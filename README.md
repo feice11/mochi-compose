@@ -11,15 +11,18 @@
 ![minSdk](https://img.shields.io/badge/minSdk-23-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![爱发电](https://img.shields.io/badge/爱发电-赞助-946ce6)](https://afdian.com/a/feice)
 
 简体中文 · [English](README.en.md) · [下载示例 APK](https://github.com/feice11/mochi-compose/releases/latest)
+
+<a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-zh.svg" alt="在爱发电支持 Mochi" height="56"></a>
 
 </div>
 
 ## 效果
 
-下面都是示例 app 在模拟器上的录屏，配色是 MD3 抹茶绿。特写用的是 0.5 倍速。
+下面都是示例 app 在模拟器上的录屏。特写用的是 0.5 倍速。
+
+### MD3 抹茶绿
 
 <table>
   <tr>
@@ -44,9 +47,31 @@
   </tr>
 </table>
 
+### Nothing 外观
+
+换成 Nothing 外观后，布局和动效不变，配色、字体和图标会换成 Nothing 的风格：点阵图标、点阵数字、红色强调、衬线标题。
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_home.png" width="200"><br><sub>点阵图标的组件目录</sub></td>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_tabbar.gif" width="260"><br><sub>标签栏（0.5×）</sub></td>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_counter.gif" width="260"><br><sub>点阵数字逐位滚动（0.5×）</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/preview/n_progress.gif" width="260"><br><sub>进度条和按钮里的加载（0.5×）</sub></td>
+    <td align="center"><img src="docs/assets/preview/n_download.gif" width="260"><br><sub>App Store 式下载按钮（0.5×）</sub></td>
+    <td align="center"><img src="docs/assets/preview/n_gauge.gif" width="260"><br><sub>仪表跟着拖动（0.5×）</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/preview/n_spokes.gif" width="260"><br><sub>下拉刷新的辐条一根根出现（0.5×）</sub></td>
+    <td align="center"><img src="docs/assets/preview/n_skeleton.gif" width="260"><br><sub>骨架占位，加载完原地淡入（0.5×）</sub></td>
+    <td align="center"></td>
+  </tr>
+</table>
+
 目前有 20 多个组件：下拉菜单、标签栏、按钮、开关、滑块、步进器、分组列表、底部面板、分段选择器、对话框、输入框、提示、长按预览、大标题和搜索栏、侧边栏、滚筒和日期选择、日历、取色器、弹出层、轮播、下拉刷新、徽标、工具栏。还有一套页面导航（侧推、卡片展开、共享顶栏、预测性返回），以及按压高光、橡皮筋、融球这些可以拿去给自己组件用的效果。
 
-这个库不依赖 material3。如果不想要默认外观，有一套可选的 [Nothing 外观](docs/zh_CN/guide/nothing-theme.md)。
+这个库不依赖 material3。Nothing 外观的用法见 [Nothing 外观](docs/zh_CN/guide/nothing-theme.md)。
 
 ## 安装
 
@@ -132,6 +157,9 @@ setContent {
 ## 赞助
 
 Mochi 是我一个人业余时间在做的。如果它帮到了你，可以在 [爱发电](https://afdian.com/a/feice) 请我喝杯奶茶，钱会花在测试机和继续打磨上。下面这些人赞助过，名单每天自动更新：
+
+<a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-zh.svg" alt="在爱发电支持 Mochi" height="56"></a>
+
 
 <!-- sponsors:start -->
 <table>

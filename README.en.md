@@ -11,15 +11,18 @@ A soft, springy Jetpack Compose component library that follows your finger. Colo
 ![minSdk](https://img.shields.io/badge/minSdk-23-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Sponsor](https://img.shields.io/badge/afdian-sponsor-946ce6)](https://afdian.com/a/feice)
 
 [简体中文](README.md) · English · [Download the demo APK](https://github.com/feice11/mochi-compose/releases/latest)
+
+<a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-en.svg" alt="Sponsor Mochi on afdian" height="56"></a>
 
 </div>
 
 ## What it looks like
 
-These are screen recordings of the demo app on an emulator, using the MD3 matcha green palette. Close-ups play at half speed.
+These are screen recordings of the demo app on an emulator. Close-ups play at half speed.
+
+### MD3 matcha green
 
 <table>
   <tr>
@@ -44,6 +47,28 @@ These are screen recordings of the demo app on an emulator, using the MD3 matcha
   </tr>
 </table>
 
+### Nothing appearance
+
+The Nothing appearance keeps the layout and motion but changes colors, fonts and icons: dot-matrix icons and digits, red accents and serif titles.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_home.png" width="200"><br><sub>Catalog with dot-matrix icons</sub></td>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_tabbar.gif" width="260"><br><sub>Tab bar (0.5×)</sub></td>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_counter.gif" width="260"><br><sub>Dot-matrix digits rolling (0.5×)</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/preview/n_progress.gif" width="260"><br><sub>Progress bars and an in-button spinner (0.5×)</sub></td>
+    <td align="center"><img src="docs/assets/preview/n_download.gif" width="260"><br><sub>App Store-style download button (0.5×)</sub></td>
+    <td align="center"><img src="docs/assets/preview/n_gauge.gif" width="260"><br><sub>Gauges following a drag (0.5×)</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/preview/n_spokes.gif" width="260"><br><sub>Pull-to-refresh spokes appearing one by one (0.5×)</sub></td>
+    <td align="center"><img src="docs/assets/preview/n_skeleton.gif" width="260"><br><sub>Skeleton placeholders fading into content (0.5×)</sub></td>
+    <td align="center"></td>
+  </tr>
+</table>
+
 There are 20-odd components:
 
 - **Menus and overlays:** dropdown, sheet, dialog, toast, context menu, popover.
@@ -52,7 +77,7 @@ There are 20-odd components:
 
 There is also page navigation (push, card expansion, shared toolbar buttons, predictive back). The press glow, rubber banding and metaball effects can be reused in your own components.
 
-The library does not depend on material3. An optional [Nothing appearance](docs/guide/nothing-theme.md) is available too.
+The library does not depend on material3. See [Nothing appearance](docs/guide/nothing-theme.md) for how to use that look.
 
 ## Install
 
@@ -141,6 +166,9 @@ Run `./gradlew spotlessApply` before committing; CI checks formatting. Without s
 ## Sponsors
 
 Mochi is a one-person side project. If it helps you, you can support it on [afdian](https://afdian.com/a/feice); the money goes into test devices and more polish. These people have sponsored it (updated daily):
+
+<a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-en.svg" alt="Sponsor Mochi on afdian" height="56"></a>
+
 
 <!-- sponsors:start -->
 <table>
