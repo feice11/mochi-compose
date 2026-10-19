@@ -13,9 +13,12 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 
-API = "https://afdian.com/api/open/query-sponsor"
+# afdian.com sometimes answers GitHub runners with 403; ifdian.net is the same service.
+APIS = ["https://afdian.com/api/open/query-sponsor", "https://ifdian.net/api/open/query-sponsor"]
+UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 START = "<!-- sponsors:start -->"
 END = "<!-- sponsors:end -->"
 READMES = ["README.md", "README.en.md"]
@@ -27,9 +30,16 @@ def fetch_page(user_id, token, page):
     ts = int(time.time())
     sign = hashlib.md5(f"{token}params{params}ts{ts}user_id{user_id}".encode()).hexdigest()
     body = json.dumps({"user_id": user_id, "params": params, "ts": ts, "sign": sign}).encode()
-    req = urllib.request.Request(API, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.load(resp)
+    headers = {"Content-Type": "application/json", "User-Agent": UA}
+    for i, api in enumerate(APIS):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(api, data=body, headers=headers), timeout=30) as resp:
+                data = json.load(resp)
+            break
+        except urllib.error.HTTPError as e:
+            if i == len(APIS) - 1:
+                raise
+            print(f"{api}: HTTP {e.code}, trying next")
     if data.get("ec") != 200:
         raise SystemExit(f"afdian error {data.get('ec')}: {data.get('em')}")
     return data["data"]
@@ -94,7 +104,8 @@ def main():
             sponsors = json.load(f)["data"]["list"]
     else:
         user_id = os.environ.get("AFDIAN_USER_ID")
-        token = os.environ.get("AFDIAN_TOKEN")
+        # Tolerate secrets pasted with surrounding quotes or whitespace.
+        token = os.environ.get("AFDIAN_TOKEN", "").strip().strip("\"'").strip()
         if not user_id or not token:
             print("AFDIAN_USER_ID or AFDIAN_TOKEN not set, skipping")
             return
