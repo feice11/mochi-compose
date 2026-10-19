@@ -1,0 +1,13 @@
+<resources>
+    <style name="Theme.Mochi" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <color name="window_bg">#F5FBF7</color>
+    <color name="ic_bg">#F1DCC9</color>
+    <color name="ic_dango_top">#D97757</color>
+    <color name="ic_dango_mid">#FFF8F0</color>
+    <color name="ic_dango_bottom">#E9BC6E</color>
+    <color name="ic_stick">#B5835A</color>
+</resources>

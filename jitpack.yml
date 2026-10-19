@@ -1,0 +1,4 @@
+jdk:
+  - openjdk17
+install:
+  - ./gradlew :mochi-compose:publishToMavenLocal -PVERSION_NAME=$VERSION

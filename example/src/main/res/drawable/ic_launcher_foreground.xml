@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 三色团子斜插在竹签上：陶红、奶白、琥珀，左上角一点高光 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:scaleX="0.6" android:scaleY="0.6" android:translateX="24" android:translateY="24">
+        <group android:pivotX="50" android:pivotY="50" android:rotation="-35">
+            <path
+                android:pathData="M50,10 L50,93"
+                android:strokeColor="@color/ic_stick"
+                android:strokeLineCap="round"
+                android:strokeWidth="4" />
+            <path
+                android:fillColor="@color/ic_dango_top"
+                android:pathData="M35.7,29 a14.3,13 0 1,0 28.6,0 a14.3,13 0 1,0 -28.6,0 z" />
+            <group android:pivotX="43.99" android:pivotY="23.54" android:rotation="-25">
+                <path
+                    android:fillAlpha="0.5"
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M40.49,23.54 a3.5,2 0 1,0 7,0 a3.5,2 0 1,0 -7,0 z" />
+            </group>
+            <path
+                android:fillColor="@color/ic_dango_mid"
+                android:pathData="M35.7,50 a14.3,13 0 1,0 28.6,0 a14.3,13 0 1,0 -28.6,0 z"
+                android:strokeColor="#144E2C1E"
+                android:strokeWidth="1" />
+            <group android:pivotX="43.99" android:pivotY="44.54" android:rotation="-25">
+                <path
+                    android:fillAlpha="0.9"
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M40.49,44.54 a3.5,2 0 1,0 7,0 a3.5,2 0 1,0 -7,0 z" />
+            </group>
+            <path
+                android:fillColor="@color/ic_dango_bottom"
+                android:pathData="M35.7,71 a14.3,13 0 1,0 28.6,0 a14.3,13 0 1,0 -28.6,0 z" />
+            <group android:pivotX="43.99" android:pivotY="65.54" android:rotation="-25">
+                <path
+                    android:fillAlpha="0.5"
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M40.49,65.54 a3.5,2 0 1,0 7,0 a3.5,2 0 1,0 -7,0 z" />
+            </group>
+        </group>
+    </group>
+</vector>

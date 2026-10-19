@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.Mochi" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <color name="window_bg">#0F1512</color>
+</resources>

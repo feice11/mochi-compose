@@ -1,0 +1,6542 @@
+{
+  "share_variant": {
+    "codepoint": "U+F0497",
+    "glyph": "md-share_variant",
+    "dotContours": 33,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 12,
+      "pitch": 2.0,
+      "radius": 0.94,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          3,
+          -5
+        ],
+        [
+          4,
+          -5
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          4,
+          -4
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          3,
+          5
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.12,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "7519c4e316fec88c5eabc4f7c3392cb8d1d7ed1df4e45c5ecf5505e0f8095abc",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "volume_high": {
+    "codepoint": "U+F057E",
+    "glyph": "md-volume_high",
+    "dotContours": 36,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          1,
+          -4
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          1,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "460de82b9d19ffadecb7b03ebc2a4d9e5fcbee38043f3595ba92456a7721cc83",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "volume_low": {
+    "codepoint": "U+F057F",
+    "glyph": "md-volume_low",
+    "dotContours": 21,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          2,
+          -3
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "381d8affaaff09bbeb59dbb128e482225c02ce8e1b997140eca261f16068913d",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "magnify": {
+    "codepoint": "U+F0349",
+    "glyph": "md-magnify",
+    "dotContours": 24,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        9.664163156976599,
+        9.658601648100614
+      ],
+      "cells": [
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          5,
+          5
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "cb582125e6a0f3592f8dfda9ed808ffaa7611b5099a86749ff6cc3ba4e29b9ab",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "plus": {
+    "codepoint": "U+F0415",
+    "glyph": "md-plus",
+    "dotContours": 9,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 9,
+      "pitch": 2.6666666666666665,
+      "radius": 1.2533333333333332,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          0,
+          -2
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.15999999999999998,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "22814fa76acd4ab85edf291eca40347714447ecdb248bdf74f87b60c644ce444",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "minus": {
+    "codepoint": "U+F0374",
+    "glyph": "md-minus",
+    "dotContours": 5,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 9,
+      "pitch": 2.6666666666666665,
+      "radius": 1.2533333333333332,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.15999999999999998,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "5a570e969236952e6481f35fc1206785d275b260766d7a665738979446f61a37",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "airplane": {
+    "codepoint": "U+F001D",
+    "glyph": "md-airplane",
+    "dotContours": 32,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          3,
+          -4
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "d9d318997ad049a751d9dde27fd01b5360d995586ab7d72588164497130b7a63",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "microphone": {
+    "codepoint": "U+F036C",
+    "glyph": "md-microphone",
+    "dotContours": 30,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "a8adbc41cbb51b7695007454a9975eb60c54c12b2ca0ec44c708b811befdf784",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "link_variant": {
+    "codepoint": "U+F0339",
+    "glyph": "md-link_variant",
+    "dotContours": 33,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "25af1e853b41fe173612f46b582e2d39aa85be28b2602526b1ca86e41d12c88a",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "pencil": {
+    "codepoint": "U+F03EB",
+    "glyph": "md-pencil",
+    "dotContours": 34,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 12,
+      "pitch": 2.0,
+      "radius": 0.94,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.12,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "20d44c7df34ba55dabb2bd3ebdbb5a2f67c91841f77aa755520730d4d80c57e9",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "content_copy": {
+    "codepoint": "U+F018F",
+    "glyph": "md-content_copy",
+    "dotContours": 39,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -4,
+          -4
+        ],
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "2a8ef3ac0ea30aad5cda080c751bc9281a74e5dab28d2aef50d826c5597a30ca",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "bluetooth": {
+    "codepoint": "U+F00AF",
+    "glyph": "md-bluetooth",
+    "dotContours": 25,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          0,
+          -5
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          5
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "9ccb4c3577989adb6dddaf8074c620fe2c52b8799368d21b1ff7823560892165",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "laptop": {
+    "codepoint": "U+F0322",
+    "glyph": "md-laptop",
+    "dotContours": 31,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 10,
+      "pitch": 2.4,
+      "radius": 1.128,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -3,
+          -3
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.144,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "aba5e8a11400a7120358132f300d3b3e523e2729c381cf97d883511b6e71e9e8",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "cellphone": {
+    "codepoint": "U+F011C",
+    "glyph": "md-cellphone",
+    "dotContours": 30,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 10,
+      "pitch": 2.4,
+      "radius": 1.128,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.144,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "8483ba99d6a5e22a8976a672576660526770ae7d40ed200179578c63f9509c14",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "monitor": {
+    "codepoint": "U+F0379",
+    "glyph": "md-monitor",
+    "dotContours": 32,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 10,
+      "pitch": 2.4,
+      "radius": 1.128,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.144,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "f1b770778def70206ae6966bc79b5e7b23c4a4b3e4bd79ce9b0c30c08301119d",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "chevron_down_circle": {
+    "codepoint": "U+F0B26",
+    "glyph": "md-chevron_down_circle",
+    "dotContours": 25,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "a8bffbee62f681e3cadc1e30bea9287ea86356cde543d315f1d0559b17fdccc8",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "radiobox_marked": {
+    "codepoint": "U+F043E",
+    "glyph": "md-radiobox_marked",
+    "dotContours": 25,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        11.979166666666666,
+        11.97531414225506
+      ],
+      "cells": [
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "1afc89bb0d07abb679e98d6e2e1abf08a0b51f8c900971fc33ba248b05892699",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "format_list_bulleted": {
+    "codepoint": "U+F0279",
+    "glyph": "md-format_list_bulleted",
+    "dotContours": 24,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 12,
+      "pitch": 2.0,
+      "radius": 0.94,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -4,
+          -3
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.12,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "c5cad1630a8119a3f62c25a77af9ccba9f48aeae495572f0af95337eeb88c0b8",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "water": {
+    "codepoint": "U+F058C",
+    "glyph": "md-water",
+    "dotContours": 30,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          0,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "7ecb3336a6a3fbdce29c556207512bcdcc52644a4ae35a5aba9841ba8a56b196",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "swap_horizontal": {
+    "codepoint": "U+F04E1",
+    "glyph": "md-swap_horizontal",
+    "dotContours": 15,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          2,
+          -3
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          3
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "333d03fb6625aae0ebc8eb9a1b32fab435ef02c5790f95fdb60716db01a531c2",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "message_outline": {
+    "codepoint": "U+F0365",
+    "glyph": "md-message_outline",
+    "dotContours": 32,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -4,
+          -4
+        ],
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          4,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -5,
+          4
+        ],
+        [
+          -5,
+          5
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "859dc331145d03daa5233003cb02814106fbc84e5b4e9a95845605a078957ff9",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "apps": {
+    "codepoint": "U+F003B",
+    "glyph": "md-apps",
+    "dotContours": 9,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -3,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          3
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "16262300ffdd34757d913bed0bcccd5a0ecd2465b9475bf189caa7e59c067a30",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "pulse": {
+    "codepoint": "U+F0430",
+    "glyph": "md-pulse",
+    "dotContours": 18,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -1,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          -1,
+          3
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "8318ee29aee72d5b3256b502e0ff37691046561f5be17d7231d188b9b1a88620",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "compass": {
+    "codepoint": "U+F018B",
+    "glyph": "md-compass",
+    "dotContours": 21,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "bcdd3c5759dfe17c25d5d5cb82846f2293e6616dfdbe7a46f48844201cfac54b",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "tune": {
+    "codepoint": "U+F062E",
+    "glyph": "md-tune",
+    "dotContours": 30,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          2,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "42b5692930387b0a1fa43ae406335f05683f1053792a7c86bfdddc0ac423f4c4",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "swap_vertical": {
+    "codepoint": "U+F04E2",
+    "glyph": "md-swap_vertical",
+    "dotContours": 15,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -1,
+          -3
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "98c887dea447d77b8624459ca80055c0c5d8e4f57791df19609e7d671a2d4ea4",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "creation": {
+    "codepoint": "U+F0674",
+    "glyph": "md-creation",
+    "dotContours": 28,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          3,
+          -4
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "189cf59a7df4a8a0f589020557213e01e18cf374af408e804e78ce546faf4a7e",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "account_outline": {
+    "codepoint": "U+F0013",
+    "glyph": "md-account_outline",
+    "dotContours": 38,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 13,
+      "pitch": 1.8461538461538463,
+      "radius": 0.8676923076923077,
+      "origin": [
+        11.979166666666666,
+        7.804536759813707
+      ],
+      "cells": [
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          -4,
+          5
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          -4,
+          6
+        ],
+        [
+          -3,
+          6
+        ],
+        [
+          -2,
+          6
+        ],
+        [
+          -1,
+          6
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          4,
+          6
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.11076923076923077,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "aaa67860c1474df346dcb78fb8b55b5bef4fa9147fe1c026c19f2c29ee91c4fd",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "pin_outline": {
+    "codepoint": "U+F0931",
+    "glyph": "md-pin_outline",
+    "dotContours": 23,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "70ea1af29c4ea14c8276d92998f8ca7a19f5d55cd748b25e99ebe5f1dc9b59b4",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "lock_outline": {
+    "codepoint": "U+F0341",
+    "glyph": "md-lock_outline",
+    "dotContours": 33,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 10,
+      "pitch": 2.4,
+      "radius": 1.128,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.144,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "5a802608a5ba559b881a2efea068be0fe5698e56a78e16eeee8fdeb1006b6dc6",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "bell_outline": {
+    "codepoint": "U+F009C",
+    "glyph": "md-bell_outline",
+    "dotContours": 30,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "051634a33ee333f641ed10ec9438d7a9a98d0c2462ddd71cd2457e99985e130c",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "delete_outline": {
+    "codepoint": "U+F09E7",
+    "glyph": "md-delete_outline",
+    "dotContours": 41,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 12,
+      "pitch": 2.0,
+      "radius": 0.94,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.12,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "1d1a799699b1541be6398a8ce0f07f7779685e42ac785ac7db0de3adffc28661",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "camera_outline": {
+    "codepoint": "U+F0D5D",
+    "glyph": "md-camera_outline",
+    "dotContours": 44,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "d0a2f3b941db38521bbf86be4f78d03a20577a762a90fc2e461d0988a5d11a9a",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "home_outline": {
+    "codepoint": "U+F06A1",
+    "glyph": "md-home_outline",
+    "dotContours": 37,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          0,
+          -4
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "f0b75bcc421de29a3c325a1d96dd6abbceff55e26eac34ebaf379135890582b4",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "flag_outline": {
+    "codepoint": "U+F023D",
+    "glyph": "md-flag_outline",
+    "dotContours": 25,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          -3,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "d6fe4c88594d8892bceb2e63a36e7bb0e501cb7a0276aad3136b6179a0b74427",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "card_multiple_outline": {
+    "codepoint": "U+F17F2",
+    "glyph": "md-card_multiple_outline",
+    "dotContours": 41,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 12,
+      "pitch": 2.0,
+      "radius": 0.94,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          4,
+          -4
+        ],
+        [
+          5,
+          -4
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          5,
+          -3
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          5,
+          -2
+        ],
+        [
+          -5,
+          -1
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          5,
+          -1
+        ],
+        [
+          -5,
+          0
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          -5,
+          1
+        ],
+        [
+          -3,
+          1
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          -5,
+          2
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          -5,
+          3
+        ],
+        [
+          -5,
+          4
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.12,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "8cf9e39f88712f782520a54868808ec5ed0a0362f95b2a72ac7f68f7c67c40d6",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "layers_outline": {
+    "codepoint": "U+F09FE",
+    "glyph": "md-layers_outline",
+    "dotContours": 25,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          0,
+          -4
+        ],
+        [
+          -2,
+          -3
+        ],
+        [
+          -1,
+          -3
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          2,
+          -3
+        ],
+        [
+          -3,
+          -2
+        ],
+        [
+          3,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -3,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "dcfd43c542460467a74f86859e5fe812ca806898eb906b62e52f2193911c68c1",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "palette_outline": {
+    "codepoint": "U+F0E0C",
+    "glyph": "md-palette_outline",
+    "dotContours": 33,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "b23c1b67ccc4fd1cef62f085e8123ca9367e2547da4b69c91eace8c9b8757f27",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "scan_helper": {
+    "codepoint": "U+F13D8",
+    "glyph": "md-scan_helper",
+    "dotContours": 12,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 10,
+      "pitch": 2.4,
+      "radius": 1.128,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -4,
+          -4
+        ],
+        [
+          -3,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          4,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.144,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "98952e3407785bcec50f9b558e6d05a6caa18ce3f4f519e8c1556523c5d29c02",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "arrow_expand_all": {
+    "codepoint": "U+F004C",
+    "glyph": "md-arrow_expand_all",
+    "dotContours": 40,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          -4,
+          -4
+        ],
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          -1,
+          -4
+        ],
+        [
+          1,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          4,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          3,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          -2,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -4,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          -3,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "99bacf8b2fb49c4510101e6e7f5978be8014211356f0c6f77c40b923fbe4d74a",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "star": {
+    "codepoint": "U+F04CE",
+    "glyph": "md-star",
+    "dotContours": 37,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          0,
+          -4
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          2,
+          4
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "3d12a3a163f23879058c17adfbfcfd2fadceef80c260628a282be1d72ecc770f",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "star_outline": {
+    "codepoint": "U+F04D2",
+    "glyph": "md-star_outline",
+    "dotContours": 32,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 11,
+      "pitch": 2.1818181818181817,
+      "radius": 1.0254545454545454,
+      "origin": [
+        12.0,
+        12.0
+      ],
+      "cells": [
+        [
+          0,
+          -5
+        ],
+        [
+          0,
+          -4
+        ],
+        [
+          0,
+          -3
+        ],
+        [
+          -1,
+          -2
+        ],
+        [
+          0,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          -5,
+          -1
+        ],
+        [
+          -4,
+          -1
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          4,
+          -1
+        ],
+        [
+          5,
+          -1
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "selection": "line",
+      "minimumDotGapDp": 0.1309090909090909,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "39a9b6b0c6f617f21846e5a90a4cf8c31d085670996bca4ea704707e371f62ab",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "chevron_down_circle_outline": {
+    "codepoint": "U+F0B27",
+    "glyph": "md-chevron_down_circle_outline",
+    "dotContours": 52,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 13,
+      "pitch": 1.8461538461538463,
+      "radius": 0.8676923076923077,
+      "origin": [
+        11.979093858632675,
+        11.978904982618772
+      ],
+      "cells": [
+        [
+          -2,
+          -5
+        ],
+        [
+          -1,
+          -5
+        ],
+        [
+          0,
+          -5
+        ],
+        [
+          1,
+          -5
+        ],
+        [
+          2,
+          -5
+        ],
+        [
+          -4,
+          -4
+        ],
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          4,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -5,
+          -2
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          5,
+          -2
+        ],
+        [
+          -5,
+          -1
+        ],
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          3,
+          -1
+        ],
+        [
+          5,
+          -1
+        ],
+        [
+          -5,
+          0
+        ],
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          -5,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          -5,
+          2
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          -2,
+          5
+        ],
+        [
+          -1,
+          5
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          1,
+          5
+        ],
+        [
+          2,
+          5
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.11076923076923077,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "773ee00f0f4b3591c3a7a989f4efd58e3fc07ee5f75eb0c40c059cdd7efd3c73",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  },
+  "compass_outline": {
+    "codepoint": "U+F018C",
+    "glyph": "md-compass_outline",
+    "dotContours": 54,
+    "sourceProject": "GeneralKaos666/ndot-firacode-nerd a2c370b24ba6f21a20bb50e42866ffb7345da99d",
+    "upstreamGlyphSet": "Material Design Icons (Apache-2.0)",
+    "sourceFontLicense": "OFL-1.1",
+    "sourceFontUrl": "https://raw.githubusercontent.com/GeneralKaos666/ndot-firacode-nerd/a2c370b24ba6f21a20bb50e42866ffb7345da99d/FiraCodeNerdFont-Regular.ttf",
+    "sourceFontSha256": "f70580120955ef2e898125684c6f730c234371ca68ea9fa7bb57e29a04b3bb64",
+    "unitsPerEm": 1950,
+    "variant": "Local regular-matrix repair of existing MDI derivative; not Nothing original",
+    "recipe": {
+      "gridColumns": 13,
+      "pitch": 1.8461538461538463,
+      "radius": 0.8676923076923077,
+      "origin": [
+        11.979253095391643,
+        11.97478206325219
+      ],
+      "cells": [
+        [
+          -2,
+          -5
+        ],
+        [
+          -1,
+          -5
+        ],
+        [
+          0,
+          -5
+        ],
+        [
+          1,
+          -5
+        ],
+        [
+          2,
+          -5
+        ],
+        [
+          -4,
+          -4
+        ],
+        [
+          -3,
+          -4
+        ],
+        [
+          -2,
+          -4
+        ],
+        [
+          2,
+          -4
+        ],
+        [
+          3,
+          -4
+        ],
+        [
+          4,
+          -4
+        ],
+        [
+          -4,
+          -3
+        ],
+        [
+          4,
+          -3
+        ],
+        [
+          -5,
+          -2
+        ],
+        [
+          -4,
+          -2
+        ],
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          5,
+          -2
+        ],
+        [
+          -5,
+          -1
+        ],
+        [
+          -1,
+          -1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          5,
+          -1
+        ],
+        [
+          -5,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          -5,
+          1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          -5,
+          2
+        ],
+        [
+          -4,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          -4,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          -4,
+          4
+        ],
+        [
+          -3,
+          4
+        ],
+        [
+          -2,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          -2,
+          5
+        ],
+        [
+          -1,
+          5
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          1,
+          5
+        ],
+        [
+          2,
+          5
+        ]
+      ],
+      "selection": "fill",
+      "minimumDotGapDp": 0.11076923076923077,
+      "dotDiameterOverPitch": 0.94,
+      "sourceExtentCapEm": 0.84,
+      "gridOriginRule": "Frame center; matched circular hole center for circular features",
+      "sourceOutlineUnchanged": true
+    },
+    "originalSvgSha256": "a2b70bc76e9632c781b38ebd53f9ffabafb39abee184609f30833a609aad0473",
+    "converterSha256": "ecbc8d2a5bede4ec50dfb2926290175672b278ce7a04756fb288a887535d07cb",
+    "layoutGeneratorSha256": "edb7f4c7926864b8a4e9da6889af6155d91570ea6f877fe486757172490982c4"
+  }
+}

@@ -1,0 +1,61 @@
+# Mochi — application integration for AI agents
+
+Android Jetpack Compose library: MD3 Expressive theme with iOS-style interactions.
+Read this file before generating an app from this repository. Public API optionality
+is not the app integration policy. Apply requirements to actual product scenarios;
+otherwise report "not applicable" with a reason. Explicit user instructions prevail.
+
+## Required baseline
+
+- Root: MochiTheme + ProvideMochiOverscroll + rememberMochiNavigator/MochiNavHost for Mochi navigation.
+- Push pages: library toolbar controls with stable semantic navId values on both
+  pages. MochiBackButton registers itself. Register MochiBarGroup shape AND each
+  participating MochiBarGroupItem content; use stable value-based icon contentKey.
+- Shapes pair by side/position; content pairs by navId. MochiBarButton uses its text
+  as contentKey internally, and has no contentKey argument. Avoid route-prefixed,
+  random or duplicate content IDs. Do not duplicate reserved mochi.back registration.
+- Source-card opening: mochiNavSource + push(route, from = sourceKey), morphing the
+  whole page including toolbar. Do not pin the toolbar in this transition.
+  mochiSharedElement is deprecated and does nothing; never recommend it in new code.
+- Pages organized by outside-card section headings (e.g. Color settings / Theme palette)
+  use MochiCompactTitleScaffold, or MochiTitleBar with an existing scroller: remove the
+  standalone large title, keep section labels. Do not nest scrollers or repeat insets.
+  Descriptive text and card presence are not the criterion. Keep introduction titles in cards.
+- Without those section headings a large title may remain. Catalog homes start expanded,
+  collapse on upward scroll and expand at the top, preserving per-tab scroll state.
+  Do not force initial collapse or add blank space. See docs/components/navbar.md.
+- Use MochiLargeTitleScaffold when an expanded title is appropriate, grouped cards/rows, library buttons/menus and feedback.
+  Color, type and continuous shapes come from MochiTheme/MochiDefaults.
+- Only unread dots belong by the title; named states use bottom-right status chips.
+- Use blur text/icon transitions, visibility and counters for changing content.
+  Smooth card resizing has one animation owner; do not chase animated inner sizes.
+- Custom scrollers inherit Overscroll and use MochiScrollDefaults.flingBehavior().
+- Multi-page sheets use their own navigator in both MochiSheet and MochiNavHost,
+  outer-owned corners, shared internal toolbar and pop-before-dismiss back order.
+- Covered tab bars use mochiHideWhenCovered as appropriate. Respect insets, physical
+  corners, large type, icon semantics, disabled input, cancellation and reduced motion.
+- HDR is optional; the HDR selection-border feature has been removed.
+- Report each applicable requirement as integrated + code location, or not applicable
+  + reason. Separate compilation from interaction/device validation; follow user scope.
+
+- Optional Nothing appearance changes colors, font families and semantic icons only.
+  Keep all geometry and interaction rules. Chinese titles remain readable, not dotted.
+  Read docs/guide/nothing-theme.md and the separate asset provenance before using the local module.
+
+## Read next
+
+- [中文：应用接入规范](docs/zh_CN/guide/application-integration.md): scenario map, requirements, setup and delivery checklist.
+- [English: integration requirements](docs/guide/application-integration.md): same normative guide.
+- [Copyable complete app](example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt): Activity, theme, home/list/detail, source morph, shared push toolbar, icons/state/callbacks; compiled in example main sources, no demo helpers.
+- [Design philosophy](docs/guide/philosophy.md): the eight ideas behind the rules, decision order and anti-patterns; use it for cases the rules do not cover.
+- [Design principles](docs/guide/design-principles.md): shape, motion, color, type and priorities.
+- [Navigation](docs/guide/navigation.md): source versus push, shared toolbar and back.
+- [Buttons](docs/components/button.md): toolbar IDs and grouped controls.
+- [Large title](docs/components/navbar.md): title/search/refresh/insets.
+- [Sheet](docs/components/sheet.md), [Tab bar](docs/components/tabbar.md), [List](docs/components/list.md).
+- [Content transitions](docs/guide/content-transitions.md), [Overscroll](docs/guide/overscroll.md).
+- [Contributing](CONTRIBUTING.md): for modifying the library, not a substitute for app integration.
+
+These are repository-relative links, intended to be read on GitHub or in a checkout.
+No instruction file guarantees compliance by an external model; copy the guide and
+checklist links into the consuming app's own development instructions.

@@ -1,0 +1,21 @@
+{
+  "build": "Metroid_B4.1-260814-1733",
+  "display": "Original NType82 Latin; platform Chinese fallback. No Chinese dot font.",
+  "sources": [
+    {
+      "source": "Inter-Regular.ttf",
+      "resource": "nothing_inter.ttf",
+      "sha256": "170d871884d6ff20a55116aa993cdbdb351c64cb6266dfa4ac5df2734ee698ca"
+    },
+    {
+      "source": "NType82-Headline.otf",
+      "resource": "nothing_display.otf",
+      "sha256": "dc20aae73d6607cfeb0b7dff94745aa1c380e1d58ab7555f4b5899b7817f7a0e"
+    },
+    {
+      "source": "Ndot-57-Aligned.otf",
+      "resource": "nothing_dot.otf",
+      "sha256": "0201a3208484063d7ee92f717d9ecf88d5e45b66a87900fa48f7f4e7fbffe546"
+    }
+  ]
+}

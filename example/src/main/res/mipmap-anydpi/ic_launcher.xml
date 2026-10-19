@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8.0 以下没有自适应图标：圆形底色 + 同一个前景（前景画布四周留了自适应图标的安全区，按比例往外撑一点） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/ic_bg" />
+        </shape>
+    </item>
+    <item
+        android:bottom="-8dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:left="-8dp"
+        android:right="-8dp"
+        android:top="-8dp" />
+</layer-list>
