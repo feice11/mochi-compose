@@ -1,0 +1,30 @@
+name: Sponsors
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch sponsors
+        env:
+          AFDIAN_USER_ID: 6750a87096ca11ef92e852540025c377
+          AFDIAN_TOKEN: ${{ secrets.AFDIAN_TOKEN }}
+        run: python .github/scripts/update_sponsors.py
+      - name: Commit
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "docs: 更新赞助者"
+          git push
