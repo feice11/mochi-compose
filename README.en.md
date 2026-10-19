@@ -71,7 +71,7 @@ dependencyResolutionManagement {
 Then the dependency (see the JitPack badge for the version):
 
 ```kotlin
-implementation("com.github.feice11.mochi-compose:mochi-compose:<version>")
+implementation("com.github.feice11:mochi-compose:<version>")
 ```
 
 Requires compileSdk 36+ and Kotlin 2.3+ (Capsule depends on Compose 1.10).

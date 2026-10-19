@@ -65,7 +65,7 @@ dependencyResolutionManagement {
 再加依赖，版本号看上面的 JitPack 徽章：
 
 ```kotlin
-implementation("com.github.feice11.mochi-compose:mochi-compose:<版本>")
+implementation("com.github.feice11:mochi-compose:<版本>")
 ```
 
 需要 compileSdk 36 以上、Kotlin 2.3 以上（Capsule 依赖 Compose 1.10）。
