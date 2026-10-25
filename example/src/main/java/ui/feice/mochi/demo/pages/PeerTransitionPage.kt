@@ -33,6 +33,7 @@ import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
@@ -57,34 +58,38 @@ private val peers = listOf(
 fun PeerTransitionPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     var page by rememberSaveable { mutableIntStateOf(0) }
     DemoPage(entry, modifier) {
-        DemoSection(
-            "试一试",
-            footer = "点分段或在下面左右滑：两页并排一起滑过去，途中缩小、四角变圆，中间只隔一条窄缝，没有谁盖住谁。拖动时跟着手指走，松手过半或甩得够快就换页，否则弹回。连续快速切换时从当前位置接着走。",
-            padding = 0.dp,
-        ) {
-            // 切换区域贴着卡片底边：按卡片轮廓裁一下，下面两角才是圆的
-            Column(Modifier.clip(MochiTheme.shapes.extraLarge)) {
-                MochiSegmentedControl(
-                    selectedIndex = page,
-                    onSelect = { page = it },
-                    items = persistentListOf(*peers.map { it.first }.toTypedArray()),
-                    modifier = Modifier.padding(16.dp),
-                )
-                MochiPeerTransition(
-                    targetState = page,
-                    modifier = Modifier.fillMaxWidth().height(320.dp),
-                    pages = peers.indices.toList(),
-                    onPageChange = { page = it },
-                    background = MochiDefaults.groupedContainer(),
-                ) { i -> PeerSample(i) }
+        demoItem {
+            DemoSection(
+                "试一试",
+                footer = "点分段或在下面左右滑：两页并排一起滑过去，途中缩小、四角变圆，中间只隔一条窄缝，没有谁盖住谁。拖动时跟着手指走，松手过半或甩得够快就换页，否则弹回。连续快速切换时从当前位置接着走。",
+                padding = 0.dp,
+            ) {
+                // 切换区域贴着卡片底边：按卡片轮廓裁一下，下面两角才是圆的
+                Column(Modifier.clip(MochiTheme.shapes.extraLarge)) {
+                    MochiSegmentedControl(
+                        selectedIndex = page,
+                        onSelect = { page = it },
+                        items = persistentListOf(*peers.map { it.first }.toTypedArray()),
+                        modifier = Modifier.padding(16.dp),
+                    )
+                    MochiPeerTransition(
+                        targetState = page,
+                        modifier = Modifier.fillMaxWidth().height(320.dp),
+                        pages = peers.indices.toList(),
+                        onPageChange = { page = it },
+                        background = MochiDefaults.groupedContainer(),
+                    ) { i -> PeerSample(i) }
+                }
             }
         }
-        MochiListSection(
-            header = "用在哪里",
-            footer = "平级的几页之间用它；有前后层级的（打开详情、下一步）用侧推。",
-        ) {
-            MochiListRow("首页底部标签栏", value = "已接入")
-            MochiListRow("推入下一层", value = "用侧推")
+        demoItem {
+            MochiListSection(
+                header = "用在哪里",
+                footer = "平级的几页之间用它；有前后层级的（打开详情、下一步）用侧推。",
+            ) {
+                MochiListRow("首页底部标签栏", value = "已接入")
+                MochiListRow("推入下一层", value = "用侧推")
+            }
         }
     }
 }

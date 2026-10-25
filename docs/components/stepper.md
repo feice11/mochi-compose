@@ -12,7 +12,7 @@ MochiStepper(n, { n = it }, range = 1..99)
 - At either end of `range` the matching button is disabled, repeat stops and the press deformation releases; the buttons must not remain fused after disabling or cancellation
 - Both buttons sit in a `MochiButtonGroup`: the pressed one grows and fuses with its neighbour
 
-In `MochiListRow.trailing`, the 34dp button group publishes its own capsule outline, giving a minimum end inset of 28 − 17 = 11dp; the card resolves the actual shared group gutter. The value and buttons stay centered together in the same Row, including boundary rows. Add shell spacing instead of moving the stepper vertically. Disabling changes neither dimensions nor spacing.
+In `MochiListRow.trailing`, it sits 16dp from the card's right edge like every trailing item (iOS). The value and buttons stay centered together in the same Row, including boundary rows. Disabling changes neither dimensions nor spacing.
 
 | Parameter | Description | Default |
 |---|---|---|

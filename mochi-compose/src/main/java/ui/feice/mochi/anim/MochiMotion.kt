@@ -9,7 +9,11 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Immutable
 import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * 一套开/关动画。
@@ -72,6 +76,30 @@ public object MochiMotions {
         closeEffects = responseSpring(0.12f, 1f),
     )
 
+    /**
+     * iOS 27 的玻璃菜单（UIKit ContextMenu 的液态形变，AnimationKit MorphAnimationSettings 的原生值）：
+     * 展开时位置、宽高、内容同一组弹簧 dampingRatio 0.8、response 0.3；收起（liquidMorphShrink）宽高、位置、内容 0.9 / 0.3。
+     * 内容比形状晚 secondStepDelay = 0.3 × 0.1 = 0.03 秒，换成形状弹簧在 0.03 秒时走到的进度。
+     * blurInSpring / blurOutSpring 是透镜里内容的模糊和放大用的（见 DropdownOverlay 的 MenuLens），不管内容透明度。
+     * 开了液态玻璃的菜单默认用它（见 [ui.feice.mochi.theme.MochiMaterials.menuGlass]）
+     */
+    public val Ios27Menu: MochiMotion = MochiMotion(
+        name = "iOS 27 玻璃菜单",
+        openSpatial = responseSpring(0.3f, 0.8f),
+        closeSpatial = responseSpring(0.3f, 0.9f),
+        openEffects = responseSpring(0.3f, 0.8f),
+        closeEffects = responseSpring(0.3f, 0.9f),
+        contentAt = springProgress(0.3f, 0.8f, 0.03f),
+    )
+
+    /** response / dampingRatio 的弹簧（零初速、目标 1，欠阻尼）在 [t] 秒时的进度 */
+    private fun springProgress(response: Float, damping: Float, t: Float): Float {
+        val w = 2f * PI.toFloat() / response
+        val wd = w * sqrt(1f - damping * damping)
+        val zw = damping * w
+        return 1f - exp(-zw * t) * (cos(wd * t) + zw / wd * sin(wd * t))
+    }
+
     // —— 仿 iOS（SwiftUI 预设换算）——
     public val IosSmooth: MochiMotion = appleSpring("iOS smooth", 0.5f, 0f)
     public val IosSnappy: MochiMotion = appleSpring("iOS snappy", 0.5f, 0.15f)
@@ -98,7 +126,7 @@ public object MochiMotions {
     )
 
     public val all: List<MochiMotion> = listOf(
-        Ios26, IosSmooth, IosSnappy, IosBouncy,
+        Ios26, Ios27Menu, IosSmooth, IosSnappy, IosBouncy,
         ExpressiveFast, ExpressiveDefault, ExpressiveSlow, Standard, Jelly, Emphasized,
     )
 }

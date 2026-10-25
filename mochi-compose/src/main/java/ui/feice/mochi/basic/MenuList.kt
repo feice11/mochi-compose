@@ -111,7 +111,8 @@ internal fun MochiList(
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val density = LocalDensity.current
-    val ios = style.itemLayout == MochiItemLayout.Ios
+    // 玻璃菜单和 iOS 布局一样：对勾在左、选中不铺底色
+    val ios = style.itemLayout == MochiItemLayout.Ios || style.liquid
     val itemH = px.itemHeight
     val hlPathCache = remember { G2PathCache() }
     val currentHover by rememberUpdatedState(hover)
@@ -223,56 +224,61 @@ internal fun MochiList(
                 .offset { IntOffset(0, (from * itemH - scroll()).roundToInt()) },
         ) {
             val radio = selectedIndex >= 0
+            val icons = items.any { it.icon != null }
             for (i in from until until) {
                 key(i) {
                     val item = items[i]
                     val selected = i == selectedIndex
                     val base = if (item.destructive) style.destructiveColor else style.onPanelColor
                     val color by animateColorAsState(if (selected && !ios) style.onSelectedColor else base, label = "itemColor")
-                    Row(
-                        Modifier
-                            // 不错开出现的曲线不给每一行单独开 layer
-                            .then(
-                                if (motion.stagger > 0f) {
-                                    Modifier.graphicsLayer {
-                                        val t = staggered(effects(), i, items.size, motion.stagger)
-                                        alpha = t
-                                        translationY = (1f - t) * dir * 8.dp.toPx()
-                                    }
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .semantics(mergeDescendants = true) {
-                                role = Role.Button
-                                onClick {
-                                    onSelect(i)
-                                    true
+                    val row = Modifier
+                        // 不错开出现的曲线不给每一行单独开 layer
+                        .then(
+                            if (motion.stagger > 0f) {
+                                Modifier.graphicsLayer {
+                                    val t = staggered(effects(), i, items.size, motion.stagger)
+                                    alpha = t
+                                    translationY = (1f - t) * dir * 8.dp.toPx()
                                 }
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Button
+                            onClick {
+                                onSelect(i)
+                                true
                             }
-                            .fillMaxWidth()
-                            .height(style.itemHeight)
-                            .padding(start = if (ios) 12.dp else 16.dp, end = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (ios) {
-                            // 勾在最左，单选菜单里每行都留位置，文字才对齐
-                            if (radio) {
-                                Box(Modifier.size(20.dp)) { if (selected) CheckMark(color) }
-                                Spacer(Modifier.width(10.dp))
+                        }
+                        .fillMaxWidth()
+                        .height(style.itemHeight)
+                    if (style.liquid) {
+                        LiquidRow(item, color, selected, radio, icons, row)
+                    } else {
+                        Row(
+                            row.padding(start = if (ios) 12.dp else 16.dp, end = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (ios) {
+                                // 勾在最左，单选菜单里每行都留位置，文字才对齐
+                                if (radio) {
+                                    Box(Modifier.size(20.dp)) { if (selected) CheckMark(color) }
+                                    Spacer(Modifier.width(10.dp))
+                                }
+                                ItemLabel(item.label, color, Modifier.weight(1f))
+                                if (item.icon != null) {
+                                    Spacer(Modifier.width(10.dp))
+                                    Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { item.icon(color) }
+                                }
+                            } else {
+                                if (item.icon != null) {
+                                    Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { item.icon(color) }
+                                    Spacer(Modifier.width(12.dp))
+                                }
+                                ItemLabel(item.label, color, Modifier.weight(1f))
+                                if (selected) CheckMark(color)
                             }
-                            ItemLabel(item.label, color, Modifier.weight(1f))
-                            if (item.icon != null) {
-                                Spacer(Modifier.width(10.dp))
-                                Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { item.icon(color) }
-                            }
-                        } else {
-                            if (item.icon != null) {
-                                Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { item.icon(color) }
-                                Spacer(Modifier.width(12.dp))
-                            }
-                            ItemLabel(item.label, color, Modifier.weight(1f))
-                            if (selected) CheckMark(color)
                         }
                     }
                 }
@@ -281,6 +287,33 @@ internal fun MochiList(
         overlay()
     }
 }
+
+/**
+ * 玻璃菜单的一行（iOS 27 _UIContextMenuLargeCellLayout / LargeLeadingImageCellLayout 的约束，数值见 [LiquidMenu]）：
+ * 左边距 l = 28，单选菜单再加 15 给对勾；对勾中心在 l / 2 + 6；有图标的菜单图标在文字前，中心 l + 40 / 2 − 8，文字从 l + 4 + 40 − 8 开始。
+ * iOS 的行占满菜单宽，Mochi 的列表整体缩进 [LiquidMenu.Inset]，这里都减掉它
+ */
+@Composable
+private fun LiquidRow(item: MochiItem, color: Color, selected: Boolean, radio: Boolean, icons: Boolean, modifier: Modifier) {
+    val m = LiquidMenu
+    val l = m.Padding + if (radio) m.SelectionIndent else 0.dp
+    Box(modifier.padding(end = m.Padding - m.Inset), contentAlignment = Alignment.CenterStart) {
+        if (selected) {
+            Box(Modifier.offset(x = l / 2 + m.CheckOffset - m.Inset - CheckSize / 2).size(CheckSize)) { CheckMark(color) }
+        }
+        if (item.icon != null) {
+            Box(
+                Modifier.offset(x = l + m.ImageBox / 2 + m.ImageOffset - m.Inset - IconSize / 2).size(IconSize),
+                contentAlignment = Alignment.Center,
+            ) { item.icon(color) }
+        }
+        val start = if (icons) l + m.ImageGap + m.ImageBox + m.ImageOffset else l
+        ItemLabel(item.label, color, Modifier.padding(start = start - m.Inset))
+    }
+}
+
+private val CheckSize = 20.dp
+private val IconSize = 22.dp
 
 @Composable
 private fun ItemLabel(text: String, color: Color, modifier: Modifier = Modifier) {

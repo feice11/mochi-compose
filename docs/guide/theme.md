@@ -1,8 +1,30 @@
 # Theme
 
-[Optional Nothing appearance: colors, fonts and semantic icons](nothing-theme.md).
+[Optional Nothing appearance: colors, fonts and semantic icons](nothing-theme.md). [Optional iOS appearance and glass materials](ios-theme.md).
 
 `MochiTheme` provides Material 3 Expressive color, type, shape and motion tokens. Library components read only from it and never hardcode colors.
+
+Building an app? Start with [theme integration in the app integration guide](application-integration.md): wire the theme once at the root and keep appearance branches out of pages.
+
+## Materials: liquid glass (long-term beta) and blur
+
+`MochiTheme(materials = …)` decides whether floating bars are solid or liquid glass and whether scroll edges blur progressively. Materials are independent of colors, so the Mochi, Nothing and iOS appearances can all use them, each with its own switch:
+
+```kotlin
+MochiTheme(
+    colors = colors,
+    materials = iosMaterials(isDark, glass = glassOn, blur = blurOn, themeAccent = true),
+) { … }
+```
+
+- `glass`: tab bars (search field and accessory included) and other floating bars are glass; off means a solid capsule with a shadow
+- `blur`: content scrolled under the top and bottom bars blurs progressively and dims by luminance; off means a fading background
+- `themeAccent`: keep the glass neutral and color the selected item with the theme's accent. Pass false for iOS colors (iOS derives its accent from the glass) and true for others
+- The default is `MochiMaterials()`: both off. `iosMaterials` lives in mochi-ios; see [iOS appearance and glass materials](ios-theme.md) for glass styles and transparency
+
+Components read the materials (`MochiTheme.materials`); pages never check the switches. Liquid glass re-renders what is behind it every frame and costs more power, so let users opt in and tell them the cost first.
+
+Liquid glass is a **long-term beta**: its look, performance and public API may change in minor releases with no compatibility guarantee, and rendering cost varies a lot between devices. In shipping apps keep it off by default and let users turn it on. Blur (`blur`) is not part of the beta.
 
 ## Usage
 
@@ -31,6 +53,8 @@ MochiTheme.motionScheme.defaultSpatial
 ```
 
 `MochiTheme` also provides `LocalContentColor` (= onSurface) and `LocalTextStyle` (= bodyLarge) at the root. The library's `Text` uses them by default, so text outside any container is still readable in dark mode.
+
+The outermost `MochiTheme` also keeps status and navigation bar icons in step with light/dark (dark icons on a light theme, light icons on a dark one), so apps no longer write `WindowCompat.getInsetsController(…).isAppearanceLightStatusBars`. The window is written only when light/dark changes, and nested themes forcing dark (a photo viewer, say) do not change the whole window. Screens that need their own icon colors, such as full-screen video, pass `systemBarAppearance = false` at that level or set the colors themselves; recomposition will not undo it.
 
 ## Demo palette
 
@@ -95,6 +119,7 @@ All shapes use the default G2 continuous-curvature corner from [Kyant0/Capsule](
 - Straight edge → Bézier transition → arc, with continuous curvature and no sudden jump where the arc starts.
 - When the radius reaches half the short edge, it turns into a capsule (Kyant's capsule profile).
 - To use it yourself: `MochiRoundedRectangle(radius)`, `MochiCapsule`, or `ContinuousRoundedRectangle(radius, MochiContinuity)`.
+- The curve matches Kyant's, but `MochiContinuity` builds the outline path itself: Kyant's own path carries floating-point error where two curve pieces meet, so Skia classifies it as non-convex, and large cards fall back to a CPU-drawn mask that is uploaded as a texture and redrawn every frame while scrolling. Cards and capsules are now convex paths the GPU draws directly (on the theme page, the first frame of each fling dropped from about 16 ms to about 10 ms). To get the same path, use the shapes above rather than calling Kyant's `toPath()` directly.
 
 | Name | Corner |
 |---|---|
@@ -165,7 +190,7 @@ Conversion: k = (2π / response)². Closing never overshoots, so progress cannot
 
 Type scale line heights are distributed centered (`LineHeightStyle.Alignment.Center`, no trim), so CJK glyphs don't sit low in the line box and line up with the centers of icons, switches, checkmarks and chevrons beside them.
 
-Two-line list rows remove the title and supporting blocks' outer line-height leading with `Trim.Both`, preserving glyphs, theme font sizes and internal subtitle line heights. The extra block gap is `MochiListDefaults.SupportingTextGap` (0dp). Leading tiles and trailing symbols stay centered on the whole row; tile outlines own their concentric edge anchors. See [List spacing](../components/list.md#spacing).
+Two-line list rows remove the title and supporting blocks' outer line-height leading with `Trim.Both`, preserving glyphs, theme font sizes and internal subtitle line heights. The block gap is `MochiListDefaults.SupportingTextGap` (4dp, iOS). Leading tiles and trailing symbols stay centered on the whole row. See [List spacing](../components/list.md#spacing-ios-26).
 
 - Large titles use `textStyles.largeTitle` (34sp Bold) and line up with the cards below, with no extra indent
 - Menu item icons get a 22dp box, matching symbols next to 17sp body text
@@ -186,13 +211,13 @@ Besides the MD3 scale, `MochiTextStyles` has three styles for iOS positions, and
 
 Large bold glyphs carry built-in left spacing (about 0.04em) that makes them look indented next to an icon or a card edge. `Modifier.mochiOpticalLeading(style)` shifts the text left by that much (layer only, layout unchanged); large titles use it.
 
-`MochiDefaults.groupedBackground()` / `groupedContainer()` are the iOS grouped-style page and card colors: light gray page with white cards in light mode, the darkest surface with a card one step brighter in dark mode.
+`MochiDefaults.groupedBackground()` / `groupedContainer()` are the iOS grouped-style page and card colors: light gray page with white cards in light mode, the darkest surface with a card one step brighter in dark mode. Inside a bottom sheet (`LocalMochiElevated` is true, the iOS elevated level) they switch to the elevated pair: in dark mode the sheet is surfaceContainerLow and cards surfaceContainerHigh; the sheet itself uses `MochiDefaults.sheetBackground()`.
 
 ## Concentric and optical balance
 
 Three rules every component follows when placing things inside a rounded container:
 
-1. **Same shape**: inset the container's outline by an even margin to get a concentric inner contour, and give inner rounded shapes that contour's radius (`MochiConcentric.inner(outer, inset)`). Examples: the tab bar indicator, list leading tiles (12dp = 28 − 16), the demo header icon tile.
+1. **Same shape**: inset the container's outline by an even margin to get a concentric inner contour, and give inner rounded shapes that contour's radius (`MochiConcentric.inner(outer, inset)`). Examples: the tab bar indicator, the demo header icon tile.
 2. **Different shape**: judge an icon or a piece of text by its visual mass (imagine it blurred), not its bounding box, and put that mass on the concentric contour. Examples: the toast icon sits in a square as tall as the content, 10dp from the capsule's end and edges; the search magnifier is as far from the capsule end as from its top and bottom; the back chevron and demo icons are centered on their ink centroid; the list `›` is centered on the real glyph ink.
 3. **Near the edges**: nothing pokes into a corner. Either push it inward (short first/last list rows get extra space) or round it concentrically.
 

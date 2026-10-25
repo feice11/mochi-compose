@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +55,7 @@ import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
@@ -71,60 +73,78 @@ fun TextInputPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
     // 0 = 没开，1 = 新建文件夹，2 = Wi-Fi 密码
-    var dialog by remember { mutableIntStateOf(0) }
-    var folder by remember { mutableStateOf("") }
-    var wifi by remember { mutableStateOf("") }
+    var dialog by rememberSaveable { mutableIntStateOf(0) }
+    var folder by rememberSaveable { mutableStateOf("") }
+    var wifi by rememberSaveable { mutableStateOf("") }
     var dialogResult by remember { mutableStateOf<String?>(null) }
 
     DemoPage(entry, modifier) {
-        InlineEditSection()
-        FieldsSection()
-        DemoSection("多行与字数", footer = "多行时随内容长高，高度平滑过渡；单行是胶囊，长高后变成同样半径的圆角矩形。超过上限的字输不进去，字数像计数器一样滚。") {
-            var bio by remember { mutableStateOf("") }
-            MochiTextField(
-                bio,
-                { bio = it },
-                Modifier.fillMaxWidth(),
-                placeholder = "介绍一下自己",
-                singleLine = false,
-                maxLines = 6,
-                maxLength = 80,
-                supportingText = "会显示在你的主页上",
-            )
+        demoItem {
+            InlineEditSection()
         }
-        FormSection()
-        DemoSection("对话框里的输入框", footer = dialogResult ?: "输入框和对话框按钮一样宽、同心；对话框出现时自动聚焦，被键盘顶到上方居中。没填好之前确认按钮是灰的。") {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                MochiButton(onClick = {
-                    folder = ""
-                    dialog = 1
-                }, modifier = Modifier.fillMaxWidth()) { Text("新建文件夹") }
-                MochiButton(onClick = {
-                    wifi = ""
-                    dialog = 2
-                }, modifier = Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) { Text("加入 Wi-Fi（密码）") }
+        demoItem {
+            FieldsSection()
+        }
+        demoItem {
+            DemoSection("多行与字数", footer = "多行时随内容长高，高度平滑过渡；单行是胶囊，长高后变成同样半径的圆角矩形。超过上限的字输不进去，字数像计数器一样滚。") {
+                var bio by rememberSaveable { mutableStateOf("") }
+                MochiTextField(
+                    bio,
+                    { bio = it },
+                    Modifier.fillMaxWidth(),
+                    placeholder = "介绍一下自己",
+                    singleLine = false,
+                    maxLines = 6,
+                    maxLength = 80,
+                    supportingText = "会显示在你的主页上",
+                )
             }
         }
-        CodeSection()
-        ComposerSection()
-        DemoSection("搜索栏", footer = "聚焦时右边的 ✕ 按钮滑进来，输入框让位；详见「导航栏与搜索」。") {
-            var q by remember { mutableStateOf("") }
-            MochiSearchBar(q, { q = it })
+        demoItem {
+            FormSection()
         }
-        DemoSection("用法") {
-            Code(
-                "MochiTextField(text, { text = it }, placeholder = \"昵称\")\n" +
-                    "MochiTextField(pwd, { pwd = it }, secure = true, error = err)\n\n" +
-                    "// 原地改名：editing 由你持有\n" +
-                    "MochiInlineTextField(name, { name = it }, editing, { editing = it })\n\n" +
-                    "// 表单行（放在 MochiListSection 里）\n" +
-                    "MochiListTextFieldRow(phone, { phone = it }, label = \"电话\")\n\n" +
-                    "// 对话框\n" +
-                    "MochiDialog(..., content = {\n" +
-                    "    MochiDialogTextField(name, { name = it }, placeholder = \"名称\")\n" +
-                    "})\n\n" +
-                    "MochiCodeField(code, { code = it }, onComplete = { verify(it) })",
-            )
+        demoItem {
+            DemoSection("对话框里的输入框", footer = dialogResult ?: "输入框和对话框按钮一样宽、同心；对话框出现时自动聚焦，被键盘顶到上方居中。没填好之前确认按钮是灰的。") {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MochiButton(onClick = {
+                        folder = ""
+                        dialog = 1
+                    }, modifier = Modifier.fillMaxWidth()) { Text("新建文件夹") }
+                    MochiButton(onClick = {
+                        wifi = ""
+                        dialog = 2
+                    }, modifier = Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) { Text("加入 Wi-Fi（密码）") }
+                }
+            }
+        }
+        demoItem {
+            CodeSection()
+        }
+        demoItem {
+            ComposerSection()
+        }
+        demoItem {
+            DemoSection("搜索栏", footer = "聚焦时右边的 ✕ 按钮滑进来，输入框让位；详见「导航栏与搜索」。") {
+                var q by rememberSaveable { mutableStateOf("") }
+                MochiSearchBar(q, { q = it })
+            }
+        }
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "MochiTextField(text, { text = it }, placeholder = \"昵称\")\n" +
+                        "MochiTextField(pwd, { pwd = it }, secure = true, error = err)\n\n" +
+                        "// 原地改名：editing 由你持有\n" +
+                        "MochiInlineTextField(name, { name = it }, editing, { editing = it })\n\n" +
+                        "// 表单行（放在 MochiListSection 里）\n" +
+                        "MochiListTextFieldRow(phone, { phone = it }, label = \"电话\")\n\n" +
+                        "// 对话框\n" +
+                        "MochiDialog(..., content = {\n" +
+                        "    MochiDialogTextField(name, { name = it }, placeholder = \"名称\")\n" +
+                        "})\n\n" +
+                        "MochiCodeField(code, { code = it }, onComplete = { verify(it) })",
+                )
+            }
         }
     }
 
@@ -165,10 +185,10 @@ fun TextInputPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 private fun InlineEditSection() {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var name by remember { mutableStateOf("周末采购清单") }
-    var editing by remember { mutableStateOf(false) }
-    var title by remember { mutableStateOf("我的提醒") }
-    var editingTitle by remember { mutableStateOf(false) }
+    var name by rememberSaveable { mutableStateOf("周末采购清单") }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var title by rememberSaveable { mutableStateOf("我的提醒") }
+    var editingTitle by rememberSaveable { mutableStateOf(false) }
     DemoSection(
         "原地更改",
         footer = "点名字或「重命名」：文字原地变成输入框、全选，后面淡入一块底色，位置和字号一点不动。按「完成」或点别处提交，按返回放弃；清空了提交会恢复原名。",
@@ -204,12 +224,12 @@ private fun InlineEditSection() {
 @Composable
 private fun FieldsSection() {
     val cs = MochiTheme.colorScheme
-    var nick by remember { mutableStateOf("") }
-    var mail by remember { mutableStateOf("") }
-    var pwd by remember { mutableStateOf("") }
+    var nick by rememberSaveable { mutableStateOf("") }
+    var mail by rememberSaveable { mutableStateOf("") }
+    var pwd by rememberSaveable { mutableStateOf("") }
     var pwdError by remember { mutableStateOf<String?>(null) }
-    var attempts by remember { mutableIntStateOf(0) }
-    var signedIn by remember { mutableStateOf(false) }
+    var attempts by rememberSaveable { mutableIntStateOf(0) }
+    var signedIn by rememberSaveable { mutableStateOf(false) }
     val mailError = if (mail.length > 3 && '@' !in mail) "邮箱里少了 @" else null
     DemoSection(
         "输入框",
@@ -266,10 +286,10 @@ private fun FieldsSection() {
 /** 设置式表单：输入行和普通行混排，行高一致 */
 @Composable
 private fun FormSection() {
-    var first by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var mail by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    var first by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var mail by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
     var birthday by remember { mutableStateOf<String?>("3月14日") }
     MochiListSection(
         header = "表单",
@@ -302,10 +322,10 @@ private fun FormSection() {
 private fun CodeSection() {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var code by remember { mutableStateOf("") }
-    var wrong by remember { mutableStateOf(false) }
-    var attempts by remember { mutableIntStateOf(0) }
-    var passed by remember { mutableStateOf(false) }
+    var code by rememberSaveable { mutableStateOf("") }
+    var wrong by rememberSaveable { mutableStateOf(false) }
+    var attempts by rememberSaveable { mutableIntStateOf(0) }
+    var passed by rememberSaveable { mutableStateOf(false) }
     DemoSection("验证码", footer = "当前那格描主色边、光标闪烁，数字进来时模糊放大淡入。输入 123456 通过，别的数字整排抖一下、变红。") {
         Column(
             Modifier.fillMaxWidth(),
@@ -354,7 +374,7 @@ private fun ComposerSection() {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
     val sent = remember { mutableStateListOf("晚上一起吃饭吗？") }
-    var msg by remember { mutableStateOf("") }
+    var msg by rememberSaveable { mutableStateOf("") }
     DemoSection("消息输入栏", footer = "胶囊输入框随内容长高，发送键落在最后一行右边；有字时麦克风模糊替换成发送键。") {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.End) {
             sent.forEach { m ->

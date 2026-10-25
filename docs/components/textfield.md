@@ -60,7 +60,7 @@ MochiListSection(header = "Contact") {
 
 - Rows you tap to pick a value instead of typing (birthday, region) use `MochiListFormRow`: same layout as the input rows, the value starts in the same column (not trailing like a settings row), and the whole row highlights on press. With no value it shows a faded placeholder
 
-- Same height as a normal row (at least `RowMinHeight`, at least `RowVerticalPadding` above and below). Separators start at the text, and the card handles first/last padding, following the same rules as the other rows in the card
+- Same height as a normal row (at least `RowMinHeight`, at least `RowVerticalPadding` above and below). Separators start at the text, following the same rules as the other rows in the card
 - Optional label on the left; `labelWidth` defaults to `MochiListTextFieldDefaults.LabelWidth` (88dp). Use the same value within a card so the inputs line up in one column
 - Tapping anywhere on the row focuses it; while focused and non-empty, a clear button blurs in at the end
 - With `singleLine = false` it grows naturally (notes)

@@ -30,6 +30,7 @@ import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.shape.MochiRoundedRectangle
@@ -52,22 +53,26 @@ fun ContextMenuPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     }
     val shape = MochiRoundedRectangle(20.dp)
     DemoPage(entry, modifier) {
-        DemoSection("试一试", footer = last ?: "长按一张卡片。按住时卡片先缩一点，按满时长才弹出菜单。", container = false) {
-            Photos.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { photo ->
-                        MochiContextMenu(
-                            items = items,
-                            onItemClick = { last = "「${photo.title}」：${items[it].label}" },
-                            shape = shape,
-                            modifier = Modifier.weight(1f),
-                        ) { PhotoCard(photo, shape) }
+        demoItem {
+            DemoSection("试一试", footer = last ?: "长按一张卡片。按住时卡片先缩一点，按满时长才弹出菜单。", container = false) {
+                Photos.chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        row.forEach { photo ->
+                            MochiContextMenu(
+                                items = items,
+                                onItemClick = { last = "「${photo.title}」：${items[it].label}" },
+                                shape = shape,
+                                modifier = Modifier.weight(1f),
+                            ) { PhotoCard(photo, shape) }
+                        }
                     }
                 }
             }
         }
-        DemoSection("用法") {
-            Code("MochiContextMenu(\n    items = items,\n    onItemClick = { … },\n) {\n    Card(…)\n}")
+        demoItem {
+            DemoSection("用法") {
+                Code("MochiContextMenu(\n    items = items,\n    onItemClick = { … },\n) {\n    Card(…)\n}")
+            }
         }
     }
 }

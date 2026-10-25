@@ -28,6 +28,9 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        targetSdk = 35
+    }
     publishing {
         singleVariant("release") {
             withSourcesJar()
@@ -49,6 +52,8 @@ dependencies {
     api(libs.androidx.compose.foundation)
     // 形状：iOS 式连续曲率圆角 https://github.com/Kyant0/Capsule
     api(libs.kyant.capsule)
+    // 玻璃材质抓背后的内容 https://github.com/Kyant0/AndroidLiquidGlass
+    implementation(libs.kyant.backdrop)
     // 公开 API 里用到 ImmutableList
     api(libs.kotlinx.collections.immutable)
     // Monet：从种子色生成 MD3 tonal 配色

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,18 +29,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -51,6 +57,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -102,11 +110,15 @@ import ui.feice.mochi.demo.routeTitle
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.effect.content.mochiBlurReveal
 import ui.feice.mochi.effect.elastic.mochiPressDeform
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
+import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.list.MochiListDefaults
+import ui.feice.mochi.list.LocalMochiListItemSpacing
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.list.MochiListSectionFooter
@@ -114,7 +126,7 @@ import ui.feice.mochi.list.MochiListSectionHeader
 import ui.feice.mochi.list.MochiListSliderRow
 import ui.feice.mochi.navigation.MochiBackButton
 import ui.feice.mochi.navigation.MochiNavigator
-import ui.feice.mochi.navigation.mochiScrollEdgeFade
+import ui.feice.mochi.navigation.MochiTitleBar
 import ui.feice.mochi.shape.MochiConcentric
 import ui.feice.mochi.shape.MochiConcentricContainer
 import ui.feice.mochi.shape.MochiRoundedRectangle
@@ -136,12 +148,21 @@ import ui.feice.mochi.utils.MochiHapticProfile
  * - 左上角圆形返回按钮浮在内容上面；往上滚过大标题后，顶栏出现小标题
  */
 @Composable
-internal fun DemoPage(entry: CatalogEntry, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun DemoPage(
+    entry: CatalogEntry,
+    modifier: Modifier = Modifier,
+    list: LazyListState = rememberLazyListState(),
+    // 叠在列表上、顶栏下的一层（例如图标页的字母索引条）
+    overlay: (@Composable BoxScope.() -> Unit)? = null,
+    content: LazyListScope.() -> Unit,
+) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    val scroll = rememberScrollState()
     val density = LocalDensity.current
-    // 大标题在滚动内容里的底边（不随滚动变）和顶栏底边（屏幕坐标），折叠大标题的交接用
+
+    // 大标题在滚动内容里的底边（不随滚动变）和顶栏底边（屏幕坐标），折叠大标题的交接用。
+    // 头部卡片是第 0 项：滚过第 0 项以后大标题早就整个钻到顶栏下面了，按滚了很远算
+    fun scrolled(): Float = if (list.firstVisibleItemIndex > 0) Float.MAX_VALUE / 4f else list.firstVisibleItemScrollOffset.toFloat()
     var titleBottom0 by remember { mutableFloatStateOf(0f) }
     var titleH by remember { mutableFloatStateOf(1f) }
     // 页面自己的坐标系：大标题位置按它算，不用 positionInRoot——打开转场里整页在缩放，
@@ -150,100 +171,104 @@ internal fun DemoPage(entry: CatalogEntry, modifier: Modifier = Modifier, conten
     val barBottomPx = WindowInsets.statusBars.getTop(density) + with(density) { TopBarHeight.toPx() }
 
     // 大标题露在顶栏下面的比例：1 = 整个在顶栏下方，0 = 底边刚好到顶栏下沿。大标题按它淡出、小标题按它淡入，两段交叠
-    fun titleUnder(): Float = (titleBottom0 - scroll.value - barBottomPx) / titleH.coerceAtLeast(1f)
+    fun titleUnder(): Float = (titleBottom0 - scrolled() - barBottomPx) / titleH.coerceAtLeast(1f)
+    // 正文录成背景来源，浮在上面的返回按钮是玻璃时从这里取样（主题没开玻璃时为 null，不多录）
+    val backdrop = rememberMochiBarBackdrop()
     Box(
         modifier
             .fillMaxSize()
             .onPlaced { page[0] = it }
             .background(MochiDefaults.groupedBackground()),
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                // 键盘弹出时滚动区域变矮，聚焦的输入框自己滚到键盘上方
-                .imePadding()
-                .verticalScroll(scroll, flingBehavior = MochiScrollDefaults.flingBehavior())
-                .statusBarsPadding()
-                .padding(top = TopBarHeight)
-                .navigationBarsPadding()
+        val navBottom = WindowInsets.navigationBars.getBottom(density)
+        // mochiListSection 的各行跨过项间距连成一张卡片，要知道间距是多少
+        CompositionLocalProvider(LocalMochiListItemSpacing provides MochiListDefaults.SectionSpacing) {
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .mochiBackdropSource(backdrop)
+                    // 滚到顶栏下面的内容自己渐进模糊（iOS 外观的滚动边缘效果）
+                    .mochiScrollEdgeBlur(with(density) { barBottomPx.toDp() }) { scrolled() / (8.dp.value * density.density) }
+                    // 键盘弹出时滚动区域变矮，聚焦的输入框自己滚到键盘上方
+                    .imePadding(),
+                state = list,
                 // 顶上多留 8dp：返回按钮和头部卡片之间不挤
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SectionSpacing),
-        ) {
-            // 头部卡片只保留图标、标题和简介。
-            // 图标与目录入口共用超椭圆；尺寸可变，轮廓不能在进入详情后换成另一种形状。
-            DemoCard(padding = IntroPadding, corner = IntroCorner, shape = MochiTheme.shapes.extraLargeIncreased) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppIcon(
-                        entry.glyph,
-                        entry.iconColors(),
-                        64.dp,
-                        Modifier,
-                        shape = CatalogIconShape,
-                    )
-                    Spacer(Modifier.weight(1f))
-                    if (entry.status == CatalogStatus.Planned) Tag("开发中", cs.surfaceContainerHighest, cs.onSurfaceVariant)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        entry.title,
-                        style = ts.largeTitle,
-                        // 光学左对齐：大号粗体字形自带的左侧空白抵掉，和图标左边对齐
-                        modifier = Modifier
-                            .mochiOpticalLeading(ts.largeTitle)
-                            .onPlaced {
-                                val y = page[0]?.localPositionOf(it, Offset.Zero)?.y ?: return@onPlaced
-                                titleBottom0 = y + it.size.height + scroll.value
-                                titleH = it.size.height.toFloat()
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = with(density) { barBottomPx.toDp() } + 8.dp,
+                    bottom = with(density) { navBottom.toDp() } + 40.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SectionSpacing),
+                flingBehavior = MochiScrollDefaults.flingBehavior(),
+            ) {
+                // 头部卡片只保留图标、标题和简介。
+                item(key = DemoIntroKey) {
+                    // 图标与目录入口共用超椭圆；尺寸可变，轮廓不能在进入详情后换成另一种形状。
+                    DemoCard(padding = IntroPadding, corner = IntroCorner, shape = MochiTheme.shapes.extraLargeIncreased) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(
+                                entry.glyph,
+                                entry.iconColors(),
+                                64.dp,
+                                Modifier,
+                                shape = CatalogIconShape,
+                            )
+                            Spacer(Modifier.weight(1f))
+                            if (entry.status == CatalogStatus.Planned) Tag("开发中", cs.surfaceContainerHighest, cs.onSurfaceVariant)
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                entry.title,
+                                style = ts.largeTitle,
+                                // 光学左对齐：大号粗体字形自带的左侧空白抵掉，和图标左边对齐
+                                modifier = Modifier
+                                    .mochiOpticalLeading(ts.largeTitle)
+                                    .onPlaced {
+                                        val y = page[0]?.localPositionOf(it, Offset.Zero)?.y ?: return@onPlaced
+                                        titleBottom0 = y + it.size.height + scrolled()
+                                        titleH = it.size.height.toFloat()
+                                    }
+                                    // 滚进顶栏下面时模糊淡出，和顶栏小标题的模糊淡入交接（跟着滚动位置走）
+                                    .mochiBlurReveal({ if (titleBottom0 <= 0f) 1f else smoothstep(0.2f, 1f, titleUnder()) }),
+                            )
+                            // 说明限高（图标和大标题不受影响）：超出的部分在卡片里自己滚着看，上下边有短渐隐遮罩
+                            val descScroll = rememberScrollState()
+                            // 最多露三行简介，再多在卡片里滚
+                            val maxDesc = with(density) { ts.bodyLarge.lineHeight.takeIf { it.isSpecified }?.let { (it * 3).toDp() } } ?: 72.dp
+                            Column(
+                                Modifier
+                                    .heightIn(max = maxDesc)
+                                    .mochiScrollFadeMask(descScroll)
+                                    .verticalScroll(descScroll),
+                            ) {
+                                Text(
+                                    entry.summary,
+                                    style = ts.bodyLarge,
+                                    color = cs.onSurfaceVariant,
+                                )
                             }
-                            // 滚进顶栏下面时模糊淡出，和顶栏小标题的模糊淡入交接（跟着滚动位置走）
-                            .mochiBlurReveal({ if (titleBottom0 <= 0f) 1f else smoothstep(0.2f, 1f, titleUnder()) }),
-                    )
-                    // 说明限高（图标和大标题不受影响）：超出的部分在卡片里自己滚着看，上下边有短渐隐遮罩
-                    val descScroll = rememberScrollState()
-                    // 最多露三行简介，再多在卡片里滚
-                    val maxDesc = with(density) { ts.bodyLarge.lineHeight.takeIf { it.isSpecified }?.let { (it * 3).toDp() } } ?: 72.dp
-                    Column(
-                        Modifier
-                            .heightIn(max = maxDesc)
-                            .mochiScrollFadeMask(descScroll)
-                            .verticalScroll(descScroll),
-                    ) {
-                        Text(
-                            entry.summary,
-                            style = ts.bodyLarge,
-                            color = cs.onSurfaceVariant,
-                        )
+                        }
                     }
                 }
+                content()
             }
-            content()
         }
+        overlay?.invoke(this)
         // 顶栏：返回按钮 + 滚过大标题后出现的居中小标题。
         // 内容一开始往上滚，顶栏（连同状态栏）就铺上底色，并往下渐隐一段（iOS 26 的滚动边缘效果），不画分隔线
         val fadePx = with(density) { 8.dp.toPx() }
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .mochiScrollEdgeFade(MochiDefaults.groupedBackground(), alpha = { scroll.value / fadePx })
-                .statusBarsPadding()
-                .height(TopBarHeight)
-                .padding(horizontal = MochiButtonDefaults.BarHorizontalPadding),
-        ) {
-            // 长按返回按钮：返回历史（iOS）
-            MochiBackButton(Modifier.align(Alignment.CenterStart), history = ::routeTitle)
-            Text(
-                entry.title,
-                style = ts.navTitle,
-                maxLines = 1,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 56.dp)
-                    // 淡入的同时从下方 6dp 滑到位（iOS 26 的小标题）
-                    // 大标题钻到顶栏下面以后模糊淡入（iOS 26）
-                    .mochiBlurReveal({ if (titleBottom0 <= 0f) 0f else 1f - smoothstep(-0.1f, 0.5f, titleUnder()) }, rise = 6.dp),
-            )
-        }
+        // 用库的 MochiTitleBar：返回按钮是玻璃时，它取样的是模糊后的正文再叠上顶栏渐隐（和眼睛看到的一致），
+        // 自己拼顶栏只给正文录制的话，描边那圈会透出没叠渐隐的内容
+        MochiTitleBar(
+            title = entry.title,
+            navigationIcon = { MochiBackButton(history = ::routeTitle) },
+            barHeight = TopBarHeight,
+            // 大标题钻到顶栏下面以后模糊淡入（iOS 26）
+            titleProgress = { if (titleBottom0 <= 0f) 0f else 1f - smoothstep(-0.1f, 0.5f, titleUnder()) },
+            backgroundProgress = { scrolled() / fadePx },
+            backdrop = backdrop,
+        )
     }
 }
 
@@ -269,9 +294,23 @@ internal fun BackButton(modifier: Modifier = Modifier, container: Color? = null,
     MochiBackButton(modifier, colors = base.copy(container = container ?: base.container, content = tint ?: base.content))
 }
 
+/** 头部卡片在演示页列表里的 key */
+private const val DemoIntroKey = "demo-intro"
+
+/**
+ * 演示页（[DemoPage]）列表里的一项：一般是一个分组；放几个时竖着排，间距和分组之间一样。
+ * 演示页按懒加载列表排，只有屏幕附近的项在界面树里，见设计规范「长页面用懒加载列表」
+ */
+internal fun LazyListScope.demoItem(key: Any? = null, content: @Composable ColumnScope.() -> Unit) {
+    item(key) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SectionSpacing), content = content)
+    }
+}
+
 /**
  * 分组：小标题 + 圆角容器。演示页的内容都放在分组里。
  * @param footer 容器下方的补充说明
+ * @param clip 没有内边距时把内容裁进卡片形状（见 [DemoCard]）
  */
 @Composable
 internal fun DemoSection(
@@ -281,6 +320,7 @@ internal fun DemoSection(
     padding: Dp = 16.dp,
     container: Boolean = true,
     animateHeight: Boolean = true,
+    clip: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 小标题和说明用库里列表的同一套（字号、颜色、缩进、和卡片的距离都一致）
@@ -288,7 +328,7 @@ internal fun DemoSection(
         if (title != null) MochiListSectionHeader(title)
         // container = false：内容本身就是卡片（比如彩色照片卡），直接放在页面底色上，不再套一层
         if (container) {
-            DemoCard(padding = padding, animateHeight = animateHeight, content = content)
+            DemoCard(padding = padding, animateHeight = animateHeight, clip = clip, content = content)
         } else {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
         }
@@ -385,6 +425,7 @@ internal fun DemoCard(
     animateHeight: Boolean = true,
     corner: Dp = SectionCorner,
     shape: Shape = MochiTheme.shapes.extraLarge,
+    clip: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     MochiConcentricContainer(corner, padding) {
@@ -394,8 +435,9 @@ internal fun DemoCard(
                 .background(MochiDefaults.groupedContainer(), shape)
                 .mochiAnimateHeight(shape, enabled = animateHeight)
                 // 没有内边距 = 内容铺满卡片（演示舞台、列表、轮播），自带底色时会把卡片圆角盖成直角：
-                // 这种情况由卡片统一裁进自己的形状，演示不用各自记得 clip
-                .then(if (padding == 0.dp) Modifier.clip(shape) else Modifier)
+                // 这种情况由卡片统一裁进自己的形状，演示不用各自记得 clip。
+                // 内容自己按卡片圆角画角上的色块时传 clip = false：按连续圆角路径裁剪整张卡片，滚动时每帧都要重新生成一张卡片大小的遮罩
+                .then(if (padding == 0.dp && clip) Modifier.clip(shape) else Modifier)
                 .padding(padding),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             content = content,

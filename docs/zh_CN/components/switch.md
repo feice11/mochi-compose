@@ -2,7 +2,7 @@
 
 开关：iOS 26 的样子和手感（不做玻璃）。64×28 的轨道 + 38×24 的白色胶囊拇指，轨道和拇指都是 G2 连续曲率胶囊。
 
-旋钮和未选中轨道默认读取 `MochiDefaults.controlThumb()` / `controlTrack()`；未提供 `LocalMochiControlPalette` 时保持原先白色旋钮与 `fill()` 底槽，可选外观可统一覆盖，显式传入 `colors` 仍优先。
+旋钮和未选中轨道默认读取 `MochiDefaults.controlThumb()` / `controlTrack()`；未提供 `LocalMochiControlPalette` 时保持原先白色旋钮与 `fill()` 底槽（`fill()` 本身也可由 `MochiControlPalette.fill` 覆盖），可选外观可统一覆盖，显式传入 `colors` 仍优先。
 
 - **点一下**：拇指带速度滑过去，沿运动方向拉长、到位压扁回弹；轨道颜色随拇指位置连续过渡。
 - **按住**：拇指放大到溢出轨道，投影变深并发光。

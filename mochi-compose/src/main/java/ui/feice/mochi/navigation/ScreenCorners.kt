@@ -18,7 +18,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 
 /**
- * 屏幕四个物理圆角的半径（px）。转场时页面边缘用它裁剪，整屏时和屏幕边缘完全重合。
+ * 屏幕四个物理圆角的半径（px）。转场时沿用这些半径生成 G2 连续曲率轮廓；不是用普通圆弧剪切。整屏静止时不额外处理轮廓。
  * 系统不提供（API 31 以下、屏幕本身是直角）时是 0，和屏幕一致。
  */
 @Immutable

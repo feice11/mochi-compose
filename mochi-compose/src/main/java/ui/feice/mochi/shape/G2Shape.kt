@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.Dp
 import com.kyant.capsule.Continuity
 import com.kyant.capsule.ContinuousRoundedRectangle
 import com.kyant.capsule.continuities.G1Continuity
-import com.kyant.capsule.path.toPath
 import kotlin.math.min
 
 /*
@@ -30,7 +29,7 @@ internal fun Path.addG2RoundRect(rect: Rect, radius: Float, smoothing: Float) {
     val r = radius.coerceIn(0f, min(rect.width, rect.height) / 2f).toDouble()
     val p = continuityFor(smoothing)
         .createRoundedRectanglePathSegments(rect.width.toDouble(), rect.height.toDouble(), r, r, r, r)
-        .toPath()
+        .toConvexPath()
     addPath(p, rect.topLeft)
 }
 
@@ -47,7 +46,7 @@ internal fun Path.addG2RoundRect(rect: Rect, topLeft: Float, topRight: Float, bo
             bottomRight.coerceIn(0f, half).toDouble(),
             bottomLeft.coerceIn(0f, half).toDouble(),
         )
-        .toPath()
+        .toConvexPath()
     addPath(p, rect.topLeft)
 }
 

@@ -20,7 +20,7 @@
 | `pop()` / `popTo(index)` | Back one page / return to an earlier page (root index 0) |
 | `MochiNavigator.current` | Enclosing host's navigator |
 | `mochiNavSource(key, cornerRadius, color)` | Source registration matching the real card's key, radius and color |
-| `mochiNavOccluder()` | Registers a bar floating over content as an occluder: during a source morph the bar stays above the container and fades with progress; built into `MochiTitleBar`, `mochiScrollEdgeFade`, `MochiTabBar`, `MochiBottomToolbar` |
+| `mochiNavOccluder()` | Registers a bar floating over content as an occluder: during a source morph the bar stays above the container and fades with progress (a glass bar shows the morphing container through it, not the covered content); built into `MochiTitleBar`, `mochiScrollEdgeFade`, `MochiTabBar`, `MochiBottomToolbar` |
 | `rememberMochiScreenCorners()` | Four physical corner radii in px, not dp |
 | `MochiNavHost(corners = …)` | Corner override; inherit sheet corners inside a sheet and screen corners elsewhere by default; `MochiScreenCorners.None` explicitly disables inner transition rounding |
 
@@ -64,17 +64,17 @@ fun NavigationBasics() {
 
 Register the outer card so the whole card is recorded. Source/target contents retain their measured layout; transforms and corners animate in layers without reflowing the whole page each frame. Opening and closing default to iOS smooth 300ms for size and corners (`MochiSprings.smooth(300)`: no bounce, settles smoothly), while position uses its own slightly bouncy snappy 300ms (`openMove` / `closeMove`) that overshoots a little before settling; keeping velocity when reversed mid-way. You can swipe back while the page is still opening without waiting for it to settle, and tapping a page that is shrinking back reopens it from where it is. Customize through `MochiNavDefaults.spec()` rather than copying the engine.
 
-The source picture fades out early while the page overlaps it with a fade-in; closing restores the source. The underlying page keeps composition and scroll state, recedes/dims during transition, and is not drawn when fully covered. Source morphs use `backdrop` around the receding page (black by default); pushes use `pushBackdrop` (grouped page color by default).
+The source picture fades out early while the page overlaps it with a fade-in; closing restores the source. The underlying page keeps composition and scroll state, stays at its original scale and only dims during transition, and is not drawn when fully covered. Source morphs use `backdrop` around the receding page (black by default); pushes use `pushBackdrop` (grouped page color by default).
 
 ## Push and back
 
 `nav.push("detail")` without `from` pushes a page from the right and shifts the lower page left. Register toolbars as below: using Mochi-looking buttons alone does not enable sharing. `MochiNavSpec.push` is critically damped by default; interruption/reversal continues from current progress and velocity instead of resetting.
 
-`MochiBackButton` defaults to the current navigator's `pop()`. The host handles system back and gestures; do not install a competing page handler. Independent overlays close according to their own back lifecycle first. `popTo(index)` returns farther back; `MochiBackButton(history = { route -> title })` enables long-press history with a business-provided title mapping.
+`MochiBackButton` defaults to the current navigator's `pop()`. Outside a `MochiNavHost`, or on its first page, it forwards to the Activity's `OnBackPressedDispatcher`, so outer handlers close a sheet or finish the Activity instead of the button doing nothing. The host handles system back and gestures; do not install a competing page handler. Independent overlays close according to their own back lifecycle first. `popTo(index)` returns farther back; `MochiBackButton(history = { route -> title })` enables long-press history with a business-provided title mapping.
 
 Set `android:enableOnBackInvokedCallback="true"` on the application for predictive back. Android 14 may also require its developer option; three-button navigation or missing gesture progress still commits a normal exit animation.
 
-Full-screen swipe back handles only input not consumed by children, preserving horizontal lists, switches, sliders and swipe rows. Only a fully open top page responds. Push pages translate with the finger; source pages shrink toward the source; cancellation restores the current page. The touch is consumed the moment the gesture is claimed, so outer gestures that also wait for unconsumed drags ([sidebar](../components/sidebar.md), an outer navigator) do not claim it too: swiping right on a child page goes back, and only on the root page does it open the sidebar.
+Full-screen swipe back handles only input not consumed by children, preserving horizontal lists, switches, sliders and swipe rows. Only a fully open top page responds. Push pages translate with the finger; source pages shrink toward the source; cancellation restores the current page. On release, as long as the finger is still right of where it started, velocity decides: a fling to the left (over 150dp/s) cancels, moving right or holding still goes back; there is no halfway threshold. The touch is consumed the moment the gesture is claimed, so outer gestures that also wait for unconsumed drags ([sidebar](../components/sidebar.md), an outer navigator) do not claim it too: swiping right on a child page goes back, and only on the root page does it open the sidebar.
 
 ## Shared toolbar
 
@@ -133,7 +133,7 @@ Load business data asynchronously. The host waits until the new page has compose
 
 The host keeps the drawing cost of transitions down by itself; pages do not need to cooperate:
 
-- When opening from / closing back into a source, the top page and the page it covers are each drawn into an offscreen layer, and only that image is scaled and clipped per frame. The source card's image is cached as a texture during the transition as well.
+- When opening from / closing back into a source, the captured top-page image is transformed and given a G2 alpha contour; the covered page stays in place by default. The source card's image is cached as a texture during the transition as well.
 - Bars collapsed with `mochiHideWhenCovered` in the covered page (tab bar, bottom toolbar) are drawn by the host meanwhile, with the same position, slide and stacking as before, so the covered page is not redrawn every frame just because a bar moves.
 - In pages, do not write screen coordinates that change with the transition (`positionInRoot` / `positionInWindow`) into state that triggers recomposition or redraw every frame: the whole page is scaling, those values change every frame, and the offscreen cache is invalidated every frame. Use page-local coordinates (`localPositionOf`) when a position within the page is needed; the library's menu anchors only track their position while the menu is open.
 
@@ -169,3 +169,17 @@ MochiPeerTransition(
 - During a transition each page is drawn into its own offscreen layer and only that image is scaled, moved and faded, so text glyphs and paths are not re-rasterized at every frame's scale. At rest no offscreen layer is used.
 - Without `pages`, `direction` decides the side: positive means the new page is on the right, negative on the left. `background` is drawn under each page and `backdrop` fills the gap and the area around shrunk pages. Tuning lives in `MochiPeerTransitionSpec`: minimum scale, gap width, how far the pages travel before reaching minimum scale, and the spring.
 - The demo app's home tab bar uses it (Depth style) and also switches tabs on swipe; Navigation → 同层级切换 has a standalone demo of the sliding style.
+
+## Back previews and persistent tab bars
+
+`MochiNavHost(predictiveBack = false)` disables system predictive-back previews while ordinary back still pops. Nested hosts and sheets inherit `LocalMochiPredictiveBack`. The app's full-screen swipe-back gesture remains independent. The demo stores this preference under Theme → Appearance.
+
+`MochiTabScaffold(collapseOnScroll = false)` keeps the bar expanded while scrolling; the default true preserves existing library behavior. Reselect-to-top, independent tab positions and hiding when covered still work. The demo home passes false.
+
+During source morphs the navigation host exclusively draws registered occluders; the original page and carried-bar layer do not also paint the same surface and shadow. During side pushes the original page remains the sole owner. Reverse and cancelled transitions use the same ownership rule.
+
+## Stationary source backgrounds and G2 contours
+
+The underlying page stays at its original scale during source expansion, return and predictive back, preserving scroll position, source coordinates and bar positions. `underScale` defaults to 1; explicit values below 1 retain legacy depth for existing callers. Dimming is calculated independently from scale.
+
+Pushes and source morphs use the same Kyant G2 continuous contour, retaining screen radii and each sheet corner (full-height sheet bottom corners remain zero). The existing captured page uses an antialiased exterior alpha mask instead of a `graphicsLayer.clip` or path clip on the page tree. Occluder overlays use the same contour. The mask is removed at rest.

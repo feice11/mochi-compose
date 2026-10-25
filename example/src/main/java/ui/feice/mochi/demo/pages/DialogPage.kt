@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -30,6 +31,7 @@ import ui.feice.mochi.demo.common.DemoSettingsSection
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Toggles
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 
 /**
@@ -38,42 +40,48 @@ import ui.feice.mochi.demo.common.tile
 @Composable
 fun DialogPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     // 0 = 没开，1 = 两个按钮，2 = 三个按钮，3 = 一个按钮
-    var open by remember { mutableIntStateOf(0) }
+    var open by rememberSaveable { mutableIntStateOf(0) }
     var last by remember { mutableStateOf<String?>(null) }
-    var outside by remember { mutableStateOf(false) }
+    var outside by rememberSaveable { mutableStateOf(false) }
     val close = { open = 0 }
 
     DemoPage(entry, modifier) {
-        DemoSection(
-            "试一试",
-            footer = last ?: "按住一个按钮拖动：它放大发光跟手，和旁边的按钮连起来。用返回手势慢慢拖，对话框跟着缩小，松手关闭。",
-        ) {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                MochiButton(onClick = { open = 1 }, modifier = Modifier.fillMaxWidth()) { Text("删除笔记（两个按钮）") }
-                MochiButton(onClick = { open = 2 }, modifier = Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) {
-                    Text("照片权限（三个按钮）")
-                }
-                MochiButton(onClick = { open = 3 }, modifier = Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) {
-                    Text("只有一个按钮")
+        demoItem {
+            DemoSection(
+                "试一试",
+                footer = last ?: "按住一个按钮拖动：它放大发光跟手，和旁边的按钮连起来。用返回手势慢慢拖，对话框跟着缩小，松手关闭。",
+            ) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MochiButton(onClick = { open = 1 }, modifier = Modifier.fillMaxWidth()) { Text("删除笔记（两个按钮）") }
+                    MochiButton(onClick = { open = 2 }, modifier = Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) {
+                        Text("照片权限（三个按钮）")
+                    }
+                    MochiButton(onClick = { open = 3 }, modifier = Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) {
+                        Text("只有一个按钮")
+                    }
                 }
             }
         }
-        DemoSettingsSection("调参") {
-            Toggles("点外面关闭", listOf("开" to true, "关" to false), outside) { outside = it }
+        demoItem {
+            DemoSettingsSection("调参") {
+                Toggles("点外面关闭", listOf("开" to true, "关" to false), outside) { outside = it }
+            }
         }
-        DemoSection("用法") {
-            Code(
-                "MochiDialog(\n" +
-                    "    visible = show,\n" +
-                    "    onDismissRequest = { show = false },\n" +
-                    "    title = \"删除这条笔记？\",\n" +
-                    "    message = \"删除后无法恢复。\",\n" +
-                    "    actions = persistentListOf(\n" +
-                    "        MochiDialogAction(\"取消\", MochiDialogActionRole.Cancel),\n" +
-                    "        MochiDialogAction(\"删除\", MochiDialogActionRole.Destructive) { … },\n" +
-                    "    ),\n" +
-                    ")",
-            )
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "MochiDialog(\n" +
+                        "    visible = show,\n" +
+                        "    onDismissRequest = { show = false },\n" +
+                        "    title = \"删除这条笔记？\",\n" +
+                        "    message = \"删除后无法恢复。\",\n" +
+                        "    actions = persistentListOf(\n" +
+                        "        MochiDialogAction(\"取消\", MochiDialogActionRole.Cancel),\n" +
+                        "        MochiDialogAction(\"删除\", MochiDialogActionRole.Destructive) { … },\n" +
+                        "    ),\n" +
+                        ")",
+                )
+            }
         }
     }
 

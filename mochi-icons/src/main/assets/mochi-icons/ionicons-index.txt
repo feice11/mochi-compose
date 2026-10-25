@@ -1,0 +1,516 @@
+# ionicons 8.1.0
+accessibility	7	
+add	7	circle include invite plus
+add-circle	7	add circle include invite plus
+airplane	7	plane
+alarm	7	clock time
+albums	7	boxes slides square
+alert	7	! attention exclamation notice warning
+alert-circle	7	! alert attention circle exclamation notice warning
+american-football	7	american football
+analytics	7	data metrics track
+aperture	7	dark images levels light settings
+apps	7	applications
+archive	7	email
+arrow-back	7	arrow back chevron left navigation
+arrow-back-circle	7	arrow back chevron circle left navigation
+arrow-down	7	arrow chevron down
+arrow-down-circle	7	arrow chevron circle down
+arrow-down-left-box	7	arrow box down left
+arrow-down-right-box	7	arrow box down right
+arrow-forward	7	arrow chevron forward navigation right
+arrow-forward-circle	7	arrow chevron circle forward navigation right
+arrow-redo	7	arrow redo
+arrow-redo-circle	7	arrow circle redo
+arrow-undo	7	arrow undo
+arrow-undo-circle	7	arrow circle undo
+arrow-up	7	arrow chevron up
+arrow-up-circle	7	arrow chevron circle up
+arrow-up-left-box	7	arrow box left up
+arrow-up-right-box	7	arrow box right up
+at	7	@
+at-circle	7	@ at circle
+attach	7	
+backspace	7	
+bag	7	
+bag-add	7	add bag
+bag-check	7	bag check
+bag-handle	7	bag handle
+bag-remove	7	bag remove
+balloon	7	
+ban	7	
+bandage	7	
+bar-chart	7	bar chart
+barbell	7	exercise lifting weight
+barcode	7	camera reader
+baseball	7	
+basket	7	
+basketball	7	
+battery-charging	7	battery charging
+battery-dead	7	battery dead
+battery-full	7	battery full
+battery-half	7	battery half
+beaker	7	flask mixture potion
+bed	7	hotel loveseat sleep
+beer	7	drink eat food
+bicycle	7	bike exercise
+binoculars	7	
+bluetooth	7	cloud connection
+boat	7	
+body	7	
+bonfire	7	heat hot
+book	7	read
+bookmark	7	favorite save tag
+bookmarks	7	favorite
+bowling-ball	7	ball bowling
+briefcase	7	folder organize
+browsers	7	square
+brush	7	
+bug	7	develop error hacker program
+build	7	
+bulb	7	
+bus	7	
+business	7	
+cafe	7	coffee cup
+calculator	7	arithmetic math
+calendar	7	date month week
+calendar-clear	7	calendar clear
+calendar-number	7	calendar number
+call	7	telephone
+camera	7	image photo
+camera-reverse	7	camera reverse
+car	7	
+car-sport	7	car sport
+card	7	$ cash credit debit dollars money price shopping
+caret-back	7	arrow back caret left
+caret-back-circle	7	arrow back caret circle left
+caret-down	7	arrow caret down
+caret-down-circle	7	arrow caret circle down
+caret-forward	7	arrow caret forward right
+caret-forward-circle	7	arrow caret circle forward right
+caret-up	7	arrow caret up
+caret-up-circle	7	arrow caret circle up
+cart	7	
+cash	7	$ credit debit dollars money price shopping
+cellular	7	
+chatbox	7	
+chatbox-ellipses	7	chatbox ellipses
+chatbubble	7	
+chatbubble-ellipses	7	chatbubble ellipses
+chatbubbles	7	talk
+checkbox	7	
+checkmark	7	circle
+checkmark-circle	7	checkmark circle
+checkmark-done	7	checkmark done
+checkmark-done-circle	7	checkmark circle done
+chevron-back	7	arrow back chevron left
+chevron-back-circle	7	arrow back chevron circle left
+chevron-collapse	7	chevron collapse
+chevron-down	7	arrow chevron down
+chevron-down-circle	7	arrow chevron circle down
+chevron-expand	7	chevron expand
+chevron-forward	7	arrow chevron forward right
+chevron-forward-circle	7	arrow chevron circle forward right
+chevron-up	7	arrow chevron up
+chevron-up-circle	7	arrow chevron circle up
+clipboard	7	copy paste write
+close	7	circle delete remove
+close-circle	7	circle close delete remove
+cloud	7	circle storage weather whether
+cloud-circle	7	circle cloud storage weather whether
+cloud-done	7	cloud done
+cloud-download	7	cloud download storage
+cloud-offline	7	cloud offline
+cloud-upload	7	cloud storage upload
+cloudy	7	overcast weather whether
+cloudy-night	7	cloudy night overcast weather whether
+code	7	develop hacker program
+code-download	7	code develop download hacker program
+code-slash	7	code slash
+code-working	7	code develop hacker program working
+cog	7	gear options settings
+color-fill	7	color fill
+color-filter	7	color filter
+color-palette	7	color palette
+color-wand	7	color wand
+compass	7	directions location navigation
+construct	7	
+contract	7	
+contrast	7	dark images levels light settings
+copy	7	duplicate paper
+create	7	edit
+crop	7	
+cube	7	box container square
+cut	7	
+desktop	7	
+diamond	7	
+dice	7	
+disc	7	cd vinyl
+document	7	file paper
+document-attach	7	attach document
+document-lock	7	document lock
+document-text	7	document text
+documents	7	
+download	7	export
+duplicate	7	
+ear	7	
+earth	7	globe
+easel	7	
+egg	7	baby bird birth twitter
+ellipse	7	circle
+ellipsis-horizontal	7	ellipsis horizontal
+ellipsis-horizontal-circle	7	circle ellipsis horizontal
+ellipsis-vertical	7	ellipsis vertical
+ellipsis-vertical-circle	7	circle ellipsis vertical
+enter	7	
+exit	7	
+expand	7	resize
+extension-puzzle	7	extension puzzle
+eye	7	exposed look see view
+eye-off	7	eye off
+eyedrop	7	
+fast-food	7	fast food
+female	7	dudette girl lady woman
+file-tray	7	file tray
+file-tray-full	7	file full tray
+file-tray-stacked	7	file stacked tray
+film	7	
+filter	7	
+filter-circle	7	circle filter
+finger-print	7	finger print
+fish	7	
+fitness	7	
+flag	7	favorite marker
+flame	7	fire heat hot
+flash	7	lightning weather whether
+flash-off	7	flash off
+flashlight	7	
+flask	7	bubbles mixture potion
+flower	7	
+folder	7	file
+folder-open	7	folder open
+football	7	soccer
+footsteps	7	
+funnel	7	sort
+game-controller	7	controller game
+gift	7	
+git-branch	7	branch git
+git-commit	7	commit git
+git-compare	7	compare git
+git-merge	7	git merge
+git-network	7	git network
+git-pull-request	7	git pull request
+glasses	7	look reading see steve
+globe	7	internet world
+golf	7	
+grid	7	menu
+hammer	7	options settings tools
+hand-left	7	hand left
+hand-right	7	hand right
+happy	7	fun good like smile yes
+hardware-chip	7	chip hardware
+headset	7	
+heart	7	love
+heart-circle	7	circle heart love
+heart-dislike	7	dislike heart love
+heart-dislike-circle	7	circle dislike heart love
+heart-half	7	half heart love
+help	7	? circle information question
+help-buoy	7	? buoy help question
+help-circle	7	? circle help information question
+home	7	house
+hourglass	7	time
+ice-cream	7	cream ice
+id-card	7	card id
+image	7	camera photo
+images	7	photo
+infinite	7	forever loop
+information	7	circle help knowledge
+information-circle	7	circle help information knowledge
+invert-mode	7	invert mode
+journal	7	
+key	7	access
+keypad	7	type
+language	7	
+laptop	7	apple macbook osx
+layers	7	
+leaf	7	green nature plant recycle
+library	7	
+link	7	anchor attach chain href
+list	7	
+list-circle	7	circle list
+locate	7	gps maps navigate
+location	7	
+lock-closed	7	closed lock
+lock-open	7	lock open
+log-in	7	login signin
+log-out	7	logout signout
+logo-alipay	2	alipay logo
+logo-amazon	2	amazon logo
+logo-amplify	2	amplify logo
+logo-android	2	android logo
+logo-angular	2	angular logo
+logo-appflow	2	appflow logo
+logo-apple	2	apple logo
+logo-apple-appstore	2	apple appstore logo
+logo-apple-ar	2	apple ar logo
+logo-behance	2	behance logo
+logo-bitbucket	2	bitbucket logo
+logo-bitcoin	2	bitcoin logo
+logo-buffer	2	buffer logo
+logo-capacitor	2	capacitor logo
+logo-chrome	2	chrome logo
+logo-closed-captioning	2	captioning closed logo
+logo-codepen	2	codepen logo
+logo-css3	2	css3 logo
+logo-designernews	2	designernews logo
+logo-deviantart	2	deviantart logo
+logo-discord	2	discord logo
+logo-docker	2	docker logo
+logo-dribbble	2	dribbble logo
+logo-dropbox	2	dropbox logo
+logo-edge	2	edge logo
+logo-electron	2	electron logo
+logo-euro	2	euro logo
+logo-facebook	2	facebook logo
+logo-figma	2	figma logo
+logo-firebase	2	firebase logo
+logo-firefox	2	firefox logo
+logo-flickr	2	flickr logo
+logo-foursquare	2	foursquare logo
+logo-github	2	github logo
+logo-gitlab	2	gitlab logo
+logo-google	2	google logo
+logo-google-playstore	2	google logo playstore
+logo-hackernews	2	hackernews logo
+logo-html5	2	html5 logo
+logo-instagram	2	instagram logo
+logo-ionic	2	ionic logo
+logo-ionitron	2	ionitron logo
+logo-javascript	2	javascript logo
+logo-laravel	2	laravel logo
+logo-linkedin	2	linkedin logo
+logo-markdown	2	logo markdown
+logo-mastodon	2	logo mastodon
+logo-medium	2	logo medium
+logo-microsoft	2	logo microsoft
+logo-no-smoking	2	logo no smoking
+logo-nodejs	2	logo nodejs
+logo-npm	2	logo npm
+logo-octocat	2	logo octocat
+logo-paypal	2	logo paypal
+logo-pinterest	2	logo pinterest
+logo-playstation	2	logo playstation
+logo-pwa	2	logo pwa
+logo-python	2	logo python
+logo-react	2	logo react
+logo-reddit	2	logo reddit
+logo-rss	2	logo rss
+logo-sass	2	logo sass
+logo-skype	2	logo skype
+logo-slack	2	logo slack
+logo-snapchat	2	logo snapchat
+logo-soundcloud	2	logo soundcloud
+logo-stackoverflow	2	logo stackoverflow
+logo-steam	2	logo steam
+logo-stencil	2	logo stencil
+logo-tableau	2	logo tableau
+logo-threads	2	logo threads
+logo-tiktok	2	logo tiktok
+logo-trapeze	2	logo trapeze
+logo-tumblr	2	logo tumblr
+logo-tux	2	logo tux
+logo-twitch	2	logo twitch
+logo-twitter	2	logo twitter x
+logo-usd	2	logo usd
+logo-venmo	2	logo venmo
+logo-vercel	2	logo vercel
+logo-vimeo	2	logo vimeo
+logo-vk	2	logo vk
+logo-vue	2	logo vue
+logo-web-component	2	component logo web
+logo-wechat	2	logo wechat
+logo-whatsapp	2	logo whatsapp
+logo-windows	2	logo windows
+logo-wordpress	2	logo wordpress
+logo-x	2	logo twitter x
+logo-xbox	2	logo xbox
+logo-xing	2	logo xing
+logo-yahoo	2	logo yahoo
+logo-yen	2	logo yen
+logo-youtube	2	logo youtube
+magnet	7	attraction sticky
+mail	7	email
+mail-open	7	mail open
+mail-unread	7	mail unread
+male	7	boy dude guy
+male-female	7	female male
+man	7	boy dude guy male
+map	7	gps navigation pin
+medal	7	
+medical	7	
+medkit	7	case disease firstaid health sick
+megaphone	7	
+menu	7	
+mic	7	noise sound speaker talk
+mic-circle	7	circle mic noise sound speaker talk
+mic-off	7	mic noise off sound speaker talk
+mic-off-circle	7	circle mic noise off sound speaker talk
+moon	7	dark night sky
+move	7	
+musical-note	7	listening musical noise note play sound
+musical-notes	7	listening musical noise notes play sound
+navigate	7	gps location map pin
+navigate-circle	7	circle gps location map navigate pin
+newspaper	7	
+notifications	7	bell
+notifications-circle	7	bell circle notifications
+notifications-off	7	bell notifications off
+notifications-off-circle	7	bell circle notifications off
+nuclear	7	danger hazard warning
+nutrition	7	
+open	7	anchor external link
+options	7	filters sliders
+paper-plane	7	paper plane
+partly-sunny	7	partly sunny
+pause	7	break freeze hold music
+pause-circle	7	break circle freeze hold music pause
+paw	7	
+pencil	7	
+people	7	head human person stalker users
+people-circle	7	circle contacts head human people person stalker users
+person	7	head human staff users
+person-add	7	add head human member new person staff users
+person-circle	7	circle head human person staff users
+person-remove	7	person remove
+phone-landscape	7	landscape phone
+phone-portrait	7	phone portrait
+pie-chart	7	chart pie
+pin	7	gps location navigation
+pint	7	
+pizza	7	drink eat food
+planet	7	globe home nature space world
+play	7	arrow music right watch
+play-back	7	back left play
+play-back-circle	7	back circle left play
+play-circle	7	arrow circle music play right watch
+play-forward	7	forward play right
+play-forward-circle	7	circle forward play right
+play-skip-back	7	back left play skip
+play-skip-back-circle	7	back circle left play skip
+play-skip-forward	7	forward play right skip
+play-skip-forward-circle	7	circle forward play right skip
+podium	7	award compete competition lose win
+power	7	off on
+pricetag	7	$ commerce items money shopping
+pricetags	7	$ commerce items money shopping
+print	7	fax
+prism	7	
+pulse	7	hot live rate
+push	7	
+qr-code	7	code qr
+radio	7	music
+radio-button-off	7	button off radio
+radio-button-on	7	button on radio
+rainy	7	cloud water weather whether
+reader	7	
+receipt	7	
+recording	7	film tape voicemail
+refresh	7	circle reload renew reset
+refresh-circle	7	circle refresh reload renew reset
+reload	7	
+reload-circle	7	circle reload
+remove	7	circle minus subtract
+remove-circle	7	circle minus remove subtract
+reorder-four	7	four reorder
+reorder-three	7	reorder three
+reorder-two	7	reorder two
+repeat	7	
+resize	7	
+restaurant	7	eat
+return-down-back	7	back down left return
+return-down-forward	7	down forward return right
+return-up-back	7	back left return up
+return-up-forward	7	forward return right up
+ribbon	7	
+rocket	7	
+rose	7	flower
+sad	7	bad cry no
+save	7	
+scale	7	
+scan	7	
+scan-circle	7	circle scan
+school	7	
+search	7	glass magnifying
+search-circle	7	circle glass magnifying search
+send	7	email paper
+server	7	
+settings	7	options
+shapes	7	
+share	7	
+share-social	7	share social
+shield	7	
+shield-checkmark	7	checkmark shield
+shield-half	7	half shield
+shirt	7	
+shuffle	7	random
+skull	7	
+snow	7	cold
+sparkles	7	
+speedometer	7	drive level speed
+square	7	
+star	7	favorite
+star-half	7	favorite half rate star
+stats-chart	7	chart stats
+stop	7	
+stop-circle	7	circle stop
+stopwatch	7	time
+storefront	7	
+subway	7	
+sunny	7	light sky weather whether
+swap-horizontal	7	horizontal swap
+swap-vertical	7	swap vertical
+sync	7	
+sync-circle	7	circle sync
+tablet-landscape	7	landscape tablet
+tablet-portrait	7	portrait tablet
+telescope	7	
+tennisball	7	
+terminal	7	
+text	7	
+thermometer	7	cold heat hot mercury temperature
+thumbs-down	7	down thumbs
+thumbs-up	7	thumbs up
+thunderstorm	7	cloudy lightning overcast rain sky storm weather whether
+ticket	7	
+time	7	clock hour minute second watch
+timer	7	clock
+today	7	
+toggle	7	switch
+trail-sign	7	sign trail
+train	7	
+transgender	7	
+trash	7	close delete remove
+trash-bin	7	bin trash
+trending-down	7	down trending
+trending-up	7	trending up
+triangle	7	
+trophy	7	award compete competition lose win
+tv	7	television
+umbrella	7	dry rain shelter wet
+unlink	7	
+videocam	7	camera film movie
+videocam-off	7	off videocam
+volume-high	7	high volume
+volume-low	7	low volume
+volume-medium	7	medium volume
+volume-mute	7	mute sound volume
+volume-off	7	off volume
+walk	7	
+wallet	7	cash money
+warning	7	
+watch	7	
+water	7	
+wifi	7	bars connection internet
+wine	7	glass
+woman	7	dudette female girl lady

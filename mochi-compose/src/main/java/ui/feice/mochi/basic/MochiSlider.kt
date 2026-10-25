@@ -5,8 +5,8 @@ package ui.feice.mochi.basic
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -84,6 +84,9 @@ public object MochiSliderDefaults {
 
     /** 拖出两端时整条滑块最多被拉长多少 */
     public val MaxStretch: Dp = 10.dp
+
+    /** 离吸附点（detents）多近就吸住，按整条的比例 */
+    public const val DetentPull: Float = 0.025f
 }
 
 /**
@@ -95,6 +98,7 @@ public object MochiSliderDefaults {
  * - steps > 0 时有刻度，值吸附到刻度上，每过一格轻震
  * - 给了 [origin]：亮色轨道从这个值往两边填（−50…+50 这种有中性值的调节，iOS 26 的 neutralValue），
  *   原点处有一个小刻度，拖过原点时轻震
+ * - 给了 [detents]（没有 steps 时）：每个值处画一个小刻度，拖到附近（[MochiSliderDefaults.DetentPull] 以内）就吸住、轻震一下
  */
 @Composable
 public fun MochiSlider(
@@ -105,6 +109,7 @@ public fun MochiSlider(
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     steps: Int = 0,
     origin: Float? = null,
+    detents: List<Float> = emptyList(),
     onValueChangeFinished: (() -> Unit)? = null,
     colors: MochiSliderColors = MochiSliderDefaults.colors(),
     gel: Float = 0.6f,
@@ -123,6 +128,8 @@ public fun MochiSlider(
     val currentSteps by rememberUpdatedState(steps)
     val originFraction = origin?.let { ((it - valueRange.start) / span).coerceIn(0f, 1f) }
     val currentOrigin by rememberUpdatedState(originFraction)
+    val detentFractions = detents.map { ((it - valueRange.start) / span).coerceIn(0f, 1f) }
+    val currentDetents by rememberUpdatedState(detentFractions)
     val glow = rememberMochiGlowState()
     val scope = rememberCoroutineScope()
     val thumbPath = remember { G2PathCache() }
@@ -133,7 +140,7 @@ public fun MochiSlider(
 
     fun snap(f: Float): Float {
         val n = currentSteps
-        if (n <= 0) return f
+        if (n <= 0) return currentDetents.firstOrNull { abs(it - f) < MochiSliderDefaults.DetentPull } ?: f
         val k = n + 1
         return (f * k).roundToInt() / k.toFloat()
     }
@@ -167,10 +174,13 @@ public fun MochiSlider(
                         scope.launch { glow.press(down.position, r) }
                         var raw = currentFraction
                         var last = snap(raw)
-                        // 横向越过触摸阈值才开始拖：竖着划交给外面的滚动
-                        val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { c, over ->
-                            c.consume()
-                            raw += over / travel
+                        // 任意方向越过触摸阈值、且偏横向（横向位移不小于竖向）就接手，斜着拖也抓得住；
+                        // 偏竖向时不消费，交给外面的滚动接手（它一消费，这里就取消）
+                        val drag = awaitTouchSlopOrCancellation(down.id) { c, over ->
+                            if (abs(over.x) >= abs(over.y)) {
+                                c.consume()
+                                raw += over.x / travel
+                            }
                         }
                         if (drag != null) {
                             state.dragging = true
@@ -185,14 +195,16 @@ public fun MochiSlider(
                                     // 拖过原点（或正好停到原点上）也轻震一下
                                     val o = currentOrigin
                                     val crossOrigin = o != null && (f == o || (f - o) * (last - o) < 0f)
-                                    if (currentSteps > 0 || hitEnd || crossOrigin) haptics.tick()
+                                    val onDetent = f in currentDetents
+                                    if (currentSteps > 0 || hitEnd || crossOrigin || onDetent) haptics.tick()
                                     last = f
                                     currentOnChange(range.start + f * (range.endInclusive - range.start))
                                 }
                             }
                             apply(raw)
                             glow.moveTo(drag.position)
-                            horizontalDrag(drag.id) { c ->
+                            // 接手后只看横向位移，手指上下漂移不影响
+                            drag(drag.id) { c ->
                                 apply(raw + (c.position.x - c.previousPosition.x) / travel)
                                 glow.moveTo(c.position)
                                 c.consume()
@@ -233,6 +245,16 @@ public fun MochiSlider(
                         drawRoundRect(
                             colors.tick,
                             Offset(ox - 1.dp.toPx(), cy - th / 2f - 3.dp.toPx()),
+                            Size(2.dp.toPx(), th + 6.dp.toPx()),
+                            CornerRadius(1.dp.toPx()),
+                            alpha = alpha,
+                        )
+                    }
+                    for (d in detentFractions) {
+                        val dx = left + (right - left) * d
+                        drawRoundRect(
+                            colors.tick,
+                            Offset(dx - 1.dp.toPx(), cy - th / 2f - 3.dp.toPx()),
                             Size(2.dp.toPx(), th + 6.dp.toPx()),
                             CornerRadius(1.dp.toPx()),
                             alpha = alpha,

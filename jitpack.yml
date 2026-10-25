@@ -1,4 +1,4 @@
 jdk:
   - openjdk17
 install:
-  - ./gradlew :mochi-compose:publishToMavenLocal -PVERSION_NAME=$VERSION
+  - ./gradlew :mochi-compose:publishToMavenLocal :mochi-icons:publishToMavenLocal -PVERSION_NAME=$VERSION

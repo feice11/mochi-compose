@@ -12,8 +12,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.theme.MochiTheme
 
-/** 按钮样式（MD3E 的四种） */
-public enum class MochiButtonStyle { Filled, Tonal, Outlined, Text }
+/**
+ * 按钮样式：MD3E 的四种，加上 iOS 26 的两种 clear 玻璃。
+ * 主题的控件是玻璃时，[Filled] / [Tonal] 画成 iOS 的 prominentGlass / glass，[ProminentClearGlass] / [ClearGlass]
+ * 画成 prominentClearGlass / clearGlass（更通透的 .clear 玻璃）；不是玻璃时 clear 两种分别和 [Filled] / [Tonal] 一样
+ */
+public enum class MochiButtonStyle { Filled, Tonal, Outlined, Text, ClearGlass, ProminentClearGlass }
 
 /**
  * 按钮配色。
@@ -109,7 +113,7 @@ public object MochiButtonDefaults {
         val glowA = if (cs.isDark) 0.16f else 0.45f
         return remember(style, cs) {
             when (style) {
-                MochiButtonStyle.Filled -> MochiButtonColors(
+                MochiButtonStyle.Filled, MochiButtonStyle.ProminentClearGlass -> MochiButtonColors(
                     container = cs.primary,
                     content = cs.onPrimary,
                     outline = Color.Transparent,
@@ -119,7 +123,7 @@ public object MochiButtonDefaults {
                     disabledContent = cs.onSurface.copy(alpha = 0.38f),
                 )
 
-                MochiButtonStyle.Tonal -> MochiButtonColors(
+                MochiButtonStyle.Tonal, MochiButtonStyle.ClearGlass -> MochiButtonColors(
                     container = cs.secondaryContainer,
                     content = cs.onSecondaryContainer,
                     outline = Color.Transparent,

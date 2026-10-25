@@ -14,11 +14,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme as m3Dark
 import androidx.compose.material3.lightColorScheme as m3Light
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 import ui.feice.mochi.demo.onboarding.OnboardingLayer
 import ui.feice.mochi.effect.content.MochiThemeRevealHost
 import ui.feice.mochi.effect.content.rememberMochiThemeRevealState
@@ -38,15 +35,7 @@ class MainActivity : ComponentActivity() {
             MochiThemeRevealHost(reveal, Modifier.fillMaxSize()) {
                 DemoTheme(appearance) {
                     // 示例里的 Slider / Snackbar 来自 material3（只在示例里用，库本身不依赖），给它一套从 MochiTheme 映射过去的配色
-                    // 状态栏 / 导航栏图标跟着 app 自己的深浅色走（app 可以和系统设成不一样）
-                    val dark = MochiTheme.colorScheme.isDark
-                    val view = LocalView.current
-                    SideEffect {
-                        WindowCompat.getInsetsController(window, view).apply {
-                            isAppearanceLightStatusBars = !dark
-                            isAppearanceLightNavigationBars = !dark
-                        }
-                    }
+                    // 状态栏 / 导航栏图标跟着 app 自己的深浅色走：MochiTheme 已经接好
                     M3Bridge {
                         Box(Modifier.fillMaxSize()) {
                             DemoApp(appearance.controller)

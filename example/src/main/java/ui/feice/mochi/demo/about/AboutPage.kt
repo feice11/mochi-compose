@@ -66,6 +66,7 @@ import ui.feice.mochi.demo.common.IconColors
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tag
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.demo.routeTitle
 import ui.feice.mochi.effect.elastic.mochiPressDeform
@@ -76,7 +77,7 @@ import ui.feice.mochi.list.MochiListDisclosure
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.MochiBackButton
-import ui.feice.mochi.navigation.MochiCompactTitleScaffold
+import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.emphasized
@@ -127,157 +128,168 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
     }
 
     Box(modifier.fillMaxSize().onGloballyPositioned { root = it.positionInRoot() }) {
-        MochiCompactTitleScaffold(
+        var more by remember { mutableStateOf(false) }
+        MochiLazyCompactTitleScaffold(
             title = "关于",
             // 彩蛋：整页透过一层流动的玻璃看，效果直接作用在页面图层上
             modifier = Modifier.ribbonEggEffect(egg),
             navigationIcon = { MochiBackButton(history = ::routeTitle) },
         ) {
             // —— 团子 + 名字 ——
-            Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier
-                        .size(136.dp)
-                        .onGloballyPositioned { dango = it }
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                awaitFirstDown()
-                                val job = scope.launch {
-                                    coroutineScope {
-                                        // 蓄力：每过 1/4 轻震一下，团子越鼓越抖
-                                        val ticker = launch {
-                                            var step = 0
-                                            snapshotFlow { (charge.value * 4).toInt() }.collect {
-                                                if (it > step) {
-                                                    step = it
-                                                    haptics.tick()
+            demoItem {
+                Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier
+                            .size(136.dp)
+                            .onGloballyPositioned { dango = it }
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown()
+                                    val job = scope.launch {
+                                        coroutineScope {
+                                            // 蓄力：每过 1/4 轻震一下，团子越鼓越抖
+                                            val ticker = launch {
+                                                var step = 0
+                                                snapshotFlow { (charge.value * 4).toInt() }.collect {
+                                                    if (it > step) {
+                                                        step = it
+                                                        haptics.tick()
+                                                    }
                                                 }
                                             }
+                                            charge.animateTo(1f, tween(ChargeMillis, easing = LinearEasing))
+                                            ticker.cancel()
                                         }
-                                        charge.animateTo(1f, tween(ChargeMillis, easing = LinearEasing))
-                                        ticker.cancel()
+                                        haptics.confirm()
+                                        startEgg()
+                                        // 团子弹回原样，飘带从它这里抽出来
+                                        scope.launch { charge.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 240f)) }
                                     }
-                                    haptics.confirm()
-                                    startEgg()
-                                    // 团子弹回原样，飘带从它这里抽出来
-                                    scope.launch { charge.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 240f)) }
-                                }
-                                val up = waitForUpOrCancellation()
-                                if (job.isActive) {
-                                    job.cancel()
-                                    val tap = up != null && charge.value < 0.3f
-                                    scope.launch { charge.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 420f)) }
-                                    if (tap) {
-                                        haptics.tick()
-                                        scope.launch {
-                                            poke.animateTo(1f, tween(70))
-                                            poke.animateTo(0f, spring(dampingRatio = 0.3f, stiffness = 480f))
+                                    val up = waitForUpOrCancellation()
+                                    if (job.isActive) {
+                                        job.cancel()
+                                        val tap = up != null && charge.value < 0.3f
+                                        scope.launch { charge.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 420f)) }
+                                        if (tap) {
+                                            haptics.tick()
+                                            scope.launch {
+                                                poke.animateTo(1f, tween(70))
+                                                poke.animateTo(0f, spring(dampingRatio = 0.3f, stiffness = 480f))
+                                            }
+                                            if (++taps == 5) toast.show("试试长按团子？", subtitle = "按住别松手")
                                         }
-                                        if (++taps == 5) toast.show("试试长按团子？", subtitle = "按住别松手")
                                     }
                                 }
+                            },
+                    ) {
+                        DangoMark(
+                            Modifier.fillMaxSize(),
+                            poke = { poke.value },
+                            swell = { charge.value },
+                            tremble = { charge.value.let { c -> 2.5f * c * sin(c * 70f) } },
+                        )
+                    }
+                    Text("Mochi", style = ts.largeTitle, modifier = Modifier.padding(top = 4.dp))
+                    Text("麻薯", style = ts.titleMedium.emphasized(), color = Dango.Top)
+                    Text(
+                        "软软弹弹、跟手顺滑的 Compose 组件库",
+                        style = ts.subhead.copy(textAlign = TextAlign.Center),
+                        color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Tag("v$version", cs.surfaceContainerHigh, cs.onSurfaceVariant, Modifier.padding(top = 12.dp))
+                }
+            }
+            // —— 作者 ——
+            demoItem {
+                MochiListSection(
+                    header = "开发者",
+                    footer = "Mochi 由我一个人在业余时间开发维护，免费开源。赞助会用在打磨手感、补组件和测试设备上。",
+                ) {
+                    MochiListRow(
+                        "稽品飞车",
+                        subtitle = "Mochi 作者（feice11）",
+                        leading = {
+                            MochiAvatarButton(onClick = { open(GitHub) }, size = 48.dp) {
+                                Image(
+                                    painterResource(R.drawable.avatar_feice),
+                                    contentDescription = "稽品飞车的头像",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.matchParentSize(),
+                                )
                             }
                         },
-                ) {
-                    DangoMark(
-                        Modifier.fillMaxSize(),
-                        poke = { poke.value },
-                        swell = { charge.value },
-                        tremble = { charge.value.let { c -> 2.5f * c * sin(c * 70f) } },
                     )
+                    LinkRow("GitHub", "feice11", Icons.GITHUB, IconColors(Color(0xFF24292F), Color.White)) { open(GitHub) }
+                    LinkRow("哔哩哔哩", "UID 626797481", Icons.BILIBILI, IconColors(Color(0xFFFB7299), Color.White)) { open(Bilibili) }
+                    LinkRow("爱发电", "feice", Icons.HEART, IconColors(Color(0xFF946CE6), Color.White)) { open(Afdian) }
                 }
-                Text("Mochi", style = ts.largeTitle, modifier = Modifier.padding(top = 4.dp))
-                Text("麻薯", style = ts.titleMedium.emphasized(), color = Dango.Top)
-                Text(
-                    "软软弹弹、跟手顺滑的 Compose 组件库",
-                    style = ts.subhead.copy(textAlign = TextAlign.Center),
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Tag("v$version", cs.surfaceContainerHigh, cs.onSurfaceVariant, Modifier.padding(top = 12.dp))
             }
-
-            // —— 作者 ——
-            MochiListSection(
-                header = "开发者",
-                footer = "Mochi 由我一个人在业余时间开发维护，免费开源。赞助会用在打磨手感、补组件和测试设备上。",
-            ) {
-                MochiListRow(
-                    "稽品飞车",
-                    subtitle = "feice11 · Mochi 作者",
-                    leading = {
-                        MochiAvatarButton(onClick = { open(GitHub) }, size = 48.dp) {
-                            Image(
-                                painterResource(R.drawable.avatar_feice),
-                                contentDescription = "稽品飞车的头像",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.matchParentSize(),
-                            )
-                        }
-                    },
-                )
-                LinkRow("GitHub", "feice11", Icons.GITHUB, IconColors(Color(0xFF24292F), Color.White)) { open(GitHub) }
-                LinkRow("哔哩哔哩", "UID 626797481", Icons.BILIBILI, IconColors(Color(0xFFFB7299), Color.White)) { open(Bilibili) }
-                LinkRow("爱发电", "feice", Icons.HEART, IconColors(Color(0xFF946CE6), Color.White)) { open(Afdian) }
-            }
-
             // —— 交流群：只写步骤，群号在赞助后由爱发电私信发出 ——
-            MochiListSection(header = "加入交流群", footer = "交流群只对赞助者开放，申请入群时会核对订单号。") {
-                StepRow(1, "在爱发电赞助任意一档", onClick = { open(Afdian) })
-                StepRow(2, "赞助成功后，私信里会收到群号")
-                StepRow(3, "申请入群时填写爱发电订单号", subtitle = "在爱发电「我的订单」里可以看到")
-            }
-
-            // —— 鸣谢 ——
-            var more by remember { mutableStateOf(false) }
-            MochiListSection(header = "鸣谢") {
-                LinkRow(
-                    "Kyant0",
-                    null,
-                    Icons.GITHUB,
-                    Tone.Neutral.tile(),
-                    subtitle = "提供了圆角算法。",
-                ) { open("https://github.com/Kyant0") }
-                LinkRow(
-                    "Bear",
-                    null,
-                    Icons.GITHUB,
-                    Tone.Neutral.tile(),
-                    subtitle = "做了计数器的滚轮动画。",
-                ) { open("https://github.com/mif9499") }
-                LinkRow(
-                    "Nevoit",
-                    null,
-                    Icons.GITHUB,
-                    Tone.Neutral.tile(),
-                    subtitle = "一直骂我。",
-                ) { open("https://github.com/Nevodev") }
-                MochiListDisclosure(
-                    "其他开源项目",
-                    expanded = more,
-                    onExpandedChange = { more = it },
-                    leading = {
-                        AppIcon(Icons.GIFT, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
-                    },
-                ) {
-                    MochiListRow("MaterialKolor", subtitle = "Material 3 动态取色", chevron = true, onClick = {
-                        open("https://github.com/jordond/MaterialKolor")
-                    })
-                    MochiListRow("Ionicons", subtitle = "演示里的图标", chevron = true, onClick = {
-                        open("https://github.com/ionic-team/ionicons")
-                    })
-                    MochiListRow("miuix", subtitle = "工程规范参考", chevron = true, onClick = {
-                        open("https://github.com/compose-miuix-ui/miuix")
-                    })
+            demoItem {
+                MochiListSection(header = "加入交流群", footer = "交流群只对赞助者开放，申请入群时会核对订单号。") {
+                    StepRow(1, "在爱发电赞助任意一档", onClick = { open(Afdian) })
+                    StepRow(2, "赞助成功后，私信里会收到群号")
+                    StepRow(3, "申请入群时填写爱发电订单号", subtitle = "在爱发电「我的订单」里可以看到")
                 }
             }
-
-            Text(
-                "Made with 🍡 by 稽品飞车 · Apache-2.0",
-                style = ts.footnote.copy(textAlign = TextAlign.Center),
-                color = cs.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // —— 鸣谢 ——
+            demoItem {
+                MochiListSection(header = "鸣谢") {
+                    LinkRow(
+                        "Kyant0",
+                        null,
+                        Icons.GITHUB,
+                        Tone.Neutral.tile(),
+                        subtitle = "提供了圆角算法。",
+                    ) { open("https://github.com/Kyant0") }
+                    LinkRow(
+                        "Bear",
+                        null,
+                        Icons.GITHUB,
+                        Tone.Neutral.tile(),
+                        subtitle = "做了计数器的滚轮动画。",
+                    ) { open("https://github.com/mif9499") }
+                    LinkRow(
+                        "Nevoit",
+                        null,
+                        Icons.GITHUB,
+                        Tone.Neutral.tile(),
+                        subtitle = "一直骂我。",
+                    ) { open("https://github.com/Nevodev") }
+                    MochiListDisclosure(
+                        "其他开源项目",
+                        expanded = more,
+                        onExpandedChange = { more = it },
+                        leading = {
+                            AppIcon(
+                                Icons.GIFT,
+                                Tone.Neutral.tile(),
+                                MochiListDefaults.LeadingSize,
+                                corner = MochiListDefaults.LeadingCorner,
+                            )
+                        },
+                    ) {
+                        MochiListRow("MaterialKolor", subtitle = "Material 3 动态取色", chevron = true, onClick = {
+                            open("https://github.com/jordond/MaterialKolor")
+                        })
+                        MochiListRow("Ionicons", subtitle = "演示里的图标", chevron = true, onClick = {
+                            open("https://github.com/ionic-team/ionicons")
+                        })
+                        MochiListRow("miuix", subtitle = "工程规范参考", chevron = true, onClick = {
+                            open("https://github.com/compose-miuix-ui/miuix")
+                        })
+                    }
+                }
+            }
+            demoItem {
+                Text(
+                    "Made with 🍡 by 稽品飞车 · Apache-2.0",
+                    style = ts.footnote.copy(textAlign = TextAlign.Center),
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         egg?.let { state -> RibbonEggOverlay(state, onClose = { egg = null }) }

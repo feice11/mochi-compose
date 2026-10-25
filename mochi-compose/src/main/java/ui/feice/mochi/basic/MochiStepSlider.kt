@@ -177,7 +177,7 @@ public fun MochiStepSlider(
                 // 外胶囊 + 一层很淡的柔和投影
                 val outer = Rect(0f, 0f, size.width, size.height)
                 val outerPath = containerPath.get(outer, size.height / 2f, ControlSmoothing)
-                drawMochiShadow(outerPath, MochiMetaballShadow.elevated(this, elevation = 0.2f, dark = dark), shadowColor)
+                drawMochiShadow(outer, size.height / 2f, MochiMetaballShadow.elevated(this, elevation = 0.2f, dark = dark), shadowColor)
                 drawPath(outerPath, colors.container, alpha = alpha)
                 // 刻度点
                 val dot = h * 0.11f

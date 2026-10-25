@@ -2,7 +2,7 @@
 
 Switch with the look and feel of iOS 26 (without glass): a 64×28 track and a 38×24 white capsule thumb, both G2 continuous-curvature capsules.
 
-Thumb and inactive-track defaults read `MochiDefaults.controlThumb()` / `controlTrack()`. Without `LocalMochiControlPalette`, the original white thumb and `fill()` track remain. Appearance presets may override them; explicitly supplied `colors` still take precedence.
+Thumb and inactive-track defaults read `MochiDefaults.controlThumb()` / `controlTrack()`. Without `LocalMochiControlPalette`, the original white thumb and `fill()` track remain (`fill()` itself can be overridden by `MochiControlPalette.fill`). Appearance presets may override them; explicitly supplied `colors` still take precedence.
 
 - **Tap**: the thumb slides over with speed, stretching along its motion and squashing with a bounce when it arrives; the track color follows the thumb position continuously.
 - **Press**: the thumb grows past the track, with a deeper shadow and a glow.

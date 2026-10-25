@@ -224,9 +224,31 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
         return above.source != null && above.inTransition
     }
 
+    /**
+     * 这一页在转场中，或被上面的页盖着：页里取背后亮度的效果（玻璃标签栏、滚动边缘）这时不回读屏幕。
+     * 转场每帧都在变，读到的是半路的画面，回读还会让渲染线程等 GPU，正好卡在动画上
+     */
+    internal fun isMovingOrCovered(entry: MochiNavEntry): Boolean = entry.inTransition || above(entry) != null
+
+    /** [c] 在这一页某个收起的栏里、而栏正由 MochiNavHost 代画时，栏此刻往下滑了多少（px）；否则 0 */
+    internal fun carriedShift(entry: MochiNavEntry, c: LayoutCoordinates): Float {
+        if (!isCarriedUnderSource(entry)) return 0f
+        for (h in hiddenOf(entry)) {
+            val hc = h.coords ?: continue
+            var p: LayoutCoordinates? = c
+            while (p != null) {
+                if (p === hc) return hideOffset(h)
+                p = p.parentCoordinates
+            }
+        }
+        return 0f
+    }
+
     /** 收起的栏此刻往下滑了多少（px） */
     internal fun hideOffset(h: HideHandle): Float {
         val e = h.entry ?: return 0f
+        // 侧推：照 iOS 的 hidesBottomBarWhenPushed，栏留在下层页里、跟着它往左退，被新页盖住；不往下滑
+        if (above(e)?.source == null) return 0f
         return (h.height + h.below) * smoothstep(0f, HideDoneAt, coverOf(e))
     }
 
@@ -365,6 +387,10 @@ internal class MochiNavEntry(val id: Int, val route: String, val source: String?
 
     /** 这一页内容根节点的坐标（未变换的页面坐标系） */
     var contentCoords: LayoutCoordinates? = null
+
+    /** 这一页变换后的整页画面（屏幕坐标系）和它的坐标：下层页的玻璃在转场中透过它看到这一页（见 rememberMochiNavCoverBackdrop） */
+    var coverLayer: GraphicsLayer? = null
+    var coverCoords: LayoutCoordinates? = null
 
     /**
      * 打开、拖动返回、关闭中。用 derivedStateOf：只在「是否转场中」变化时通知读者，

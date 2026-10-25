@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.elastic.mochiPressDeform
@@ -65,36 +67,44 @@ import ui.feice.mochi.theme.emphasized
 @Composable
 fun GlowPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
-    var tinted by remember { mutableStateOf(false) }
+    var tinted by rememberSaveable { mutableStateOf(false) }
     var strength by remember { mutableFloatStateOf(if (cs.isDark) 0.14f else 0.45f) }
     val base = if (tinted) cs.primary else Color.White
     val spec = remember(base, strength) { MochiGlowSpec(color = base.copy(alpha = strength)) }
 
     DemoPage(entry, modifier) {
-        DemoSection("控制中心", footer = "按住任意一块并拖动，光从手指处亮起、带阻尼地跟着走；点一下切换。大块的光更大更柔，圆按钮的光收得更紧。") {
-            ControlCenter(spec)
+        demoItem {
+            DemoSection("控制中心", footer = "按住任意一块并拖动，光从手指处亮起、带阻尼地跟着走；点一下切换。大块的光更大更柔，圆按钮的光收得更紧。") {
+                ControlCenter(spec)
+            }
         }
-        DemoSettingsSection("调参") {
-            Toggles("光的颜色", listOf("白光" to false, "主色" to true), tinted) { tinted = it }
+        demoItem {
+            DemoSettingsSection("调参") {
+                Toggles("光的颜色", listOf("白光" to false, "主色" to true), tinted) { tinted = it }
+            }
         }
-        DemoSliderSection("亮度", "%.2f".format(strength), strength, { strength = it }, valueRange = 0.05f..0.8f)
-        DemoSection("用法") {
-            Code("Modifier\n    .background(color, shape)\n    .mochiPressGlow(rememberMochiGlowState(), shape)")
-            Caption("只想画、自己驱动状态时用 Modifier.mochiGlow。")
+        demoItem {
+            DemoSliderSection("亮度", "%.2f".format(strength), strength, { strength = it }, valueRange = 0.05f..0.8f)
+        }
+        demoItem {
+            DemoSection("用法") {
+                Code("Modifier\n    .background(color, shape)\n    .mochiPressGlow(rememberMochiGlowState(), shape)")
+                Caption("只想画、自己驱动状态时用 Modifier.mochiGlow。")
+            }
         }
     }
 }
 
 @Composable
 private fun ControlCenter(spec: MochiGlowSpec) {
-    var plane by remember { mutableStateOf(false) }
-    var wifi by remember { mutableStateOf(true) }
-    var bluetooth by remember { mutableStateOf(true) }
-    var hotspot by remember { mutableStateOf(false) }
-    var playing by remember { mutableStateOf(true) }
-    var focus by remember { mutableStateOf(false) }
-    var lock by remember { mutableStateOf(true) }
-    var camera by remember { mutableStateOf(false) }
+    var plane by rememberSaveable { mutableStateOf(false) }
+    var wifi by rememberSaveable { mutableStateOf(true) }
+    var bluetooth by rememberSaveable { mutableStateOf(true) }
+    var hotspot by rememberSaveable { mutableStateOf(false) }
+    var playing by rememberSaveable { mutableStateOf(true) }
+    var focus by rememberSaveable { mutableStateOf(false) }
+    var lock by rememberSaveable { mutableStateOf(true) }
+    var camera by rememberSaveable { mutableStateOf(false) }
     val outer = MochiConcentric.shape()
     // 网络块里关着的圆钮：比块本身再深一层的灰，不然和块底色融成一片
     val inner = MochiDefaults.fill().compositeOver(MochiTheme.colorScheme.surfaceContainerHighest)
@@ -152,7 +162,7 @@ private fun ControlCenter(spec: MochiGlowSpec) {
                     Column {
                         Text("专注模式", style = MochiTheme.textStyles.subhead.emphasized(), color = LocalContentColor.current)
                         MochiBlurText(
-                            if (focus) "勿扰 · 已开启" else "关闭",
+                            if (focus) "已开启勿扰" else "关闭",
                             style = MochiTheme.textStyles.footnote,
                             color = LocalContentColor.current.copy(alpha = 0.7f),
                         )

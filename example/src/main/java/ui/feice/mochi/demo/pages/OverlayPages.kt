@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,9 +62,11 @@ import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
+import ui.feice.mochi.effect.overscroll.mochiContainedScroll
 import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
@@ -73,97 +76,109 @@ import ui.feice.mochi.theme.MochiTheme
 @Composable
 fun PopoverPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
-    var info by remember { mutableStateOf(false) }
-    var plus by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf(false) }
-    var sheet by remember { mutableStateOf(false) }
-    var last by remember { mutableStateOf("还没选") }
-    var tipCard by remember { mutableStateOf(true) }
-    var tipPopover by remember { mutableStateOf(false) }
-    var starred by remember { mutableStateOf(false) }
+    var info by rememberSaveable { mutableStateOf(false) }
+    var plus by rememberSaveable { mutableStateOf(false) }
+    var confirm by rememberSaveable { mutableStateOf(false) }
+    var sheet by rememberSaveable { mutableStateOf(false) }
+    var last by rememberSaveable { mutableStateOf("还没选") }
+    var tipCard by rememberSaveable { mutableStateOf(true) }
+    var tipPopover by rememberSaveable { mutableStateOf(false) }
+    var starred by rememberSaveable { mutableStateOf(false) }
 
     DemoPage(entry, modifier) {
-        DemoSection("弹出层", footer = "按钮和面板是一个组件：按下放大发光、按钮颜色融进面板，和选择列表同一套；下面放不下会翻到上面。点外面或返回键关闭。右边的 ＋ 是普通菜单（MochiIconDropdown），按住直接滑选。") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                MochiPopoverButton(
-                    expanded = info,
-                    onExpandedChange = { info = it },
-                    popover = {
-                        Text("存储空间", style = MochiTheme.textStyles.body.copy(fontWeight = FontWeight.SemiBold))
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "已用 46.2 GB，共 128 GB。照片占得最多，可以在设置里打开「优化存储」。",
-                            style = MochiTheme.textStyles.subhead,
-                            color = cs.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        MochiButton({ info = false }, Modifier.fillMaxWidth()) { Text("知道了") }
-                    },
-                ) { Text("显示详情") }
-                MochiIconDropdown(
-                    expanded = plus,
-                    onExpandedChange = { plus = it },
-                    items = NewItems,
-                    onItemClick = { last = NewItems[it].label },
-                    modifier = Modifier.semantics { contentDescription = "新建" },
-                ) { Glyph(Icons.PLUS, cs.onSurface) }
+        demoItem {
+            DemoSection("弹出层", footer = "按钮和面板是一个组件：按下放大发光、按钮颜色融进面板，和选择列表同一套；下面放不下会翻到上面。点外面或返回键关闭。右边的 ＋ 是普通菜单（MochiIconDropdown），按住直接滑选。") {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MochiPopoverButton(
+                        expanded = info,
+                        onExpandedChange = { info = it },
+                        popover = {
+                            Text("存储空间", style = MochiTheme.textStyles.body.copy(fontWeight = FontWeight.SemiBold))
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "已用 46.2 GB，共 128 GB。照片占得最多，可以在设置里打开「优化存储」。",
+                                style = MochiTheme.textStyles.subhead,
+                                color = cs.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            MochiButton({ info = false }, Modifier.fillMaxWidth()) { Text("知道了") }
+                        },
+                    ) { Text("显示详情") }
+                    MochiIconDropdown(
+                        expanded = plus,
+                        onExpandedChange = { plus = it },
+                        items = NewItems,
+                        onItemClick = { last = NewItems[it].label },
+                        modifier = Modifier.semantics { contentDescription = "新建" },
+                    ) { Glyph(Icons.PLUS, cs.onSurface) }
+                }
+                MochiBlurText("上次选择：$last", style = MochiTheme.textStyles.subhead, color = cs.onSurfaceVariant)
             }
-            MochiBlurText("上次选择：$last", style = MochiTheme.textStyles.subhead, color = cs.onSurfaceVariant)
         }
-        DemoSection(
-            "操作确认",
-            footer = "有来源按钮时从按钮弹出（iOS 26）：就是一个带标题的选择列表，按住按钮直接滑到选项上松手；点外面就是取消。没有来源按钮时是 iOS 26 的居中对话框（底部操作列表已经去掉了），按钮竖排、取消在最下面，点外面也是取消。",
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MochiConfirmationDialogBox(
-                    expanded = confirm,
-                    onExpandedChange = { confirm = it },
-                    actions = persistentListOf(
-                        MochiDialogAction("删除照片", MochiDialogActionRole.Destructive) { last = "删除照片" },
-                        MochiDialogAction("仅从相簿移除") { last = "仅从相簿移除" },
-                    ),
-                    title = "这张照片会从所有设备上删除。",
-                ) { Text("删除…") }
-                MochiButton({ sheet = true }, style = MochiButtonStyle.Tonal) { Text("无来源确认") }
-            }
-            MochiBlurText("上次选择：$last", style = MochiTheme.textStyles.subhead, color = cs.onSurfaceVariant)
-        }
-        DemoSection("提示", footer = "提示卡放在页面里，关掉时高度平滑收起。提示气泡和按钮是一个组件：轻点星星收藏，长按展开提示，按钮颜色融进气泡、收起时缩回按钮。") {
-            MochiTipCard(
-                "试试长按",
-                visible = tipCard,
-                onDismiss = { tipCard = false },
-                message = "长按照片可以预览，再往上拖出菜单。",
-                icon = { Glyph(Icons.STAR, cs.primary, size = 26) },
-            )
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        demoItem {
+            DemoSection(
+                "操作确认",
+                footer = "有来源按钮时从按钮弹出（iOS 26）：就是一个带标题的选择列表，按住按钮直接滑到选项上松手；点外面就是取消。没有来源按钮时是 iOS 26 的居中对话框（底部操作列表已经去掉了），按钮竖排、取消在最下面，点外面也是取消。",
             ) {
-                MochiTipPopover(
-                    "收藏",
-                    visible = tipPopover,
-                    onVisibleChange = { tipPopover = it },
-                    modifier = Modifier.semantics { contentDescription = "收藏" },
-                    message = "点星星把它加到收藏，下次在首页就能找到。",
-                    icon = { Glyph(Icons.HEART, cs.primary, size = 26) },
-                    onClick = { starred = !starred },
-                ) { Glyph(Icons.STAR, if (starred) cs.primary else cs.onSurface) }
-                MochiButton({
-                    tipCard = true
-                    tipPopover = true
-                }, style = MochiButtonStyle.Text) { Text("重新显示提示") }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MochiConfirmationDialogBox(
+                        expanded = confirm,
+                        onExpandedChange = { confirm = it },
+                        actions = persistentListOf(
+                            MochiDialogAction("删除照片", MochiDialogActionRole.Destructive) { last = "删除照片" },
+                            MochiDialogAction("仅从相簿移除") { last = "仅从相簿移除" },
+                        ),
+                        title = "这张照片会从所有设备上删除。",
+                    ) { Text("删除…") }
+                    MochiButton({ sheet = true }, style = MochiButtonStyle.Tonal) { Text("无来源确认") }
+                }
+                MochiBlurText("上次选择：$last", style = MochiTheme.textStyles.subhead, color = cs.onSurfaceVariant)
             }
         }
-        DemoSection("用法") {
-            Code(
-                "MochiPopoverButton(open, { open = it }, popover = { … }) { Text(\"详情\") }\n" +
-                    "MochiConfirmationDialogBox(open, { open = it }, actions, title = …) { Text(\"删除…\") }\n" +
-                    "MochiConfirmationDialog(show, { show = false }, actions) // 底部\n" +
-                    "MochiTipCard(title, visible, onDismiss)\n" +
-                    "MochiTipPopover(title, visible, { visible = it }, onClick = { … }) { Glyph(…) }",
-            )
+        demoItem {
+            DemoSection("提示", footer = "提示卡放在页面里，关掉时高度平滑收起。提示气泡和按钮是一个组件：轻点星星收藏，长按展开提示，按钮颜色融进气泡、收起时缩回按钮。") {
+                MochiTipCard(
+                    "试试长按",
+                    visible = tipCard,
+                    onDismiss = { tipCard = false },
+                    message = "长按照片可以预览，再往上拖出菜单。",
+                    icon = { Glyph(Icons.STAR, cs.primary, size = 26) },
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MochiTipPopover(
+                        "收藏",
+                        visible = tipPopover,
+                        onVisibleChange = { tipPopover = it },
+                        modifier = Modifier.semantics { contentDescription = "收藏" },
+                        message = "点星星把它加到收藏，下次在首页就能找到。",
+                        icon = { Glyph(Icons.HEART, cs.primary, size = 26) },
+                        onClick = { starred = !starred },
+                    ) { Glyph(Icons.STAR, if (starred) cs.primary else cs.onSurface) }
+                    MochiButton({
+                        tipCard = true
+                        tipPopover = true
+                    }, style = MochiButtonStyle.Text) { Text("重新显示提示") }
+                }
+            }
+        }
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "MochiPopoverButton(open, { open = it }, popover = { … }) { Text(\"详情\") }\n" +
+                        "MochiConfirmationDialogBox(open, { open = it }, actions, title = …) { Text(\"删除…\") }\n" +
+                        "MochiConfirmationDialog(show, { show = false }, actions) // 底部\n" +
+                        "MochiTipCard(title, visible, onDismiss)\n" +
+                        "MochiTipPopover(title, visible, { visible = it }, onClick = { … }) { Glyph(…) }",
+                )
+            }
         }
     }
     MochiConfirmationDialog(
@@ -184,57 +199,63 @@ fun PopoverPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 fun CarouselPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val pager = rememberPagerState { Stories.size }
-    var page by remember { mutableIntStateOf(3) }
+    var page by rememberSaveable { mutableIntStateOf(3) }
     val scope = rememberCoroutineScope()
     val pos = remember { androidx.compose.animation.core.Animatable(3f) }
     DemoPage(entry, modifier) {
-        DemoSection("轮播", footer = "左右露出相邻卡片的一截，离中间越远越小越淡；下面的指示器跟着滑动连续变化。", container = false) {
-            MochiCarousel(
-                Stories.size,
-                height = 220.dp,
-                state = pager,
-                modifier = Modifier.semantics {
-                    contentDescription = "轮播演示"
-                },
-            ) { i ->
-                val (title, tone, icon) = Stories[i]
-                val colors = tone.tile()
-                Box(
-                    Modifier.fillMaxSize().background(colors.container).padding(20.dp),
-                    contentAlignment = Alignment.BottomStart,
-                ) {
-                    Glyph(icon, colors.content, Modifier.align(Alignment.TopEnd), size = 32, filled = true)
-                    Column {
-                        Text("今日推荐 · ${i + 1}", style = MochiTheme.textStyles.footnote, color = colors.content.copy(alpha = 0.75f))
-                        Text(title, style = MochiTheme.textStyles.largeTitle, color = colors.content)
+        demoItem {
+            DemoSection("轮播", footer = "左右露出相邻卡片的一截，离中间越远越小越淡；下面的指示器跟着滑动连续变化。", container = false) {
+                MochiCarousel(
+                    Stories.size,
+                    height = 220.dp,
+                    state = pager,
+                    modifier = Modifier.semantics {
+                        contentDescription = "轮播演示"
+                    },
+                ) { i ->
+                    val (title, tone, icon) = Stories[i]
+                    val colors = tone.tile()
+                    Box(
+                        Modifier.fillMaxSize().background(colors.container).padding(20.dp),
+                        contentAlignment = Alignment.BottomStart,
+                    ) {
+                        Glyph(icon, colors.content, Modifier.align(Alignment.TopEnd), size = 32, filled = true)
+                        Column {
+                            Text("今日推荐 · ${i + 1}", style = MochiTheme.textStyles.footnote, color = colors.content.copy(alpha = 0.75f))
+                            Text(title, style = MochiTheme.textStyles.largeTitle, color = colors.content)
+                        }
                     }
                 }
             }
         }
-        DemoSection("页面指示器", footer = "点左半边 / 右半边翻一页；按住后左右拖动快速翻页，每换一页轻震。页数多时只露出一段，两端的点缩小。") {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                MochiPageControl(
-                    pageCount = 15,
-                    position = { pos.value },
-                    onPageSelect = {
-                        page = it
-                        scope.launch {
-                            pos.animateTo(it.toFloat(), androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 500f))
-                        }
-                    },
-                    modifier = Modifier.semantics { contentDescription = "页面指示器演示" },
-                )
-            }
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                MochiBlurText("第 ${page + 1} 页，共 15 页", style = MochiTheme.textStyles.subhead, color = cs.onSurfaceVariant)
+        demoItem {
+            DemoSection("页面指示器", footer = "点左半边 / 右半边翻一页；按住后左右拖动快速翻页，每换一页轻震。页数多时只露出一段，两端的点缩小。") {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    MochiPageControl(
+                        pageCount = 15,
+                        position = { pos.value },
+                        onPageSelect = {
+                            page = it
+                            scope.launch {
+                                pos.animateTo(it.toFloat(), androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 500f))
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "页面指示器演示" },
+                    )
+                }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    MochiBlurText("第 ${page + 1} 页，共 15 页", style = MochiTheme.textStyles.subhead, color = cs.onSurfaceVariant)
+                }
             }
         }
-        DemoSection("用法") {
-            Code(
-                "MochiCarousel(count, height = 220.dp) { page -> 卡片内容 }\n" +
-                    "MochiPageControl(pagerState)\n" +
-                    "MochiPageControl(count, position = { … }, onPageSelect = { … })",
-            )
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "MochiCarousel(count, height = 220.dp) { page -> 卡片内容 }\n" +
+                        "MochiPageControl(pagerState)\n" +
+                        "MochiPageControl(count, position = { … }, onPageSelect = { … })",
+                )
+            }
         }
     }
 }
@@ -244,57 +265,63 @@ fun CarouselPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 fun RefreshPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val items = remember { mutableStateListOf(*Notes.toTypedArray()) }
-    var counter by remember { mutableIntStateOf(1) }
+    var counter by rememberSaveable { mutableIntStateOf(1) }
     DemoPage(entry, modifier) {
-        DemoSection("下拉刷新", footer = "往下拉，转圈一根根显出辐条；拉过阈值轻震一下开始刷新，列表停在转圈下面，刷新完收回。", padding = 0.dp) {
-            val overscroll = rememberMochiOverscrollEffect()
-            val list = rememberLazyListState()
-            // Lazy 列表要传 listState：刷新结束还在顶上时钉住第 0 项，最前面的新笔记才露得出来
-            val refresh = rememberMochiRefreshState(overscroll, list) {
-                delay(1200)
-                items.add(0, "新笔记 ${counter++}")
-            }
-            Box(Modifier.fillMaxWidth().height(380.dp).clip(MochiTheme.shapes.extraLarge).semantics { contentDescription = "刷新列表" }) {
-                if (items.isEmpty()) {
-                    MochiEmptyState(
-                        "没有笔记",
-                        Modifier.align(Alignment.Center),
-                        message = "新建的笔记会出现在这里。",
-                        icon = { Glyph(Icons.NOTE, cs.onSurfaceVariant, size = 48) },
-                        action = {
-                            MochiButton({ items.addAll(Notes) }, style = MochiButtonStyle.Tonal) { Text("加载示例") }
-                        },
-                    )
-                } else {
-                    LazyColumn(
-                        Modifier.fillMaxSize().mochiRefreshHold(refresh),
-                        state = list,
-                        overscrollEffect = overscroll,
-                        flingBehavior = MochiScrollDefaults.flingBehavior(),
-                        contentPadding = PaddingValues(vertical = 8.dp),
-                    ) {
-                        items(items, key = { it }) { title ->
-                            MochiListRow(title, subtitle = "今天", modifier = Modifier.animateItem())
+        demoItem {
+            DemoSection("下拉刷新", footer = "往下拉，转圈一根根显出辐条；拉过阈值轻震一下开始刷新，列表停在转圈下面，刷新完收回。", padding = 0.dp) {
+                val overscroll = rememberMochiOverscrollEffect()
+                val list = rememberLazyListState()
+                // Lazy 列表要传 listState：刷新结束还在顶上时钉住第 0 项，最前面的新笔记才露得出来
+                val refresh = rememberMochiRefreshState(overscroll, list) {
+                    delay(1200)
+                    items.add(0, "新笔记 ${counter++}")
+                }
+                Box(Modifier.fillMaxWidth().height(380.dp).clip(MochiTheme.shapes.extraLarge).semantics { contentDescription = "刷新列表" }) {
+                    if (items.isEmpty()) {
+                        MochiEmptyState(
+                            "没有笔记",
+                            Modifier.align(Alignment.Center),
+                            message = "新建的笔记会出现在这里。",
+                            icon = { Glyph(Icons.NOTE, cs.onSurfaceVariant, size = 48) },
+                            action = {
+                                MochiButton({ items.addAll(Notes) }, style = MochiButtonStyle.Tonal) { Text("加载示例") }
+                            },
+                        )
+                    } else {
+                        LazyColumn(
+                            Modifier.fillMaxSize().mochiRefreshHold(refresh).mochiContainedScroll(overscroll),
+                            state = list,
+                            overscrollEffect = overscroll,
+                            flingBehavior = MochiScrollDefaults.flingBehavior(),
+                            contentPadding = PaddingValues(vertical = 8.dp),
+                        ) {
+                            items(items, key = { it }) { title ->
+                                MochiListRow(title, subtitle = "今天", modifier = Modifier.animateItem())
+                            }
                         }
+                        MochiRefreshIndicator(refresh, Modifier.align(Alignment.TopCenter))
                     }
-                    MochiRefreshIndicator(refresh, Modifier.align(Alignment.TopCenter))
                 }
             }
         }
-        MochiListSection(footer = "清空后显示空状态（iOS 的 ContentUnavailableView），点「加载示例」恢复。") {
-            MochiListRow("清空列表", onClick = { items.clear() }, destructive = true)
+        demoItem {
+            MochiListSection(footer = "清空后显示空状态（iOS 的 ContentUnavailableView），点「加载示例」恢复。") {
+                MochiListRow("清空列表", onClick = { items.clear() }, destructive = true)
+            }
         }
-        DemoSection("用法") {
-            Code(
-                "val overscroll = rememberMochiOverscrollEffect()\n" +
-                    "val list = rememberLazyListState()\n" +
-                    "val refresh = rememberMochiRefreshState(overscroll, list) { reload() }\n" +
-                    "Box {\n" +
-                    "    LazyColumn(Modifier.mochiRefreshHold(refresh), list, overscrollEffect = overscroll) { … }\n" +
-                    "    MochiRefreshIndicator(refresh, Modifier.align(Alignment.TopCenter))\n" +
-                    "}\n" +
-                    "MochiEmptyState(\"没有笔记\", message = …, icon = { … }, action = { … })",
-            )
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "val overscroll = rememberMochiOverscrollEffect()\n" +
+                        "val list = rememberLazyListState()\n" +
+                        "val refresh = rememberMochiRefreshState(overscroll, list) { reload() }\n" +
+                        "Box {\n" +
+                        "    LazyColumn(Modifier.mochiRefreshHold(refresh), list, overscrollEffect = overscroll) { … }\n" +
+                        "    MochiRefreshIndicator(refresh, Modifier.align(Alignment.TopCenter))\n" +
+                        "}\n" +
+                        "MochiEmptyState(\"没有笔记\", message = …, icon = { … }, action = { … })",
+                )
+            }
         }
     }
 }

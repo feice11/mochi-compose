@@ -107,9 +107,8 @@ class SheetLayoutRegression {
                                     topRadius = maxOf(top(corners.topLeft), top(corners.topRight))
                                     bottomLeftRadius = corners.bottomLeft
                                     bottomRightRadius = corners.bottomRight
-                                    surfaceColor = cs.surfaceContainerLow.toArgb()
+                                    surfaceColor = MochiDefaults.sheetBackground().toArgb()
                                     titleColor = cs.onSurface.toArgb()
-                                    cardColor = MochiDefaults.groupedContainer().toArgb()
                                     Box(
                                         Modifier.fillMaxSize().onGloballyPositioned { window = it.boundsInWindow() },
                                     ) {
@@ -117,6 +116,8 @@ class SheetLayoutRegression {
                                     }
                                     MochiSheet(state, modifier = Modifier.onGloballyPositioned { surface = it.boundsInWindow() }) {
                                         CompositionLocalProvider(LocalDensity provides Density(px, fontScale)) {
+                                            // 面板里是浮起一层的卡片色
+                                            cardColor = MochiDefaults.groupedContainer().toArgb()
                                             MochiSheetHeader(
                                                 "加入网络",
                                                 Modifier.onGloballyPositioned { header = it.boundsInWindow() },

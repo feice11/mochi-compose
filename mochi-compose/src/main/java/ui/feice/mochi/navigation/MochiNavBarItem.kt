@@ -5,6 +5,13 @@ package ui.feice.mochi.navigation
 
 import android.annotation.SuppressLint
 import android.os.Build
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -19,6 +26,8 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.LayoutAwareModifierNode
@@ -26,9 +35,14 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import ui.feice.mochi.effect.content.mochiCachedBlur
+import ui.feice.mochi.effect.glass.GlassFill
+import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.metaball.MochiBlob
 import ui.feice.mochi.effect.metaball.MochiMetaballColors
 import ui.feice.mochi.effect.metaball.MochiMetaballFrame
@@ -60,9 +74,12 @@ import ui.feice.mochi.utils.smoothstep
  */
 public fun Modifier.mochiNavBarItem(id: String, contentKey: Any? = null): Modifier = this then NavBarContentElement(id, contentKey)
 
-/** 顶栏按钮的形状：包在按钮最外面，转场中整个按钮在页里不画（由 MochiNavHost 接管）。cornerRadius 为负数 = 胶囊 */
-internal fun Modifier.navBarShape(id: String, color: Color, cornerRadius: Float = -1f): Modifier =
-    this then NavBarShapeElement(id, color, cornerRadius)
+/**
+ * 顶栏按钮的形状：包在按钮最外面，转场中整个按钮在页里不画（由 MochiNavHost 接管）。cornerRadius 为负数 = 胶囊。
+ * [glass]：按钮是玻璃，转场中 MochiNavHost 也把这个形状画成玻璃（[SharedBarGlass]），不画成 [color] 的纯色
+ */
+internal fun Modifier.navBarShape(id: String, color: Color, cornerRadius: Float = -1f, glass: Boolean = false): Modifier =
+    this then NavBarShapeElement(id, color, cornerRadius, glass)
 
 /** [MochiBackButton] 用的共享 id */
 internal const val BackBarItemId = "mochi.back"
@@ -92,6 +109,7 @@ internal sealed class BarHandle(var id: String) {
 internal class BarShapeHandle(id: String) : BarHandle(id) {
     var color: Color = Color.Transparent
     var cornerRadius: Float = -1f
+    var glass: Boolean = false
 }
 
 /** 内容：录下来的图标 / 文字 */
@@ -114,13 +132,15 @@ private data class NavBarContentElement(val id: String, val contentKey: Any?) : 
     }
 }
 
-private data class NavBarShapeElement(val id: String, val color: Color, val cornerRadius: Float) : ModifierNodeElement<NavBarNode>() {
+private data class NavBarShapeElement(val id: String, val color: Color, val cornerRadius: Float, val glass: Boolean) :
+    ModifierNodeElement<NavBarNode>() {
     override fun create(): NavBarNode = NavBarNode(BarShapeHandle(id)).also { update(it) }
 
     override fun update(node: NavBarNode) {
         val h = node.handle as BarShapeHandle
         h.color = color
         h.cornerRadius = cornerRadius
+        h.glass = glass
         node.updateId(id)
     }
 
@@ -188,7 +208,14 @@ private class NavBarNode(val handle: BarHandle) :
  * 一帧里的一个形状（rect 是此刻的矩形）。corner 为负数 = 胶囊：圆角永远是此刻短边的一半，
  * 变形途中鼓起、缩放时也一直是胶囊，不会变成偏方的圆角矩形
  */
-private class MorphShape(val rect: Rect, val corner: Float, val color: Color, val alpha: Float, val leading: Boolean) {
+private class MorphShape(
+    val rect: Rect,
+    val corner: Float,
+    val color: Color,
+    val alpha: Float,
+    val leading: Boolean,
+    val glass: Boolean = false,
+) {
     val radius: Float
         get() {
             val half = minOf(rect.width, rect.height) / 2f
@@ -225,17 +252,37 @@ internal class BarPathCache {
  * 正在动的一串页（[MochiNavigator.slideChain]）从起点页的顶栏开始，按每一页的进度依次变形过去，最后画一次：
  * 快速连续推入 / 返回时也只有一套顶栏，某一页转场结束、这一串变短时画面不跳
  */
-internal fun DrawScope.drawSharedBarItems(nav: MochiNavigator, paths: BarPathCache) {
+internal fun DrawScope.drawSharedBarItems(nav: MochiNavigator, paths: BarPathCache, glass: Boolean = false) {
+    val f = sharedBarFrame(nav, size.width, ContentBlur.toPx()) ?: return
+    drawMorphShapes(if (glass) f.shapes.filter { !it.glass } else f.shapes, f.envelope, paths)
+    // 先画淡出的，再画淡入 / 接着走的
+    f.contents.sortedBy { it.alpha }.forEach { drawContentLayer(it.handle, it.center, it.alpha, it.blur) }
+}
+
+/** 一帧的共享顶栏：此刻的形状、内容和融球颈的包络 */
+private class SharedBarFrame(val shapes: List<MorphShape>, val contents: List<MorphContent>, val envelope: Float)
+
+/**
+ * 侧推转场里画成玻璃的共享顶栏形状（[navBarShape] 的 glass），按从左到右的顺序；没在转场时为空。
+ * [width] 是导航主机的宽，[blurMax] 内容模糊的上限（px，只影响内容，这里用不到但算法共用）
+ */
+internal fun sharedBarGlassShapes(nav: MochiNavigator, width: Float, blurMax: Float): List<SharedGlassShape> =
+    sharedBarFrame(nav, width, blurMax)?.shapes?.filter { it.glass }?.sortedBy { it.rect.center.x }
+        ?.map { SharedGlassShape(it.rect, it.radius, it.alpha) }.orEmpty()
+
+/** 转场里一块玻璃形状：此刻的矩形、圆角（px）、透明度 */
+internal class SharedGlassShape(val rect: Rect, val radius: Float, val alpha: Float)
+
+private fun sharedBarFrame(nav: MochiNavigator, width: Float, blurMax: Float): SharedBarFrame? {
     val chain = nav.slideChain()
-    if (chain.size < 2) return
+    if (chain.size < 2) return null
     val base = chain.first()
-    val bc = base.contentCoords?.takeIf { it.isAttached } ?: return
-    val mid = size.width / 2f
-    val blurMax = ContentBlur.toPx()
+    val bc = base.contentCoords?.takeIf { it.isAttached } ?: return null
+    val mid = width / 2f
 
     // 起点：起点页的顶栏原样
     var shapes = nav.barsOf(base).filterIsInstance<BarShapeHandle>().mapNotNull { h ->
-        h.restRect(bc)?.let { MorphShape(it, h.cornerRadius, h.color, 1f, it.center.x < mid) }
+        h.restRect(bc)?.let { MorphShape(it, h.cornerRadius, h.color, 1f, it.center.x < mid, h.glass) }
     }
     var contents = nav.barsOf(base).filterIsInstance<BarContentHandle>().mapNotNull { h ->
         h.restRect(bc)?.let { r -> MorphContent(h, r.center, 1f, 0f).also { it.attach(r, shapes) } }
@@ -292,9 +339,7 @@ internal fun DrawScope.drawSharedBarItems(nav: MochiNavigator, paths: BarPathCac
         shapes = step.shapes
         contents = next
     }
-    drawMorphShapes(shapes, envelope, paths)
-    // 先画淡出的，再画淡入 / 接着走的
-    contents.sortedBy { it.alpha }.forEach { drawContentLayer(it.handle, it.center, it.alpha, it.blur) }
+    return SharedBarFrame(shapes, contents, envelope)
 }
 
 /** 内容挂到所在的形状上：找包含它中心的那个形状，记下相对位置 */
@@ -341,7 +386,7 @@ private fun morphStep(cur: List<MorphShape>, target: List<Pair<BarShapeHandle, R
             val rect = elasticRect(from.rect, r, m)
             // 两头都是胶囊就一直是胶囊；否则圆角在两头之间过渡
             val corner = if (from.corner < 0f && h.cornerRadius < 0f) -1f else lerpF(from.radius, h.radiusFor(r), m)
-            return MorphShape(rect, corner, color, lerpF(from.alpha, 1f, m), leading)
+            return MorphShape(rect, corner, color, lerpF(from.alpha, 1f, m), leading, from.glass || h.glass)
         }
         for (i in 0 until n) {
             val from = cur[a[i]]
@@ -359,7 +404,7 @@ private fun morphStep(cur: List<MorphShape>, target: List<Pair<BarShapeHandle, R
             val from = cur[a[j]]
             fromOld[a[j]] = out.size
             out += if (n > 0) {
-                MorphShape(elasticRect(from.rect, target[b[n - 1]].second, m), from.corner, from.color, from.alpha, leading)
+                MorphShape(elasticRect(from.rect, target[b[n - 1]].second, m), from.corner, from.color, from.alpha, leading, from.glass)
             } else {
                 vanish(from, m)
             }
@@ -374,7 +419,7 @@ private fun appear(h: BarShapeHandle, r: Rect, m: Float, leading: Boolean): Morp
     val s = AppearFrom + (1f - AppearFrom) * e + AppearPop * pop(e)
     val half = Offset(r.width * s / 2f, r.height * s / 2f)
     val rr = Rect(r.center - half, r.center + half)
-    return MorphShape(rr, if (h.cornerRadius < 0f) -1f else h.cornerRadius * s, h.color, e, leading)
+    return MorphShape(rr, if (h.cornerRadius < 0f) -1f else h.cornerRadius * s, h.color, e, leading, h.glass)
 }
 
 /** 新页这一侧没有形状：原地缩小、淡出 */
@@ -394,6 +439,7 @@ private fun vanish(from: MorphShape, m: Float): MorphShape {
         from.color,
         from.alpha * e,
         from.leading,
+        from.glass,
     )
 }
 
@@ -485,3 +531,40 @@ private const val AppearPop = 0.12f
 
 /** 一步变形的进度 m 时颈的强度：开头和结尾为 0，第一帧和最后一帧和静止的页面完全一样 */
 private fun fuseEnvelope(m: Float): Float = smoothstep(0f, 0.12f, m) * (1f - smoothstep(0.88f, 1f, m))
+
+/**
+ * 侧推转场里把玻璃按钮的共享形状画成玻璃（[navBarShape] 的 glass）：最多 [SharedGlassSlots] 块，
+ * 每块在排版阶段读这一帧的形状（[sharedBarGlassShapes]），按它的位置、大小、圆角画，不重组。
+ * [fill] 取样整页的录制，这一层要放在录制范围外面（不然取样到自己）；形状上的图标由 [drawSharedBarItems] 画在它上面
+ */
+@Composable
+internal fun SharedBarGlass(nav: MochiNavigator, fill: GlassFill) {
+    val blurMax = with(LocalDensity.current) { ContentBlur.toPx() }
+    var width by remember { mutableFloatStateOf(0f) }
+    fun shape(i: Int) = sharedBarGlassShapes(nav, width, blurMax).getOrNull(i)
+    Box(Modifier.fillMaxSize().onSizeChanged { width = it.width.toFloat() }) {
+        repeat(SharedGlassSlots) { i ->
+            GlassSurface(
+                fill,
+                Modifier
+                    .fillMaxSize()
+                    .layout { measurable, constraints ->
+                        val r = shape(i)?.rect
+                        val w = r?.width?.roundToInt()?.coerceAtLeast(1) ?: 1
+                        val h = r?.height?.roundToInt()?.coerceAtLeast(1) ?: 1
+                        val placeable = measurable.measure(Constraints.fixed(w, h))
+                        layout(constraints.maxWidth, constraints.maxHeight) {
+                            placeable.place(r?.left?.roundToInt() ?: 0, r?.top?.roundToInt() ?: 0)
+                        }
+                    },
+                null,
+                null,
+                alpha = { shape(i)?.alpha ?: 0f },
+                cornerRadiusPx = { shape(i)?.radius ?: 0f },
+            )
+        }
+    }
+}
+
+/** 转场里同时画成玻璃的共享形状最多几块（左边返回按钮 + 右边一两个按钮 / 按钮组，变形途中多出来的也够用） */
+private const val SharedGlassSlots = 4

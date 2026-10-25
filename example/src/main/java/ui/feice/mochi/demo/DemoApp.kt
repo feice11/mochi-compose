@@ -4,8 +4,8 @@
 package ui.feice.mochi.demo
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -20,18 +20,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,15 +55,22 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kyant.capsule.ContinuousRoundedRectangle
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.basic.MochiBarIconButton
+import ui.feice.mochi.basic.MochiDialog
+import ui.feice.mochi.basic.MochiDialogAction
+import ui.feice.mochi.basic.MochiDialogActionRole
 import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.MochiTabBar
 import ui.feice.mochi.basic.MochiTabBarDefaults
@@ -71,19 +84,19 @@ import ui.feice.mochi.demo.catalog.CatalogGroup
 import ui.feice.mochi.demo.catalog.CatalogStatus
 import ui.feice.mochi.demo.catalog.catalog
 import ui.feice.mochi.demo.common.AppIcon
-import ui.feice.mochi.demo.common.BottomBarClearance
 import ui.feice.mochi.demo.common.CatalogIconShape
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.DemoSettingsSection
-import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.SectionCorner
 import ui.feice.mochi.demo.common.Tag
 import ui.feice.mochi.demo.common.Toggles
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.iconColors
-import ui.feice.mochi.demo.onboarding.GraphicsSettings
+import ui.feice.mochi.demo.onboarding.GlassEntryCard
+import ui.feice.mochi.demo.onboarding.GlassTintPage
 import ui.feice.mochi.demo.onboarding.isDark
 import ui.feice.mochi.demo.onboarding.rebright
 import ui.feice.mochi.demo.onboarding.restyle
@@ -93,25 +106,29 @@ import ui.feice.mochi.demo.pages.sharedBarTitle
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.effect.content.mochiBlurReveal
 import ui.feice.mochi.effect.elastic.mochiPressDeform
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
+import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
+import ui.feice.mochi.icons.MochiIonicon
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.MochiNavHost
 import ui.feice.mochi.navigation.MochiNavigator
-import ui.feice.mochi.navigation.MochiPeerTransition
-import ui.feice.mochi.navigation.MochiPeerTransitionSpec
 import ui.feice.mochi.navigation.MochiScrollEdgeDefaults
+import ui.feice.mochi.navigation.MochiTabReselectHandler
+import ui.feice.mochi.navigation.MochiTabScaffold
+import ui.feice.mochi.navigation.MochiTabScaffoldDefaults
 import ui.feice.mochi.navigation.MochiTitleBar
 import ui.feice.mochi.navigation.MochiTitleBarDefaults
 import ui.feice.mochi.navigation.mochiHideWhenCovered
 import ui.feice.mochi.navigation.mochiNavSource
 import ui.feice.mochi.navigation.mochiScrollEdgeFade
 import ui.feice.mochi.navigation.rememberMochiNavigator
-import ui.feice.mochi.nothing.NothingColors
 import ui.feice.mochi.picker.MochiSeedPalette
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.ColorSchemeMode
@@ -129,20 +146,17 @@ import ui.feice.mochi.theme.mochiOpticalLeading
  * 路由：目录条目的 id；侧推演示是 "push/第几页"，共享顶栏按钮演示是 "bar/序号"。
  */
 @Composable
-fun DemoApp(
-    controller: ThemeController,
-    modifier: Modifier = Modifier,
-    nothingAppearance: Boolean = LocalDemoAppearance.current?.style ==
-        DemoStyle.Nothing,
-) {
+fun DemoApp(controller: ThemeController, modifier: Modifier = Modifier) {
     val nav = rememberMochiNavigator("home")
     // 整个 app 的滚动都用 iOS 越界回弹
     ProvideMochiOverscroll {
-        MochiNavHost(nav, modifier) { route ->
+        MochiNavHost(nav, modifier, predictiveBack = LocalDemoAppearance.current?.predictiveBack ?: true) { route ->
             when {
-                route == "home" -> HomeScreen(controller, nothingAppearance)
+                route == "home" -> HomeScreen(controller)
 
                 route == "about" -> AboutPage()
+
+                route == "glass-tint" -> GlassTintPage()
 
                 // 兼容旧版本保存的小应用路由，进入转场说明页。
                 route.startsWith("app/") -> catalog.first { it.id == "transition" }.let { it.page?.invoke(it) }
@@ -164,6 +178,7 @@ fun DemoApp(
 internal fun routeTitle(route: String): String = when {
     route == "home" -> "首页"
     route == "about" -> "关于"
+    route == "glass-tint" -> "液态玻璃"
     route.startsWith("app/") -> "打开应用式转场"
     route.startsWith("push/") -> "第 ${route.removePrefix("push/")} 页"
     route.startsWith("bar/") -> sharedBarTitle(route.removePrefix("bar/").toIntOrNull() ?: 0)
@@ -171,16 +186,7 @@ internal fun routeTitle(route: String): String = when {
 }
 
 @Composable
-private fun HomeScreen(controller: ThemeController, nothingAppearance: Boolean, modifier: Modifier = Modifier) {
-    val cs = MochiTheme.colorScheme
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    val scrollBehavior = rememberMochiTabBarScrollBehavior()
-    // Catalogs retain their original expanded heading and independently saved scroll positions.
-    val componentsGrid = rememberLazyGridState()
-    val effectsGrid = rememberLazyGridState()
-    val navigationGrid = rememberLazyGridState()
-    val themeScroll = rememberScrollState()
-    val scope = rememberCoroutineScope()
+private fun HomeScreen(controller: ThemeController, modifier: Modifier = Modifier) {
     val tabs = remember {
         persistentListOf(
             MochiTabItem("组件", selectedIcon = { Glyph(Icons.GRID, it, size = 22, filled = true) }) { Glyph(Icons.GRID, it, size = 22) },
@@ -193,101 +199,49 @@ private fun HomeScreen(controller: ThemeController, nothingAppearance: Boolean, 
             }) { Glyph(Icons.PALETTE, it, size = 22) },
         )
     }
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(MochiDefaults.groupedBackground()),
-    ) {
-        // 切换标签用同层级过渡的景深样式：前一页往后退、淡出，后一页从后面往前、淡入；也可以左右滑跟手切换。
-        // 各标签的滚动位置各自保留
-        MochiPeerTransition(
-            targetState = tab,
-            spec = MochiPeerTransitionSpec.Depth,
-            modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
-            pages = HomePages,
-            onPageChange = {
-                tab = it
-                scrollBehavior.expand()
-            },
-        ) { page ->
-            when (page) {
-                0 -> CatalogGrid(
-                    "组件",
-                    catalog.filter { it.group == CatalogGroup.Components },
-                    componentsGrid,
-                )
+    // 标签页骨架：各标签的状态和滚动位置各自保留、再点当前标签回顶部、正文底部让出标签栏，都由 MochiTabScaffold 接好
+    MochiTabScaffold(
+        items = tabs,
+        collapseOnScroll = false,
+        modifier = modifier,
+        // 首页用只有图标的标签栏：选中项的标签横排在图标右边（纯色、玻璃标签栏都支持）；选中色跟主题走，不用按主题分别传
+        behavior = MochiTabBarDefaults.iconOnlyBehavior(selectedLabelOnly = true),
+    ) { page ->
+        when (page) {
+            0 -> CatalogGrid("组件", catalog.filter { it.group == CatalogGroup.Components })
 
-                1 -> CatalogGrid("效果", catalog.filter { it.group == CatalogGroup.Effects }, effectsGrid)
+            1 -> CatalogGrid("效果", catalog.filter { it.group == CatalogGroup.Effects })
 
-                2 -> CatalogGrid("导航", catalog.filter { it.group == CatalogGroup.Navigation }, navigationGrid)
+            2 -> CatalogGrid("导航", catalog.filter { it.group == CatalogGroup.Navigation })
 
-                else -> ThemeTab(controller, themeScroll)
-            }
+            else -> ThemeTab(controller)
         }
-        // 滚动边缘效果（iOS 26，不做模糊）：标签栏后面垫一层底色，朝内容那侧渐隐，内容滚到标签栏下面时被柔和地盖住。
-        // 顶上的由每一页自己的顶栏画（跟着滚动出现、画在顶栏按钮下面），这里不再整体盖一层：那样会压住顶栏按钮
-        Spacer(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 36.dp)
-                .mochiScrollEdgeFade(MochiDefaults.groupedBackground(), bottom = true, extent = 56.dp),
-        )
-        MochiTabBar(
-            selectedIndex = tab,
-            colors = if (nothingAppearance) {
-                MochiTabBarDefaults.colors(
-                    selectedContent = NothingColors.Accent,
-                )
-            } else {
-                MochiTabBarDefaults.colors()
-            },
-            onSelect = {
-                tab = it
-                scrollBehavior.expand()
-            },
-            items = tabs,
-            // 首页用只有图标的标签栏：选中项的标签横排在图标右边
-            behavior = MochiTabBarDefaults.iconOnlyBehavior(selectedLabelOnly = true),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                // 打开别的页时标签栏往下收起，返回时滑回来（跟着转场进度，返回手势拖一半也跟着露出来）
-                .mochiHideWhenCovered()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            scrollBehavior = scrollBehavior,
-            // 再点一次当前标签：平滑回到顶部、展开标签栏（iOS）
-            onReselect = {
-                scrollBehavior.expand()
-                scope.launch {
-                    when (it) {
-                        0 -> componentsGrid.animateScrollToItem(0)
-                        1 -> effectsGrid.animateScrollToItem(0)
-                        2 -> navigationGrid.animateScrollToItem(0)
-                        else -> themeScroll.animateScrollTo(0)
-                    }
-                }
-            },
-        )
     }
 }
 
 /** 保留原来的展开大标题和目录信息；向上滚动时交接到紧凑顶栏。 */
 @Composable
-private fun CatalogGrid(title: String, entries: List<CatalogEntry>, state: LazyGridState) {
+private fun CatalogGrid(title: String, entries: List<CatalogEntry>, state: LazyGridState = rememberLazyGridState()) {
     val countSubtitle = "共 ${entries.size} 个"
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    MochiTabReselectHandler { state.animateScrollToItem(0) }
+    val edgeProgress = MochiScrollEdgeDefaults.progress(state)
+    // 顶栏按钮是玻璃时，取样的是这份列表录制
+    val barBackdrop = rememberMochiBarBackdrop()
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             state = state,
-            modifier = Modifier.fillMaxSize(),
+            // 滚到顶栏下面的内容自己渐进模糊（iOS 外观的滚动边缘效果）
+            // 顶栏玻璃取样渐进模糊之后的样子
+            modifier = Modifier.fillMaxSize().mochiBackdropSource(barBackdrop)
+                .mochiScrollEdgeBlur(top + MochiTitleBarDefaults.Height, edgeProgress),
             flingBehavior = MochiScrollDefaults.flingBehavior(),
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
                 top = top + 12.dp,
-                bottom = bottom + BottomBarClearance,
+                bottom = MochiTabScaffoldDefaults.contentBottomPadding(),
             ),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -317,7 +271,8 @@ private fun CatalogGrid(title: String, entries: List<CatalogEntry>, state: LazyG
             actions = { AboutButton() },
             titleProgress = { catalogTitleProgress(state) },
             // 底色和渐隐跟着内容是否滚进顶栏下面（比小标题出现得早）：一滚上去状态栏后面就有底色
-            backgroundProgress = MochiScrollEdgeDefaults.progress(state),
+            backgroundProgress = edgeProgress,
+            backdrop = barBackdrop,
         )
     }
 }
@@ -389,72 +344,115 @@ private fun CatalogCard(entry: CatalogEntry, modifier: Modifier = Modifier) {
 
 /** 首页主题页的可见分组，同时作为副标题统计的来源。 */
 internal enum class ThemeSection(val title: String) {
+    Graphics("液态玻璃"),
     Appearance("外观"),
+    Materials("材质"),
     Colors("配色"),
     Seed("主题色"),
     Palette("主题色板"),
     Surfaces("表面层级"),
-    Corners("圆角曲线"),
-    Graphics("图形"),
     Experimental("实验性"),
     Onboarding("引导"),
 }
 
 /** 主题页按实际渲染的分组计数，紧凑顶栏与正文共享这一份列表。 */
 @Composable
-private fun ThemeTab(controller: ThemeController, scroll: androidx.compose.foundation.ScrollState) {
+private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememberLazyListState()) {
     val appearance = LocalDemoAppearance.current
     val reveal = appearance?.reveal
     val systemDark = isSystemInDarkTheme()
     val nowDark = MochiTheme.colorScheme.isDark
+    // 打开液态玻璃前的确认框
+    var confirmGlass by rememberSaveable { mutableStateOf(false) }
     val sections = ThemeSection.entries.filter {
         when (it) {
-            ThemeSection.Appearance, ThemeSection.Onboarding -> appearance != null
+            ThemeSection.Appearance, ThemeSection.Materials, ThemeSection.Onboarding -> appearance != null
 
-            // Nothing 外观用自己的固定配色，不接受种子色
-            ThemeSection.Seed -> appearance?.style != DemoStyle.Nothing
+            // 液态玻璃打开时（任何主题），它的样式和通透度入口放在最上面
+            ThemeSection.Graphics -> appearance?.liquidGlass == true
+
+            // Nothing、iOS 外观用自己的固定配色，不接受种子色
+            ThemeSection.Seed -> appearance == null || appearance.style == DemoStyle.Mochi
 
             else -> true
         }
     }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    MochiTabReselectHandler { scroll.animateScrollToItem(0) }
+    val barBackdrop = rememberMochiBarBackdrop()
     Box(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxSize()
-                .verticalScroll(scroll, flingBehavior = MochiScrollDefaults.flingBehavior())
-                .padding(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = top + MochiTitleBarDefaults.Height + 12.dp,
-                    bottom = bottom + BottomBarClearance,
-                ),
+        val edgeProgress = MochiScrollEdgeDefaults.progress(scroll)
+        // 懒加载：只有屏幕附近的分组在界面树里（设计规范「长页面用懒加载列表」）
+        LazyColumn(
+            Modifier.fillMaxSize().mochiBackdropSource(barBackdrop).mochiScrollEdgeBlur(top + MochiTitleBarDefaults.Height, edgeProgress),
+            state = scroll,
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = top + MochiTitleBarDefaults.Height + 12.dp,
+                bottom = MochiTabScaffoldDefaults.contentBottomPadding(),
+            ),
             verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SectionSpacing),
+            flingBehavior = MochiScrollDefaults.flingBehavior(),
         ) {
-            sections.forEach { section ->
+            items(sections, key = { it }) { section ->
                 when (section) {
                     ThemeSection.Appearance -> appearance?.let { settings ->
                         DemoSettingsSection(section.title) {
-                            Toggles("主题", listOf("Mochi" to DemoStyle.Mochi, "Nothing" to DemoStyle.Nothing), settings.style) {
+                            Toggles(
+                                "主题",
+                                listOf("Mochi" to DemoStyle.Mochi, "Nothing" to DemoStyle.Nothing, "iOS" to DemoStyle.Ios),
+                                settings.style,
+                            ) {
                                 reveal.restyle { settings.style = it }
                             }
+                            MochiListRow(
+                                "预测性返回",
+                                subtitle = "系统返回手势跟手预览，关闭后仍可正常返回",
+                                trailing = { MochiSwitch(settings.predictiveBack, { settings.predictiveBack = it }) },
+                            )
                             MochiListRow(
                                 "衬线体标题",
                                 subtitle = "大标题和导航标题用系统衬线体（宋体），正文不变",
                                 trailing = { MochiSwitch(settings.serif, { on -> reveal.restyle { settings.serif = on } }) },
                             )
-                            if (settings.style == DemoStyle.Nothing) {
-                                MochiListRow(
-                                    "点阵图标",
-                                    subtitle = "换成 Nothing 的点阵图标；关掉沿用 Mochi 的图标",
-                                    trailing = { MochiSwitch(settings.nothingDotIcons, { settings.nothingDotIcons = it }) },
-                                )
+                        }
+                    }
+
+                    ThemeSection.Materials -> appearance?.let { settings ->
+                        DemoSettingsSection(
+                            section.title,
+                            footer = "两项各自开关，对三套主题都有效。液态玻璃让标签栏等浮在内容上的栏透出背后的内容；" +
+                                "模糊效果让滚到顶栏、底栏下面的内容渐进模糊，关掉后是底色渐隐。",
+                        ) {
+                            MochiListRow(
+                                "液态玻璃",
+                                subtitle = "长期 Beta。实时模糊，可选择是否保留玻璃光学效果",
+                                trailing = {
+                                    // 确认框开着时开关先停在打开，取消再回到关（iOS 需要确认的开关也是这样）
+                                    MochiSwitch(settings.liquidGlass || confirmGlass, { on ->
+                                        // 打开前先提醒耗电；关掉直接生效
+                                        if (on) confirmGlass = true else reveal.restyle { settings.liquidGlass = false }
+                                    })
+                                },
+                            )
+                            if (settings.liquidGlass) {
+                                Toggles(
+                                    "效果",
+                                    listOf("仅模糊" to true, "完整" to false),
+                                    settings.glassBlurOnly,
+                                ) { settings.glassBlurOnly = it }
                             }
+                            MochiListRow(
+                                "模糊效果",
+                                subtitle = "顶栏、底栏下面的内容渐进模糊",
+                                trailing = { MochiSwitch(settings.blurEffects, { on -> reveal.restyle { settings.blurEffects = on } }) },
+                            )
                         }
                     }
 
                     ThemeSection.Colors -> DemoSettingsSection(section.title) {
-                        if (appearance?.style == DemoStyle.Nothing) {
+                        if (appearance != null && appearance.style != DemoStyle.Mochi) {
                             Toggles(
                                 "模式",
                                 listOf("跟随系统" to NothingMode.System, "浅" to NothingMode.Light, "深" to NothingMode.Dark),
@@ -515,9 +513,7 @@ private fun ThemeTab(controller: ThemeController, scroll: androidx.compose.found
 
                     ThemeSection.Surfaces -> ThemeSurfaceLevels(section.title)
 
-                    ThemeSection.Corners -> CornerCurveSection(section.title)
-
-                    ThemeSection.Graphics -> GraphicsSettings(section.title)
+                    ThemeSection.Graphics -> GlassEntryCard()
 
                     ThemeSection.Experimental -> DemoSettingsSection(
                         section.title,
@@ -533,7 +529,7 @@ private fun ThemeTab(controller: ThemeController, scroll: androidx.compose.found
                     }
 
                     ThemeSection.Onboarding -> appearance?.let { settings ->
-                        DemoSettingsSection(section.title, footer = "首次打开时的设置引导：选画面效果、主题、明暗和主题色。") {
+                        DemoSettingsSection(section.title, footer = "首次打开时的设置引导：调玻璃通透度、选主题、明暗和主题色。") {
                             MochiListRow(
                                 "下次启动演示软件后重新播放引导",
                                 trailing = { MochiSwitch(!settings.onboarded, { on -> settings.onboarded = !on }) },
@@ -543,8 +539,22 @@ private fun ThemeTab(controller: ThemeController, scroll: androidx.compose.found
                 }
             }
         }
-        MochiTitleBar("主题", actions = { AboutButton() }, backgroundProgress = MochiScrollEdgeDefaults.progress(scroll))
+        MochiTitleBar("主题", actions = { AboutButton() }, backgroundProgress = edgeProgress, backdrop = barBackdrop)
     }
+    MochiDialog(
+        visible = confirmGlass,
+        onDismissRequest = { confirmGlass = false },
+        title = "打开液态玻璃？",
+        message = "标签栏等会实时折射、模糊背后的内容，每一帧都要额外渲染，更耗电、更占 GPU。" +
+            "较旧或发热的手机上滚动和转场可能掉帧，随时可以在这里关掉。",
+        icon = { MochiIonicon("warning", tint = MochiTheme.colorScheme.error, size = 44.dp) },
+        actions = persistentListOf(
+            MochiDialogAction("取消", MochiDialogActionRole.Cancel),
+            MochiDialogAction("打开", MochiDialogActionRole.Primary) {
+                appearance?.let { settings -> reveal.restyle { settings.liquidGlass = true } }
+            },
+        ),
+    )
 }
 
 /** 首页右上角：小团子按钮，点开关于页（共享顶栏：关于页的返回按钮从这里长出来） */
@@ -557,66 +567,47 @@ private fun AboutButton() {
     }
 }
 
-/** 圆角曲线：半径从直角一路拉到胶囊，看连续圆角怎么平滑过渡；可以叠上普通圆角的轮廓对比 */
-@Composable
-private fun CornerCurveSection(title: String) {
-    val cs = MochiTheme.colorScheme
-    var radius by remember { mutableFloatStateOf(20f) }
-    var compare by remember { mutableStateOf(false) }
-    val plain = remember(radius) { RoundedCornerShape(radius.dp) }
-    DemoSection(
-        title,
-        footer = "Kyant 的 G2 连续曲率圆角：直边到圆弧的弯曲是渐变的；拉到 36dp（高度的一半）就是胶囊。描边是普通圆角，对比看角上多出来的那一点。",
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(72.dp)
-                .background(cs.primaryContainer, MochiRoundedRectangle(radius.dp))
-                .then(if (compare) Modifier.border(1.5.dp, cs.primary, plain) else Modifier),
-        )
-    }
-    DemoSliderSection("半径", "${radius.roundToInt()} dp", radius, { radius = it }, valueRange = 0f..36f)
-    DemoSettingsSection(null) {
-        MochiListRow("叠加普通圆角", trailing = { MochiSwitch(compare, { compare = it }) })
-    }
-}
-
 /** 开发中的组件：写明计划交互和会用到的效果，效果标签可以点进对应的效果页 */
 @Composable
 private fun PlannedPage(entry: CatalogEntry) {
     val cs = MochiTheme.colorScheme
     val nav = MochiNavigator.current
     DemoPage(entry) {
-        DemoSection("计划交互") {
-            entry.plan.forEachIndexed { i, line ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(
-                        Modifier
-                            .size(24.dp)
-                            .background(cs.secondaryContainer, CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("${i + 1}", style = MochiTheme.textStyles.labelMedium, color = cs.onSecondaryContainer) }
-                    Text(line, style = MochiTheme.textStyles.bodyLarge, modifier = Modifier.weight(1f))
+        demoItem {
+            DemoSection("计划交互") {
+                entry.plan.forEachIndexed { i, line ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(
+                            Modifier
+                                .size(24.dp)
+                                .background(cs.secondaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("${i + 1}", style = MochiTheme.textStyles.labelMedium, color = cs.onSecondaryContainer) }
+                        Text(line, style = MochiTheme.textStyles.bodyLarge, modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
         // 标准列表行：和列表页、开关页同样的图标块、间距、分隔线和「›」
-        MochiListSection(header = "会用到的效果", footer = "这些效果已经可以单独使用，点开先体验。") {
-            entry.uses.forEach { effect ->
-                val target = catalog.first { it.group == CatalogGroup.Effects && it.uses.firstOrNull() == effect }
-                MochiListRow(
-                    target.title,
-                    onClick = { nav?.push(target.id) },
-                    chevron = true,
-                    leading = {
-                        AppIcon(target.glyph, target.iconColors(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
-                    },
-                )
+        demoItem {
+            MochiListSection(header = "会用到的效果", footer = "这些效果已经可以单独使用，点开先体验。") {
+                entry.uses.forEach { effect ->
+                    val target = catalog.first { it.group == CatalogGroup.Effects && it.uses.firstOrNull() == effect }
+                    MochiListRow(
+                        target.title,
+                        onClick = { nav?.push(target.id) },
+                        chevron = true,
+                        leading = {
+                            AppIcon(
+                                target.glyph,
+                                target.iconColors(),
+                                MochiListDefaults.LeadingSize,
+                                corner = MochiListDefaults.LeadingCorner,
+                            )
+                        },
+                    )
+                }
             }
         }
     }
 }
-
-/** 首页四个标签页的顺序（同层级切换按它判断方向、左右滑找旁边一页） */
-private val HomePages = listOf(0, 1, 2, 3)

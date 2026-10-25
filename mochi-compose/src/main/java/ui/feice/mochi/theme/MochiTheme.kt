@@ -28,6 +28,13 @@ import androidx.compose.ui.text.TextStyle
  * ```
  * 根部还会提供 [LocalContentColor]（= onSurface）和 [LocalTextStyle]（= bodyLarge），
  * 不放在任何容器里的文字也有正确的颜色，深色模式下不会是黑字。
+ *
+ * 最外层的 MochiTheme 还会让状态栏、导航栏图标跟着明暗走（浅色主题深色图标），应用不用自己写
+ * `WindowCompat.getInsetsController(…).isAppearanceLightStatusBars`。页面要自己控制时传 [systemBarAppearance] = false。
+ *
+ * [materials] 决定浮在内容上的栏用纯色还是液态玻璃、滚动边缘要不要渐进模糊，和配色无关：任何主题都能打开。
+ * 玻璃、模糊的配方在 mochi-ios 里（`iosMaterials(isDark, glass = …, blur = …)`），默认纯色（[MochiMaterials] 的默认值）。
+ * 组件都从主题读这些，应用里不需要按主题、按开关分别写组件。
  */
 @Composable
 public fun MochiTheme(
@@ -35,6 +42,8 @@ public fun MochiTheme(
     textStyles: MochiTextStyles = defaultTextStyles(),
     shapes: MochiShapes = defaultShapes(),
     motionScheme: MochiMotionScheme = defaultMotionScheme(),
+    systemBarAppearance: Boolean = true,
+    materials: MochiMaterials = LocalMochiMaterials.current,
     content: @Composable () -> Unit,
 ) {
     MochiTheme(
@@ -42,6 +51,8 @@ public fun MochiTheme(
         textStyles = textStyles,
         shapes = shapes,
         motionScheme = motionScheme,
+        systemBarAppearance = systemBarAppearance,
+        materials = materials,
         content = content,
     )
 }
@@ -84,23 +95,27 @@ private class SchemeTransition(initial: MochiColorScheme) {
 /** 配色过渡时长 */
 private const val ColorTransitionMillis = 420
 
-/** 直接给一套配色的版本 */
+/** 直接给一套配色的版本；[materials] 默认沿用外层提供的材质 */
 @Composable
 public fun MochiTheme(
     colors: MochiColorScheme,
     textStyles: MochiTextStyles = defaultTextStyles(),
     shapes: MochiShapes = defaultShapes(),
     motionScheme: MochiMotionScheme = defaultMotionScheme(),
+    systemBarAppearance: Boolean = true,
+    materials: MochiMaterials = LocalMochiMaterials.current,
     content: @Composable () -> Unit,
 ) {
     // HDR 窗口模式只由最外层（最先出现）的 MochiTheme 管一次，见 MochiHdrWindowEffect
     MochiHdrWindowEffect()
     MochiGraphicsWindowEffect()
+    if (systemBarAppearance) MochiSystemBarsEffect(colors.isDark)
     CompositionLocalProvider(
         LocalMochiColorScheme provides colors,
         LocalMochiTextStyles provides textStyles,
         LocalMochiShapes provides shapes,
         LocalMochiMotionScheme provides motionScheme,
+        LocalMochiMaterials provides materials,
         LocalContentColor provides colors.onSurface,
         LocalTextStyle provides textStyles.bodyLarge,
         content = content,
@@ -124,6 +139,11 @@ public object MochiTheme {
     public val motionScheme: MochiMotionScheme
         @Composable @ReadOnlyComposable
         get() = LocalMochiMotionScheme.current
+
+    /** 浮在内容上的栏用纯色还是玻璃，见 [MochiMaterials] */
+    public val materials: MochiMaterials
+        @Composable @ReadOnlyComposable
+        get() = LocalMochiMaterials.current
 }
 
 // 没包 MochiTheme 时也能用：默认浅色配色和默认 token

@@ -81,6 +81,20 @@ Respect the user's requested verification scope. Compilation is not interaction 
 - Changes to the metaball shader: add a scene to `MochiRenderBenchmark` and run `./gradlew :mochi-compose:connectedDebugAndroidTest`.
   改了融球 shader 时，给 `MochiRenderBenchmark` 加场景，并跑 `./gradlew :mochi-compose:connectedDebugAndroidTest`。
 
+The example Release build enables R8 by default. Keep AGP/D8/R8 compatible with the Kotlin compiler; the current Kotlin 2.3 toolchain uses AGP 8.13.2. `-PmochiMinify=false` is an explicit diagnostic option. Resource shrinking stays disabled because the demo resolves calibration assets by name. Do not pool measurements from optimized and unoptimized builds.
+
+示例 Release 默认启用 R8，AGP/D8/R8 必须支持当前 Kotlin 编译器；Kotlin 2.3 当前配 AGP 8.13.2。`-PmochiMinify=false` 仅供显式诊断；资源压缩仍关闭，以保留按名称读取的校准素材。优化与未优化构建的测量不能混算。
+
+For an opt-in glass comparison against the actual Release app, build `:example:assembleRelease :example:assembleReleaseAndroidTest -PmochiTestBuildType=release` and select only `ui.feice.mochi.demo.SharedTextureComparison`. Install the matching application and instrumentation APKs together. It skips without the instrumentation argument `allowPhysicalInput=true`; `cycles=3` runs three ABBA groups in one process. It fixes quality and the window display mode, resets the preview scroll/selection and live-carousel phase, captures continuous FrameMetrics and environment readings, exports `shared-texture-abba/report.json` under the demo's external files directory, then restores the test overrides. Deduplicate identical frame timestamps before analysis; compare counterbalanced groups rather than treating every frame as an independent experiment. This comparison covers the source-texture switch, not all library changes.
+
+液态玻璃的可选实机对照使用上述 Release 构建命令，只选 `SharedTextureComparison`，应用和测试 APK 必须成对安装。未传 `allowPhysicalInput=true` 时跳过；`cycles=3` 在同一进程跑三组 ABBA，固定画质和窗口显示档位，复位预览滚动、选中项与动态轮播相位，连续采集 FrameMetrics 与环境数据，结果输出到演示应用外部文件目录的 `shared-texture-abba/report.json`，结束恢复测试覆盖。先按帧时间戳去重，再按交错组比较，不能把每帧当成独立实验；该测试只对照共享背景纹理开关，不代表全部库修改的前后收益。
+
+Pass `comparison=finish` to compare the original finishing pass against bounded/compact inputs and the circular-contour shortcut; `finish-bounds` and `finish-geometry` isolate those parts. Output is `<comparison>-abba/report.json`. The test temporarily selects the iOS appearance to expose the glass entry and restores the previous appearance afterwards. / 传 `comparison=finish` 对照原收尾与输入范围、单输入及圆形搜索优化；`finish-bounds`、`finish-geometry` 分别隔离输入和几何部分。结果位于 `<comparison>-abba/report.json`。测试临时选择 iOS 外观以显示玻璃入口，结束后恢复原外观。
+
+`comparison=edge-face` isolates the edge-varying face atlas; `comparison=pipeline` combines it with the finish changes. An optional `glassStyle=Ios26` or `Ios27` fixes the recipe family and is restored afterwards. / `comparison=edge-face` 单独比较边缘模糊的面色管线；`comparison=pipeline` 同时对照面色与收尾优化。可传 `glassStyle=Ios26` 或 `Ios27` 固定配方系列，结束后恢复原选择。
+
+`comparison=face-inputs` isolates dependency-keyed immutable filter reuse. Release glass-test targets additionally load `proguard-benchmark-target.pro`, generated from the harness/runner's shared-class references, to keep test entry points that application-only R8 analysis would remove. This contract covers `SharedTextureComparison`; other UI tests normally use Debug. Record whether this test contract was present with each APK hash. / `comparison=face-inputs` 单独对照按依赖复用不可变滤镜对象。Release 玻璃测试构建另外加载按测试引用生成的 `proguard-benchmark-target.pro`，保留只由测试入口使用的共享类成员；该清单针对 `SharedTextureComparison`，其他 UI 测试通常使用 Debug。每个 APK 的哈希记录应同时说明是否启用了这份测试契约。
+
 ## Commits / 提交
 
 `<scope>: <summary>`, where scope is one of `library` / `docs` / `example` / `build` / `fix`. Keep library changes and example + docs changes in separate commits when practical.

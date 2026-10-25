@@ -79,22 +79,24 @@ public fun MochiContextMenu(
     var screenW by remember { mutableFloatStateOf(0f) }
     // 卡片在屏幕右半边就让菜单靠右对齐
     val alignEnd = screenW > 0f && anchor.observed().center.x > screenW / 2f
-    val style = remember(colors, behavior, physics, menuWidth, alignEnd, cornerRadius) {
+    val liquid = liquidMenu()
+    val style = remember(colors, behavior, physics, menuWidth, alignEnd, cornerRadius, liquid) {
         mochiStyle(
             // 卡片就是「按钮」：它自己画内容，按钮底色透明；投影、融球颈按卡片的圆角算
             colors.copy(buttonColor = Color.Transparent),
             behavior.copy(openMode = MochiOpenMode.Detach, align = if (alignEnd) MochiAlign.End else MochiAlign.Start),
             physics,
             menuWidth,
-        ).copy(buttonCornerRadius = cornerRadius)
+        ).copy(buttonCornerRadius = cornerRadius).let { if (liquid) it.liquid(cover = false) else it }
     }
+    val menuMotion = liquidMotion(liquid, motion)
     val engine = rememberMochiEngine(
         expanded = expanded,
         onExpandedChange = { expanded = it },
         onItemClick = onItemClick,
         itemCount = items.size,
         style = style,
-        motion = motion,
+        motion = menuMotion,
         dismissDelayMillis = behavior.dismissDelayMillis,
         anchorSize = { anchor.rect.size },
     )
@@ -187,7 +189,7 @@ public fun MochiContextMenu(
         trigger = MochiTrigger.LongPress,
         items = items,
         selectedIndex = -1,
-        motion = motion,
+        motion = menuMotion,
         anchorShape = shape,
         anchorPadding = PaddingValues(0.dp),
         scrim = MochiDefaults.scrim(),

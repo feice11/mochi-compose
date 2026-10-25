@@ -47,7 +47,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -122,7 +121,6 @@ import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.MochiBackButton
 import ui.feice.mochi.navigation.MochiTitleBarDefaults
 import ui.feice.mochi.nothing.NothingColors
-import ui.feice.mochi.nothing.NothingIcons
 import ui.feice.mochi.nothing.nothingColorScheme
 import ui.feice.mochi.nothing.nothingControlPalette
 import ui.feice.mochi.nothing.nothingTextStyles
@@ -131,7 +129,6 @@ import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.ColorSchemeMode
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.LocalMochiControlPalette
-import ui.feice.mochi.theme.LocalMochiIconProvider
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.theme.MochiTheme
@@ -424,13 +421,13 @@ private fun CenteredPage(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-// ---------- 第 2 页：画面效果 ----------
+// ---------- 第 2 页：液态玻璃通透度 ----------
 
 @Composable
 private fun GraphicsPage(t: () -> Float) {
     PageColumn {
-        PageHeading("画面效果", "越往右越好看，也越耗电。随时可以在「主题」页改。", t)
-        GraphicsSettings(null, stagger = { Modifier.pop(t, 2 + it) })
+        PageHeading("液态玻璃", "往左更通透，往右更清楚。随时可以在「主题」页改。", t)
+        GlassTintSettings(null, stagger = { Modifier.pop(t, 2 + it) })
     }
 }
 
@@ -538,7 +535,7 @@ private fun GlassDango(modifier: Modifier = Modifier, startDelay: Long = 0L) {
 private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
     val haptics = rememberMochiHaptics()
     PageColumn {
-        PageHeading("选择主题", "两套完整的设计语言：配色、字体、图标、控件都会跟着换。之后也能在「主题」页改。", t)
+        PageHeading("选择主题", "两套完整的设计语言：配色、字体、控件都会跟着换。之后也能在「主题」页改。", t)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             listOf(DemoStyle.Mochi to "Mochi", DemoStyle.Nothing to "Nothing").forEachIndexed { index, (style, label) ->
                 Column(Modifier.weight(1f).pop(t, 2 + index), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -566,7 +563,7 @@ private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
  * 没选中的稍微缩小。整块按压跟手形变；里面的内容不接收触摸（只是预览）。
  */
 @Composable
-private fun SelectFrame(
+internal fun SelectFrame(
     selected: Boolean,
     radius: Dp,
     onClick: () -> Unit,
@@ -609,7 +606,7 @@ private fun SelectFrame(
 }
 
 @Composable
-private fun CheckDot(selected: Boolean) {
+internal fun CheckDot(selected: Boolean) {
     val cs = MochiTheme.colorScheme
     MochiBlurCrossfade(selected, transition = MochiBlurTransitions.Appear) { on ->
         Box(
@@ -641,7 +638,6 @@ private fun StylePreview(style: DemoStyle, appearance: DemoAppearance) {
     val colors = if (nothing) nothingColorScheme(dark) else appearance.controller.colorScheme(dark)
     val textStyles = remember(nothing) { if (nothing) nothingTextStyles() else defaultTextStyles() }
     CompositionLocalProvider(
-        LocalMochiIconProvider provides if (nothing) NothingIcons else null,
         LocalMochiControlPalette provides if (nothing) nothingControlPalette(dark) else null,
     ) {
         MochiTheme(colors = colors, textStyles = textStyles) {
@@ -703,7 +699,7 @@ private fun nothingButton() = ui.feice.mochi.basic.MochiButtonDefaults.colors(Mo
 
 /** 按 [scale] 缩小摆放：内容按放大后的尺寸排版，再整体缩回来（字号、控件都是真实比例） */
 @Composable
-private fun Miniature(scale: Float, content: @Composable () -> Unit) {
+internal fun Miniature(scale: Float, content: @Composable () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Box(
             Modifier
@@ -756,7 +752,7 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
     PageColumn {
         PageHeading(
             "外观",
-            if (nothing) "选择明暗，以及要不要换成 Nothing 的点阵图标。" else "选择明暗和主题色。色块上是从种子色生成的整套配色。",
+            if (nothing) "选择明暗。Nothing 外观用固定的黑白灰加红色。" else "选择明暗和主题色。色块上是从种子色生成的整套配色。",
             t,
         )
         val shade = if (nothing) appearance.nothingMode.shade() else controller.colorSchemeMode.shade()
@@ -797,7 +793,7 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
                     trailing = { MochiSwitch(appearance.serif, { on -> appearance.serif = on }) },
                 )
             }
-            if (nothing) DotIconsSection(appearance) else SeedSection(appearance)
+            if (!nothing) SeedSection(appearance)
         }
     }
 }
@@ -867,42 +863,6 @@ private fun SeedSection(appearance: DemoAppearance) {
             },
             style = controller.paletteStyle,
         )
-    }
-}
-
-private val PreviewIcons = listOf(Icons.HOME, Icons.SEARCH, Icons.HEART, Icons.CAMERA, Icons.BELL, Icons.STAR)
-
-@Composable
-private fun DotIconsSection(appearance: DemoAppearance) {
-    val haptics = rememberMochiHaptics()
-    val dot = appearance.nothingDotIcons
-    // 每个图标各自的显示状态：开关一拨，从左到右一颗颗换过去
-    val shown = remember { mutableStateListOf(*Array(PreviewIcons.size) { dot }) }
-    LaunchedEffect(dot) {
-        for (i in shown.indices) {
-            if (shown[i] == dot) continue
-            delay(55)
-            shown[i] = dot
-            haptics.tick()
-        }
-    }
-    MochiListSection {
-        MochiListRow(
-            "点阵图标",
-            subtitle = "换成 Nothing 的点阵图标；关掉沿用 Mochi 的图标",
-            trailing = { MochiSwitch(dot, { appearance.nothingDotIcons = it }) },
-        )
-    }
-    DemoSection("预览") {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            PreviewIcons.forEachIndexed { i, icon ->
-                MochiBlurCrossfade(shown[i], transition = MochiBlurTransitions.Appear) { d ->
-                    CompositionLocalProvider(LocalMochiIconProvider provides if (d) NothingIcons else null) {
-                        Glyph(icon, MochiTheme.colorScheme.onSurface, size = 30)
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -985,9 +945,8 @@ private fun DonePage(appearance: DemoAppearance, t: () -> Float, active: Boolean
 private fun summary(appearance: DemoAppearance): String = if (appearance.style == DemoStyle.Nothing) {
     listOf(
         "Nothing",
-        if (appearance.nothingDotIcons) "点阵图标" else "常规图标",
         appearance.nothingMode.shade().summary(),
-        "画面${MochiGraphics.level.label}",
+        glassTintLabel(appearance.styleGlassTint),
     ).joinToString(" · ")
 } else {
     val mode = appearance.controller.colorSchemeMode
@@ -995,7 +954,7 @@ private fun summary(appearance: DemoAppearance): String = if (appearance.style =
         "Mochi",
         if (mode.isMonet()) "壁纸取色" else "自选主题色",
         mode.shade().summary(),
-        "画面${MochiGraphics.level.label}",
+        glassTintLabel(appearance.styleGlassTint),
     ).joinToString(" · ")
 }
 

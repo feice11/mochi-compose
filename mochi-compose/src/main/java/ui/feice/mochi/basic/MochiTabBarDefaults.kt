@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.theme.LocalMochiControlPalette
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
 
@@ -108,8 +110,11 @@ public object MochiTabBarDefaults {
     public fun colors(
         container: Color = MochiTheme.colorScheme.run { if (isDark) surfaceContainerHigh else surfaceContainerLowest },
         indicator: Color = MochiTheme.colorScheme.secondaryContainer,
-        selectedContent: Color = MochiTheme.colorScheme.onSecondaryContainer,
-        content: Color = MochiTheme.colorScheme.onSurfaceVariant,
+        // 选中项：外观主题可以在控件配色里指定（Nothing 用红色）；玻璃标签栏的选中块是中性灰，用主题强调色才看得出选中
+        selectedContent: Color = LocalMochiControlPalette.current?.tabSelected?.takeIf { it.isSpecified }
+            ?: MochiTheme.colorScheme.run { if (MochiTheme.materials.bar != null) primary else onSecondaryContainer },
+        // 玻璃标签栏（iOS）的未选中项用正文色，纯色底栏用次要色
+        content: Color = MochiTheme.colorScheme.run { if (MochiTheme.materials.bar != null) onSurface else onSurfaceVariant },
         shadow: Color = MochiTheme.colorScheme.shadow,
         badge: Color = MochiTheme.colorScheme.error,
         onBadge: Color = MochiTheme.colorScheme.onError,

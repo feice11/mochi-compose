@@ -20,8 +20,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
@@ -52,16 +55,74 @@ public class MochiOverscrollEffect(spec: MochiOverscrollSpec = MochiOverscrollSp
     /** 图层实际显示的越界位移（px），供大标题和下拉刷新联动。 */
     public val offset: Offset get() = delegate.visibleOffset
 
+    /** 越界是不是手指正拖着：松手后的惯性撞到边、回弹都是 false。下拉刷新只认手指拉出来的位移 */
+    internal var dragging: Boolean by mutableStateOf(false)
+        private set
+
     // 沿用上游的 false：回弹视觉动画不会让新的点击被当成“仅停止滚动”。
     override val isInProgress: Boolean get() = delegate.isInProgress
     override val node: DelegatableNode get() = delegate.node
 
-    override fun applyToScroll(delta: Offset, source: NestedScrollSource, performScroll: (Offset) -> Offset): Offset =
-        delegate.applyToScroll(delta, source, performScroll)
+    // mochiContainedScroll 挡在外层前面吃掉的剩余：只在自己的滚动、惯性进行中记，交回 Cresto 当成没被消耗，照常回弹
+    private var scrolling = false
+    private var flinging = false
+    private var heldScroll = Offset.Zero
+    private var heldFling = Velocity.Zero
 
-    override suspend fun applyToFling(velocity: Velocity, performFling: suspend (Velocity) -> Velocity): Unit =
-        delegate.applyToFling(velocity, performFling)
+    override fun applyToScroll(delta: Offset, source: NestedScrollSource, performScroll: (Offset) -> Offset): Offset {
+        dragging = source == NestedScrollSource.UserInput
+        return delegate.applyToScroll(delta, source) { d ->
+            scrolling = true
+            heldScroll = Offset.Zero
+            val consumed = try {
+                performScroll(d)
+            } finally {
+                scrolling = false
+            }
+            consumed - heldScroll
+        }
+    }
+
+    override suspend fun applyToFling(velocity: Velocity, performFling: suspend (Velocity) -> Velocity) {
+        dragging = false
+        delegate.applyToFling(velocity) { v ->
+            flinging = true
+            heldFling = Velocity.Zero
+            val consumed = try {
+                performFling(v)
+            } finally {
+                flinging = false
+            }
+            consumed - heldFling
+        }
+    }
+
+    /** [mochiContainedScroll] 挂的连接：吃掉内层滚到头剩下的位移和速度，外层收不到 */
+    internal val containment: NestedScrollConnection = object : NestedScrollConnection {
+        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+            if (scrolling) heldScroll += available
+            return available
+        }
+
+        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+            if (flinging) heldFling += available
+            return available
+        }
+    }
 }
+
+/**
+ * 嵌在可滚页面里的滚动区域（预览卡片、卡片里的列表）：滚到头时拖动和惯性都不往外传，外面的页面不跟着动，
+ * 剩下的位移和速度交给这块区域自己的 [effect] 拉出越界、回弹（iOS 里套在页面中的 UIScrollView 也是这样）。
+ * 挂在滚动容器外面，[effect] 同时传给容器的 `overscrollEffect`：
+ *
+ * ```kotlin
+ * val overscroll = rememberMochiOverscrollEffect()
+ * Column(Modifier.height(320.dp).mochiContainedScroll(overscroll).verticalScroll(state, overscrollEffect = overscroll)) { … }
+ * LazyColumn(Modifier.mochiContainedScroll(overscroll), overscrollEffect = overscroll) { … }
+ * ```
+ */
+public fun Modifier.mochiContainedScroll(effect: MochiOverscrollEffect): Modifier = nestedScroll(effect.containment)
 
 /** 为子树中的滚动容器创建 Cresto 回弹效果。 */
 @Immutable

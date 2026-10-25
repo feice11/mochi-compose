@@ -6,6 +6,8 @@ package ui.feice.mochi.basic
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,7 +51,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
+import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
@@ -57,6 +64,7 @@ import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.MochiConcentricContainer
 import ui.feice.mochi.shape.MochiRoundedRectangle
+import ui.feice.mochi.theme.LocalMochiIconDraw
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.lerp
@@ -144,6 +152,9 @@ public object MochiDialogDefaults {
  * 默认点外面不关闭（iOS 的警告框也是这样），返回键 / 返回手势关闭；[dismissOnBack] 为 false 时返回手势只让卡片
  * 跟着缩一下、松手弹回，不关闭（配合按住才关闭的按钮，确保提示被看到）。
  * 点任何一个按钮：先执行它的 onClick，再调 [onDismissRequest]。
+ *
+ * [icon] 放在标题上面。每次弹出，图标位里的 `MochiIonicon`（mochi-icons）会一笔一笔描出来、实心部分最后淡入
+ * （通过 [LocalMochiIconDraw]），所有带图标的对话框出场一致，调用方不用自己写动画。警告类提示用 "warning" 之类的描边图标。
  */
 @Suppress("ktlint:compose:modifier-not-used-at-root")
 @Composable
@@ -164,6 +175,8 @@ public fun MochiDialog(
     val currentVisible by rememberUpdatedState(visible)
     val presence = remember { Animatable(0f) }
     val back = remember { Animatable(0f) }
+    // 图标的描绘进度：每次弹出从头画（LocalMochiIconDraw），关闭途中又打开时接着画完
+    val iconDraw = remember { Animatable(if (visible) 0f else 1f) }
     var composed by remember { mutableStateOf(visible) }
     var closing by remember { mutableStateOf(false) }
     var edge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
@@ -180,7 +193,15 @@ public fun MochiDialog(
             closing = false
             back.snapTo(0f)
             // 新弹出的对话框：先等它组合、排版、画完、帧率回稳再动，开头几帧不被排版吞掉（关闭途中又打开不等）
-            if (fresh) awaitFrameSettle(framePeriod)
+            if (fresh) {
+                iconDraw.snapTo(0f)
+                awaitFrameSettle(framePeriod)
+            }
+            // 卡片放大到位的同时，图标一笔一笔画出来（比卡片稍晚起笔，卡片还在缩时看不清细节）
+            launch {
+                delay(IconDrawDelayMillis)
+                iconDraw.animateTo(1f, tween(IconDrawMillis, easing = LinearEasing))
+            }
             presence.animateTo(1f, MochiMotions.responseSpring(0.36f, 0.78f))
         } else if (composed) {
             // 对话框里有输入框时，关掉的同时收起键盘（iOS）
@@ -241,7 +262,9 @@ public fun MochiDialog(
             contentAlignment = Alignment.Center,
         ) {
             MochiConcentricContainer(corner, inset) {
-                Column(
+                // 主题有警告框玻璃（alertGlass）且浮层底下有页面录制时，卡片画成玻璃；否则纯色
+                val glass = rememberGlassFill(MochiTheme.materials.alertGlass, LocalMochiOverlayGlass.current)
+                Box(
                     modifier
                         .padding(horizontal = 36.dp)
                         .widthIn(max = MochiDialogDefaults.MaxWidth)
@@ -272,40 +295,51 @@ public fun MochiDialog(
                             clip = false
                             shadowElevation = 24.dp.toPx() * p
                         }
-                        .background(colors.container, shape)
+                        .then(if (glass == null) Modifier.background(colors.container, shape) else Modifier)
                         .mochiAnimateHeight(shape),
                     // 边缘接按钮的环境光
                 ) {
-                    Column(
-                        Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (icon != null) Box(Modifier.padding(bottom = 4.dp)) { icon() }
-                        if (title.isNotEmpty()) {
-                            Text(
-                                title,
-                                style = MochiTheme.textStyles.navTitle,
-                                color = colors.title,
-                            )
+                    if (glass != null) GlassSurface(glass, Modifier.matchParentSize(), corner, null)
+                    Column {
+                        Column(
+                            Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (icon != null) {
+                                Box(Modifier.padding(bottom = 4.dp)) {
+                                    CompositionLocalProvider(LocalMochiIconDraw provides { iconDraw.value }) { icon() }
+                                }
+                            }
+                            if (title.isNotEmpty()) {
+                                Text(
+                                    title,
+                                    style = MochiTheme.textStyles.navTitle,
+                                    color = colors.title,
+                                )
+                            }
+                            if (message != null) {
+                                Text(
+                                    message,
+                                    style = MochiTheme.textStyles.bodyLarge.copy(fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
+                                    color = colors.message,
+                                )
+                            }
+                            content?.invoke(this)
                         }
-                        if (message != null) {
-                            Text(
-                                message,
-                                style = MochiTheme.textStyles.bodyLarge.copy(fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-                                color = colors.message,
-                            )
+                        DialogButtons(actions, colors, inset) { a ->
+                            a.onClick()
+                            currentOnDismiss()
                         }
-                        content?.invoke(this)
-                    }
-                    DialogButtons(actions, colors, inset) { a ->
-                        a.onClick()
-                        currentOnDismiss()
                     }
                 }
             }
         }
     }
 }
+
+/** 图标描绘出场：弹出后多久起笔、整个描绘多长 */
+private const val IconDrawDelayMillis = 90L
+private const val IconDrawMillis = 720
 
 @Composable
 private fun DialogButtons(

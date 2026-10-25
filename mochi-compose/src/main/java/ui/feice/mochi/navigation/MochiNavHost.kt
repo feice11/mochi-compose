@@ -4,6 +4,7 @@
 package ui.feice.mochi.navigation
 
 import androidx.activity.BackEventCompat
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -30,10 +32,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -46,12 +46,13 @@ import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToDown
@@ -64,21 +65,25 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.effect.glass.LocalMochiWindowBackdrop
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberGlassFill
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
+import ui.feice.mochi.effect.glass.source
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.MochiSprings
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
-import ui.feice.mochi.shape.G2RectClipShape4
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.lerp
@@ -90,7 +95,7 @@ import ui.feice.mochi.utils.smoothstep
  * @param close 关闭（整屏 / 松手时的画面 → 来源）的弹簧
  * @param cancel 预测性返回取消后弹回整屏的弹簧
  * @param push 侧推（没有来源的 push / pop）的弹簧：iOS 是临界阻尼，不回弹。打开和关闭用同一条，中途掉头时速度连续
- * @param underScale 上面有页面打开时，下层页面缩到多少（景深感）
+ * @param underScale 来源转场的背景比例，默认 1 保持原位；显式小于 1 可启用旧的景深缩放
  * @param backScale 预测性返回拖到底时页面缩到多少
  * @param scrim 下层页面被压住时盖上的暗色（alpha 是最深时的）
  * @param backdrop 从来源打开的转场最底下的底色（下层页缩小后露出的四周和圆角外侧），像从桌面打开应用一样是黑的
@@ -102,7 +107,7 @@ public data class MochiNavSpec(
     val open: AnimationSpec<Float>,
     val close: AnimationSpec<Float>,
     val cancel: AnimationSpec<Float>,
-    val underScale: Float = 0.94f,
+    val underScale: Float = 1f,
     val backScale: Float = 0.86f,
     val scrim: Color = Color.Black.copy(alpha = 0.18f),
     val backdrop: Color = Color.Black,
@@ -120,7 +125,7 @@ public object MochiNavDefaults {
         open: AnimationSpec<Float> = MochiSprings.smooth(300, visibilityThreshold = 0.0005f),
         close: AnimationSpec<Float> = MochiSprings.smooth(300, visibilityThreshold = 0.0005f),
         cancel: AnimationSpec<Float> = MochiMotions.responseSpring(0.35f, 1f),
-        underScale: Float = 0.94f,
+        underScale: Float = 1f,
         backScale: Float = 0.86f,
         scrim: Color = Color.Black.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.4f else 0.18f),
         backdrop: Color = Color.Black,
@@ -140,7 +145,7 @@ public object MochiNavDefaults {
  * - 有来源（`push(route, from = key)`）时是「容器变形」：卡片本身变成页面。变形中的容器里同时画着卡片
  *   （录下来的画面，按容器宽度缩放）和页面（按容器宽度缩放），两者都贴着容器一起长大，卡片渐隐、页面渐显；
  *   关闭时原路缩回，落地时容器里的卡片画面正好和原卡片重合。所有过渡只由弹簧进度决定，
- *   途中返回或再点一次都从当前位置和速度连续掉头。下层页面缩小并压暗。
+ *   途中返回或再点一次都从当前位置和速度连续掉头。下层页面默认保持原位，只随进度压暗。
  * - 没有来源时是 iOS 的侧推：新页从右边推进来，下层页往左退 30% 并压暗，新页左边缘带一道投影；
  *   打开和关闭是同一条弹簧，途中随时 pop / 再 push 同一页都会从当前位置连续掉头（转场中不拦触摸）。
  *   应用的侧推页操作使用带稳定 navId 的库顶栏控件，图标配置稳定 contentKey；布局容器本身不自动登记操作。
@@ -152,6 +157,7 @@ public object MochiNavDefaults {
  *
  * 页面始终按整屏排版，转场只改 graphicsLayer，不会每帧重新布局。栈顶下面那一页保持组合
  * （滚动位置、来源元素的位置都还在），完全被盖住时不绘制；更深的页面状态由 SaveableStateHolder 保存。
+ * @param predictiveBack 系统返回手势预览；false 时仍可正常返回，内层主机和面板继承此设置。应用内全屏右滑手势不受影响。
  * @param corners 页面转场圆角覆盖值；null 在面板内继承面板圆角，其他位置使用物理屏幕圆角；[MochiScreenCorners.None] 显式关闭内页转场圆角
  */
 @Composable
@@ -160,6 +166,7 @@ public fun MochiNavHost(
     modifier: Modifier = Modifier,
     spec: MochiNavSpec = MochiNavDefaults.spec(),
     corners: MochiScreenCorners? = null,
+    predictiveBack: Boolean = LocalMochiPredictiveBack.current,
     content: @Composable (route: String) -> Unit,
 ) {
     val holder = rememberSaveableStateHolder()
@@ -172,9 +179,11 @@ public fun MochiNavHost(
     val pushBackdrop = spec.pushBackdrop.takeOrElse { MochiDefaults.groupedBackground() }
     geo.defaultCorners = corners ?: screenCorners
     geo.enclosingCorners = if (corners == null) surface?.corners else null
+    geo.glassOpaque = surface?.takeIf { it.glass != null }?.opaque
     geo.fallbackCorner = if (corners == null && surface == null) with(LocalDensity.current) { SlideFallbackCorner.toPx() } else 0f
 
-    PredictiveBackHandler(enabled = navigator.canPop) { events ->
+    BackHandler(enabled = !predictiveBack && navigator.canPop) { navigator.pop() }
+    PredictiveBackHandler(enabled = predictiveBack && navigator.canPop) { events ->
         val e = navigator.entries.lastOrNull { !it.closing } ?: return@PredictiveBackHandler
         // 上一页还在「从来源打开」式地关闭（或者这一页就是那种页）：这次返回排队，手势不改这一页的画面，免得接手时跳一下
         val leaving = navigator.entries.lastOrNull()?.takeIf { it.closing }
@@ -218,7 +227,18 @@ public fun MochiNavHost(
         }
     }
 
-    CompositionLocalProvider(LocalMochiNavigator provides navigator, LocalMochiNavSurface provides null) {
+    // 最外层的导航主机把整页录下来给浮层（菜单、警告框、面板）的玻璃取样；面板里的内层主机、没有玻璃的主题不录
+    val windowBackdrop = if (surface == null && LocalMochiWindowBackdrop.current == null && MochiTheme.materials.anyGlass) {
+        rememberMochiBackdrop(MochiDefaults.groupedBackground())
+    } else {
+        null
+    }
+    CompositionLocalProvider(
+        LocalMochiNavigator provides navigator,
+        LocalMochiNavSurface provides null,
+        LocalMochiPredictiveBack provides predictiveBack,
+        LocalMochiWindowBackdrop provides (windowBackdrop?.source ?: LocalMochiWindowBackdrop.current),
+    ) {
         Box(
             modifier
                 .fillMaxSize()
@@ -244,76 +264,82 @@ public fun MochiNavHost(
                     drawRect(if (opening) geo.spec.backdrop else pushBackdrop)
                 },
         ) {
-            val entries = navigator.entries
-            val n = entries.size
-            // 组合哪些页：从栈顶往下，只要这一页在转场（没把下面完全盖住）就把下面那页也带上，
-            // 快速连续推入 / 返回时，好几页同时在动，每一页下面都有东西，不会露出黑底；
-            // 至少保留栈顶下面那一页（滚动位置、来源元素的位置都还在，返回手势一开始就能露出来）
-            var first = (n - 2).coerceAtLeast(0)
-            while (first > 0 && entries[first + 1].inTransition) first--
-            for (i in first until n) {
-                val e = entries[i]
-                key(e.id) {
-                    // 侧推阴影：画在这一页下面、单独一层，不被任何页面的圆角裁切截断
-                    Spacer(
-                        Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {}
-                            .drawBehind { geo.drawSlideShadow(e, this) },
-                    )
-                    EntryLayer(e, geo, surface) {
-                        holder.SaveableStateProvider(e.id) {
-                            CompositionLocalProvider(LocalMochiNavEntry provides e) { content(e.route) }
-                        }
-                    }
-                    LaunchedEffect(e, e.closing) {
-                        val slide = e.source == null
-                        if (!e.closing) {
-                            // 新打开的页：先等它组合、排版、绘制完、帧率回稳（第一次打开时类加载、首屏子组合可能要几百毫秒）
-                            // 再开始动，不然动画的开头几帧被这几帧吞掉，看起来是从卡片一下跳到半屏。等待期间画面还停在起点
-                            if (e.progress.value == 0f && !e.started) awaitFrameSettle(framePeriod)
-                            e.started = true
-                            // 打开；关闭途中又被 push 回来时也走这里，从当前位置和速度掉头（Animatable 换目标时保留速度）
-                            if (slide) {
-                                if (e.progress.value < 1f) e.progress.animateTo(1f, geo.spec.push)
-                            } else {
-                                coroutineScope {
-                                    launch { if (e.move.value < 1f || e.move.isRunning) e.move.animateTo(1f, geo.spec.openMove) }
-                                    if (e.progress.value < 1f) e.progress.animateTo(1f, geo.spec.open)
-                                }
+            // 页面录成整页的背景来源（浮层、转场里的共享顶栏玻璃取样它）；共享顶栏在录制外面，不会取样到自己
+            Box(Modifier.fillMaxSize().then(if (windowBackdrop != null) Modifier.mochiBackdropSource(windowBackdrop) else Modifier)) {
+                val entries = navigator.entries
+                val n = entries.size
+                // 组合哪些页：从栈顶往下，只要这一页在转场（没把下面完全盖住）就把下面那页也带上，
+                // 快速连续推入 / 返回时，好几页同时在动，每一页下面都有东西，不会露出黑底；
+                // 至少保留栈顶下面那一页（滚动位置、来源元素的位置都还在，返回手势一开始就能露出来）
+                var first = (n - 2).coerceAtLeast(0)
+                while (first > 0 && entries[first + 1].inTransition) first--
+                for (i in first until n) {
+                    val e = entries[i]
+                    key(e.id) {
+                        // 侧推阴影：画在这一页下面、单独一层，不被任何页面的圆角裁切截断
+                        Spacer(
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {}
+                                .drawBehind { geo.drawSlideShadow(e, this) },
+                        )
+                        EntryLayer(e, geo, surface) {
+                            holder.SaveableStateProvider(e.id) {
+                                CompositionLocalProvider(LocalMochiNavEntry provides e) { content(e.route) }
                             }
-                            return@LaunchedEffect
                         }
-                        if (slide) {
-                            // 侧推：同一条弹簧直接往 0 走，打开途中返回也是从当前位置连续掉头
-                            val v = e.releaseVelocity
-                            e.releaseVelocity = 0f
-                            e.progress.animateTo(0f, geo.spec.push, initialVelocity = if (v != 0f) v else e.progress.velocity)
+                        LaunchedEffect(e, e.closing) {
+                            val slide = e.source == null
+                            if (!e.closing) {
+                                // 新打开的页：先等它组合、排版、绘制完、帧率回稳（第一次打开时类加载、首屏子组合可能要几百毫秒）
+                                // 再开始动，不然动画的开头几帧被这几帧吞掉，看起来是从卡片一下跳到半屏。等待期间画面还停在起点
+                                if (e.progress.value == 0f && !e.started) awaitFrameSettle(framePeriod)
+                                e.started = true
+                                // 打开；关闭途中又被 push 回来时也走这里，从当前位置和速度掉头（Animatable 换目标时保留速度）
+                                if (slide) {
+                                    if (e.progress.value < 1f) e.progress.animateTo(1f, geo.spec.push)
+                                } else {
+                                    coroutineScope {
+                                        launch { if (e.move.value < 1f || e.move.isRunning) e.move.animateTo(1f, geo.spec.openMove) }
+                                        if (e.progress.value < 1f) e.progress.animateTo(1f, geo.spec.open)
+                                    }
+                                }
+                                return@LaunchedEffect
+                            }
+                            if (slide) {
+                                // 侧推：同一条弹簧直接往 0 走，打开途中返回也是从当前位置连续掉头
+                                val v = e.releaseVelocity
+                                e.releaseVelocity = 0f
+                                e.progress.animateTo(0f, geo.spec.push, initialVelocity = if (v != 0f) v else e.progress.velocity)
+                                navigator.remove(e)
+                                holder.removeState(e.id)
+                                navigator.onClosed()
+                                return@LaunchedEffect
+                            }
+                            // 有来源：同一条弹簧从当前位置往 0 走（不重新起算，所以能随时掉头）；
+                            // 返回手势的缩小量一起弹回 0，落地时正好是来源的矩形
+                            coroutineScope {
+                                launch { e.back.animateTo(0f, geo.spec.close) }
+                                launch { e.move.animateTo(0f, geo.spec.closeMove) }
+                                e.progress.animateTo(0f, geo.spec.close)
+                            }
                             navigator.remove(e)
                             holder.removeState(e.id)
                             navigator.onClosed()
-                            return@LaunchedEffect
                         }
-                        // 有来源：同一条弹簧从当前位置往 0 走（不重新起算，所以能随时掉头）；
-                        // 返回手势的缩小量一起弹回 0，落地时正好是来源的矩形
-                        coroutineScope {
-                            launch { e.back.animateTo(0f, geo.spec.close) }
-                            launch { e.move.animateTo(0f, geo.spec.closeMove) }
-                            e.progress.animateTo(0f, geo.spec.close)
-                        }
-                        navigator.remove(e)
-                        holder.removeState(e.id)
-                        navigator.onClosed()
                     }
                 }
             }
             // 跨页共享的顶栏：侧推转场中画在所有页面上面、留在顶栏原位变形（见 MochiNavBarItem.kt）。不拦触摸
+            // 玻璃按钮的形状画成玻璃（取样整页录制），其余形状和所有图标画在 Spacer 里
+            val barGlass = rememberGlassFill(MochiTheme.materials.controlGlass, windowBackdrop?.source)
+            if (barGlass != null && navigator.isTransitioning) SharedBarGlass(navigator, barGlass)
             val barPaths = remember { BarPathCache() }
             Spacer(
                 Modifier.fillMaxSize().drawBehind {
                     // 从来源打开时，下层页的顶栏 / 底栏（mochiNavOccluder）先盖在变形中的容器上、再随进度淡掉，不会被一下盖住
                     geo.drawOccluders(this)
-                    drawSharedBarItems(navigator, barPaths)
+                    drawSharedBarItems(navigator, barPaths, glass = barGlass != null)
                 },
             )
         }
@@ -322,9 +348,32 @@ public fun MochiNavHost(
 
 @Composable
 private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurface?, content: @Composable () -> Unit) {
+    val cover = rememberGraphicsLayer()
+    val pageMask = remember { NavPageMask() }
+    DisposableEffect(e, cover) {
+        e.coverLayer = cover
+        onDispose { if (e.coverLayer === cover) e.coverLayer = null }
+    }
     Box(
         Modifier
             .fillMaxSize()
+            .onPlaced { e.coverCoords = it }
+            // 变换后的整页再录一份：下层页的玻璃在转场中读它（rememberMochiNavCoverBackdrop），原地照常画
+            .drawWithContent {
+                val outline = geo.outline(e)
+                // Reuse the captured page, rather than installing a path clip on
+                // every descendant. Clear only the exterior of the G2 contour.
+                cover.compositingStrategy = if (outline != null) {
+                    androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                } else {
+                    androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
+                }
+                cover.record {
+                    this@drawWithContent.drawContent()
+                    if (outline != null) pageMask.clearOutside(this, outline)
+                }
+                drawLayer(cover)
+            }
             .graphicsLayer { geo.applyLayer(e, this) }
             .drawWithContent {
                 // 完全被盖住的下层页不画。不用 alpha = 0：那样露出来时只改了图层属性，
@@ -332,14 +381,17 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
                 // 这里只读「是否转场中」（derivedStateOf），不读每帧变化的进度，转场中不会每帧重录整页
                 if (!geo.isHidden(e)) {
                     // The incoming page also covers the previous page's dimming below its safe body.
-                    if (surface != null) drawRect(surface.color)
+                    // 玻璃面板：页面是透明的，底色按面板此刻的不透明度画（半屏透出面板的玻璃，全屏和面板一样不透明）
+                    if (surface != null) drawRect(surface.color, alpha = if (surface.glass == null) 1f else surface.opaque())
                     drawContent()
                 }
             },
     ) {
         val scope = rememberCoroutineScope()
+        // 正在缩回来源：只有看得见的那块接触摸（画面不裁）。点来源卡片照常掉头长回来，这一块以外落到下层页上
+        val hit = if (e.closing) Modifier.visibleHitArea(e, geo) else Modifier
         Box(
-            Modifier
+            hit
                 .fillMaxSize()
                 // 页面内容单独一层：被盖住时外层跳过绘制、露出来时外层只重录一条「画这一层」，
                 // 页面本身的绘制记录保留着，转场第一帧不用把整页重新录一遍。
@@ -382,7 +434,7 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
         if (e.closing) {
             val nav = geo.nav
             Spacer(
-                Modifier
+                hit
                     .fillMaxSize()
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
@@ -403,6 +455,13 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
                 .drawBehind { geo.drawOver(e, this) },
         )
     }
+}
+
+/** 只把顶上 [NavGeometry.visibleHeight] 那么高报成自己的大小（命中范围跟着缩），内容照整页排版、照常画 */
+private fun Modifier.visibleHitArea(e: MochiNavEntry, geo: NavGeometry): Modifier = layout { measurable, constraints ->
+    val p = measurable.measure(constraints)
+    val h = ceil(geo.visibleHeight(e)).toInt().coerceIn(constraints.minHeight, p.height)
+    layout(p.width, h) { p.place(0, 0) }
 }
 
 /** 一帧里栈顶页的画面 */
@@ -429,6 +488,9 @@ private class NavGeometry(val nav: MochiNavigator) {
     lateinit var spec: MochiNavSpec
     var defaultCorners: MochiScreenCorners = MochiScreenCorners.None
     var enclosingCorners: (() -> MochiScreenCorners)? = null
+
+    /** 在玻璃面板里：面板此刻的不透明度（0 = 玻璃，1 = 不透明），见 [MochiNavSurface.glass] */
+    var glassOpaque: (() -> Float)? = null
     private val corners: MochiScreenCorners get() = enclosingCorners?.invoke() ?: defaultCorners
 
     /** 侧推时屏幕没有物理圆角（模拟器、直角屏）用的圆角（px），保证转场中始终是圆角 */
@@ -441,10 +503,16 @@ private class NavGeometry(val nav: MochiNavigator) {
     private fun top(): MochiNavEntry? = nav.entries.lastOrNull()
 
     fun applyLayer(e: MochiNavEntry, layer: androidx.compose.ui.graphics.GraphicsLayerScope) {
+        layer.scaleX = 1f
+        layer.scaleY = 1f
+        layer.translationX = 0f
+        layer.translationY = 0f
+        layer.alpha = 1f
+        layer.clip = false
         val top = top() ?: return
         if (size.width <= 0f) return
         if (top.source == null && nav.under(top) != null) {
-            applySlide(e, top, layer)
+            applySlide(e, layer)
             return
         }
         if (e === top) {
@@ -457,55 +525,63 @@ private class NavGeometry(val nav: MochiNavigator) {
             layer.translationX = f.rect.left
             layer.translationY = f.rect.top
             layer.alpha = f.alpha
-            if (e.inTransition) {
-                layer.clip = true
-                layer.shape = pageClip(Rect(0f, 0f, size.width, f.rect.height / s), f.tl / s, f.tr / s, f.br / s, f.bl / s)
-            } else {
-                layer.clip = false
-            }
         } else if (nav.under(top) === e) {
-            // 下层页：被栈顶压着时缩小，四角用屏幕圆角；栈顶完全打开静止时不画（见 isHidden）
+            // 下层页：默认保持原位，显式 underScale 才缩小；栈顶完全打开静止时不画（见 isHidden）
             val u = underScale(top)
             layer.scaleX = u
             layer.scaleY = u
             layer.transformOrigin = TransformOrigin.Center
-            if (u < 1f) {
-                layer.clip = true
-                layer.shape =
-                    pageClip(full, corners.topLeft / u, corners.topRight / u, corners.bottomRight / u, corners.bottomLeft / u)
-            } else {
-                layer.clip = false
-            }
         } else {
             layer.alpha = 0f
         }
     }
 
     /**
-     * 侧推：栈顶页 x = W·(1 − p)，下层页 x = −0.3·W·p。转场中两页都裁成屏幕圆角（下层页不缩放也裁），
-     * 静止时不裁（零开销）
+     * 有来源的栈顶页缩回去时，页面坐标里看得见的高度（从顶上算）：页面按宽度缩放，排版高度比卡片高出一截，
+     * 接触摸的范围只留这一块，下面多出来的部分不挡下层页的卡片
      */
-    private fun applySlide(e: MochiNavEntry, top: MochiNavEntry, layer: androidx.compose.ui.graphics.GraphicsLayerScope) {
-        val moving = e.inTransition || nav.above(e)?.inTransition == true
-        when {
-            // 每一页的位置 = 自己滑出去的量 + 被上面那页推着往左退的量。连续返回时两页同时在滑，各自连续
-            else -> layer.translationX = slideX(e)
-        }
-        layer.scaleX = 1f
-        layer.scaleY = 1f
-        layer.alpha = 1f
-        if (moving) {
-            layer.clip = true
-            layer.shape = pageClip(
-                full,
+    fun visibleHeight(e: MochiNavEntry): Float {
+        if (e !== top() || e.source == null || size.width <= 0f) return size.height
+        val r = frame(e).rect
+        return r.height * size.width / r.width.coerceAtLeast(1e-3f)
+    }
+
+    /**
+     * 侧推：栈顶页 x = W·(1 − p)，下层页 x = −0.3·W·p。转场中两页共用 G2 透明度轮廓，
+     * 静止时撤掉轮廓处理（零开销）
+     */
+    private fun applySlide(e: MochiNavEntry, layer: androidx.compose.ui.graphics.GraphicsLayerScope) {
+        layer.translationX = slideX(e)
+        // 玻璃面板里页面是透明的：下层页随上面那页盖上来淡出，两页的内容不会叠在一起（近似，原生的做法没逆向）。
+        // 面板越不透明淡得越少，全屏时和平常一样只压暗
+        val opaque = glassOpaque ?: return
+        val above = nav.above(e) ?: return
+        if (above.source == null) layer.alpha = 1f - slideProgress(above) * (1f - opaque())
+    }
+
+    /** The same G2 geometry is used by the page alpha mask and occluder overlays. */
+    fun outline(e: MochiNavEntry): NavPageOutline? {
+        val top = top() ?: return null
+        if (size.width <= 0f) return null
+        if (top.source == null && nav.under(top) != null) {
+            if (!e.inTransition && nav.above(e)?.inTransition != true) return null
+            return NavPageOutline(
+                full.translate(slideX(e), 0f),
                 slideCorner(corners.topLeft),
                 slideCorner(corners.topRight),
                 slideCorner(corners.bottomRight),
                 slideCorner(corners.bottomLeft),
             )
-        } else {
-            layer.clip = false
         }
+        if (e === top && nav.under(e) != null && e.inTransition) {
+            val f = frame(e)
+            return NavPageOutline(f.rect, f.tl, f.tr, f.br, f.bl)
+        }
+        if (nav.under(top) === e) {
+            val u = underScale(top)
+            if (u < 1f) return NavPageOutline(mapUnder(full, u), corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft)
+        }
+        return null
     }
 
     /** 上面那页完全打开、静止时，这一页完全被盖住，不用画 */
@@ -526,6 +602,8 @@ private class NavGeometry(val nav: MochiNavigator) {
         if (p <= 0.001f) return
         val edge = slideX(e)
         if (edge >= size.width) return
+        // 投影两端的圆角段填在页面角里，页面透明（玻璃面板半屏）时会露出来；这时不画
+        if ((glassOpaque?.invoke() ?: 1f) < 1f) return
         scope.drawSlideEdgeShadow(edge, slideCorner(corners.topLeft), slideCorner(corners.bottomLeft), SlideShadowAlpha * p)
     }
 
@@ -571,7 +649,7 @@ private class NavGeometry(val nav: MochiNavigator) {
                 }
             }
         } else if (nav.under(top) === e && top.inTransition) {
-            val k = ((1f - underScale(top)) / (1f - spec.underScale)).coerceIn(0f, 1f)
+            val k = navUnderDim(top.progress.value, top.back.value)
             if (k > 0.001f) scope.drawRect(spec.scrim.copy(alpha = spec.scrim.alpha * k))
         }
     }
@@ -585,8 +663,11 @@ private class NavGeometry(val nav: MochiNavigator) {
         for (h in nav.hiddenOf(e)) {
             val layer = h.layer ?: continue
             val c = h.coords?.takeIf { it.isAttached } ?: continue
+            val dy = nav.hideOffset(h)
+            // 已经整个滑出屏幕：不画。玻璃栏每画一次都要把背后重新模糊一遍，转场后半段全省掉
+            if (dy >= h.height + h.below - 0.5f) continue
             val r = root.localBoundingBoxOf(c, clipBounds = false)
-            scope.translate(r.left, r.top + nav.hideOffset(h)) { drawLayer(layer) }
+            scope.translate(r.left, r.top + dy) { drawLayer(layer) }
         }
     }
 
@@ -608,6 +689,8 @@ private class NavGeometry(val nav: MochiNavigator) {
      * 按下层页此刻的缩放画在所有页面上面，不透明度随打开进度淡掉：起点和落地时卡片仍在栏下面（和点之前一模一样），
      * 中途栏渐渐退到容器后面，而不是容器一出发就把栏一下盖住
      */
+    private val occluderMask = NavPageMask()
+
     fun drawOccluders(scope: DrawScope) {
         val top = top() ?: return
         if (top.source == null || !top.inTransition || size.width <= 0f) return
@@ -620,20 +703,39 @@ private class NavGeometry(val nav: MochiNavigator) {
         val u = openUnderScale(top)
         val page = mapUnder(full, u)
         // 下层页缩小后裁成屏幕圆角，栏的副本也裁在同一个轮廓里，四角不会露出直角
-        val clip = Path().apply { addRoundRect(RoundRect(page, CornerRadius(corners.topLeft))) }
-        scope.clipPath(clip) {
+        // 先算出每个栏副本此刻的位置；已经滑出页面的不画，淡出用的离屏层也只开这些栏合起来那么大（不开整屏）
+        val placed = ArrayList<Pair<GraphicsLayer, Rect>>(list.size)
+        var bounds = Rect.Zero
+        for (h in list) {
+            val layer = h.layer ?: continue
+            val c = h.coords?.takeIf { it.isAttached } ?: continue
+            val r = mapUnder(root.localBoundingBoxOf(c, clipBounds = false).translate(0f, carriedOffset(under, c)), u)
+            if (!r.overlaps(page)) continue
+            placed += layer to r
+            bounds = if (bounds.isEmpty) {
+                r
+            } else {
+                Rect(minOf(bounds.left, r.left), minOf(bounds.top, r.top), maxOf(bounds.right, r.right), maxOf(bounds.bottom, r.bottom))
+            }
+        }
+        if (placed.isEmpty()) return
+        with(scope) {
             drawIntoCanvas { canvas ->
-                // 整组一起淡：栏底色和上面的图标、文字不会各自半透明叠出深浅
-                canvas.saveLayer(page, Paint().apply { alpha = a })
-                for (h in list) {
-                    val layer = h.layer ?: continue
-                    val c = h.coords?.takeIf { it.isAttached } ?: continue
-                    val r = mapUnder(root.localBoundingBoxOf(c, clipBounds = false).translate(0f, carriedOffset(under, c)), u)
+                // 整组一起淡：栏底色和上面的图标、文字不会各自半透明叠出深浅。
+                // 离屏层往外多开一圈：栏的投影、玻璃的外阴影和边光都画在栏的矩形外面，只开栏那么大会被切成直角，
+                // 转场一结束换回真的栏时阴影又一下冒出来
+                val reach = OccluderShadowReach.toPx()
+                canvas.saveLayer(bounds.inflate(reach).intersect(page), Paint().apply { alpha = a })
+                for ((layer, r) in placed) {
                     translate(r.left, r.top) { scale(u, pivot = Offset.Zero) { drawLayer(layer) } }
                 }
                 // 下层页此刻的压暗也压在栏的副本上，和栏下面那份一样深
-                val k = ((1f - u) / (1f - spec.underScale)).coerceIn(0f, 1f)
+                val k = navUnderDim(top.progress.value, top.back.value)
                 if (k > 0.001f) drawRect(spec.scrim.copy(alpha = spec.scrim.alpha * k), blendMode = BlendMode.SrcAtop)
+                occluderMask.clearOutside(
+                    this,
+                    NavPageOutline(page, corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft),
+                )
                 canvas.restore()
             }
         }
@@ -787,6 +889,9 @@ private class NavGeometry(val nav: MochiNavigator) {
 /** 下层页的顶栏 / 底栏副本在打开进度到这里时完全淡掉 */
 private const val OccluderFadeTo = 0.5f
 
+/** 栏的副本淡出时离屏层往外多开的范围：盖住栏的投影和玻璃的外阴影 */
+private val OccluderShadowReach = 40.dp
+
 /** 共享元素不再单独飞行 */
 private const val DisableSharedFlight = true
 
@@ -820,19 +925,6 @@ private const val ShadowMidAlpha = 0.45f
 /** 侧推页此刻的「可见打开程度」：打开进度和返回手势里滑得更远的那个 */
 internal fun slideProgress(e: MochiNavEntry): Float = 1f - max(1f - e.progress.value, SlideBackFollow * e.back.value)
 
-/**
- * 转场中整页的裁剪形状。四角一样大（绝大多数屏幕）时用圆角矩形轮廓：RenderNode 直接用 GPU 的圆角裁剪，
- * 几乎零成本；连续曲率的 Path 轮廓要走模板裁剪，两张整屏每帧各一次，在 120Hz 上很吃 GPU。
- * 屏幕物理圆角（getRoundedCorner）本来就是按圆弧给的半径，圆角矩形和屏幕边缘对得更准。四角不一样时才用 Path。
- */
-private fun pageClip(rect: Rect, tl: Float, tr: Float, br: Float, bl: Float): Shape =
-    if (tl == tr && tr == br && br == bl) RoundRectClip(rect, tl) else G2RectClipShape4(rect, tl, tr, br, bl)
-
-private data class RoundRectClip(val rect: Rect, val radius: Float) : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
-        Outline.Rounded(RoundRect(rect, CornerRadius(radius)))
-}
-
 private fun lerpRect(a: Rect, b: Rect, t: Float): Rect = Rect(
     lerp(a.left, b.left, t),
     lerp(a.top, b.top, t),
@@ -841,7 +933,8 @@ private fun lerpRect(a: Rect, b: Rect, t: Float): Rect = Rect(
 )
 
 /**
- * 全屏右滑返回（iOS 26）：手指在页面任意位置往右划，页面跟着手走；松手时划过一半或甩得够快就返回，不然弹回去。
+ * 全屏右滑返回（iOS 26）：手指在页面任意位置往右划，页面跟着手走；松手时只要还在起点右边就按速度判断：
+ * 往左甩得够快就弹回去，往右或停住就返回。
  * - 只看子元素没消费的触摸：横向滚动、滑块、左滑行、开关这些自己处理横向拖动的元素照常，竖着划照常滚动
  * - 侧推页：页面 1:1 跟手往右滑出，露出下面那页；从来源打开的页：和预测性返回一样跟手缩小，返回时缩回来源
  * - 只有完全打开、没在转场的栈顶页才接这个手势
@@ -886,8 +979,9 @@ private suspend fun PointerInputScope.fullSwipeBack(e: MochiNavEntry, geo: NavGe
                     dy = 0f
                 }
             } else {
+                // 连同这一帧里攒下的历史点一起算速度：快速往回甩的几个点常挤在同一帧里
+                tracker.addPointerInputChange(ch)
                 ch.consume()
-                tracker.addPosition(ch.uptimeMillis, ch.position)
                 dx += ch.position.x - ch.previousPosition.x
                 dy += ch.position.y - ch.previousPosition.y
                 val x = dx.coerceAtLeast(0f)
@@ -901,10 +995,9 @@ private suspend fun PointerInputScope.fullSwipeBack(e: MochiNavEntry, geo: NavGe
         }
         if (!claimed) return@awaitEachGesture
         val v = tracker.calculateVelocity().x
-        val fast = v > FullSwipeFlingVelocity.toPx()
         val back = e.source == null
-        val far = if (back) dx / w > 0.5f else dx / (w * FullSwipeSourceSpan) > 0.35f
-        val commit = (far && v > -FullSwipeFlingVelocity.toPx()) || fast
+        // 只要还在起点右边就看松手速度：明显往左甩是取消，往右或停住都返回（不用先划过一半）
+        val commit = dx > 0f && v > -FullSwipeCancelVelocity.toPx()
         e.backActive = false
         if (commit) {
             if (back) e.releaseVelocity = -(v / w).coerceAtLeast(0f)
@@ -962,5 +1055,5 @@ private fun DrawScope.drawShadowCorner(c: Offset, r: Float, w: Float, a: Float, 
 /** 从来源打开的页：手指划过屏幕宽的这么多，缩小到底 */
 private const val FullSwipeSourceSpan = 0.7f
 
-/** 甩得比这快就算返回（往右）/ 取消（往左） */
-private val FullSwipeFlingVelocity = 500.dp
+/** 松手时往左快过这个就取消返回 */
+private val FullSwipeCancelVelocity = 150.dp

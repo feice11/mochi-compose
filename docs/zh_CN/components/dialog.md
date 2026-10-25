@@ -23,6 +23,23 @@ MochiDialog(
 - 按钮是胶囊：两个时并排，其余竖排。按钮离卡片边 14dp，卡片圆角 = 按钮半高（24dp）+ 14dp，按钮和卡片同心
 - 按钮配色按角色：`Primary` 主色实心、`Default` / `Cancel` 灰色、`Destructive` 灰色红字；文字都加粗
 - 出现时从 1.12 倍缩放到位、淡入，后面的页面压暗；消失时淡出、略微缩小
+- 带 `icon` 时图标统一描绘出场：图标位里的 `MochiIonicon` 在卡片放大的同时一笔一笔描出来（约 0.7 秒），实心部分最后淡入（见[图标](icons.md)）。调用方只传图标，不写动画
+
+```kotlin
+MochiDialog(
+    visible = show,
+    onDismissRequest = { show = false },
+    title = "打开液态玻璃？",
+    message = "每一帧都要额外渲染，更耗电。",
+    icon = { MochiIonicon("warning", tint = MochiTheme.colorScheme.error, size = 44.dp) },
+    actions = persistentListOf(
+        MochiDialogAction("取消", MochiDialogActionRole.Cancel),
+        MochiDialogAction("打开", MochiDialogActionRole.Primary) { enable() },
+    ),
+)
+```
+
+需要用户确认才生效的设置（耗电、耗流量）用普通点按确认就够了；`holdToConfirm` 留给不可撤销的危险操作。
 
 ## 高光和形变
 

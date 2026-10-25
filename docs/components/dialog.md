@@ -23,6 +23,23 @@ MochiDialog(
 - Buttons are capsules: side by side when there are two, stacked otherwise. They sit 14dp from the card edge and the card corner is the button's half height (24dp) + 14dp, so they are concentric
 - Button colors follow the role: `Primary` filled, `Default` / `Cancel` gray, `Destructive` gray with red text; all labels semibold
 - It scales in from 1.12× and fades in while the page behind dims; it fades out with a slight shrink
+- With an `icon`, the icon draws itself in: a `MochiIonicon` in the icon slot traces its strokes one after another while the card scales in (about 0.7 s), and filled parts fade in last (see [Icons](icons.md)). Callers pass only the icon, no animation code
+
+```kotlin
+MochiDialog(
+    visible = show,
+    onDismissRequest = { show = false },
+    title = "Turn on liquid glass?",
+    message = "Every frame needs extra rendering and uses more power.",
+    icon = { MochiIonicon("warning", tint = MochiTheme.colorScheme.error, size = 44.dp) },
+    actions = persistentListOf(
+        MochiDialogAction("Cancel", MochiDialogActionRole.Cancel),
+        MochiDialogAction("Turn on", MochiDialogActionRole.Primary) { enable() },
+    ),
+)
+```
+
+A setting that only needs consent (power, data use) is confirmed with a plain tap; keep `holdToConfirm` for irreversible destructive actions.
 
 ## Glow and deformation
 

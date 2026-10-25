@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.DemoSettingsSection
 import ui.feice.mochi.demo.common.DemoSliderSection
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.hdr.MochiEdgeGlow
@@ -64,35 +66,53 @@ fun HdrPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         MochiHdr.enabled = true
         onDispose { if (!wasOn) MochiHdr.enabled = false }
     }
-    var edge by remember { mutableStateOf(false) }
-    var palette by remember { mutableIntStateOf(0) }
-    var width by remember { mutableFloatStateOf(24f) }
-    var line by remember { mutableFloatStateOf(3f) }
-    var speed by remember { mutableFloatStateOf(1f) }
-    var intensity by remember { mutableFloatStateOf(1f) }
+    var edge by rememberSaveable { mutableStateOf(false) }
+    var palette by rememberSaveable { mutableIntStateOf(0) }
+    var width by rememberSaveable { mutableFloatStateOf(24f) }
+    var line by rememberSaveable { mutableFloatStateOf(3f) }
+    var speed by rememberSaveable { mutableFloatStateOf(1f) }
+    var intensity by rememberSaveable { mutableFloatStateOf(1f) }
     Box(modifier.fillMaxSize()) {
         DemoPage(entry) {
-            StatusSection()
-            PressSection()
-            ControlsSection()
-            DemoSection("屏幕边缘流光", footer = "Apple Intelligence 式的彩色光沿着屏幕圆角流动，盖在内容上保持原色；HDR 下贴边亮线最亮。单个 shader 画完，没有离屏模糊。") {
-                MochiButton({ edge = !edge }, Modifier.fillMaxWidth()) {
-                    MochiBlurText(if (edge) "收起边缘流光" else "显示边缘流光")
-                }
-                PalettePicker(palette) { palette = it }
+            demoItem {
+                StatusSection()
             }
-            DemoSliderSection("宽度", "${width.roundToInt()} dp", width, { width = it }, valueRange = 8f..56f)
-            DemoSliderSection("亮线", "%.1f dp".format(line), line, { line = it }, valueRange = 1f..8f)
-            DemoSliderSection("速度", "%.1f×".format(speed), speed, { speed = it }, valueRange = 0.2f..3f)
-            DemoSliderSection("强度", "${(intensity * 100).roundToInt()}%", intensity, { intensity = it }, valueRange = 0.2f..1f)
-            DemoSection("用法") {
-                Code(
-                    "// 全局开关：API 34+ 且屏幕支持时生效\nMochiHdr.enabled = true\n" +
-                        "MochiHdr.strength = 0.6f\n\n" +
-                        "MochiEdgeGlow(\n    active,\n    palette = MochiHdrPalette.Siri,\n)\n" +
-                        "drawRect(mochiHdrBrush(Color.White))",
-                )
-                Caption("按压高光、融球、开关滑块不用改代码，打开 MochiHdr 后按住时就有 HDR 高光。所有 HDR 光都不超过峰值亮度、按原色相提亮，不会过曝发白。")
+            demoItem {
+                PressSection()
+            }
+            demoItem {
+                ControlsSection()
+            }
+            demoItem {
+                DemoSection("屏幕边缘流光", footer = "Apple Intelligence 式的彩色光沿着屏幕圆角流动，盖在内容上保持原色；HDR 下贴边亮线最亮。单个 shader 画完，没有离屏模糊。") {
+                    MochiButton({ edge = !edge }, Modifier.fillMaxWidth()) {
+                        MochiBlurText(if (edge) "收起边缘流光" else "显示边缘流光")
+                    }
+                    PalettePicker(palette) { palette = it }
+                }
+            }
+            demoItem {
+                DemoSliderSection("宽度", "${width.roundToInt()} dp", width, { width = it }, valueRange = 8f..56f)
+            }
+            demoItem {
+                DemoSliderSection("亮线", "%.1f dp".format(line), line, { line = it }, valueRange = 1f..8f)
+            }
+            demoItem {
+                DemoSliderSection("速度", "%.1f×".format(speed), speed, { speed = it }, valueRange = 0.2f..3f)
+            }
+            demoItem {
+                DemoSliderSection("强度", "${(intensity * 100).roundToInt()}%", intensity, { intensity = it }, valueRange = 0.2f..1f)
+            }
+            demoItem {
+                DemoSection("用法") {
+                    Code(
+                        "// 全局开关：API 34+ 且屏幕支持时生效\nMochiHdr.enabled = true\n" +
+                            "MochiHdr.strength = 0.6f\n\n" +
+                            "MochiEdgeGlow(\n    active,\n    palette = MochiHdrPalette.Siri,\n)\n" +
+                            "drawRect(mochiHdrBrush(Color.White))",
+                    )
+                    Caption("按压高光、融球、开关滑块不用改代码，打开 MochiHdr 后按住时就有 HDR 高光。所有 HDR 光都不超过峰值亮度、按原色相提亮，不会过曝发白。")
+                }
             }
         }
         MochiEdgeGlow(edge, Modifier.fillMaxSize(), Palettes[palette].second, width.dp, line.dp, speed, intensity)
@@ -115,7 +135,7 @@ private fun StatusSection() {
             MochiListRow("HDR", trailing = { MochiSwitch(MochiHdr.enabled && supported, { MochiHdr.enabled = it }, enabled = supported) })
             MochiListRow("设备支持", value = if (supported) "支持" else "不支持")
             val head = (MochiHdr.headroom * 10f).roundToInt()
-            var last by remember { mutableIntStateOf(head) }
+            var last by rememberSaveable { mutableIntStateOf(head) }
             val dir = if (head >= last) 1 else -1
             LaunchedEffect(head) { last = head }
             MochiListRow(
@@ -145,8 +165,8 @@ private fun PressSection() {
 
 @Composable
 private fun ControlsSection() {
-    var on by remember { mutableStateOf(true) }
-    var v by remember { mutableFloatStateOf(0.6f) }
+    var on by rememberSaveable { mutableStateOf(true) }
+    var v by rememberSaveable { mutableFloatStateOf(0.6f) }
     DemoSettingsSection("开关") {
         MochiListRow("开关", trailing = { MochiSwitch(on, { on = it }) })
     }

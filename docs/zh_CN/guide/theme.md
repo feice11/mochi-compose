@@ -1,6 +1,6 @@
 # 主题
 
-[可选 Nothing 外观：配色、字体与语义图标](nothing-theme.md)。
+[可选 Nothing 外观：配色与字体](nothing-theme.md)。[可选 iOS 外观与玻璃材质](ios-theme.md)。接入应用时先看[应用接入规范的「主题接入」](application-integration.md#主题接入在根部接一次页面里不写主题分支)：主题在根部接一次，页面里不写外观分支。
 
 `MochiTheme` 提供 MD3 Expressive 的配色、字阶、形状和动效 token。组件库里的组件只从这里取值，不写死颜色。
 
@@ -30,7 +30,29 @@ MochiTheme.shapes.largeIncreased
 MochiTheme.motionScheme.defaultSpatial
 ```
 
+## 材质：液态玻璃（长期 Beta）与模糊
+
+`MochiTheme(materials = …)` 决定浮在内容上的栏用纯色还是液态玻璃、滚动边缘要不要渐进模糊。材质和配色无关，Mochi、Nothing、iOS 三套外观都能用，两项各自开关：
+
+```kotlin
+MochiTheme(
+    colors = colors,
+    materials = iosMaterials(isDark, glass = glassOn, blur = blurOn, themeAccent = true),
+) { … }
+```
+
+- `glass`：标签栏（含搜索框、附件条）等浮在内容上的栏是玻璃；关掉是纯色胶囊加投影
+- `blur`：滚到顶栏、底栏下面的内容渐进模糊并按亮度压暗；关掉是底色渐隐
+- `themeAccent`：玻璃保持中性，选中项用主题的强调色。iOS 配色传 false（用 iOS 按玻璃算出的强调色），其他配色传 true
+- 默认（不传）是 `MochiMaterials()`：都关。`iosMaterials` 在 mochi-ios 里，玻璃样式、通透度等参数见 [iOS 外观与玻璃材质](ios-theme.md)
+
+组件自己读材质（`MochiTheme.materials`），页面不需要判断开关。液态玻璃每帧都要重新渲染背后的内容，更耗电：适合交给用户打开，打开前提示代价。
+
+液态玻璃是**长期 Beta**：外观参数、性能和公开 API 都可能在小版本里调整，不保证兼容；不同机型的渲染开销差别也大。正式产品里建议默认关闭，交给用户打开。模糊效果（`blur`）不在此列。
+
 `MochiTheme` 还会在根部提供 `LocalContentColor`（= onSurface）和 `LocalTextStyle`（= bodyLarge），库里的 `Text` 默认用它们，所以不放在任何容器里的文字在深色模式下也是正确的浅色。
+
+最外层的 `MochiTheme` 还会让状态栏、导航栏的图标跟着明暗走（浅色主题深色图标、深色主题浅色图标），应用不用再写 `WindowCompat.getInsetsController(…).isAppearanceLightStatusBars`。只在明暗变化时写一次窗口；里层强制深色的子树（看图页之类）不会改掉整个窗口。全屏视频之类需要自己控制图标颜色的页面，在那一层传 `systemBarAppearance = false`，或者在页面里自己设置（不会被每次重组改回来）。
 
 ## ThemeController
 
@@ -91,6 +113,7 @@ MD3 字阶：`displayLarge/Medium/Small`、`headlineLarge/Medium/Small`、`title
 - 直边 → 贝塞尔过渡 → 圆弧，曲率连续，没有普通圆角在圆弧起点那一下突变。
 - 半径拉到短边一半时自动过渡成胶囊（Kyant 的 capsule profile）。
 - 自己用：`MochiRoundedRectangle(radius)`、`MochiCapsule`，或者 `ContinuousRoundedRectangle(radius, MochiContinuity)`。
+- 曲线和 Kyant 一样，但轮廓路径由 `MochiContinuity` 自己拼：Kyant 自带的路径在两段曲线的接口处有浮点误差，Skia 判成「不是凸的」，大卡片会退到 CPU 上画遮罩再上传纹理，滚动时每帧重做。现在卡片、胶囊都是凸路径，GPU 直接画（主题页快甩时每次起手那一帧从约 16ms 降到约 10ms）。要拿到同样的路径，用上面这几个形状，不要直接调 Kyant 的 `toPath()`。
 
 | 名称 | 圆角 |
 |---|---|
@@ -161,7 +184,7 @@ spatial / effects 的数值取自 androidx `ExpressiveMotionTokens`。`MochiMoti
 
 字阶的行高按「居中」分配（`LineHeightStyle.Alignment.Center`，不裁切），中文字形不会在行框里偏下，和旁边的图标、开关、对勾、「›」的中心在同一条线上。
 
-列表双行单独去掉标题与副标题文字块外侧的行高留白（`Trim.Both`），不裁字形、不改主题字号或副标题内部行高；两个内容块间的附加间距统一为 `MochiListDefaults.SupportingTextGap`（0dp）。行首图标和行尾符号按整行居中，同心边缘读取图标块自身轮廓，见[列表间距规范](../components/list.md#间距规范)。
+列表双行单独去掉标题与副标题文字块外侧的行高留白（`Trim.Both`），不裁字形、不改主题字号或副标题内部行高；两个内容块之间是 `MochiListDefaults.SupportingTextGap`（4dp，iOS）。行首图标和行尾符号按整行居中，见[列表间距规范](../components/list.md#间距规范照-ios-26)。
 
 - 大标题用 `textStyles.largeTitle`（34sp Bold），和下面卡片的外边对齐，不额外缩进
 - 菜单项的图标框是 22dp，对应 17sp 正文旁边的符号大小
@@ -182,7 +205,7 @@ spatial / effects 的数值取自 androidx `ExpressiveMotionTokens`。`MochiMoti
 
 大号粗体字形自带左侧空白（约 0.04em），放在图标或卡片边旁边看起来往里缩。`Modifier.mochiOpticalLeading(style)` 把文字往左挪掉这一点（只改图层，不影响布局），大标题都用了它。
 
-`MochiDefaults.groupedBackground()` / `groupedContainer()` 是 iOS 分组样式的页面底色和卡片色：浅色下灰底白卡片，深色下最深的底、卡片亮一档。
+`MochiDefaults.groupedBackground()` / `groupedContainer()` 是 iOS 分组样式的页面底色和卡片色：浅色下灰底白卡片，深色下最深的底、卡片亮一档。底部面板里（`LocalMochiElevated` 为 true，iOS 的 elevated 层级）换成浮起的一套：深色面板是 surfaceContainerLow、卡片 surfaceContainerHigh，面板底色用 `MochiDefaults.sheetBackground()`。
 
 ## 同心与光学平衡
 
@@ -190,7 +213,7 @@ spatial / effects 的数值取自 androidx `ExpressiveMotionTokens`。`MochiMoti
 
 1. **同形**：把容器外形按相同的边距往里缩，得到一条同心的内轮廓，里面的圆角形状用这条轮廓的圆角（`MochiConcentric.inner(outer, inset)`）。例子：标签栏选中块、列表行首图标块（12dp = 28 − 16）、演示页头部的图标块。
 2. **异形**：图标和文字按「视觉重心」看（想象把它模糊成一团），不按包围盒，让这一团贴着同心内轮廓。例子：提示的图标放在和内容一样高的正方形里，离胶囊左端和上下都是 10dp；搜索栏的放大镜离左端和离上下一样远；返回箭头和演示图标按墨迹重心居中；列表的 `›` 按字形实际墨迹居中。
-3. **靠边的元素**：都不能戳进圆角里。要么往里推（列表首末行矮时多留白），要么把它自己的圆角改成同心的。
+3. **靠边的元素**：都不能戳进圆角里。要么往里推（离圆角足够远），要么把它自己的圆角改成同心的。
 
 `MochiDefaults.fill()` 是 iOS 的 system fill（浅色 onSurface 12%、深色 24%），用在控件底槽上：关着的开关、滑块和进度条没走到的那段、分段选择器的底槽。它是半透明的，白卡片和灰底上都看得清。顶栏按钮（返回、工具按钮）用卡片色，在灰底上是白色圆按钮。
 

@@ -49,13 +49,15 @@ import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.mask.MochiFadeEdges
 import ui.feice.mochi.effect.mask.mochiFadeMask
+import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.MochiBackButton
-import ui.feice.mochi.navigation.MochiCompactTitleScaffold
+import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
 import ui.feice.mochi.navigation.MochiNavHost
 import ui.feice.mochi.navigation.MochiNavigator
 import ui.feice.mochi.navigation.MochiScrollEdgeDefaults
@@ -176,7 +178,7 @@ fun SidebarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var msg by remember { mutableStateOf("") }
+    var msg by rememberSaveable { mutableStateOf("") }
     val sent = remember(chat?.id) { mutableStateListOf<String>() }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + MochiTitleBarDefaults.Height
     // 每个对话各自的滚动位置；顶栏的底色和渐隐跟着当前对话是否滚进顶栏下面（停在顶部时不盖住第一条消息）
@@ -190,9 +192,11 @@ private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             MochiBlurCrossfade(chat?.id ?: -1, Modifier.weight(1f).fillMaxWidth()) { id ->
                 val c = Chats.getOrNull(id)
+                val listState = listStates.getOrPut(id) { LazyListState() }
                 LazyColumn(
-                    Modifier.fillMaxSize(),
-                    state = listStates.getOrPut(id) { LazyListState() },
+                    // 滚到顶栏下面的内容自己渐进模糊（iOS 外观的滚动边缘效果）
+                    Modifier.fillMaxSize().mochiScrollEdgeBlur(top, MochiScrollEdgeDefaults.progress(listState)),
+                    state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -286,19 +290,23 @@ private fun Bubble(mine: Boolean, text: String) {
 @Composable
 private fun SidebarSettings(style: MochiSidebarStyle, onStyle: (MochiSidebarStyle) -> Unit) {
     val nav = MochiNavigator.current
-    MochiCompactTitleScaffold(title = "设置", navigationIcon = { MochiBackButton() }) {
-        MochiListSection(
-            header = "侧边栏样式",
-            footer = "推开：侧边栏盖在上面和主页面一起往右推，主页面只压暗（iPhone 上 AI 应用的做法）。浮动面板：iPadOS 26 的样子，在状态栏下方、圆角和屏幕同心，打开时藏起小白条，主页面不动只压暗。",
-        ) {
-            MochiListRow("推开", checked = style == MochiSidebarStyle.Push, onClick = { onStyle(MochiSidebarStyle.Push) })
-            MochiListRow("浮动面板", checked = style == MochiSidebarStyle.Floating, onClick = { onStyle(MochiSidebarStyle.Floating) })
+    MochiLazyCompactTitleScaffold(title = "设置", navigationIcon = { MochiBackButton() }) {
+        demoItem {
+            MochiListSection(
+                header = "侧边栏样式",
+                footer = "推开：侧边栏盖在上面和主页面一起往右推，主页面只压暗（iPhone 上 AI 应用的做法）。浮动面板：iPadOS 26 的样子，在状态栏下方、圆角和屏幕同心，打开时藏起小白条，主页面不动只压暗。",
+            ) {
+                MochiListRow("推开", checked = style == MochiSidebarStyle.Push, onClick = { onStyle(MochiSidebarStyle.Push) })
+                MochiListRow("浮动面板", checked = style == MochiSidebarStyle.Floating, onClick = { onStyle(MochiSidebarStyle.Floating) })
+            }
         }
-        MochiListSection(
-            header = "手势",
-            footer = "这是应用里的子页：往右划是返回，不会打开侧边栏。回到对话页（根页）后，往右划才打开侧边栏。",
-        ) {
-            MochiListRow("返回对话", onClick = { nav?.pop() })
+        demoItem {
+            MochiListSection(
+                header = "手势",
+                footer = "这是应用里的子页：往右划是返回，不会打开侧边栏。回到对话页（根页）后，往右划才打开侧边栏。",
+            ) {
+                MochiListRow("返回对话", onClick = { nav?.pop() })
+            }
         }
     }
 }

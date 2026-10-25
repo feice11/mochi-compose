@@ -27,10 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -54,9 +52,7 @@ import ui.feice.mochi.navigation.MochiNavHost
 import ui.feice.mochi.navigation.MochiNavigator
 import ui.feice.mochi.navigation.rememberMochiNavigator
 import ui.feice.mochi.nothing.MochiNothingTheme
-import ui.feice.mochi.nothing.NothingIcons
 import ui.feice.mochi.nothing.nothingDotTextStyle
-import ui.feice.mochi.theme.MochiIcon
 import ui.feice.mochi.theme.MochiTheme
 
 /** Emulator-only: real demo pages, glyph loading, mixed-script layouts and representative interaction. */
@@ -85,10 +81,6 @@ class NothingAppearanceRegression {
                     assertFalse("Clipped font layout: $name", result!!.hasVisualOverflow)
                 }
                 shot("$prefix-fonts")
-                if (font == 1f) {
-                    show("icons", dark, font)
-                    shot("$prefix-icons")
-                }
                 for (route in listOf("home", "list", "switch", "stepper", "slider", "dropdown", "sheet", "bar/0")) {
                     show(route, dark, font)
                     shot("$prefix-${route.replace('/', '-')}")
@@ -263,103 +255,7 @@ class NothingAppearanceRegression {
 
     @Composable
     private fun Scene(route: String) {
-        if (route == "icons") {
-            val iconKeys = listOf(
-                "share",
-                "wifi",
-                "person",
-                "pin",
-                "lock-closed",
-                "document-text",
-                "moon",
-                "heart",
-                "star",
-                "notifications",
-                "trash",
-                "camera",
-                "volume-high",
-                "volume-low",
-                "search",
-                "scan",
-                "add",
-                "airplane",
-                "mic",
-                "link",
-                "home",
-                "create",
-                "copy",
-                "flag",
-                "bluetooth",
-                "laptop",
-                "phone-portrait",
-                "desktop",
-                "sunny",
-                "pulse",
-                "chevron-back",
-                "chevron-forward",
-                "close",
-                "checkmark",
-                "chevron-down-circle",
-                "radio-button-on",
-                "list",
-                "compass",
-                "layers",
-                "albums",
-                "expand",
-                "swap-horizontal",
-                "toggle",
-                "options",
-                "chatbubble-ellipses",
-                "chatbox",
-                "reader",
-                "water",
-                "swap-vertical",
-                "sparkles",
-                "flash",
-                "apps",
-                "color-palette",
-                "remove",
-                "list.chevron",
-                "control.plus",
-                "control.minus",
-                "chevron-down",
-                "ellipsis-horizontal",
-            )
-            Column(
-                Modifier.fillMaxSize().background(MochiTheme.colorScheme.background).padding(16.dp, 60.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                for (row in iconKeys.chunked(6)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (iconKey in row) {
-                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                assertNotNull("Outline dot resource missing: $iconKey", NothingIcons.resolve(iconKey, false))
-                                assertNotNull("Filled dot resource missing: $iconKey", NothingIcons.resolve(iconKey, true))
-                                Box(Modifier.size(46.dp, 34.dp), contentAlignment = Alignment.Center) {
-                                    val slot = when (iconKey) {
-                                        "control.plus", "control.minus" -> Modifier.size(46.dp, 34.dp)
-                                        "list.chevron" -> Modifier.size(8.4.dp, 14.dp)
-                                        else -> Modifier.size(28.dp)
-                                    }
-                                    MochiIcon(iconKey, slot, tint = MochiTheme.colorScheme.onBackground) {
-                                        error("Known icon fell back to ordinary artwork: $iconKey")
-                                    }
-                                }
-                                BasicText(
-                                    iconKey,
-                                    style = MochiTheme.textStyles.footnote.copy(
-                                        fontSize = 8.sp,
-                                        color = MochiTheme.colorScheme.onBackground,
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        } else if (route == "fonts") {
+        if (route == "fonts") {
             Column(
                 Modifier.fillMaxSize().background(MochiTheme.colorScheme.background).padding(24.dp, 64.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -394,11 +290,9 @@ class NothingAppearanceRegression {
                             it
                     },
                 )
-                assertNotNull(NothingIcons.resolve("search", false))
-                assertEquals(null, NothingIcons.resolve("unmapped-custom-icon", false))
             }
         } else if (route == "home") {
-            DemoApp(ui.feice.mochi.theme.ThemeController(), nothingAppearance = true)
+            DemoApp(ui.feice.mochi.theme.ThemeController())
         } else {
             val nav = rememberMochiNavigator(route)
             SideEffect { activeNavigator = nav }

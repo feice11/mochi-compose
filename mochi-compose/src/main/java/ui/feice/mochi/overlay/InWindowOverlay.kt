@@ -14,7 +14,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import ui.feice.mochi.effect.glass.GlassSource
+import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
+import ui.feice.mochi.effect.glass.LocalMochiWindowBackdrop
 import androidx.compose.ui.platform.LocalView
 import ui.feice.mochi.navigation.LocalMochiNavEntry
 
@@ -32,6 +41,7 @@ internal fun InWindowOverlay(leaving: () -> Boolean = { false }, content: @Compo
     val parent = rememberCompositionContext()
     val currentContent by rememberUpdatedState(content)
     val currentLeaving by rememberUpdatedState(leaving)
+    val below by rememberUpdatedState(LocalMochiWindowBackdrop.current)
     val overlay = remember(hostView) {
         OverlayFrame(hostView.context) { currentLeaving() }.apply {
             addView(
@@ -40,7 +50,24 @@ internal fun InWindowOverlay(leaving: () -> Boolean = { false }, content: @Compo
                     setContent {
                         // 浮层不属于原页面的布局树，复制的按钮 / 共享元素不能登记成页内节点。
                         // 保留导航器，浮层里的操作仍可导航；内嵌 MochiNavHost 会提供自己的页面。
-                        CompositionLocalProvider(LocalMochiNavEntry provides null) { currentContent() }
+                        CompositionLocalProvider(LocalMochiNavEntry provides null) {
+                            val under = below
+                            if (under == null) {
+                                currentContent()
+                            } else {
+                                // 浮层的玻璃取样它底下的内容；从浮层里再打开的浮层，底下是那份内容再叠上这个浮层自己
+                                val own = rememberLayerBackdrop()
+                                val layer = rememberCombinedBackdrop(under.layer, own)
+                                val face = rememberCombinedBackdrop(under.face, own)
+                                val chain = remember(layer, face) { GlassSource(layer, face) }
+                                Box(Modifier.fillMaxSize().layerBackdrop(own)) {
+                                    CompositionLocalProvider(
+                                        LocalMochiOverlayGlass provides under,
+                                        LocalMochiWindowBackdrop provides chain,
+                                    ) { currentContent() }
+                                }
+                            }
+                        }
                     }
                 },
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),

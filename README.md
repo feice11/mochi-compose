@@ -49,11 +49,11 @@
 
 ### Nothing 外观
 
-换成 Nothing 外观后，布局和动效不变，配色、字体和图标会换成 Nothing 的风格：点阵图标、点阵数字、红色强调、衬线标题。
+换成 Nothing 外观后，布局、图标和动效不变，配色和字体换成 Nothing 的风格：点阵数字、红色强调、衬线标题。液态玻璃（长期 Beta）和模糊效果是独立的开关，三套外观都能打开。
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="docs/assets/preview/n_home.png" width="200"><br><sub>点阵图标的组件目录</sub></td>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_home.png" width="200"><br><sub>Nothing 外观的组件目录</sub></td>
     <td align="center" width="33%"><img src="docs/assets/preview/n_tabbar.gif" width="260"><br><sub>标签栏（0.5×）</sub></td>
     <td align="center" width="33%"><img src="docs/assets/preview/n_counter.gif" width="260"><br><sub>点阵数字逐位滚动（0.5×）</sub></td>
   </tr>
@@ -93,6 +93,12 @@ dependencyResolutionManagement {
 implementation("com.github.feice11:mochi-compose:<版本>")
 ```
 
+图标单独一个模块（全套 Ionicons，见 [图标](docs/zh_CN/components/icons.md)）：
+
+```kotlin
+implementation("com.github.feice11.mochi-compose:mochi-icons:<版本>")
+```
+
 需要 compileSdk 36 以上、Kotlin 2.3 以上（Capsule 依赖 Compose 1.10）。
 
 ## 用起来
@@ -123,9 +129,9 @@ setContent {
 
 ## 文档
 
-组件：[下拉菜单](docs/zh_CN/components/dropdown.md) · [标签栏](docs/zh_CN/components/tabbar.md) · [按钮](docs/zh_CN/components/button.md) · [开关](docs/zh_CN/components/switch.md) · [滑块](docs/zh_CN/components/slider.md) · [步进器](docs/zh_CN/components/stepper.md) · [列表](docs/zh_CN/components/list.md) · [底部面板](docs/zh_CN/components/sheet.md) · [分段选择器](docs/zh_CN/components/segmented.md) · [对话框](docs/zh_CN/components/dialog.md) · [文字输入](docs/zh_CN/components/textfield.md) · [提示](docs/zh_CN/components/toast.md) · [长按预览](docs/zh_CN/components/context-menu.md) · [大标题与搜索栏](docs/zh_CN/components/navbar.md) · [侧边栏](docs/zh_CN/components/sidebar.md) · [滚筒与时间日期](docs/zh_CN/components/picker.md) · [日历](docs/zh_CN/components/calendar.md) · [颜色选择](docs/zh_CN/components/color-picker.md) · [弹出层与确认](docs/zh_CN/components/popover.md) · [轮播与页面指示器](docs/zh_CN/components/pager.md) · [下拉刷新与空状态](docs/zh_CN/components/refresh.md) · [徽标、头像与仪表](docs/zh_CN/components/badge.md) · [工具栏与长按确认](docs/zh_CN/components/toolbar.md)
+组件：[下拉菜单](docs/zh_CN/components/dropdown.md) · [标签栏](docs/zh_CN/components/tabbar.md) · [按钮](docs/zh_CN/components/button.md) · [开关](docs/zh_CN/components/switch.md) · [滑块](docs/zh_CN/components/slider.md) · [强度调整条](docs/zh_CN/components/intensity-slider.md) · [步进器](docs/zh_CN/components/stepper.md) · [列表](docs/zh_CN/components/list.md) · [底部面板](docs/zh_CN/components/sheet.md) · [分段选择器](docs/zh_CN/components/segmented.md) · [对话框](docs/zh_CN/components/dialog.md) · [文字输入](docs/zh_CN/components/textfield.md) · [提示](docs/zh_CN/components/toast.md) · [长按预览](docs/zh_CN/components/context-menu.md) · [大标题与搜索栏](docs/zh_CN/components/navbar.md) · [侧边栏](docs/zh_CN/components/sidebar.md) · [滚筒与时间日期](docs/zh_CN/components/picker.md) · [日历](docs/zh_CN/components/calendar.md) · [颜色选择](docs/zh_CN/components/color-picker.md) · [弹出层与确认](docs/zh_CN/components/popover.md) · [轮播与页面指示器](docs/zh_CN/components/pager.md) · [下拉刷新与空状态](docs/zh_CN/components/refresh.md) · [徽标、头像与仪表](docs/zh_CN/components/badge.md) · [工具栏与长按确认](docs/zh_CN/components/toolbar.md) · [选择芯片](docs/zh_CN/components/chip.md) · [图标](docs/zh_CN/components/icons.md)
 
-指南：[应用接入规范](docs/zh_CN/guide/application-integration.md) · [主题](docs/zh_CN/guide/theme.md) · [通用效果](docs/zh_CN/guide/effects.md) · [内容变换](docs/zh_CN/guide/content-transitions.md) · [导航与页面转场](docs/zh_CN/guide/navigation.md) · [越界回弹](docs/zh_CN/guide/overscroll.md) · [触感](docs/zh_CN/guide/haptics.md) · [HDR 高光（实验性）](docs/zh_CN/guide/hdr.md) · [Nothing 外观](docs/zh_CN/guide/nothing-theme.md) · [兼容性](docs/zh_CN/guide/compatibility.md)
+指南：[应用接入规范](docs/zh_CN/guide/application-integration.md) · [主题](docs/zh_CN/guide/theme.md) · [通用效果](docs/zh_CN/guide/effects.md) · [内容变换](docs/zh_CN/guide/content-transitions.md) · [导航与页面转场](docs/zh_CN/guide/navigation.md) · [越界回弹](docs/zh_CN/guide/overscroll.md) · [触感](docs/zh_CN/guide/haptics.md) · [HDR 高光（实验性）](docs/zh_CN/guide/hdr.md) · [Nothing 外观](docs/zh_CN/guide/nothing-theme.md) · [iOS 外观与玻璃材质（长期 Beta）](docs/zh_CN/guide/ios-theme.md) · [兼容性](docs/zh_CN/guide/compatibility.md)
 
 想改库本身的话：[设计理念](docs/zh_CN/guide/philosophy.md) · [设计规范](docs/zh_CN/guide/design-principles.md) · [新增组件](docs/zh_CN/guide/adding-components.md) · [贡献指南](CONTRIBUTING.md) · [更新日志](CHANGELOG.md)
 
@@ -177,7 +183,7 @@ Mochi 是我一个人业余时间在做的。如果它帮到了你，可以在 [
 - 形状用的是 [Kyant0/Capsule](https://github.com/Kyant0/Capsule)。
 - 计数器的滚轮动画来自 [Bear](https://github.com/mif9499)。
 - 工程规范参考了 [miuix](https://github.com/compose-miuix-ui/miuix)。
-- 示例 app 的图标来自 [Ionicons](https://ionic.io/ionicons)。
+- `mochi-icons` 模块和示例 app 的图标来自 [Ionicons](https://ionic.io/ionicons)（MIT）。
 
 ## 许可
 

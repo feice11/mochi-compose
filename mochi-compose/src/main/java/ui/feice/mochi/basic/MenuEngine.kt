@@ -239,6 +239,7 @@ internal fun MochiEngine.Overlay(
     header: String? = null,
     content: (@Composable ColumnScope.() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    group: BarGroupHandle? = null,
     anchorContent: @Composable RowScope.() -> Unit,
 ) {
     if (!overlayVisible) return
@@ -265,6 +266,7 @@ internal fun MochiEngine.Overlay(
             header = header,
             content = content,
             contentPadding = contentPadding,
+            group = group,
             buttonContent = anchorContent,
         )
     }

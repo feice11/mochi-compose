@@ -67,6 +67,8 @@ import ui.feice.mochi.effect.metaball.MochiMetaballFrame
 import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.metaball.drawMochiMetaball
 import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
+import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
+import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.G2RectClipShape
 import ui.feice.mochi.theme.LocalContentColor
@@ -343,6 +345,8 @@ private fun PopoverOverlay(
         }
         val frame = { frameState.value }
 
+        // 主题有菜单玻璃（menuGlass）且浮层底下有页面录制时，面板画成玻璃（随展开淡入）；玻璃面板不画纯色的小箭头
+        val glass = rememberGlassFill(MochiTheme.materials.menuGlass, LocalMochiOverlayGlass.current)
         Spacer(
             Modifier
                 .fillMaxSize()
@@ -358,7 +362,7 @@ private fun PopoverOverlay(
                         f.metaball
                     }
                     drawMochiMetaball(renderer, mf, metaColors, shadow, style.g2Smoothing)
-                    if (arrowH > 0f) {
+                    if (arrowH > 0f && glass == null) {
                         val a = smoothstep(0.55f, 1f, cl)
                         if (a > 0f) {
                             val half = MochiPopoverDefaults.ArrowHalfWidth.toPx()
@@ -388,6 +392,13 @@ private fun PopoverOverlay(
                     shape = G2RectClipShape(f.panel, f.panelRadius, style.g2Smoothing)
                 },
         ) {
+            if (glass != null) {
+                with(density) {
+                    Box(Modifier.offset { target.topLeft.round() }.size(target.width.toDp(), target.height.coerceAtLeast(1f).toDp())) {
+                        PanelGlass(glass, target, frame, style.panelCornerRadius) { smoothstep(0f, 0.6f, progress.value) }
+                    }
+                }
+            }
             with(density) {
                 Box(
                     Modifier

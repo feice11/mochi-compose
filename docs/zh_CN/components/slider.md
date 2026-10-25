@@ -5,7 +5,7 @@
 旋钮和未选中轨道默认读取 `MochiDefaults.sliderThumb()` / `controlTrack()`；未提供 `LocalMochiControlPalette` 时保持原先白色旋钮与 `fill()` 底槽，可选外观可统一覆盖，显式传入 `colors` 仍优先。
 
 - **按住**：拇指放大、投影变深并发光，轨道变粗一点。
-- **拖动**：相对拖动，按在哪都行，拇指不会跳到手指处；横向越过触摸阈值才开始拖，竖着划照样滚页面。
+- **拖动**：相对拖动，按在哪都行，拇指不会跳到手指处；手指越过触摸阈值、且横向位移不小于竖向时开始拖（斜着拖也抓得住），偏竖着划照样滚页面；接手后只看横向位移。
 - **果冻**：拖得快时拇指沿运动方向拉长。
 - **两端**：拖到两端以外，整条滑块朝那一侧被橡皮筋拉长一点，拇指被压扁；碰到两端时轻震。
 - **刻度**：`steps > 0` 时显示刻度，值吸附到刻度上，每过一格轻震。两端内缩半个拇指：第 i 个刻度在 `MochiSliderDefaults.ThumbWidth / 2 + i × (宽 − ThumbWidth) / 格数`，刻度下要放文字时按这个对齐。
@@ -40,6 +40,8 @@ MochiSlider(value = level, onValueChange = { level = it }, valueRange = 0f..100f
 ## 从中间填充
 
 `MochiSlider(origin = 0f, valueRange = -50f..50f)`：亮色轨道从 `origin` 往拇指那边填（iOS 26 的 neutralValue）。原点处有一个小刻度，拇指拖过原点时轻震一下。
+
+`MochiSlider(detents = listOf(0.75f))`（没有 `steps` 时）：每个值处画一个小刻度，拖到离它 `MochiSliderDefaults.DetentPull`（整条的 2.5%）以内就吸住、轻震一下。`MochiListSliderRow` 同样有这个参数。
 
 ## 分档滑条
 

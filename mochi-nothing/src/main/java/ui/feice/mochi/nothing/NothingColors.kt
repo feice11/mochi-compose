@@ -15,11 +15,17 @@ public object NothingColors {
     public val Accent: Color = Color(0xFFD71921)
 }
 
-/** White knobs remain distinct on red active tracks and neutral inactive tracks. */
+/** White knobs remain distinct on red active tracks and neutral inactive tracks; selected tabs use the red accent. */
 public fun nothingControlPalette(isDark: Boolean): MochiControlPalette = if (isDark) {
-    MochiControlPalette(thumb = Color.White, inactiveTrack = Color(0xFF666666), sliderThumb = Color.White, listChevron = Color(0xFFA8A8A8))
+    MochiControlPalette(
+        thumb = Color.White,
+        inactiveTrack = Color(0xFF666666),
+        sliderThumb = Color.White,
+        listChevron = Color(0xFFA8A8A8),
+        tabSelected = NothingColors.Accent,
+    )
 } else {
-    MochiControlPalette(thumb = Color.White, listChevron = Color(0xFF666666))
+    MochiControlPalette(thumb = Color.White, listChevron = Color(0xFF666666), tabSelected = NothingColors.Accent)
 }
 
 /** Full semantic palette, independent of wallpaper seed colors. */

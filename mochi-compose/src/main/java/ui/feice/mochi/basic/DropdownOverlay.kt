@@ -3,7 +3,6 @@
 
 package ui.feice.mochi.basic
 
-import android.os.Build
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +18,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -80,10 +81,13 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
@@ -110,6 +114,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -120,6 +126,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
@@ -148,6 +155,11 @@ import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
 import ui.feice.mochi.gesture.MochiCallbacks
 import ui.feice.mochi.gesture.MochiController
 import ui.feice.mochi.gesture.mochiButtonGesture
+import ui.feice.mochi.effect.glass.GlassFill
+import ui.feice.mochi.effect.glass.GlassMerge
+import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
+import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.G2RectClipShape
@@ -186,6 +198,7 @@ internal fun MochiOverlay(
     header: String? = null,
     content: (@Composable ColumnScope.() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    group: BarGroupHandle? = null,
     buttonContent: @Composable RowScope.() -> Unit,
 ) {
     val view = LocalView.current
@@ -269,7 +282,18 @@ internal fun MochiOverlay(
         val button = anchorOnScreen.translate(-o)
         val safeTop = WindowInsets.statusBars.getTop(density).toFloat()
         val safeBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
-        val panelWidth = if (matchAnchorWidth) max(px.menuWidth, button.width) else px.menuWidth
+        // 主题有菜单玻璃（menuGlass）且浮层底下有页面录制时，面板画成玻璃
+        val glass = rememberGlassFill(MochiTheme.materials.menuGlass, LocalMochiOverlayGlass.current)
+        // iOS 的玻璃菜单（style.liquid）：从按钮开始就是玻璃，跟着当前面板实时变形，开合途中玻璃里有透镜
+        val liquidGlass = glass != null && style.liquid
+        // 菜单从玻璃按钮组里弹出来：整个组直接变形成菜单（组藏起来，面板从组的胶囊长出来，收起时缩回组的胶囊），
+        // 组里的图标（连同弹菜单的那一格）画在面板上，开头淡出、收起最后淡回。不画成两块：单独从那一格长出来时组还留在原地，像分开的两块玻璃
+        val mergeGroup = if (liquidGlass) group else null
+        // 按钮本身已经是玻璃（按钮组、栏里的玻璃下拉按钮）：浮层从头到尾都是玻璃，开头、结尾不先画成按钮的纯色
+        val glassButton = liquidGlass && (group != null || LocalButtonGlass.current != null)
+        val anchor = mergeGroup?.rect?.translate(-o) ?: button
+        val start = anchor
+        val panelWidth = if (matchAnchorWidth) max(px.menuWidth, anchor.width) else px.menuWidth
         val headerPx = if (header == null || content != null) {
             0f
         } else {
@@ -295,7 +319,7 @@ internal fun MochiOverlay(
                 align = style.align,
             ).let { it.rect to it.upward }
         } else {
-            computeTarget(button, containerSize, items.size, style.openMode, px, matchAnchorWidth, safeTop, safeBottom, headerPx)
+            computeTarget(anchor, containerSize, items.size, style.openMode, px, matchAnchorWidth, safeTop, safeBottom, headerPx)
         }
         val viewport = target.height - px.panelPadding * 2f - headerPx
         SideEffect {
@@ -312,17 +336,36 @@ internal fun MochiOverlay(
         val currentOnReady by rememberUpdatedState(onReady)
         LaunchedEffect(Unit) { currentOnReady() }
 
+        // iOS 玻璃菜单开合时的透镜和 kick（见 MenuLens；只在 liquid 玻璃菜单里跑，其余时候保持 0）
+        val lens = remember { MenuLens() }
         // 一帧的几何只算一次：shader、克隆按钮、裁剪、内容四处都要读，用 derivedStateOf 缓存
-        val frameState = remember(button, target, upward, px, cover, elastic) {
+        val frameState = remember(start, anchor, target, upward, px, cover, elastic) {
             derivedStateOf {
-                computeFrame(
+                val f = computeFrame(
                     p = progress.value, velocity = progress.velocity,
-                    button = button, target = target, upward = upward, px = px,
-                    pressScale = press(), pull = rubber.pull, cover = cover, elastic = elastic,
+                    button = start, target = target, upward = upward, px = px,
+                    pressScale = if (mergeGroup != null) 1f else press(), pull = rubber.pull, cover = cover, elastic = elastic, liquid = style.liquid,
                 )
+                // 按钮组菜单收起时不踢（iOS 录屏里收起没有往外踢的那一下）
+                val dy = lens.kickOffset(density, anchor, target)
+                if (dy == 0f) f else f.panelShifted(0f, dy, cover)
             }
         }
         val frame = { frameState.value }
+
+        if (liquidGlass) {
+            LaunchedEffect(progress, lens) {
+                snapshotFlow { progress.targetValue >= 1f }.dropWhile { !it }.collectLatest { open -> lens.run(open) }
+            }
+        }
+        // 菜单从玻璃按钮组里脱出来：浮层接手画整个组，组和面板画成一块玻璃（光滑并集，见 MenuLens），
+        // 组里的内容（连同弹菜单的那一格）画在玻璃上面；组自己藏起来。组的位置跟着来源的 kick 走。
+        if (mergeGroup != null) {
+            DisposableEffect(mergeGroup) {
+                mergeGroup.hidden = true
+                onDispose { mergeGroup.hidden = false }
+            }
+        }
 
         // 1) shader 层：按钮 + 面板 + 融球 + 阴影 + 发光
         Spacer(
@@ -338,9 +381,36 @@ internal fun MochiOverlay(
                     val shadow = MochiMetaballShadow.elevated(this, cl, dark, vis)
                     // 先画阴影 + 融球颈，再用 Kyant 连续曲率 Path 画本体（形状抗锯齿），
                     // 本体颜色也由 shader 算：按钮色 → 面板色的渐变融色和按压发光都在里面
-                    drawMochiMetaball(renderer, f.metaball, metaballColors, shadow, style.g2Smoothing, glow, glowOrigin = o)
+                    // 玻璃菜单：面板的纯色跟着玻璃淡入淡掉（只留阴影），收起最后一段按钮的颜色回来
+                    val colors = if (liquidGlass) {
+                        val b = metaballColors.b
+                        val glassIn = if (glassButton) 1f else glassAlpha(progress.value)
+                        metaballColors.copy(b = b.copy(alpha = b.alpha * (1f - glassIn)))
+                    } else {
+                        metaballColors
+                    }
+                    // 从按钮组里脱出来时按压的光交给组的玻璃，这里不画
+                    drawMochiMetaball(renderer, f.metaball, colors, shadow, style.g2Smoothing, if (group != null) null else glow, glowOrigin = o)
                 },
         )
+
+        if (liquidGlass) {
+            LiquidPanelGlass(glass, frame, style.panelCornerRadius, null, { 0f }) {
+                if (glassButton) 1f else glassAlpha(progress.value)
+            }
+        }
+        if (mergeGroup != null) {
+            Spacer(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = 1f - smoothstep(0f, 0.25f, progress.value) }
+                    .drawBehind {
+                        // 跟着面板的左上角走（展开开头面板还和组差不多大）
+                        val p = frame().panel
+                        translate(p.left, p.top) { drawLayer(mergeGroup.content) }
+                    },
+            )
+        }
 
         // 2) 按钮克隆：和真按钮同位置同手势，包裹模式下内容淡出
         with(density) {
@@ -353,7 +423,8 @@ internal fun MochiOverlay(
                         val f = frame()
                         scaleX = f.scale
                         scaleY = f.scale
-                        alpha = if (cover) 1f - smoothstep(0f, 0.25f, progress.value) else 1f
+                        // 从按钮组里脱出来时这一格的图标跟着组画（见上），克隆只留手势
+                        alpha = if (mergeGroup != null) 0f else if (cover) 1f - smoothstep(0f, 0.25f, progress.value) else 1f
                     }
                     .padding(buttonPadding),
                 horizontalArrangement = Arrangement.Center,
@@ -390,6 +461,16 @@ internal fun MochiOverlay(
                     shape = G2RectClipShape(f.panel, f.panelRadius, style.g2Smoothing)
                 },
         ) {
+            // iOS 玻璃菜单：开合途中内容经过透镜（放大、模糊、贴边位移，见 MenuLens）
+            Box(if (liquidGlass) Modifier.fillMaxSize().menuLens(lens, frame, target, density) else Modifier.fillMaxSize()) {
+            // 其余带玻璃的面板（弹出层）：玻璃盖在融球画的纯色面板上面，随展开淡入
+            if (glass != null && !liquidGlass) {
+                with(density) {
+                    Box(Modifier.offset { target.topLeft.round() }.size(target.width.toDp(), target.height.toDp())) {
+                        PanelGlass(glass, target, frame, style.panelCornerRadius) { smoothstep(0f, 0.6f, progress.value) }
+                    }
+                }
+            }
             with(density) {
                 Box(
                     Modifier
@@ -477,7 +558,8 @@ internal fun MochiOverlay(
                                 .padding(top = px.panelPadding.toDp() + HeaderTop)
                                 .graphicsLayer {
                                     val f = frame()
-                                    alpha = effects().coerceIn(0f, 1f)
+                                    val ev = effects().coerceIn(0f, 1f)
+                                    alpha = ev
                                     translationX = f.panel.center.x - target.center.x
                                     translationY = f.panel.center.y - target.center.y
                                 },
@@ -512,7 +594,8 @@ internal fun MochiOverlay(
                                 val f = frame()
                                 val ev = effects().coerceIn(0f, 1f)
                                 alpha = ev
-                                val s = 0.94f + 0.06f * ev
+                                // iOS 玻璃菜单不另外缩放（放大交给透镜）
+                                val s = if (liquidGlass) 1f else 0.94f + 0.06f * ev
                                 scaleX = s
                                 scaleY = s
                                 transformOrigin = pivot
@@ -565,6 +648,7 @@ internal fun MochiOverlay(
                     }
                 }
             }
+            }
         }
     }
 }
@@ -614,3 +698,95 @@ private val MenuFadeExtent = 20.dp
 
 /** 自动滚动速度：手指贴边一个选项高时每秒滚过几个选项 */
 private const val AutoScrollSpeed = 6f
+
+/** 玻璃的透明度：按钮的纯色在展开头 1/4 换成玻璃（Mochi 的衔接；iOS 的按钮本来就是玻璃） */
+private fun glassAlpha(p: Float): Float = (4f * p).coerceIn(0f, 1f)
+
+/** 内容图层套上 [MenuLens]：按当前面板中心放大，位移和模糊的范围换算回放大前的坐标 */
+private fun Modifier.menuLens(lens: MenuLens, frame: () -> DropdownFrame, target: Rect, density: Density): Modifier =
+    graphicsLayer {
+        val f = frame()
+        val s = lens.scale(density, target.height)
+        val c = f.panel.center
+        scaleX = s
+        scaleY = s
+        transformOrigin = TransformOrigin(c.x / size.width, c.y / size.height)
+        val panel = Rect(c.x + (f.panel.left - c.x) / s, c.y + (f.panel.top - c.y) / s, c.x + (f.panel.right - c.x) / s, c.y + (f.panel.bottom - c.y) / s)
+        renderEffect = lens.effect(density, panel, f.panelRadius, s)
+    }
+
+/**
+ * iOS 玻璃菜单的面板玻璃：按当前面板（[frame]）的位置、大小、圆角排版（layout 阶段读，不重组），
+ * 从按钮的胶囊连续变成面板，不缩放。
+ * 给了 [group]（按钮组当前的位置，null = 这会儿没有组）时，玻璃按面板和组的外包框排版，画成两块的光滑并集（半径 [smooth]，px），组按胶囊算
+ */
+@Composable
+private fun LiquidPanelGlass(
+    glass: GlassFill,
+    frame: () -> DropdownFrame,
+    corner: Dp,
+    group: (() -> Rect?)?,
+    smooth: () -> Float,
+    alpha: () -> Float,
+) {
+    // 排版的矩形：没有组时是面板；有组时是外包框，按整像素往外取（并集的坐标从它的左上角量），再留出光滑并集往外鼓的量（最多半径的 1/4）
+    fun bounds(): Rect {
+        val p = frame().panel
+        val g = group?.invoke() ?: return p
+        val m = smooth() / 4f + 2f
+        return Rect(
+            floor(min(p.left, g.left) - m),
+            floor(min(p.top, g.top) - m),
+            ceil(max(p.right, g.right) + m),
+            ceil(max(p.bottom, g.bottom) + m),
+        )
+    }
+    GlassSurface(
+        glass,
+        Modifier
+            .fillMaxSize()
+            .layout { measurable, constraints ->
+                val r = bounds()
+                val placeable = measurable.measure(
+                    Constraints.fixed(r.width.roundToInt().coerceAtLeast(1), r.height.roundToInt().coerceAtLeast(1)),
+                )
+                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(r.left.roundToInt(), r.top.roundToInt()) }
+            },
+        corner,
+        null,
+        alpha = alpha,
+        cornerRadiusPx = { frame().panelRadius },
+        merge = group?.let { g ->
+            {
+                val gr = g()
+                if (gr == null) {
+                    null
+                } else {
+                    val o = bounds().topLeft
+                    GlassMerge(frame().panel.translate(-o), gr.translate(-o), gr.height / 2f, smooth())
+                }
+            }
+        },
+    )
+}
+
+/**
+ * 菜单面板的玻璃：按展开后的面板（[target]）排版一次，开合、过冲、橡皮筋时用平移和绕中心缩放跟着当前面板（[frame]）走，
+ * 背景不跟着缩放。圆角取展开后的 [corner]
+ */
+@Composable
+internal fun BoxScope.PanelGlass(glass: GlassFill, target: Rect, frame: () -> DropdownFrame, corner: Dp, alpha: () -> Float) {
+    GlassSurface(
+        glass,
+        Modifier.matchParentSize().graphicsLayer {
+            val f = frame()
+            translationX = f.panel.center.x - target.center.x
+            translationY = f.panel.center.y - target.center.y
+        },
+        corner,
+        null,
+        scaleX = { frame().panel.width / target.width.coerceAtLeast(1f) },
+        scaleY = { frame().panel.height / target.height.coerceAtLeast(1f) },
+        alpha = alpha,
+    )
+}

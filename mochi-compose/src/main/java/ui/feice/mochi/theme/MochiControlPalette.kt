@@ -15,8 +15,16 @@ public data class MochiControlPalette(
     val thumb: Color,
     val inactiveTrack: Color = Color.Unspecified,
     val sliderThumb: Color = thumb,
-    /** Dot artwork needs a readable foreground rather than a translucent line-icon tint. */
+    /** List row chevron; unspecified keeps the translucent Mochi tint. */
     val listChevron: Color = Color.Unspecified,
+    /** Switch on-track; unspecified keeps the primary color (iOS uses its own green here). */
+    val switchTrack: Color = Color.Unspecified,
+    /** Translucent fill behind controls ([MochiDefaults.fill]); unspecified keeps the onSurface-based Mochi fill. */
+    val fill: Color = Color.Unspecified,
+    /** List row divider; unspecified keeps 60% outlineVariant. Translucent native separators can be supplied as-is. */
+    val listDivider: Color = Color.Unspecified,
+    /** Selected tab icon and label; unspecified keeps onSecondaryContainer on solid bars and primary on glass bars. */
+    val tabSelected: Color = Color.Unspecified,
 )
 
 /** Appearance override for control defaults; null preserves the original Mochi colors. */

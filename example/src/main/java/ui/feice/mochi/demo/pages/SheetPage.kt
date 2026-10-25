@@ -43,11 +43,13 @@ import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.navigation.MochiNavDefaults
 import ui.feice.mochi.navigation.MochiNavHost
 import ui.feice.mochi.navigation.rememberMochiNavigator
+import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -61,24 +63,28 @@ fun SheetPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 
     // 两个面板共用一个「后面的页面」：哪个更靠前就按哪个缩
     DemoPage(entry, modifier.mochiSheetBackdrop(both).mochiSheetBackdrop(large)) {
-        DemoSection("试一试", footer = last ?: "往上拉到全屏，往下甩关闭；安全性和高级设置支持多级侧推，返回先退页。") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                // 两个按钮平分一行，不挤在左边
-                MochiButton(onClick = { both.show() }, modifier = Modifier.weight(1f)) { Text("半屏 / 全屏") }
-                MochiButton(onClick = { large.show() }, modifier = Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("只有全屏") }
+        demoItem {
+            DemoSection("试一试", footer = last ?: "往上拉到全屏，往下甩关闭；安全性和高级设置支持多级侧推，返回先退页。") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // 两个按钮平分一行，不挤在左边
+                    MochiButton(onClick = { both.show() }, modifier = Modifier.weight(1f)) { Text("半屏 / 全屏") }
+                    MochiButton(onClick = { large.show() }, modifier = Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("只有全屏") }
+                }
             }
         }
-        DemoSection("用法") {
-            Code(
-                "val sheet = rememberMochiSheetState()\n" +
-                    "val nav = rememberMochiNavigator(\"network\")\n" +
-                    "Page(Modifier.mochiSheetBackdrop(sheet))\n" +
-                    "MochiSheet(sheet, navigator = nav) {\n" +
-                    "    MochiNavHost(nav) { route -> … } // 自动继承可见面板轮廓，安全区只限制正文\n" +
-                    "}\n" +
-                    "nav.push(\"security\") // 面板内侧推\n" +
-                    "sheet.show()",
-            )
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "val sheet = rememberMochiSheetState()\n" +
+                        "val nav = rememberMochiNavigator(\"network\")\n" +
+                        "Page(Modifier.mochiSheetBackdrop(sheet))\n" +
+                        "MochiSheet(sheet, navigator = nav) {\n" +
+                        "    MochiNavHost(nav) { route -> … } // 自动继承可见面板轮廓，安全区只限制正文\n" +
+                        "}\n" +
+                        "nav.push(\"security\") // 面板内侧推\n" +
+                        "sheet.show()",
+                )
+            }
         }
     }
 
@@ -88,13 +94,12 @@ fun SheetPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 
 @Composable
 private fun NetworkSheet(state: MochiSheetState, onDismiss: (String) -> Unit) {
-    var session by remember { mutableIntStateOf(0) }
-    var result by remember { mutableStateOf("面板关了") }
+    var session by rememberSaveable { mutableIntStateOf(0) }
+    var result by rememberSaveable { mutableStateOf("面板关了") }
     var security by rememberSaveable { mutableStateOf("WPA3") }
     var auto by rememberSaveable { mutableStateOf(true) }
     var ip by rememberSaveable { mutableStateOf("自动（DHCP）") }
     val cs = MochiTheme.colorScheme
-    val surface = cs.surfaceContainerLow
     // 每次关闭重置页栈；选中的网络设置仍保留，重新打开不会停在上次的子页。
     key(session) {
         val nav = rememberMochiNavigator("network")
@@ -103,6 +108,8 @@ private fun NetworkSheet(state: MochiSheetState, onDismiss: (String) -> Unit) {
             result = "面板关了"
             session++
         }) {
+            // 面板的底色（浮起一层的分组底色），卡片在上面亮一档。在面板里面读：玻璃面板里它是透明的，底色由面板画
+            val surface = MochiDefaults.sheetBackground()
             MochiNavHost(
                 nav,
                 spec = MochiNavDefaults.spec(pushBackdrop = surface),

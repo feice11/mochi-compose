@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Toggles
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.list.MochiListRow
@@ -72,17 +74,17 @@ private val allTabs = listOf(
  */
 @Composable
 fun TabBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var count by remember { mutableIntStateOf(4) }
+    var count by rememberSaveable { mutableIntStateOf(4) }
     val scrollBehavior = rememberMochiTabBarScrollBehavior()
-    var droplet by remember { mutableStateOf(true) }
-    var gel by remember { mutableFloatStateOf(0.6f) }
-    var selected by remember { mutableIntStateOf(0) }
-    var unread by remember { mutableIntStateOf(3) }
+    var droplet by rememberSaveable { mutableStateOf(true) }
+    var gel by rememberSaveable { mutableFloatStateOf(0.6f) }
+    var selected by rememberSaveable { mutableIntStateOf(0) }
+    var unread by rememberSaveable { mutableIntStateOf(3) }
     var layout by remember { mutableStateOf(TabBarDemoLayout.Standard) }
-    var searching by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    var playing by remember { mutableStateOf(false) }
-    var selectedLabelOnly by remember { mutableStateOf(false) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var playing by rememberSaveable { mutableStateOf(false) }
+    var selectedLabelOnly by rememberSaveable { mutableStateOf(false) }
     val items = remember(count, unread) {
         allTabs.take(count).map { (label, glyph) ->
             // 角标：「通知」显示未读数，「我的」一个小红点
@@ -107,94 +109,102 @@ fun TabBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val sel = selected.coerceIn(0, count - 1)
 
     DemoPage(entry, modifier) {
-        DemoSection(
-            "试一试",
-            footer = "点标签或按住左右滑，短融球拖尾紧随选中块。用下方开关手动收起和展开，也可以切换布局、调整通知角标。",
-            padding = 0.dp,
-        ) {
-            if (layout == TabBarDemoLayout.Search) {
-                MochiBlurText(
-                    if (searching) "搜索：${query.ifEmpty { "…" }}" else "点右边的放大镜开始搜索",
-                    style = MochiTheme.textStyles.bodyMedium,
-                    color = MochiTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp),
+        demoItem {
+            DemoSection(
+                "试一试",
+                footer = "点标签或按住左右滑，短融球拖尾紧随选中块。用下方开关手动收起和展开，也可以切换布局、调整通知角标。",
+                padding = 0.dp,
+            ) {
+                if (layout == TabBarDemoLayout.Search) {
+                    MochiBlurText(
+                        if (searching) "搜索：${query.ifEmpty { "…" }}" else "点右边的放大镜开始搜索",
+                        style = MochiTheme.textStyles.bodyMedium,
+                        color = MochiTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp),
+                    )
+                }
+                MochiTabBar(
+                    selectedIndex = sel,
+                    onSelect = { selected = it },
+                    items = items,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                    scrollBehavior = scrollBehavior,
+                    behavior = if (layout == TabBarDemoLayout.IconOnly) {
+                        MochiTabBarDefaults.iconOnlyBehavior(
+                            gel = gel,
+                            fuseRadius = if (droplet) 18.dp else 0.dp,
+                            selectedLabelOnly = selectedLabelOnly,
+                        )
+                    } else {
+                        MochiTabBarDefaults.behavior(
+                            gel = gel,
+                            fuseRadius = if (droplet) 22.dp else 0.dp,
+                            selectedLabelOnly = selectedLabelOnly,
+                        )
+                    },
+                    windowInsets = WindowInsets(0),
+                    search = if (layout == TabBarDemoLayout.Search) {
+                        MochiTabBarSearch(
+                            active = searching,
+                            onActiveChange = {
+                                searching = it
+                                if (!it) query = ""
+                            },
+                            query = query,
+                            onQueryChange = { query = it },
+                            placeholder = "搜索歌曲、专辑",
+                        )
+                    } else {
+                        null
+                    },
+                    accessory = if (layout == TabBarDemoLayout.Accessory) {
+                        { inline -> MiniPlayer(inline, playing) { playing = !playing } }
+                    } else {
+                        null
+                    },
                 )
             }
-            MochiTabBar(
-                selectedIndex = sel,
-                onSelect = { selected = it },
-                items = items,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                scrollBehavior = scrollBehavior,
-                behavior = if (layout == TabBarDemoLayout.IconOnly) {
-                    MochiTabBarDefaults.iconOnlyBehavior(
-                        gel = gel,
-                        fuseRadius = if (droplet) 18.dp else 0.dp,
-                        selectedLabelOnly = selectedLabelOnly,
-                    )
-                } else {
-                    MochiTabBarDefaults.behavior(
-                        gel = gel,
-                        fuseRadius = if (droplet) 22.dp else 0.dp,
-                        selectedLabelOnly = selectedLabelOnly,
-                    )
-                },
-                windowInsets = WindowInsets(0),
-                search = if (layout == TabBarDemoLayout.Search) {
-                    MochiTabBarSearch(
-                        active = searching,
-                        onActiveChange = {
-                            searching = it
-                            if (!it) query = ""
-                        },
-                        query = query,
-                        onQueryChange = { query = it },
-                        placeholder = "搜索歌曲、专辑",
-                    )
-                } else {
-                    null
-                },
-                accessory = if (layout == TabBarDemoLayout.Accessory) {
-                    { inline -> MiniPlayer(inline, playing) { playing = !playing } }
-                } else {
-                    null
-                },
-            )
         }
-        DemoSettingsSection("调参") {
-            Toggles(
-                "布局",
-                listOf(
-                    "标准" to TabBarDemoLayout.Standard,
-                    "仅图标" to TabBarDemoLayout.IconOnly,
-                    "搜索" to TabBarDemoLayout.Search,
-                    "附件条" to TabBarDemoLayout.Accessory,
-                ),
-                layout,
-            ) {
-                layout = it
-                searching = false
-                query = ""
+        demoItem {
+            DemoSettingsSection("调参") {
+                Toggles(
+                    "布局",
+                    listOf(
+                        "标准" to TabBarDemoLayout.Standard,
+                        "仅图标" to TabBarDemoLayout.IconOnly,
+                        "搜索" to TabBarDemoLayout.Search,
+                        "附件条" to TabBarDemoLayout.Accessory,
+                    ),
+                    layout,
+                ) {
+                    layout = it
+                    searching = false
+                    query = ""
+                }
+                Toggles("标签数", listOf("3" to 3, "4" to 4, "5" to 5), count) { count = it }
+                // 仅图标布局下，选中项的标签横排在图标右边
+                MochiListRow("仅选中显示标签", trailing = { MochiSwitch(selectedLabelOnly, { selectedLabelOnly = it }) })
+                MochiListRow(
+                    "收起标签栏",
+                    trailing = {
+                        MochiSwitch(scrollBehavior.collapsed, { if (it) scrollBehavior.collapse() else scrollBehavior.expand() })
+                    },
+                )
+                Toggles("融球残影", listOf("开" to true, "关" to false), droplet) { droplet = it }
+                Toggles("通知角标", listOf("无" to 0, "3" to 3, "12" to 12, "99+" to 100), unread) { unread = it }
             }
-            Toggles("标签数", listOf("3" to 3, "4" to 4, "5" to 5), count) { count = it }
-            // 仅图标布局下，选中项的标签横排在图标右边
-            MochiListRow("仅选中显示标签", trailing = { MochiSwitch(selectedLabelOnly, { selectedLabelOnly = it }) })
-            MochiListRow(
-                "收起标签栏",
-                trailing = {
-                    MochiSwitch(scrollBehavior.collapsed, { if (it) scrollBehavior.collapse() else scrollBehavior.expand() })
-                },
-            )
-            Toggles("融球残影", listOf("开" to true, "关" to false), droplet) { droplet = it }
-            Toggles("通知角标", listOf("无" to 0, "3" to 3, "12" to 12, "99+" to 100), unread) { unread = it }
         }
-        DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
-        DemoSection("用法") {
-            Code(
-                "MochiTabBar(\n    selectedIndex = tab,\n    onSelect = { tab = it },\n    items = persistentListOf(\n        MochiTabItem(\"首页\") { tint -> Icon(…, tint) },\n        …\n    ),\n    scrollBehavior = rememberMochiTabBarScrollBehavior(),\n)",
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("手动控制：调用 scrollBehavior.collapse() 收起，调用 expand() 展开；开关读取 collapsed 状态。", style = MochiTheme.textStyles.bodyMedium)
+        demoItem {
+            DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
+        }
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "MochiTabBar(\n    selectedIndex = tab,\n    onSelect = { tab = it },\n    items = persistentListOf(\n        MochiTabItem(\"首页\") { tint -> Icon(…, tint) },\n        …\n    ),\n    scrollBehavior = rememberMochiTabBarScrollBehavior(),\n)",
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("手动控制：调用 scrollBehavior.collapse() 收起，调用 expand() 展开；开关读取 collapsed 状态。", style = MochiTheme.textStyles.bodyMedium)
+                }
             }
         }
     }

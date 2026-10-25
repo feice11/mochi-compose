@@ -56,7 +56,14 @@ class MochiRenderBenchmark {
     private val h = 2400
     private val d = 2.625f
 
-    private class Scene(val name: String, val f: MochiMetaballFrame, val glow: Float, val touch: Offset, val cover: Boolean)
+    private class Scene(
+        val name: String,
+        val f: MochiMetaballFrame,
+        val glow: Float,
+        val touch: Offset,
+        val cover: Boolean,
+        val alpha: Float = 1f,
+    )
 
     private fun dp(v: Float) = v * d
 
@@ -80,6 +87,7 @@ class MochiRenderBenchmark {
             // 标签栏切换：出发处缩小的残影 + 拉长的选中块，中间融球颈
             Scene("tabbar-droplet", tabbar(), 0f, tabInd.center, false),
             Scene("tabbar-droplet-glow", tabbar(), 1f, tabInd.center, false),
+            Scene("translucent-tabbar-droplet", tabbar(), 0f, tabInd.center, false, 0.16f),
         )
     }
 
@@ -133,6 +141,10 @@ class MochiRenderBenchmark {
         if (draw) {
             setUniforms(under, f, false, scene.glow, scene.touch, shadow)
             setUniforms(bodySh, f, true, scene.glow, scene.touch, shadow)
+            for (shader in listOf(under, bodySh)) {
+                shader.setColorUniform("uBtnColor", Color(0xFFDCE1F9).copy(alpha = scene.alpha).toArgb())
+                shader.setColorUniform("uPanColor", Color(0xFFE9E7EF).copy(alpha = scene.alpha).toArgb())
+            }
         }
         val pu = Paint().apply { shader = under }
         val pb = Paint().apply {
@@ -143,7 +155,8 @@ class MochiRenderBenchmark {
         val panPath = Path().apply { addG2RoundRect(f.b.rect, f.b.cornerRadius, 1f) }.asAndroidPath()
         val b = f.drawBounds(shadow)
         val metaball = MochiMetaballRenderer()
-        val colors = MochiMetaballColors(Color(0xFFDCE1F9), Color(0xFFE9E7EF), Color.Black)
+        val colors =
+            MochiMetaballColors(Color(0xFFDCE1F9).copy(alpha = scene.alpha), Color(0xFFE9E7EF).copy(alpha = scene.alpha), Color.Black)
         val glow = MochiGlowState(MochiGlowSpec(Color(0x66FFFFFF)), null)
         runBlocking { glow.snapTo(scene.glow, dp(200f), scene.touch) }
         val drawScope = CanvasDrawScope()

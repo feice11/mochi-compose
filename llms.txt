@@ -38,9 +38,33 @@ otherwise report "not applicable" with a reason. Explicit user instructions prev
 - Report each applicable requirement as integrated + code location, or not applicable
   + reason. Separate compilation from interaction/device validation; follow user scope.
 
-- Optional Nothing appearance changes colors, font families and semantic icons only.
+- Optional Nothing appearance changes colors, font families and control colors only (icons stay Mochi's).
   Keep all geometry and interaction rules. Chinese titles remain readable, not dotted.
   Read docs/guide/nothing-theme.md and the separate asset provenance before using the local module.
+
+- Icons: add the mochi-icons module and use MochiIonicon("name") (full Ionicons, Outline /
+  Filled / Sharp). Do not use Material Icons, hand-drawn paths or emoji as icons.
+- Chips: MochiChip / MochiChipGroup / MochiRemovableChip for filters and tags; never restyle
+  MochiButton into chips.
+- Horizontal scroll rows fade on edges that can still scroll (built into MochiChipGroup; use
+  mochiScrollFadeMask(state, vertical = false) for your own). Inside padded containers pass
+  MochiChipGroup(contentPadding = PaddingValues(0.dp), bleed = <padding>).
+- MochiIndexBar sits flush against the right edge (Alignment.CenterEnd, no end padding); list
+  content leaves MochiIndexBarDefaults.Width at the end.
+- Copy: no "·" gluing two facts, no slogan subtitles, no empty adjectives (immersive, seamless,
+  ultimate), no "not X but Y", no emoji decoration or gradient backgrounds. See section 5 of
+  docs/guide/application-integration.md.
+
+- Theme once at the root: colors, LocalMochiControlPalette and materials. Pages contain no
+  appearance or glass branches and pass no per-appearance colors to components.
+- Liquid glass and scroll-edge blur are two independent switches available in every appearance:
+  MochiTheme(materials = iosMaterials(dark, glass = …, blur = …, themeAccent = true)) (mochi-ios;
+  themeAccent = false only for iOS colors). Glass tab bars support every layout (icon only,
+  selected label, collapse, search, accessory). Ask before turning glass on: it costs power.
+- Optional iOS appearance (mochi-ios) adds system colors and glass bars. Glass needs a
+  backdrop source: content gets Modifier.mochiBackdropSource, the bar is a sibling drawn
+  after it and receives the same MochiBackdrop. See docs/guide/ios-theme.md.
+- MochiDialog(icon = { MochiIonicon(...) }) draws the icon in stroke by stroke automatically.
 
 ## Read next
 

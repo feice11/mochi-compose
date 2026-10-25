@@ -1,7 +1,0 @@
-fonttools==4.63.0
-Pillow==12.1.1
-aggdraw==1.4.1
-numpy==2.4.3
-opencv-python==4.13.0.92
-scipy==1.17.1
-scikit-image==0.26.0

@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,7 @@ import ui.feice.mochi.demo.common.IconColors
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Toggles
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
@@ -44,28 +46,36 @@ import ui.feice.mochi.theme.MochiTheme
  */
 @Composable
 fun SwitchPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var wifi by remember { mutableStateOf(true) }
-    var plane by remember { mutableStateOf(false) }
-    var dnd by remember { mutableStateOf(false) }
-    var green by remember { mutableStateOf(false) }
-    var gel by remember { mutableFloatStateOf(0.6f) }
+    var wifi by rememberSaveable { mutableStateOf(true) }
+    var plane by rememberSaveable { mutableStateOf(false) }
+    var dnd by rememberSaveable { mutableStateOf(false) }
+    var green by rememberSaveable { mutableStateOf(false) }
+    var gel by rememberSaveable { mutableFloatStateOf(0.6f) }
     val cs = MochiTheme.colorScheme
     val colors = if (green) MochiSwitchDefaults.colors(checkedTrack = MochiSwitchDefaults.IosGreen) else MochiSwitchDefaults.colors()
 
     DemoPage(entry, modifier) {
         // 和列表页同一种行（MochiListRow）：图标块、间距、分隔线缩进、行高都一致
-        MochiListSection(header = "试一试", footer = "点一下或按住拖动；按住时拇指放大，拖过中线轻震。") {
-            SettingRow(Icons.WIFI, "无线局域网", wifi, { wifi = it }, colors, gel)
-            SettingRow(Icons.PLANE, "飞行模式", plane, { plane = it }, colors, gel)
-            SettingRow(Icons.MOON, "勿扰模式", dnd, { dnd = it }, colors, gel)
-            SettingRow(Icons.BELL, "不可用", true, null, colors, gel)
+        demoItem {
+            MochiListSection(header = "试一试", footer = "点一下或按住拖动；按住时拇指放大，拖过中线轻震。") {
+                SettingRow(Icons.WIFI, "无线局域网", wifi, { wifi = it }, colors, gel)
+                SettingRow(Icons.PLANE, "飞行模式", plane, { plane = it }, colors, gel)
+                SettingRow(Icons.MOON, "勿扰模式", dnd, { dnd = it }, colors, gel)
+                SettingRow(Icons.BELL, "不可用", true, null, colors, gel)
+            }
         }
-        DemoSettingsSection("调参") {
-            Toggles("开启颜色", listOf("主题色" to false, "iOS 绿" to true), green) { green = it }
+        demoItem {
+            DemoSettingsSection("调参") {
+                Toggles("开启颜色", listOf("主题色" to false, "iOS 绿" to true), green) { green = it }
+            }
         }
-        DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
-        DemoSection("用法") {
-            Code("MochiSwitch(\n    checked = on,\n    onCheckedChange = { on = it },\n)")
+        demoItem {
+            DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
+        }
+        demoItem {
+            DemoSection("用法") {
+                Code("MochiSwitch(\n    checked = on,\n    onCheckedChange = { on = it },\n)")
+            }
         }
     }
 }

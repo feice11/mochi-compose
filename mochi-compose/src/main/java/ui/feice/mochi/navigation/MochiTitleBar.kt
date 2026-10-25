@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,6 +23,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import ui.feice.mochi.effect.glass.GlassSource
+import ui.feice.mochi.effect.glass.LocalMochiBarSource
+import ui.feice.mochi.effect.glass.source
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.MochiBackdrop
 import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.effect.content.MochiBlurText
@@ -44,6 +54,8 @@ public object MochiTitleBarDefaults {
  *   往下延的那段渐隐会盖住第一行内容
  * @param navigationIcon 左侧库顶栏按钮；侧推页登记稳定 navId，MochiBackButton 自动登记
  * @param actions 右侧库顶栏按钮；与侧推对应页面共用稳定 navId 和图标 contentKey
+ * @param backdrop 栏下面内容的录制（`rememberMochiBarBackdrop()`，内容加 `mochiBackdropSource`）：给了，主题的栏按钮是玻璃时
+ *   按钮取样它画成玻璃；null 沿用外面提供的（没有就是纯色）
  */
 @Composable
 public fun MochiTitleBar(
@@ -56,11 +68,54 @@ public fun MochiTitleBar(
     barHeight: Dp = MochiTitleBarDefaults.Height,
     titleProgress: () -> Float = { 1f },
     backgroundProgress: () -> Float = titleProgress,
+    backdrop: MochiBackdrop? = null,
+) {
+    if (backdrop != null) {
+        CompositionLocalProvider(LocalMochiBackdrop provides backdrop) {
+            MochiTitleBar(title, modifier, subtitle, navigationIcon, actions, background, barHeight, titleProgress, backgroundProgress)
+        }
+        return
+    }
+    // 文字跟着栏后面的亮度换深 / 浅（iOS 栏上的文字也是按背后亮度取色）：深色主题里滚到大片亮色内容下面时，
+    // 渐进模糊偏白，白字会看不清
+    val tone = remember { MochiScrollEdgeTone() }
+    val textColor = MochiScrollEdgeDefaults.textColor(tone, MochiTheme.colorScheme.onSurface)
+    val subColor = MochiScrollEdgeDefaults.textColor(tone, MochiTheme.colorScheme.onSurfaceVariant, secondary = true)
+    // 栏里的玻璃（按钮、搜索框）取样「栏下面实际看到的样子」：背景来源（已经渐进模糊过）再叠上这一层渐隐底色。
+    // 渐隐单独画在一层里录下来，不和按钮在同一层（玻璃不能取样到自己）
+    val under = LocalMochiBackdrop.current?.takeIf { MochiTheme.materials.controlGlass != null }?.source
+    val fadeLayer = if (under != null) rememberLayerBackdrop() else null
+    val barSource = if (under != null && fadeLayer != null) {
+        val layer = rememberCombinedBackdrop(under.layer, fadeLayer)
+        val face = rememberCombinedBackdrop(under.face, fadeLayer)
+        remember(layer, face) { GlassSource(layer, face) }
+    } else {
+        null
+    }
+    Box(modifier.fillMaxWidth().then(if (fadeLayer == null) Modifier.mochiScrollEdgeFade(background, alpha = backgroundProgress, tone = tone) else Modifier)) {
+        if (fadeLayer != null) {
+            Box(Modifier.matchParentSize().layerBackdrop(fadeLayer).mochiScrollEdgeFade(background, alpha = backgroundProgress, tone = tone))
+        }
+        CompositionLocalProvider(LocalMochiBarSource provides (barSource ?: LocalMochiBarSource.current)) {
+            TitleBarRow(title, subtitle, navigationIcon, actions, barHeight, titleProgress, textColor, subColor)
+        }
+    }
+}
+
+@Composable
+private fun TitleBarRow(
+    title: String,
+    subtitle: String?,
+    navigationIcon: (@Composable () -> Unit)?,
+    actions: (@Composable RowScope.() -> Unit)?,
+    barHeight: Dp,
+    titleProgress: () -> Float,
+    textColor: Color,
+    subColor: Color,
 ) {
     Box(
-        modifier
+        Modifier
             .fillMaxWidth()
-            .mochiScrollEdgeFade(background, alpha = backgroundProgress)
             .statusBarsPadding()
             .height(barHeight)
             .padding(horizontal = MochiButtonDefaults.BarHorizontalPadding),
@@ -77,6 +132,7 @@ public fun MochiTitleBar(
             MochiBlurText(
                 title,
                 style = MochiTheme.textStyles.navTitle,
+                color = textColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 contentAlignment = Alignment.Center,
@@ -85,7 +141,7 @@ public fun MochiTitleBar(
                 MochiBlurText(
                     subtitle,
                     style = MochiTheme.textStyles.footnote.copy(fontSize = 12.sp, lineHeight = 14.sp),
-                    color = MochiTheme.colorScheme.onSurfaceVariant,
+                    color = subColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     contentAlignment = Alignment.Center,

@@ -56,12 +56,10 @@ import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiSwipeAction
 import ui.feice.mochi.list.MochiSwipeRow
-import ui.feice.mochi.nothing.NothingIcons
 import ui.feice.mochi.nothing.nothingColorScheme
 import ui.feice.mochi.nothing.nothingControlPalette
 import ui.feice.mochi.nothing.nothingTextStyles
 import ui.feice.mochi.theme.LocalMochiControlPalette
-import ui.feice.mochi.theme.LocalMochiIconProvider
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.defaultTextStyles
 import ui.feice.mochi.theme.lightColorScheme
@@ -185,7 +183,6 @@ class RowSymmetryRegression {
         px = density.density
         CompositionLocalProvider(
             LocalDensity provides Density(density.density, fontScale),
-            LocalMochiIconProvider provides if (nothing) NothingIcons else null,
             LocalMochiControlPalette provides if (nothing) nothingControlPalette(false) else null,
         ) {
             MochiTheme(

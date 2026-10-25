@@ -11,6 +11,7 @@ import ui.feice.mochi.demo.pages.BadgePage
 import ui.feice.mochi.demo.pages.ButtonPage
 import ui.feice.mochi.demo.pages.CalendarPage
 import ui.feice.mochi.demo.pages.CarouselPage
+import ui.feice.mochi.demo.pages.ChipPage
 import ui.feice.mochi.demo.pages.ColorPickerPage
 import ui.feice.mochi.demo.pages.ContentPage
 import ui.feice.mochi.demo.pages.ContextMenuPage
@@ -20,6 +21,7 @@ import ui.feice.mochi.demo.pages.DropdownPage
 import ui.feice.mochi.demo.pages.ElasticPage
 import ui.feice.mochi.demo.pages.GlowPage
 import ui.feice.mochi.demo.pages.HdrPage
+import ui.feice.mochi.demo.pages.IconsPage
 import ui.feice.mochi.demo.pages.ListEditPage
 import ui.feice.mochi.demo.pages.ListPage
 import ui.feice.mochi.demo.pages.LoadingPage
@@ -44,6 +46,7 @@ import ui.feice.mochi.demo.pages.TextInputPage
 import ui.feice.mochi.demo.pages.ToastPage
 import ui.feice.mochi.demo.pages.ToolbarPage
 import ui.feice.mochi.demo.pages.TransitionPage
+import ui.feice.mochi.demo.pages.VibrancyPage
 
 /** 目录里的分组 */
 enum class CatalogGroup(val title: String) {
@@ -106,6 +109,28 @@ val catalog: List<CatalogEntry> = listOf(
         tone = Tone.Secondary,
         uses = listOf(Effect.Glow, Effect.Elastic, Effect.Metaball),
         page = { ButtonPage(it) },
+    ),
+    CatalogEntry(
+        id = "chip",
+        title = "选择芯片",
+        summary = "筛选和标签用的短选项：单选靠底色，多选时对勾一笔画出来，已选条件点一下移除",
+        group = CatalogGroup.Components,
+        status = CatalogStatus.Ready,
+        glyph = Icons.CHIP,
+        tone = Tone.Secondary,
+        uses = listOf(Effect.Glow, Effect.Elastic, Effect.Content),
+        page = { ChipPage(it) },
+    ),
+    CatalogEntry(
+        id = "icons",
+        title = "图标",
+        summary = "内置全套 Ionicons，三种画法、九档粗细，换图标原位变形；中英文搜索，按住字母快速跳",
+        group = CatalogGroup.Components,
+        status = CatalogStatus.Ready,
+        glyph = Icons.ICONS,
+        tone = Tone.Tertiary,
+        uses = listOf(Effect.Content, Effect.Elastic),
+        page = { IconsPage(it) },
     ),
 
     CatalogEntry(
@@ -408,6 +433,17 @@ val catalog: List<CatalogEntry> = listOf(
         page = { SheetPage(it) },
     ),
     // —— 效果 ——
+    CatalogEntry(
+        id = "vibrancy",
+        title = "混合字",
+        summary = "iOS 的活力文字和图标：小字、说明、图标混进背后的照片和材质，仿 App Store 卡片",
+        group = CatalogGroup.Effects,
+        status = CatalogStatus.Ready,
+        glyph = Icons.SPARKLE,
+        tone = Tone.Tertiary,
+        uses = emptyList(),
+        page = { VibrancyPage(it) },
+    ),
     CatalogEntry(
         id = "glow",
         title = "按压高光",

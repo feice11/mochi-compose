@@ -115,7 +115,8 @@ public fun rememberMochiRefreshState(
         snapshotFlow { overscroll.offset.y }.collect { y ->
             // 收回到一小段以内才能再次触发，免得刷新刚结束、手还拉着又触发一次
             if (y < state.rearmPx) armed = true
-            if (armed && !state.isRefreshing && state.pullFraction() >= 1f) {
+            // 只认手指拉过阈值：快速一甩撞到顶的回弹位移再大也不触发（iOS 也是这样）
+            if (armed && !state.isRefreshing && overscroll.dragging && state.pullFraction() >= 1f) {
                 armed = false
                 state.isRefreshing = true
                 haptics.threshold()

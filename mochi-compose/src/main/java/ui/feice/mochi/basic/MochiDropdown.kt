@@ -118,6 +118,8 @@ import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
 import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
 import ui.feice.mochi.effect.elastic.rubberStretched
+import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.LocalMochiWindowBackdrop
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.MochiGlowState
@@ -176,7 +178,78 @@ internal data class MochiStyle(
     val panelPadding: Dp,
     val align: MochiAlign,
     val screenMargin: Dp,
+    /** 玻璃菜单：按 iOS 27 玻璃菜单排版（[LiquidMenu]） */
+    val liquid: Boolean = false,
 )
+
+/**
+ * 开了液态玻璃（主题有 [ui.feice.mochi.theme.MochiMaterials.menuGlass]，页面有背景录制）时菜单换成 iOS 27 玻璃菜单的样子：
+ * 面板圆角、上下留白、行高照 [LiquidMenu]；[cover] 时按钮直接变形成菜单（iOS 的菜单从按钮长出来）。
+ * 宽度是库默认值时换成 iOS 的默认宽度，调用方自己给的宽度不动
+ */
+internal fun MochiStyle.liquid(cover: Boolean): MochiStyle = copy(
+    liquid = true,
+    openMode = if (cover) MochiOpenMode.Cover else openMode,
+    // iOS 菜单的形变不经过中间形状（morph 的 usingIntermediateShapes 传的 false），面板和来源之间不连融球颈
+    fuseRadius = 0.dp,
+    panelCornerRadius = LiquidMenu.CornerRadius,
+    panelPadding = LiquidMenu.Inset,
+    itemHeight = LiquidMenu.ItemHeight,
+    menuWidth = if (menuWidth == MochiDropdownDefaults.MenuWidth || menuWidth == MochiDropdownDefaults.IconMenuWidth) LiquidMenu.Width else menuWidth,
+)
+
+/**
+ * 玻璃菜单没指定动画（用的主题默认）时换成 iOS 27 菜单的原生弹簧。从玻璃按钮组里脱出来的菜单也用这一组：
+ * 试过 AnimationKit 的 mainEjectSpring / mainAbsorbSpring（0.75 / 0.5、0.8 / 0.7，278–281）并按 settings 的 speed 0.7 放慢，
+ * 时长和 iOS 录屏对得上，但实机拖沓发硬，回到 liquidMorph 的 0.8 / 0.3
+ */
+@Composable
+internal fun liquidMotion(liquid: Boolean, motion: MochiMotion): MochiMotion =
+    if (liquid && motion == MochiTheme.motionScheme.menu) {
+        MochiMotions.Ios27Menu
+    } else {
+        motion
+    }
+
+/** 按钮组里的一格按下时图标的不透明度（iOS 录屏里「⋯」按下后的深浅量出来的，约 0.23，近似） */
+private const val GroupItemPressedAlpha = 0.23f
+
+/** 菜单这会儿是不是玻璃菜单：主题有菜单玻璃，窗口里有页面录制可取样 */
+@Composable
+internal fun liquidMenu(): Boolean = MochiTheme.materials.menuGlass != null && LocalMochiWindowBackdrop.current != null
+
+/**
+ * iOS 27 玻璃菜单的排版，读自 24A435 UIKit：_UIContextMenuPlatformMetrics_Glass（圆角、留白、行高、边距、图标框）、
+ * 它的父类（默认宽度、对勾那一列的缩进），以及 _UIContextMenuLargeCellLayout / LargeLeadingImageCellLayout 的约束算法。
+ * iOS 的行占满菜单宽、高亮块左右缩进 10；Mochi 的列表整体缩进 [Inset]，所以行内的边距都减掉它
+ */
+internal object LiquidMenu {
+    /** menuCornerRadius */
+    val CornerRadius = 32.dp
+
+    /** 列表上下留白（sectionInsets 上下 10），也是高亮块左右的缩进（largeItemContentShapeInsets 左右 10，高亮圆角 32 − 10） */
+    val Inset = 10.dp
+
+    /** 最小行高 = itemTopToFirstBaseline 27 + itemLastBaselineToBottom 15 */
+    val ItemHeight = 42.dp
+
+    /** 文字离行左右边（menuItemInternalPadding 左右 28） */
+    val Padding = 28.dp
+
+    /** 有选中项（单选）的菜单左边多留一列给对勾（leadingIndentationWidth） */
+    val SelectionIndent = 15.dp
+
+    /** 对勾中心 = 左边距 / 2 + 它（leadingDecorationViewOffset） */
+    val CheckOffset = 6.dp
+
+    /** 图标在文字前面：图标框宽（dynamicImageBoxWidth）、框往左挪（leadingImageOffset）、框到文字（minIntraItemSpacing） */
+    val ImageBox = 40.dp
+    val ImageOffset = (-8).dp
+    val ImageGap = 4.dp
+
+    /** defaultMenuWidth */
+    val Width = 250.dp
+}
 
 internal fun mochiStyle(c: MochiDropdownColors, b: MochiDropdownBehavior, p: MochiDropdownPhysics, menuWidth: Dp) = MochiStyle(
     // 融色引擎要求按钮色不透明：打开时真按钮隐藏、浮层里画克隆，下面还垫着面板的阴影。
@@ -270,6 +343,8 @@ public fun MochiDropdown(
  * @param header 选项上面的说明文字（操作确认的标题），手指在它上面不算选项
  * @param content 不为 null = 弹出层：面板里放任意内容，按内容尺寸长出来（没有选项、不滑选）
  * @param panelCornerRadius 面板圆角，null = 菜单默认
+ * @param group 按钮是玻璃按钮组里的一格（[MochiBarGroupDropdownItem]）：按下时图标变暗、不放大、不画按压光（组的玻璃自己发光）；
+ *   开了玻璃菜单时整个组变形成菜单（276–282 试过水滴式脱出、和组融成一块，实机拖沓，没用）
  */
 @Composable
 internal fun DropdownCore(
@@ -293,9 +368,12 @@ internal fun DropdownCore(
     content: (@Composable ColumnScope.() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     panelCornerRadius: Dp? = null,
+    group: BarGroupHandle? = null,
     buttonContent: @Composable RowScope.() -> Unit,
 ) {
-    val style = remember(colors, behavior, physics, menuWidth, panelCornerRadius) {
+    // 弹出层（content）不是选项列表，不换玻璃菜单的排版
+    val liquid = content == null && liquidMenu()
+    val style = remember(colors, behavior, physics, menuWidth, panelCornerRadius, liquid) {
         mochiStyle(colors, behavior, physics, menuWidth).let {
             if (panelCornerRadius !=
                 null
@@ -304,8 +382,9 @@ internal fun DropdownCore(
             } else {
                 it
             }
-        }
+        }.let { if (liquid) it.liquid(cover = true) else it }
     }
+    val menuMotion = liquidMotion(liquid, motion)
     val trigger = behavior.trigger
     val view = LocalView.current
     // 锚点位置平时不进可观察状态（转场里每帧都变），浮层打开期间才跟踪
@@ -317,7 +396,7 @@ internal fun DropdownCore(
         onItemClick = onItemClick,
         itemCount = items.size,
         style = style,
-        motion = motion,
+        motion = menuMotion,
         dismissDelayMillis = behavior.dismissDelayMillis,
         anchorSize = { anchor.rect.size },
         onTap = onClick,
@@ -334,8 +413,10 @@ internal fun DropdownCore(
         ContinuousRoundedRectangle(style.buttonCornerRadius, continuityFor(style.g2Smoothing))
     }
 
+    // 栏里的按钮（返回按钮的历史菜单等）在有玻璃材质和背景来源时按钮本身画成玻璃；按钮组里的一格由组画
+    val buttonGlass = if (group == null) LocalButtonGlass.current else null
     // 布局里的真按钮。菜单打开期间隐藏，由浮层里的克隆 + shader 接管
-    Row(
+    Box(
         modifier = modifier
             .onGloballyPositioned {
                 anchor.update(Rect(it.positionInWindow() + view.windowOriginOnScreen(), it.size.toSize()))
@@ -360,29 +441,39 @@ internal fun DropdownCore(
                 }
             }
             .graphicsLayer {
-                alpha = if (engine.overlayReady) {
+                // 浮层接手画整个按钮组时，组自己不画，这一格照常录进组的内容里（浮层按组画它）
+                alpha = if (engine.overlayReady && group?.hidden != true) {
                     0f
-                } else if (enabled) {
-                    1f
-                } else {
+                } else if (!enabled) {
                     0.38f
+                } else if (group != null && glow.held) {
+                    // 按钮组里的一格按下时不放大、不发光（组的玻璃自己发光），图标变暗（iOS 的高亮）
+                    GroupItemPressedAlpha
+                } else {
+                    1f
                 }
-                scaleX = press.value
-                scaleY = press.value
+                val s = if (group != null) 1f else press.value
+                scaleX = s
+                scaleY = s
             }
             // 不用 clip：Android 的 clipPath 不抗锯齿，G2 曲线边缘会有锯齿；直接按形状画（有 AA）
             .drawWithCache {
                 val outline = buttonShape.createOutline(size, layoutDirection, this)
-                onDrawBehind { drawOutline(outline, style.buttonColor) }
+                onDrawBehind { if (buttonGlass == null) drawOutline(outline, style.buttonColor) }
             }
-            // 长按还没打开前，按钮自己画发光（打开后由浮层的融球 shader 画）
-            .mochiGlow(glow, buttonShape, origin = { anchor.rect.topLeft })
-            .sizeIn(minWidth = buttonMinWidth, minHeight = buttonMinHeight)
-            .padding(buttonPadding),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+            // 长按还没打开前，按钮自己画发光（打开后由浮层的融球 shader 画）；玻璃按钮不画（近似：玻璃的按压光没接这条手势）
+            .then(if (group != null || buttonGlass != null) Modifier else Modifier.mochiGlow(glow, buttonShape, origin = { anchor.rect.topLeft }))
+            .sizeIn(minWidth = buttonMinWidth, minHeight = buttonMinHeight),
+        contentAlignment = Alignment.Center,
     ) {
-        CompositionLocalProvider(LocalContentColor provides style.onButtonColor) { buttonContent() }
+        if (buttonGlass != null) GlassSurface(buttonGlass, Modifier.matchParentSize(), null, null)
+        Row(
+            Modifier.padding(buttonPadding),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CompositionLocalProvider(LocalContentColor provides style.onButtonColor, LocalButtonGlass provides null) { buttonContent() }
+        }
     }
 
     anchor.tracking = expanded || engine.overlayVisible
@@ -391,12 +482,13 @@ internal fun DropdownCore(
         trigger = trigger,
         items = items,
         selectedIndex = selectedIndex,
-        motion = motion,
+        motion = menuMotion,
         anchorShape = buttonShape,
         anchorPadding = buttonPadding,
         header = header,
         content = content,
         contentPadding = contentPadding,
+        group = group,
         anchorContent = buttonContent,
     )
 }

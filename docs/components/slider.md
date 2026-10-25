@@ -5,7 +5,7 @@ Slider with the look and feel of iOS 26 (without glass), 36dp tall: a 6dp track 
 Thumb and inactive-track defaults read `MochiDefaults.sliderThumb()` / `controlTrack()`. Without `LocalMochiControlPalette`, the original white thumb and `fill()` track remain. Appearance presets may override them; explicitly supplied `colors` still take precedence.
 
 - **Press**: the thumb grows, with a deeper shadow and a glow, and the track gets a little thicker.
-- **Drag**: dragging is relative, so you can start anywhere and the thumb doesn't jump to the finger. Dragging starts only after crossing the horizontal touch slop, so vertical swipes still scroll the page.
+- **Drag**: dragging is relative, so you can start anywhere and the thumb doesn't jump to the finger. Dragging starts once the finger crosses the touch slop with horizontal movement at least as large as vertical (diagonal drags are caught), so mostly vertical swipes still scroll the page; after that only horizontal movement counts.
 - **Jelly**: the thumb stretches along its motion when dragged fast.
 - **Ends**: past either end, the whole slider stretches a little toward that side on a rubber band and the thumb squashes; reaching an end ticks.
 - **Steps**: with `steps > 0`, tick marks appear, the value snaps to them, and each step ticks. Both ends are inset by half a thumb: tick i sits at `MochiSliderDefaults.ThumbWidth / 2 + i × (width − ThumbWidth) / segments`; align any labels under the ticks to that.
@@ -40,6 +40,8 @@ The track spans the full width, so its ends line up with the text above and belo
 ## Filling from the middle
 
 `MochiSlider(origin = 0f, valueRange = -50f..50f)` fills the active track from `origin` toward the thumb (iOS 26 `neutralValue`). A small tick marks the origin, with a haptic when the thumb crosses it.
+
+`MochiSlider(detents = listOf(0.75f))` (without `steps`) draws a small tick at each value; dragging within `MochiSliderDefaults.DetentPull` (2.5% of the track) snaps to it with a haptic. `MochiListSliderRow` takes the same parameter.
 
 ## Step slider
 

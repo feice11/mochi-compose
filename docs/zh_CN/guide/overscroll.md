@@ -7,6 +7,7 @@
 | `ProvideMochiOverscroll { }` | 子树中的 Lazy 列表、`verticalScroll` / `horizontalScroll` 使用 Cresto 回弹 |
 | `rememberMochiOverscrollEffect(spec)` | 给单个列表设置 `overscrollEffect` |
 | `MochiScrollDefaults.flingBehavior(decelerationRate)` | 列表惯性减速，独立于越界回弹 |
+| `Modifier.mochiContainedScroll(effect)` | 嵌在可滚页面里的滚动区域：滚到头时拖动和惯性不传给外层页面，交给自己的 `effect` 越界回弹 |
 | `MochiOverscrollSpec` | Cresto 阻力系数和回弹弹簧 |
 | `effect.offset` | 图层实际显示的位移（px），用于大标题和刷新联动 |
 
@@ -43,6 +44,7 @@ LazyColumn(
 
 - 原来的 `ProvideMochiOverscroll`、工厂、效果和参数接口保留，内部仅代理 Cresto 引擎。
 - 使用实际测量尺寸计算阻力，图层平移内容，不通过重新测量制造回弹。
+- 嵌在页面里的滚动区域（预览卡片、卡片里的列表）挂 `mochiContainedScroll`：放在滚动容器外面，同一个 `MochiOverscrollEffect` 同时传给容器的 `overscrollEffect`。不挂时按 Compose 默认的嵌套滚动，内层滚到头剩下的拖动和惯性会带着外层页面滚。
 - 大标题放大、下拉刷新与列表的可见位移联动。滚动方向也必须是可观察状态，首次读取零位移后才能在第一下越界时通知刷新监听；触发、保持和重新武装阈值都按 dp 换算。
 - 自绘弹出菜单也使用同一 Cresto 引擎，仅适配滚动范围、坐标方向和位移回调。
 - 来源、固定提交、许可及适配说明随 AAR/APK 打包在 `META-INF/mochi-compose/`。

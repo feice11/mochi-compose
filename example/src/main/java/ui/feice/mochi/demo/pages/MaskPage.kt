@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,108 +32,126 @@ import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.DemoSettingsSection
 import ui.feice.mochi.demo.common.DemoSliderSection
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.mask.MochiFadeEdges
 import ui.feice.mochi.effect.mask.mochiFadeMask
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask
+import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
+import ui.feice.mochi.effect.overscroll.mochiContainedScroll
+import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiTheme
 
 /**
  * 渐变遮罩：容器里的内容在边上渐隐成透明（擦掉内容本身，不是盖一层底色），放在任何底上都对。
- * 可滚动区域按滚动位置自动决定哪边遮、遮多深。以后接入模糊时用同一套边和强度。
+ * 可滚动区域按滚动位置自动决定哪边遮、遮多深；iOS 外观下同一套边和强度还会渐进模糊。
  */
 @Composable
 fun MaskPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var on by remember { mutableStateOf(true) }
-    var extent by remember { mutableFloatStateOf(24f) }
+    var on by rememberSaveable { mutableStateOf(true) }
+    var extent by rememberSaveable { mutableFloatStateOf(24f) }
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
     DemoPage(entry, modifier) {
-        DemoSection(
-            "滚动区域",
-            footer = "还能往上滚时顶边渐隐，还能往下滚时底边渐隐，滚到头那一边就是实的；深浅跟着离边的距离连续变。",
-            padding = 0.dp,
-        ) {
-            val scroll = rememberScrollState()
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .then(if (on) Modifier.mochiScrollFadeMask(scroll, extent.dp) else Modifier)
-                    .verticalScroll(scroll)
-                    .padding(horizontal = MochiListDefaults.TextRowPadding, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+        demoItem {
+            DemoSection(
+                "滚动区域",
+                footer = "还能往上滚时顶边渐隐，还能往下滚时底边渐隐，滚到头那一边就是实的；深浅跟着离边的距离连续变。",
+                padding = 0.dp,
             ) {
-                repeat(14) { i ->
-                    Text("第 ${i + 1} 行：滚动时上下边缘柔和地淡出", style = ts.body, color = cs.onSurface)
-                }
-            }
-        }
-        DemoSection(
-            "横向滚动",
-            footer = "左右滚动的内容（LazyRow）同样按滚动位置遮左右两边；从右往左排版时自动对调。",
-            padding = 0.dp,
-        ) {
-            val list = rememberLazyListState()
-            LazyRow(
-                state = list,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp)
-                    .then(if (on) Modifier.mochiScrollFadeMask(list, extent.dp, vertical = false) else Modifier),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(Tags.size) { i ->
-                    Text(
-                        Tags[i],
-                        style = ts.body,
-                        color = cs.onSecondaryContainer,
-                        modifier = Modifier
-                            .clip(MochiCapsule)
-                            .background(cs.secondaryContainer)
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                    )
-                }
-            }
-        }
-        DemoSection(
-            "任意容器",
-            footer = "遮罩擦掉的是内容本身，所以放在彩色、渐变或图片上也一样干净，不会出现一块底色。",
-            padding = 0.dp,
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    // 彩色底贴着卡片四边：按卡片轮廓裁一下，四角才是圆的
-                    .clip(MochiTheme.shapes.extraLarge)
-                    .background(Brush.linearGradient(listOf(cs.primaryContainer, cs.tertiaryContainer))),
-            ) {
+                val scroll = rememberScrollState()
+                val overscroll = rememberMochiOverscrollEffect()
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .height(160.dp)
-                        .then(if (on) Modifier.mochiFadeMask(MochiFadeEdges(bottom = 72.dp)) else Modifier)
+                        .height(220.dp)
+                        .then(if (on) Modifier.mochiScrollFadeMask(scroll, extent.dp) else Modifier)
+                        .mochiContainedScroll(overscroll)
+                        .verticalScroll(scroll, overscrollEffect = overscroll, flingBehavior = MochiScrollDefaults.flingBehavior())
                         .padding(horizontal = MochiListDefaults.TextRowPadding, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Text("一段很长的说明", style = ts.navTitle, color = cs.onPrimaryContainer)
-                    Text(LongText, style = ts.body, color = cs.onPrimaryContainer)
+                    repeat(14) { i ->
+                        Text("第 ${i + 1} 行：滚动时上下边缘柔和地淡出", style = ts.body, color = cs.onSurface)
+                    }
                 }
             }
         }
-        DemoSettingsSection("调参", footer = "以后接入模糊时用同一套边和强度：遮罩决定「哪里、遮多少」，渐隐和模糊只是两种画法。") {
-            Toggles("遮罩", listOf("开" to true, "关" to false), on) { on = it }
+        demoItem {
+            DemoSection(
+                "横向滚动",
+                footer = "左右滚动的内容（LazyRow）同样按滚动位置遮左右两边；从右往左排版时自动对调。",
+                padding = 0.dp,
+            ) {
+                val list = rememberLazyListState()
+                LazyRow(
+                    state = list,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                        .then(if (on) Modifier.mochiScrollFadeMask(list, extent.dp, vertical = false) else Modifier),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(Tags.size) { i ->
+                        Text(
+                            Tags[i],
+                            style = ts.body,
+                            color = cs.onSecondaryContainer,
+                            modifier = Modifier
+                                .clip(MochiCapsule)
+                                .background(cs.secondaryContainer)
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
         }
-        DemoSliderSection("渐隐长度", "${extent.toInt()} dp", extent, { extent = it }, valueRange = 8f..64f)
-        DemoSection("用法") {
-            Code(
-                "Column(\n    Modifier\n        .mochiScrollFadeMask(scrollState)\n        .verticalScroll(scrollState),\n) { … }\n\n" +
-                    "LazyColumn(state = list, modifier = Modifier.mochiScrollFadeMask(list)) { … }\n\n" +
-                    "Box(Modifier.mochiFadeMask(MochiFadeEdges(bottom = 48.dp))) { … }",
-            )
+        demoItem {
+            DemoSection(
+                "任意容器",
+                footer = "遮罩擦掉的是内容本身，所以放在彩色、渐变或图片上也一样干净，不会出现一块底色。",
+                padding = 0.dp,
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        // 彩色底贴着卡片四边：按卡片轮廓裁一下，四角才是圆的
+                        .clip(MochiTheme.shapes.extraLarge)
+                        .background(Brush.linearGradient(listOf(cs.primaryContainer, cs.tertiaryContainer))),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                            .then(if (on) Modifier.mochiFadeMask(MochiFadeEdges(bottom = 72.dp)) else Modifier)
+                            .padding(horizontal = MochiListDefaults.TextRowPadding, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("一段很长的说明", style = ts.navTitle, color = cs.onPrimaryContainer)
+                        Text(LongText, style = ts.body, color = cs.onPrimaryContainer)
+                    }
+                }
+            }
+        }
+        demoItem {
+            DemoSettingsSection("调参", footer = "遮罩决定「哪里、遮多少」；iOS 外观下同一套边和强度还会渐进模糊（Android 13+），渐隐和模糊只是两种画法。") {
+                Toggles("遮罩", listOf("开" to true, "关" to false), on) { on = it }
+            }
+        }
+        demoItem {
+            DemoSliderSection("渐隐长度", "${extent.toInt()} dp", extent, { extent = it }, valueRange = 8f..64f)
+        }
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "Column(\n    Modifier\n        .mochiScrollFadeMask(scrollState)\n        .verticalScroll(scrollState),\n) { … }\n\n" +
+                        "LazyColumn(state = list, modifier = Modifier.mochiScrollFadeMask(list)) { … }\n\n" +
+                        "Box(Modifier.mochiFadeMask(MochiFadeEdges(bottom = 48.dp))) { … }",
+                )
+            }
         }
     }
 }

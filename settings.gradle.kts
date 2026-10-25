@@ -18,3 +18,5 @@ dependencyResolutionManagement {
 rootProject.name = "mochi"
 include(":mochi-compose", ":example")
 include(":mochi-nothing")
+include(":mochi-ios")
+include(":mochi-icons")

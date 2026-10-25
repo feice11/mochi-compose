@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.text.font.FontWeight
 
 /** Resolve stable semantic keys; null preserves the caller's original icon. */
 public fun interface MochiIconProvider {
@@ -53,3 +54,18 @@ public fun MochiIcon(
         }
     }
 }
+
+/**
+ * 符号图标的字重（iOS 的 SF Symbols 按旁边文字的字体取字重：正文常规、标题半粗……）。
+ * 列表行把标题的字重放进来，描边图标按它加粗或变细；图标库自己画的图标可以读它决定线宽
+ */
+public val LocalMochiSymbolWeight: androidx.compose.runtime.ProvidableCompositionLocal<FontWeight> =
+    staticCompositionLocalOf { FontWeight.Normal }
+
+/**
+ * 图标的描绘进度（0 还没画 … 1 画完），在组合里读。带图标的对话框等在图标出现时提供它：
+ * 图标库（mochi-icons 的 MochiIonicon）按它把描边一笔一笔画出来、最后填上实心部分，所有带图标的对话框是同一种出场。
+ * null（默认）= 直接画完整的图标。自己画的图标也可以读它做同样的出场
+ */
+public val LocalMochiIconDraw: androidx.compose.runtime.ProvidableCompositionLocal<(() -> Float)?> =
+    staticCompositionLocalOf { null }

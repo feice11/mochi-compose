@@ -153,7 +153,9 @@ Spacer(
 
 `MochiMetaballShadow.elevated(density, elevation, dark, visibility)` gives the two-layer shadow for an elevation; use `MochiMetaballShadow.None` for no shadow.
 
-Performance: b's interior runs a cheap shader without SDFs; the expensive shader only runs on the edge band and the shadow ring, and paths are cached by size. None of this changes the rendered result.
+Translucent fills retain their alpha across the merged surface, including overlaps and a tail contained inside the selection. The renderer composites one body over the page and keeps its own shadow outside the surface; callers should not paint the bodies again underneath. This applies to every theme, including iOS semantic fills.
+
+For opaque fills, b's interior runs a cheap shader without SDFs; the expensive shader only runs on the edge band and the shadow ring. Translucent fills use an isolated layer with the combined exact G2 body contours to avoid accumulating alpha. Paths are cached by size.
 
 ## Fade mask
 
@@ -178,8 +180,11 @@ Modifier.mochiFadeMask(MochiFadeEdges.vertical()) { edge -> … }
 - `start` / `end` follow reading direction and swap automatically in RTL.
 - The default fade length is 24dp (`MochiFadeMaskDefaults.Extent`).
 - Already applied to the top and bottom of scrollable menus (`MochiDropdown` and friends) and the demo pages' scrolling descriptions. The old `navigation.mochiScrollFadeMask` is deprecated and forwards here.
-- Prepared for blur: the mask only decides which edges and how much. Edge blur will reuse the same edges and strengths; fading and blurring are just two ways to draw it.
-- This differs from `mochiScrollEdgeFade` behind top and bottom bars, which paints a background behind the bar to cover content scrolled underneath.
+- Progressive blur: when the theme sets `MochiMaterials.scrollEdge` (the iOS appearance), the same edges and strengths also blur the content (Android 13+). The blur gets stronger toward the edge and reaches twice the fade length. Its maximum sigma borrows the measured top scroll-edge value, since iOS has no separate in-container fade to compare against. The Mochi and Nothing appearances still only fade.
+- This differs from `mochiScrollEdgeFade` behind top and bottom bars, which paints a background behind the bar (a brightness-dependent dim in the iOS appearance) to cover content scrolled underneath.
+  - The progressive blur of the content under the bar is done by the scrolling container itself, with `Modifier.mochiScrollEdgeBlur(top, alpha)`. It blurs its own content, so it needs no backdrop source and the bar never draws itself. It approximates a progressive blur: one ordinary system Gaussian blur at the maximum sigma is cross-faded with the sharp content along the same mask curve, instead of varying the radius per pixel; it looks about the same and costs far less.
+  - The title scaffolds already do this. On your own pages, add it to the scrolling container: `top` is the distance from the container top to the bar's bottom edge, and `alpha` is the same value as the bar's backgroundProgress.
+- Performance: the blur only runs on the part that actually blurs (the strip under the top bar for scroll edges, the bounding box of the edges for fade masks); the rest of the content is drawn as is. Each pixel takes 13 samples covering ±3σ. On a full-screen scroll container the blur itself costs about 90% less than blurring the whole layer, and results differ by less than 1/255 per pixel.
 
 Demo: Effects → 渐变遮罩.
 
@@ -190,14 +195,25 @@ Demo: Effects → 渐变遮罩.
 ```kotlin
 drawBehind {
     val p = pathCache.get(size.toRect(), size.minDimension / 2f, 1f)
-    drawMochiShadow(p, MochiMetaballShadow.elevated(this, elevation = 0.35f, dark), MochiTheme.colorScheme.shadow)
+    // Capsules and rounded rectangles use the rect overload: pass the rect and corner radius
+    drawMochiShadow(size.toRect(), size.minDimension / 2f, MochiMetaballShadow.elevated(this, elevation = 0.35f, dark), MochiTheme.colorScheme.shadow)
     drawPath(p, container)
 }
 ```
 
-Use it for floating surfaces instead of Material's `shadowElevation`. The tab bar, its search button and its accessory already do. Below API 28, arbitrary-shape blur shadows aren't available, so it falls back to a few fading capsule rings around the bounding box.
+Use it for floating surfaces instead of Material's `shadowElevation`. The tab bar, its search button and accessory, the step slider, and switch and slider thumbs already do.
+
+For capsules and rounded rectangles, use the rect overload `drawMochiShadow(rect, cornerRadius, shadow, color)`. On Android 13+ it computes the rounded rectangle's Gaussian shadow directly in a shader: one draw, no textures. Once blurred, a continuous-curvature corner and a circular corner look the same. The path overload goes through the system's `setShadowLayer`, which creates a blur texture for every distinct path and keeps it, so a shape that changes every frame (animation, dragging, collapsing) makes GPU memory grow without bound. On an Android 16 phone, the non-iOS tab bar collapsing while scrolling leaked one texture per frame, reaching hundreds of MB after a few dozen swipes. Use the path overload only for shapes that don't change.
+
+Below API 28, arbitrary-shape blur shadows aren't available, so it falls back to a few fading capsule rings around the bounding box.
 
 ## Graphics level
+
+Use `mochiBackdropSource` for liquid-glass content and place glass beside its source. Both retain independent drawing boundaries: sibling animations should not re-record an unchanged background, while actual background changes remain live. Apply clipping to the content that needs it rather than replaying a complex parent path through the entire glass filter graph. Keep the contours required by sheets and navigation transitions.
+
+Nested layer recording snapshots an independent `Density` instead of passing the mutable enclosing `DrawScope` as density; circular delegation can otherwise overflow the stack. Fully invisible scroll edges do not read GPU pixels or update text tone. Validate page timing, visual consistency and stability separately. Removing effects, lowering refresh rate or improving an isolated microbenchmark does not establish a whole-page performance improvement.
+
+Each glass surface (Android 13+) uses four render nodes: sampling (the backdrop recorded into a 1/3-scale layer), blur (several lanes of that backdrop side by side, one horizontal and one vertical Gaussian pass), face (reads the lanes for refraction, environment light and the face matrix) and finish (full resolution: edge detail and the outer shadow). Every frame the system walks the render nodes before drawing, so the cost grows with their number, and glass that samples a page walks that page's tree once more. Previously each blur lane had its own layer, the face was re-recorded for the finish, and alpha and outline had their own layers: more than ten nodes per glass, which on a phone cost 4–6 ms per frame during transitions while the main thread waited. The blur uses the same algorithm as the system blur (sigma is the recipe value, radius 3σ, clamped edges). When recipe, size and corner radius are unchanged the effect objects are reused and the system reuses its last result; backdrop changes update live without re-recording. Do not chain multi-pass shader effects into one effect that the face then reads at other lanes: the system only evaluates the inner passes over the region the outermost pass outputs.
 
 `MochiGraphics.level` (`theme`) is the global graphics level; every expensive drawing path in the library decides whether and how heavily to draw based on it. Changes apply immediately; the app is responsible for saving it.
 

@@ -60,7 +60,7 @@ MochiListSection(header = "联系人") {
 
 - 不能打字、点了去选值的行（生日、地区）用 `MochiListFormRow`：和输入行同一套布局，值从同一列开始（不像设置页靠右），点整行有按下高亮；没有值时显示淡色占位
 
-- 行高和普通行一样（至少 `RowMinHeight`，上下至少 `RowVerticalPadding`），分隔线从文字处开始，首末留白交给卡片，和同卡片里的其他行规则一致
+- 行高和普通行一样（至少 `RowMinHeight`，上下至少 `RowVerticalPadding`），分隔线从文字处开始，和同卡片里的其他行规则一致
 - 左边可选标签，`labelWidth` 默认 `MochiListTextFieldDefaults.LabelWidth`（88dp）；同一张卡片用同一个值，输入区左对齐成一列
 - 点整行任何地方都会聚焦；聚焦且有内容时行尾模糊淡入清除按钮
 - `singleLine = false` 时多行自然长高（备注）

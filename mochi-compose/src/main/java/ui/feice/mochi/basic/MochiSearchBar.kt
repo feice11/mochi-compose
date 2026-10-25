@@ -44,6 +44,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.barGlassSource
+import ui.feice.mochi.effect.glass.rememberGlassFill
+import ui.feice.mochi.effect.glass.rememberGlassGlow
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiIcon
@@ -83,45 +87,51 @@ public fun MochiSearchBar(
     val fieldColor = cs.onSurface.copy(alpha = 0.08f)
     val hint = cs.onSurfaceVariant
 
+    // 放在提供了背景来源的栏里（标题脚手架的顶栏）且主题有 controlGlass 时，输入框画成玻璃；正文里的仍是纯色底
+    val glass = rememberGlassFill(MochiTheme.materials.controlGlass, barGlassSource())
+    val fieldInteraction = remember { MutableInteractionSource() }
+    val glassGlow = if (glass != null) rememberGlassGlow(fieldInteraction) else null
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier
-                .weight(1f)
-                .height(MochiSearchBarDefaults.Height)
-                .background(fieldColor, MochiCapsule)
-                .clickable(remember { MutableInteractionSource() }, indication = null) { requester.requestFocus() }
-                // 放大镜离左端和离上下一样远（(36 − 18) / 2）：它和胶囊的圆头同心
-                .padding(start = 9.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MagnifierGlyph(hint)
-            Spacer(Modifier.width(8.dp))
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (query.isEmpty()) Text(placeholder, style = ts.bodyLarge, color = hint, maxLines = 1)
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    textStyle = ts.bodyLarge.copy(color = cs.onSurface),
-                    cursorBrush = SolidColor(cs.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(requester)
-                        .onFocusChanged { focused = it.isFocused },
-                )
-            }
-            if (query.isNotEmpty()) {
-                Box(
-                    Modifier
-                        .size(width = 32.dp, height = 36.dp)
-                        .clickable(remember { MutableInteractionSource() }, indication = null) { onQueryChange("") }
-                        .semantics { contentDescription = "清除" },
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
-                    Box(Modifier.size(18.dp).background(hint.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
-                        ClearGlyph(cs.surface)
+        Box(Modifier.weight(1f).height(MochiSearchBarDefaults.Height)) {
+            if (glass != null) GlassSurface(glass, Modifier.matchParentSize(), null, glassGlow)
+            Row(
+                Modifier
+                    .matchParentSize()
+                    .then(if (glass == null) Modifier.background(fieldColor, MochiCapsule) else Modifier)
+                    .clickable(fieldInteraction, indication = null) { requester.requestFocus() }
+                    // 放大镜离左端和离上下一样远（(36 − 18) / 2）：它和胶囊的圆头同心
+                    .padding(start = 9.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MagnifierGlyph(hint)
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) Text(placeholder, style = ts.bodyLarge, color = hint, maxLines = 1)
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = ts.bodyLarge.copy(color = cs.onSurface),
+                        cursorBrush = SolidColor(cs.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(requester)
+                            .onFocusChanged { focused = it.isFocused },
+                    )
+                }
+                if (query.isNotEmpty()) {
+                    Box(
+                        Modifier
+                            .size(width = 32.dp, height = 36.dp)
+                            .clickable(remember { MutableInteractionSource() }, indication = null) { onQueryChange("") }
+                            .semantics { contentDescription = "清除" },
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        Box(Modifier.size(18.dp).background(hint.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
+                            ClearGlyph(cs.surface)
+                        }
                     }
                 }
             }

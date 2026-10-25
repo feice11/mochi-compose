@@ -465,7 +465,7 @@ private fun FormRowShell(
     modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit,
 ) {
-    val info = remember { ListItemInfo(MochiListDefaults.TextRowPadding, end = MochiListDefaults.TextRowPadding) }
+    val info = remember { ListItemInfo(MochiListDefaults.TextRowPadding) }
     val grouped = LocalListCardClip.current != null
     info.ownsVerticalInsets = grouped
     val press = info.press

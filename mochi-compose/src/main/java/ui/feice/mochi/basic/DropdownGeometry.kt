@@ -190,6 +190,12 @@ internal class DropdownFrame(
     val cover: Float,
 ) {
     val metaball: MochiMetaballFrame = MochiMetaballFrame(MochiBlob(button, buttonRadius), MochiBlob(panel, panelRadius), goo, blend, cover)
+
+    /** 面板竖着平移 [dy]（iOS 菜单的 kick）；包裹模式按钮就是面板，一起走 */
+    fun panelShifted(dx: Float, dy: Float, cover: Boolean): DropdownFrame {
+        val p = panel.translate(dx, dy)
+        return DropdownFrame(if (cover) p else button, buttonRadius, p, panelRadius, goo, blend, scale, this.cover)
+    }
 }
 
 /** 面板最终位置；空间不够自动反向开。包裹模式下面板从按钮所在位置铺开 */
@@ -238,6 +244,8 @@ internal fun computeTarget(
  * - pull：手指拖出面板时被橡皮筋拉住（effect.elastic 的 rubberStretched）
  * - 融球颈：展开途中长出再掐断；展开后被拉回按钮附近时按距离重新连上（effect.metaball 的 proximityFuse）
  * - elastic = 0（系统关动画）时，上面这些弹性效果全关
+ * - liquid（开了液态玻璃的菜单，照 iOS 的液态形变）：位置、宽高按同一个进度直接插值
+ *   （iOS 这几条通道是同一组弹簧），没有果冻；包裹模式不先横后纵；圆角从胶囊过渡到面板圆角
  */
 internal fun computeFrame(
     p: Float,
@@ -250,6 +258,7 @@ internal fun computeFrame(
     pull: Offset,
     cover: Boolean,
     elastic: Float,
+    liquid: Boolean = false,
 ): DropdownFrame {
     val pg = p.coerceAtLeast(0f)
     val clamped = pg.coerceAtMost(1f)
@@ -263,8 +272,8 @@ internal fun computeFrame(
 
     // 包裹：横向先走、纵向后走。按钮先横着撑成胶囊，再顺势往下「流」成面板，
     // 角点走的是一条弧线而不是直线；过冲反过来主要落在纵向（横向收、纵向多弹一点）
-    val hp = if (cover) pg + 0.6f * pg * (1f - pg) else pg
-    val vp = if (cover) pg - 0.45f * pg * (1f - pg) * (1f - 0.5f * pg) else pg
+    val hp = if (cover && !liquid) pg + 0.6f * pg * (1f - pg) else pg
+    val vp = if (cover && !liquid) pg - 0.45f * pg * (1f - pg) * (1f - 0.5f * pg) else pg
     var l = min(lerp(button.left, target.left, hp), lerp(button.right, target.right, hp))
     var r = max(lerp(button.left, target.left, hp), lerp(button.right, target.right, hp))
     var t = min(lerp(button.top, target.top, vp), lerp(button.bottom, target.bottom, vp))
@@ -280,7 +289,7 @@ internal fun computeFrame(
     }
 
     // 果冻形变（包裹模式弱一些，不然圆按钮会先被拉成竖条）
-    val s = jellyStretch(velocity) * px.gel * elastic * (if (cover) 0.55f else 1f)
+    val s = if (liquid) 0f else jellyStretch(velocity) * px.gel * elastic * (if (cover) 0.55f else 1f)
     val h = (b - t) * (1f + s)
     val w = (r - l) / (1f + s * 0.6f)
     if (upward) t = b - h else b = t + h
@@ -300,7 +309,13 @@ internal fun computeFrame(
     val panel = Rect(l, t, r, b).rubberStretched(Offset(pull.x * clamped * elastic, pull.y * clamped * elastic))
 
     val btnR = min(px.buttonRadius, button.height / 2f)
-    val panR = lerp(btnR, px.panelRadius, if (cover) smoothstep(0f, 0.85f, clamped) else clamped)
+    // liquid：圆角从「当前大小的胶囊」（短边一半）按进度变成面板圆角，长大途中一直是圆滚滚的胶囊 / 椭圆。
+    // 近似：iOS 录屏里中途是胶囊；原生按什么插值圆角没拆出来
+    val panR = if (liquid) {
+        lerp(min(panel.width, panel.height) / 2f, px.panelRadius, clamped)
+    } else {
+        lerp(btnR, px.panelRadius, if (cover) smoothstep(0f, 0.85f, clamped) else clamped)
+    }
     // 融球：展开过程中开头淡入、后半段掐断；展开后面板被拉回按钮附近（两块的间距小于静止间距）时，
     // 颈部再按距离长出来，像两滴水靠近时连上，拉开又断开
     val opening = smoothstep(0f, 0.15f, pg) * (1f - smoothstep(0.5f, 0.95f, pg))

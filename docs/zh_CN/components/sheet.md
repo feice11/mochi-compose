@@ -1,6 +1,6 @@
 # MochiSheet
 
-iOS 的底部面板（不做玻璃）。
+iOS 的底部面板。主题开了液态玻璃时，半屏是玻璃、拉到全屏变成不透明（见下面「液态玻璃」）。
 
 - **半屏**：面板悬浮，左右和底部留 8dp，沿用原来的单层连续圆角轮廓；顶部沿用 `max(物理圆角, 32dp) - 悬浮边距`，只将最大值限制在固定 48dp。
 - **全屏**：贴边铺到状态栏下面，并覆盖导航区直到窗口底部。后面的页面（加了 `mochiSheetBackdrop` 的）以顶边为原点缩小、变成圆角卡片，顶上露出一条，后面是黑底。
@@ -28,7 +28,7 @@ Button(onClick = { sheet.show() })
 |---|---|
 | state | `rememberMochiSheetState(detents, initial)`；`show()` / `hide()` / `isVisible` |
 | onDismiss | 关闭动画结束后调用 |
-| color | 面板颜色，默认 surfaceContainerLow |
+| color | 面板颜色，默认 `MochiDefaults.sheetBackground()`：浮起一层的分组底色（iOS elevated 层级的 `systemGroupedBackground`）。面板里 `LocalMochiElevated` 为 true，`MochiListCard` 换成 elevated 的卡片色，浅色、深色下都和面板差一档，不会融成一片 |
 | grabber | 顶上的小横条 |
 | hideNavigationBar | 默认 true，控制半屏时隐藏系统导航图标；不影响透明背景策略 |
 | navigator | 与内部 `MochiNavHost` 相同的导航器，返回优先交给面板内页面 |
@@ -43,7 +43,7 @@ MochiSheet(sheet, navigator = nav) {
     MochiNavHost(
         nav,
         // corners 留空：自动继承面板当前转场圆角
-        spec = MochiNavDefaults.spec(pushBackdrop = MochiTheme.colorScheme.surfaceContainerLow),
+        spec = MochiNavDefaults.spec(pushBackdrop = MochiDefaults.sheetBackground()),
     ) { route ->
         // 每页包含 MochiSheetHeader 和自己的内容。
         // 各页顶栏按钮复用 navId="sheet.leading" / "sheet.trailing"。
@@ -85,6 +85,15 @@ MochiSheet(sheet) {
 - 修复：面板打开途中被拖动会打断动画，之后面板不再响应 `hide()`，就关不掉了。现在打断只停下那一段动画；收起途中再 `show()` 会直接掉头。
 
 - 保留后面的完整页面（`mochiSheetBackdrop`），不能用矩形裁掉下半屏。半屏刚开始展开时，轮廓与屏幕物理圆弧一致；半径和贝塞尔控制点随展开进度连续插值，到全屏才达到面板顶部左/右侧的连续圆角形状（物理圆角为 58dp 的真机上为 48dp）。底部左右角也采用对应顶部的目标值，所有半径抵掉图层缩放；不得在普通圆弧和连续圆角之间突然换类型。退回半屏时复位后页缩放和裁切。
+
+## 液态玻璃
+
+主题有玻璃材质（`MochiTheme.materials.sheetGlass`）时，面板的底按 iOS 26 画（UIKitCore 逆向，`SheetLayoutInfo`）：非全屏档是 `_UIViewGlass` regular（subvariant "sheet"），全屏档是不透明的系统底色。玻璃取样面板底下的页面，连同压暗层一起。
+
+- 页面照常用 `MochiDefaults.sheetBackground()` / `groupedBackground()` 当底色。在玻璃面板里面读，它们是透明的，底色由面板自己画，页面里不用按玻璃开关分支。注意要在面板里面读（`MochiSheet { … }` 的内容里），在面板外面读到的是不透明的颜色。
+- 原生在两种底之间是直接切换；这里按往全屏拉的进度把不透明底色淡上来（近似）。
+- 面板内侧推时页面是透明的，下层页随新页盖上来淡出，两页内容不会叠在一起（近似，原生做法没有逆向）；全屏时和不透明面板一样。
+- 浮起时离屏幕边 8pt、最小圆角 32pt，和 `_UISheetPresentationMetrics` 的 mediumSheetInset / minimumFloatingCornerRadii 一致。
 
 ## 性能
 

@@ -9,7 +9,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import ui.feice.mochi.effect.elastic.mochiClaimedPressDeform
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.LocalContentColor
@@ -99,7 +99,7 @@ public fun MochiHoldButton(
     Row(
         modifier
             .defaultMinSize(minHeight = MochiHoldButtonDefaults.Height)
-            .mochiPressDeform()
+            .mochiClaimedPressDeform()
             .clip(MochiCapsule)
             .drawBehind {
                 drawRect(colors.container)
@@ -121,7 +121,7 @@ public fun MochiHoldButton(
                 } else {
                     Modifier.pointerInput(holdMillis) {
                         awaitEachGesture {
-                            awaitFirstDown()
+                            awaitFirstDown().consume()
                             val job = scope.launch {
                                 progress.animateTo(
                                     1f,
@@ -132,7 +132,12 @@ public fun MochiHoldButton(
                                 delay(250)
                                 progress.animateTo(0f, spring(dampingRatio = 1f, stiffness = 300f))
                             }
-                            waitForUpOrCancellation()
+                            // 按在按钮上的这一整下都归按钮：外层的滚动、面板拖动不接手，手指挪开也继续按住，松手才算
+                            while (true) {
+                                val c = awaitPointerEvent().changes.firstOrNull() ?: break
+                                c.consume()
+                                if (!c.pressed) break
+                            }
                             if (progress.value < 1f && job.isActive) {
                                 job.cancel()
                                 scope.launch { progress.animateTo(0f, spring(dampingRatio = 1f, stiffness = 500f)) }

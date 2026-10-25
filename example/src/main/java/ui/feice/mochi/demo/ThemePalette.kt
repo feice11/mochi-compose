@@ -10,14 +10,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.ZeroCornerSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -45,7 +48,7 @@ internal fun ThemeColorPalette(title: String) {
         PaletteSwatch("第三色", "tertiary", cs.tertiary, cs.onTertiary),
         PaletteSwatch("第三色容器", "tertiaryContainer", cs.tertiaryContainer, cs.onTertiaryContainer),
     )
-    DemoSection(title, padding = 0.dp) {
+    DemoSection(title, padding = 0.dp, clip = false) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val columns = if (maxWidth >= 300.dp * LocalDensity.current.fontScale) 2 else 1
             PaletteGrid(accents, columns)
@@ -57,17 +60,25 @@ internal fun ThemeColorPalette(title: String) {
 internal fun ThemeSurfaceLevels(title: String) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    DemoSection(title, padding = 0.dp) {
-        Column(Modifier.fillMaxWidth().clip(MochiTheme.shapes.extraLarge)) {
-            listOf(
+    val shape = MochiTheme.shapes.extraLarge
+    DemoSection(title, padding = 0.dp, clip = false) {
+        Column(Modifier.fillMaxWidth()) {
+            val levels = listOf(
                 cs.surfaceContainerLowest to "Lowest",
                 cs.surfaceContainerLow to "Low",
                 cs.surfaceContainer to "Container",
                 cs.surfaceContainerHigh to "High",
                 cs.surfaceContainerHighest to "Highest",
-            ).forEachIndexed { index, (color, name) ->
+            )
+            levels.forEachIndexed { index, (color, name) ->
+                val top = index == 0
+                val bottom = index == levels.lastIndex
                 Row(
-                    Modifier.fillMaxWidth().background(color).padding(horizontal = 22.dp, vertical = 16.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        // 首末行自己带上卡片的圆角，不把整块裁进卡片形状（见 DemoCard 的 clip）
+                        .background(color, shape.corners(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom))
+                        .padding(horizontal = 22.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text("${index + 1}", color = cs.onSurfaceVariant, style = ts.footnote, modifier = Modifier.alignByBaseline())
@@ -84,12 +95,13 @@ private data class PaletteSwatch(val name: String, val token: String, val color:
 private fun PaletteGrid(swatches: List<PaletteSwatch>, columns: Int) {
     val ts = MochiTheme.textStyles
     val gutter = 2.dp
+    val shape = MochiTheme.shapes.extraLarge
     Layout(
         modifier = Modifier
             .fillMaxWidth()
             // Same shape and bounds as DemoCard: only the perimeter has rounded corners.
-            .clip(MochiTheme.shapes.extraLarge)
-            .background(MochiDefaults.groupedContainer())
+            // 贴着卡片角的色块自己按卡片圆角画，不把整块裁进卡片形状（见 DemoCard 的 clip）
+            .background(MochiDefaults.groupedContainer(), shape)
             .drawBehind {
                 val gap = gutter.roundToPx()
                 val rows = (swatches.size + columns - 1) / columns
@@ -98,14 +110,27 @@ private fun PaletteGrid(swatches: List<PaletteSwatch>, columns: Int) {
                 val rowHeight = (size.height.roundToInt() - gap * (rows - 1)) / rows
                 swatches.forEachIndexed { i, swatch ->
                     val column = i % columns
+                    val row = i / columns
                     val left = available * column / columns + gap * column
                     val right = available * (column + 1) / columns + gap * column
                     val x = if (layoutDirection == LayoutDirection.Rtl) width - right else left
-                    drawRect(
-                        swatch.color,
-                        topLeft = Offset(x.toFloat(), ((i / columns) * (rowHeight + gap)).toFloat()),
-                        size = Size((right - left).toFloat(), rowHeight.toFloat()),
+                    val top = row == 0
+                    val bottom = row == rows - 1
+                    val start = column == 0
+                    val end = column == columns - 1
+                    val cell = shape.corners(
+                        topStart = top && start,
+                        topEnd = top && end,
+                        bottomEnd = bottom && end,
+                        bottomStart =
+                            bottom && start,
                     )
+                    translate(x.toFloat(), (row * (rowHeight + gap)).toFloat()) {
+                        drawOutline(
+                            cell.createOutline(Size((right - left).toFloat(), rowHeight.toFloat()), layoutDirection, this),
+                            swatch.color,
+                        )
+                    }
                 }
             },
         content = {
@@ -147,4 +172,15 @@ private fun PaletteGrid(swatches: List<PaletteSwatch>, columns: Int) {
             }
         }
     }
+}
+
+/** 只保留部分角（其余是直角）：卡片里铺满的色块只有贴着卡片角的那几个角是圆的。不是按角定义的形状原样返回 */
+private fun Shape.corners(topStart: Boolean, topEnd: Boolean, bottomEnd: Boolean, bottomStart: Boolean): Shape {
+    val s = this as? CornerBasedShape ?: return this
+    return s.copy(
+        topStart = if (topStart) s.topStart else ZeroCornerSize,
+        topEnd = if (topEnd) s.topEnd else ZeroCornerSize,
+        bottomEnd = if (bottomEnd) s.bottomEnd else ZeroCornerSize,
+        bottomStart = if (bottomStart) s.bottomStart else ZeroCornerSize,
+    )
 }

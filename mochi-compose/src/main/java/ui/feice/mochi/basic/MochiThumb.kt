@@ -23,6 +23,7 @@ import ui.feice.mochi.effect.glow.drawGlow
 import ui.feice.mochi.effect.glow.insetPath
 import ui.feice.mochi.effect.hdr.hdrLinearBrush
 import ui.feice.mochi.effect.hdr.hdrSolidBrush
+import ui.feice.mochi.effect.shadow.drawRoundRectShadow
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.theme.MochiHdr
@@ -52,16 +53,17 @@ internal fun DrawScope.drawPillThumb(
 ) {
     val g2 = path.get(rect, minOf(rect.width, rect.height) / 2f, ControlSmoothing)
     if (MochiGraphics.softShadows && shadow.alpha > 0f) {
-        // 硬件加速画布从 API 28 起支持任意形状的 setShadowLayer
+        // 阴影按圆角矩形画（拖动时拇指每帧变形，按路径画会每帧生成一张不回收的模糊遮罩），本体按连续曲率的胶囊画在上面
         val blur = (2.5f + 5f * lift).dp.toPx()
         val dy = (1f + 2f * lift).dp.toPx()
-        drawIntoCanvas { c ->
-            val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                this.color = color.toArgb()
-                setShadowLayer(blur, 0f, dy, shadow.copy(alpha = shadow.alpha * (0.6f + 0.4f * lift)).toArgb())
-            }
-            c.nativeCanvas.drawPath(g2.asAndroidPath(), p)
-        }
+        drawRoundRectShadow(
+            rect,
+            minOf(rect.width, rect.height) / 2f,
+            0.57735f * blur + 0.5f,
+            dy,
+            shadow.copy(alpha = shadow.alpha * (0.6f + 0.4f * lift)),
+        )
+        drawPath(g2, color)
     } else {
         // API 28 以下硬件加速不支持形状的 setShadowLayer：用几圈往外扩、越来越淡的胶囊叠出一层软投影
         if (shadow.alpha > 0f) {

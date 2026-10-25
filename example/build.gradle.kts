@@ -13,6 +13,8 @@ val signingStore = System.getenv("GOO_STORE_FILE")?.let { file(it) }?.takeIf { i
 android {
     namespace = "ui.feice.mochi.demo"
     compileSdk = 36
+    // Performance comparisons run instrumentation against the actual release app.
+    testBuildType = providers.gradleProperty("mochiTestBuildType").orElse("debug").get()
 
     defaultConfig {
         applicationId = "ui.feice.mochi.demo"
@@ -21,6 +23,7 @@ android {
         versionCode = (System.getenv("GOO_VERSION_CODE") ?: property("EXAMPLE_VERSION_CODE").toString()).toInt()
         versionName = "0.1.$versionCode"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testProguardFiles("proguard-test-rules.pro")
     }
 
     signingConfigs {
@@ -36,10 +39,15 @@ android {
 
     buildTypes {
         release {
-            // 先不混淆 / 压缩，方便排查问题；要开就改回 true
-            isMinifyEnabled = false
+            // Measure and ship the optimized release; retain an explicit diagnostic build option.
+            isMinifyEnabled = providers.gradleProperty("mochiMinify").orElse("true").get().toBoolean()
+            // Keep dynamically named calibration assets; code optimization is independent.
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (testBuildType == "release") {
+                // Only shared entry points reached by the opt-in glass test runner.
+                proguardFiles("proguard-benchmark-target.pro")
+            }
             signingConfig = if (signingStore != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
@@ -61,6 +69,8 @@ android {
 dependencies {
     implementation(project(":mochi-compose"))
     implementation(project(":mochi-nothing"))
+    implementation(project(":mochi-ios"))
+    implementation(project(":mochi-icons"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -70,6 +80,8 @@ dependencies {
     // 转场截图测试（androidTest，只在本地跑）
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
+    // AndroidX Test references these annotations; optimized instrumentation must resolve them.
+    androidTestImplementation("com.google.errorprone:error_prone_annotations:2.38.0")
 }
 
 kotlin {

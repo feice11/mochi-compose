@@ -26,12 +26,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -48,11 +50,13 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.IconColors
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.list.MochiListButton
 import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListDefaults
+import ui.feice.mochi.list.MochiListLeadingStyle
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.list.MochiListSectionFooter
@@ -62,10 +66,13 @@ import ui.feice.mochi.list.MochiListStatusChip
 import ui.feice.mochi.list.MochiSwipeAction
 import ui.feice.mochi.list.MochiSwipeRow
 import ui.feice.mochi.list.mochiListDivider
+import ui.feice.mochi.list.mochiListSection
 import ui.feice.mochi.list.mochiReorderable
 import ui.feice.mochi.list.rememberMochiReorderState
+import ui.feice.mochi.list.rows
 import ui.feice.mochi.navigation.rememberMochiNavSettled
 import ui.feice.mochi.shape.MochiCapsule
+import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.emphasized
 import ui.feice.mochi.utils.MochiHapticProfile
@@ -78,13 +85,13 @@ import ui.feice.mochi.utils.rememberMochiHaptics
 fun ListPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var notify by remember { mutableIntStateOf(1) }
-    var loadingRow by remember { mutableIntStateOf(-1) }
-    var bluetooth by remember { mutableStateOf(true) }
-    var expanded by remember { mutableStateOf(false) }
-    var width by remember { mutableFloatStateOf(1f) }
+    var notify by rememberSaveable { mutableIntStateOf(1) }
+    var loadingRow by rememberSaveable { mutableIntStateOf(-1) }
+    var bluetooth by rememberSaveable { mutableStateOf(true) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var width by rememberSaveable { mutableFloatStateOf(1f) }
     val mails = remember { mutableStateListOf(*Mails) }
-    var removed by remember { mutableIntStateOf(0) }
+    var removed by rememberSaveable { mutableIntStateOf(0) }
     val read = remember { mutableStateListOf<String>() }
     val flagged = remember { mutableStateListOf<String>() }
     val pinned = remember { mutableStateListOf<String>() }
@@ -97,191 +104,258 @@ fun ListPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
     }
 
+    var boldText by rememberSaveable { mutableStateOf(false) }
+    val baseStyles = MochiTheme.textStyles
+    val rowStyles = if (boldText) baseStyles.copy(body = baseStyles.body.copy(fontWeight = FontWeight.SemiBold)) else baseStyles
+    val order = remember { mutableStateListOf("相机", "照片", "备忘录", "日历", "天气") }
+    val reorder = rememberMochiReorderState { from, to -> order.add(to, order.removeAt(from)) }
     DemoPage(entry, modifier) {
         // 信息卡：讲状态，内容密、有强调色；下面的操作卡只放可以点的行
-        MochiListCard {
-            Column(
-                Modifier
-                    .mochiListDivider(16.dp)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                // 标题和容量在同一条基线上
-                Row(Modifier.fillMaxWidth()) {
-                    Text("储存空间快满了", style = ts.titleMedium.emphasized(), modifier = Modifier.weight(1f).alignByBaseline())
-                    Text("58.2 / 64 GB", style = ts.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+        demoItem {
+            MochiListCard {
+                Column(
+                    Modifier
+                        .mochiListDivider(16.dp)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    // 标题和容量在同一条基线上
+                    Row(Modifier.fillMaxWidth()) {
+                        Text("储存空间快满了", style = ts.titleMedium.emphasized(), modifier = Modifier.weight(1f).alignByBaseline())
+                        Text("58.2 / 64 GB", style = ts.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+                    }
+                    MochiProgressBar(0.91f)
+                    Text("照片暂停同步。清理一些大文件，或者把旧照片移到电脑上。", style = ts.bodyMedium, color = cs.onSurfaceVariant)
                 }
-                MochiProgressBar(0.91f)
-                Text("照片暂停同步。清理一些大文件，或者把旧照片移到电脑上。", style = ts.bodyMedium, color = cs.onSurfaceVariant)
-            }
-            MochiListRow("查看大文件", onClick = {}, colors = MochiListDefaults.colors(content = cs.primary), chevron = true)
-        }
-
-        MochiListSection(header = "设置", footer = "行尾灰色的是当前值，「›」表示点进去还有下一页。") {
-            MochiListRow(
-                "无线局域网",
-                onClick = {},
-                value = "HONOR-1059",
-                chevron = true,
-                leading = {
-                    AppIcon(Icons.WIFI, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
-                },
-            )
-            MochiListRow(
-                "蓝牙",
-                trailing = { MochiSwitch(bluetooth, { bluetooth = it }) },
-                leading = {
-                    AppIcon(Icons.BLUETOOTH, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
-                },
-            )
-            MochiListRow(
-                "勿扰模式",
-                onClick = {},
-                value = "关闭",
-                chevron = true,
-                leading = {
-                    AppIcon(Icons.MOON, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
-                },
-            )
-        }
-
-        MochiListSection(header = "容器高度", footer = "卡片默认平滑展开、收起。连续点击可在过渡途中改变目标高度。") {
-            MochiListRow("展开详情", trailing = { MochiSwitch(expanded, { expanded = it }) }, onClick = { expanded = !expanded })
-            if (expanded) {
-                MochiListRow("高度随内容变化", subtitle = "背景、圆角和下方内容一起平滑移动")
-                MochiListRow("连续切换", subtitle = "从当前高度继续过渡")
+                MochiListRow("查看大文件", onClick = {}, colors = MochiListDefaults.colors(content = cs.primary), chevron = true)
             }
         }
-
-        // 双行设备信息复用列表的紧凑文字间距与图标轮廓锚点；箭头和加载图标始终按整行居中。
-        MochiListSection(header = "我的设备", footer = "点一台设备：行尾转圈表示这一行在加载，其他行照常能点。") {
-            Devices.forEachIndexed { i, (name, model, icon) ->
+        demoItem {
+            MochiListSection(header = "设置", footer = "行尾灰色的是当前值，「›」表示点进去还有下一页。") {
                 MochiListRow(
-                    name,
-                    subtitle = model,
-                    onClick = { loadingRow = i },
-                    loading = loadingRow == i,
-                    chevron = loadingRow != i,
+                    "无线局域网",
+                    onClick = {},
+                    value = "HONOR-1059",
+                    chevron = true,
                     leading = {
-                        AppIcon(icon, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
+                        AppIcon(Icons.WIFI, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
+                    },
+                )
+                MochiListRow(
+                    "蓝牙",
+                    trailing = { MochiSwitch(bluetooth, { bluetooth = it }) },
+                    leading = {
+                        AppIcon(
+                            Icons.BLUETOOTH,
+                            Tone.Neutral.tile(),
+                            MochiListDefaults.LeadingSize,
+                            corner = MochiListDefaults.LeadingCorner,
+                        )
+                    },
+                )
+                MochiListRow(
+                    "勿扰模式",
+                    onClick = {},
+                    value = "关闭",
+                    chevron = true,
+                    leading = {
+                        AppIcon(Icons.MOON, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
                     },
                 )
             }
         }
-
-        MochiListSection(header = "通知方式", footer = NotifyFooters[notify]) {
-            listOf("关闭", "通知", "询问").forEachIndexed { i, label ->
-                MochiListRow(label, onClick = { notify = i }, checked = notify == i)
-            }
-        }
-
-        ListTypographyExamples()
-
-        // 首末行补白也属于左/右滑操作区域，胶囊相对完整可见行保持三侧等距。
-        MochiListSection(
-            header = "左滑操作",
-            footer = if (removed == 0) "往左滑出操作；滑过一大半松手直接删除，越过时轻震。往右滑：标为已读 / 置顶。" else "删了 $removed 封",
-        ) {
-            mails.forEach { mail ->
-                androidx.compose.runtime.key(mail.first) {
-                    MochiSwipeRow(
-                        actions = listOf(
-                            MochiSwipeAction("删除", cs.error, onClick = {
-                                mails.remove(mail)
-                                removed++
-                            }, removesRow = true),
-                            MochiSwipeAction(if (mail.first in flagged) "取消标记" else "标记", cs.tertiary, onClick = {
-                                if (!flagged.remove(mail.first)) flagged.add(mail.first)
-                            }, contentColor = cs.onTertiary),
-                        ),
-                        leadingActions = listOf(
-                            MochiSwipeAction(if (mail.first in read) "未读" else "已读", cs.primary, onClick = {
-                                if (!read.remove(mail.first)) read.add(mail.first)
-                            }, contentColor = cs.onPrimary),
-                            MochiSwipeAction(if (mail.first in pinned) "取消置顶" else "置顶", cs.secondary, onClick = {
-                                if (!pinned.remove(mail.first)) pinned.add(mail.first)
-                            }, contentColor = cs.onSecondary),
-                        ),
-                        dividerInset = MochiListDefaults.TextRowPadding,
-                    ) {
+        // iOS 列表的第二种行首：没有底块的符号图标（强调色），描边粗细跟标题字重
+        demoItem {
+            MochiTheme(MochiTheme.colorScheme, rowStyles, MochiTheme.shapes, MochiTheme.motionScheme) {
+                MochiListSection(
+                    header = "符号图标",
+                    footer = "上面「设置」那种是 28 的彩色图标块；这里是没有底块的符号图标：占 24 宽、到文字 16，默认强调色。" +
+                        "打开「粗体文字」，标题变半粗，图标的描边跟着变粗（iOS 的符号按旁边文字的字重画）。",
+                ) {
+                    MochiListRow(
+                        "粗体文字",
+                        trailing = { MochiSwitch(boldText, { boldText = it }) },
+                        leading = { Glyph(Icons.NOTE, LocalContentColor.current) },
+                        leadingStyle = MochiListLeadingStyle.Symbol,
+                    )
+                    SymbolRows.forEach { (label, icon) ->
                         MochiListRow(
-                            mail.first,
-                            subtitle = mail.second,
-                            value = mail.third,
+                            label,
                             onClick = {},
-                            titleTrailing = { MailUnreadIndicator(unread = mail.first !in read) },
-                            status = {
-                                MailStatusChips(
-                                    pinned = mail.first in pinned,
-                                    flagged =
-                                        mail.first in flagged,
-                                )
-                            },
+                            chevron = true,
+                            leading = { Glyph(icon, LocalContentColor.current) },
+                            leadingStyle = MochiListLeadingStyle.Symbol,
                         )
                     }
                 }
             }
-            if (mails.isEmpty()) {
-                MochiListRow("全部删完了", onClick = {
-                    mails.addAll(Mails)
-                    removed = 0
-                }, value = "恢复", colors = MochiListDefaults.colors(secondary = cs.primary))
+        }
+        demoItem {
+            MochiListSection(header = "容器高度", footer = "卡片默认平滑展开、收起。连续点击可在过渡途中改变目标高度。") {
+                MochiListRow("展开详情", trailing = { MochiSwitch(expanded, { expanded = it }) }, onClick = { expanded = !expanded })
+                if (expanded) {
+                    MochiListRow("高度随内容变化", subtitle = "背景、圆角和下方内容一起平滑移动")
+                    MochiListRow("连续切换", subtitle = "从当前高度继续过渡")
+                }
             }
         }
-
+        // 双行设备信息复用列表的紧凑文字间距与图标轮廓锚点；箭头和加载图标始终按整行居中。
+        demoItem {
+            MochiListSection(header = "我的设备", footer = "点一台设备：行尾转圈表示这一行在加载，其他行照常能点。") {
+                Devices.forEachIndexed { i, (name, model, icon) ->
+                    MochiListRow(
+                        name,
+                        subtitle = model,
+                        onClick = { loadingRow = i },
+                        loading = loadingRow == i,
+                        chevron = loadingRow != i,
+                        leading = {
+                            AppIcon(icon, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
+                        },
+                    )
+                }
+            }
+        }
+        demoItem {
+            MochiListSection(header = "通知方式", footer = NotifyFooters[notify]) {
+                listOf("关闭", "通知", "询问").forEachIndexed { i, label ->
+                    MochiListRow(label, onClick = { notify = i }, checked = notify == i)
+                }
+            }
+        }
+        demoItem {
+            ListTypographyExamples()
+        }
+        // 首末行补白也属于左/右滑操作区域，胶囊相对完整可见行保持三侧等距。
+        demoItem {
+            MochiListSection(
+                header = "左滑操作",
+                footer = if (removed == 0) "往左滑出操作；滑过一大半松手直接删除，越过时轻震。往右滑：标为已读 / 置顶。" else "删了 $removed 封",
+            ) {
+                mails.forEach { mail ->
+                    androidx.compose.runtime.key(mail.first) {
+                        MochiSwipeRow(
+                            actions = listOf(
+                                MochiSwipeAction("删除", cs.error, onClick = {
+                                    mails.remove(mail)
+                                    removed++
+                                }, removesRow = true),
+                                MochiSwipeAction(if (mail.first in flagged) "取消标记" else "标记", cs.tertiary, onClick = {
+                                    if (!flagged.remove(mail.first)) flagged.add(mail.first)
+                                }, contentColor = cs.onTertiary),
+                            ),
+                            leadingActions = listOf(
+                                MochiSwipeAction(if (mail.first in read) "未读" else "已读", cs.primary, onClick = {
+                                    if (!read.remove(mail.first)) read.add(mail.first)
+                                }, contentColor = cs.onPrimary),
+                                MochiSwipeAction(if (mail.first in pinned) "取消置顶" else "置顶", cs.secondary, onClick = {
+                                    if (!pinned.remove(mail.first)) pinned.add(mail.first)
+                                }, contentColor = cs.onSecondary),
+                            ),
+                            dividerInset = MochiListDefaults.TextRowPadding,
+                        ) {
+                            MochiListRow(
+                                mail.first,
+                                subtitle = mail.second,
+                                value = mail.third,
+                                onClick = {},
+                                titleTrailing = { MailUnreadIndicator(unread = mail.first !in read) },
+                                status = {
+                                    MailStatusChips(
+                                        pinned = mail.first in pinned,
+                                        flagged =
+                                            mail.first in flagged,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+                if (mails.isEmpty()) {
+                    MochiListRow("全部删完了", onClick = {
+                        mails.addAll(Mails)
+                        removed = 0
+                    }, value = "恢复", colors = MochiListDefaults.colors(secondary = cs.primary))
+                }
+            }
+        }
         // 长按拖动排序（iOS）：浮起、别的行让开、松手落进空位
-        val order = remember { mutableStateListOf("相机", "照片", "备忘录", "日历", "天气") }
-        val reorder = rememberMochiReorderState { from, to -> order.add(to, order.removeAt(from)) }
-        Column(Modifier.fillMaxWidth()) {
-            MochiListSectionHeader("拖动排序")
-            val listColors = MochiListDefaults.colors()
-            MochiListCard(colors = listColors, showDividers = !reorder.isDragging) {
-                order.forEachIndexed { i, name ->
-                    key(name) {
-                        MochiListRow(
-                            name,
-                            modifier = Modifier.mochiReorderable(reorder, name, i, listColors.container),
-                            value = "第 ${i + 1} 个",
-                        )
+        demoItem {
+            Column(Modifier.fillMaxWidth()) {
+                MochiListSectionHeader("拖动排序")
+                val listColors = MochiListDefaults.colors()
+                MochiListCard(colors = listColors, showDividers = !reorder.isDragging) {
+                    order.forEachIndexed { i, name ->
+                        key(name) {
+                            MochiListRow(
+                                name,
+                                modifier = Modifier.mochiReorderable(reorder, name, i, listColors.container),
+                                value = "第 ${i + 1} 个",
+                            )
+                        }
                     }
                 }
+                MochiListSectionFooter("长按一行，它浮起来、轻震一下，然后上下拖；经过别的行时它们让开，松手落进空位。")
             }
-            MochiListSectionFooter("长按一行，它浮起来、轻震一下，然后上下拖；经过别的行时它们让开，松手落进空位。")
         }
-
         // iOS 设置里的音量、亮度那样：说明放在分组小标题，滑块和两端图标排在同一行
-        MochiListSection(header = "卡片宽度") {
-            MochiListSliderRow(
-                width,
-                { width = it },
-                valueRange = 0.5f..1f,
-                leading = { Text("A", style = ts.footnote, color = cs.onSurfaceVariant) },
-                trailing = { Text("A", style = ts.navTitle, color = cs.onSurfaceVariant) },
-            )
+        demoItem {
+            MochiListSection(header = "卡片宽度") {
+                MochiListSliderRow(
+                    width,
+                    { width = it },
+                    valueRange = 0.5f..1f,
+                    leading = { Text("A", style = ts.footnote, color = cs.onSurfaceVariant) },
+                    trailing = { Text("A", style = ts.navTitle, color = cs.onSurfaceVariant) },
+                )
+            }
         }
-        MochiListSection(
-            modifier = Modifier.fillMaxWidth(width),
-            footer = "行变窄时保持主题字号，长标题单行省略；副标题最多两行，随内容自然增高。",
+        demoItem {
+            MochiListSection(
+                modifier = Modifier.fillMaxWidth(width),
+                footer = "行变窄时保持主题字号，长标题单行省略；副标题最多两行，随内容自然增高。",
+            ) {
+                MochiListRow("联系人密钥验证与设备信任设置", onClick = {}, value = "关闭", chevron = true)
+            }
+        }
+        demoItem {
+            SkeletonSection()
+        }
+        demoItem {
+            MochiListSection(header = "触感", footer = "整个库用同一套规则：少而准，只在状态真的变了时震。点一行试试。") {
+                MochiListRow("滑过选项 / 刻度", subtitle = "tick：很轻的一下", onClick = { haptics.tick() })
+                MochiListRow("长按呼出", subtitle = "longPress：清脆的 click", onClick = { haptics.longPress() })
+                MochiListRow("越过阈值", subtitle = "threshold：左滑删除、下拉关闭", onClick = { haptics.threshold() })
+                MochiListRow("确认", subtitle = "confirm：只在 Rich 档", onClick = { haptics.confirm() })
+            }
+        }
+        // 长分组：每一行是懒加载列表的一项，只有屏幕附近的行在界面树里；看起来仍是一张卡片
+        mochiListSection(
+            "lazy-contacts",
+            header = "懒加载分组",
+            footer = "100 行，只有屏幕附近的行会组合。首末圆角、分隔线从文字起点开始，按住一行时上下两条线一起淡出。",
         ) {
-            MochiListRow("联系人密钥验证与设备信任设置", onClick = {}, value = "关闭", chevron = true)
+            rows(LazyContacts, key = { it }) { i ->
+                MochiListRow(
+                    "联系人 ${i + 1}",
+                    subtitle = if (i % 3 == 0) "常用联系人" else null,
+                    value = if (i % 4 == 1) "工作" else null,
+                    chevron = true,
+                    onClick = {},
+                )
+            }
         }
-
-        SkeletonSection()
-
-        MochiListSection(header = "触感", footer = "整个库用同一套规则：少而准，只在状态真的变了时震。点一行试试。") {
-            MochiListRow("滑过选项 / 刻度", subtitle = "tick：很轻的一下", onClick = { haptics.tick() })
-            MochiListRow("长按呼出", subtitle = "longPress：清脆的 click", onClick = { haptics.longPress() })
-            MochiListRow("越过阈值", subtitle = "threshold：左滑删除、下拉关闭", onClick = { haptics.threshold() })
-            MochiListRow("确认", subtitle = "confirm：只在 Rich 档", onClick = { haptics.confirm() })
+        demoItem {
+            MochiListCard { MochiListButton("退出登录", onClick = {}, destructive = true, centered = true) }
         }
-
-        MochiListCard { MochiListButton("退出登录", onClick = {}, destructive = true, centered = true) }
     }
 }
 
+private val LazyContacts = List(100) { it }
+
 @Composable
 private fun ListTypographyExamples() {
-    var enlarged by remember { mutableStateOf(false) }
+    var enlarged by rememberSaveable { mutableStateOf(false) }
     val density = LocalDensity.current
     MochiListSection(header = "中英文排版", footer = "只放大下面几组文字；仍叠加系统字号设置。") {
         MochiListRow("放大对照文字至 150%", trailing = { MochiSwitch(enlarged, { enlarged = it }) })
@@ -378,8 +452,8 @@ private fun SkeletonSection() {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
     val settled by rememberMochiNavSettled()
-    var loaded by remember { mutableStateOf(false) }
-    var round by remember { mutableIntStateOf(0) }
+    var loaded by rememberSaveable { mutableStateOf(false) }
+    var round by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(settled, round) {
         if (!settled) return@LaunchedEffect
         loaded = false
@@ -415,4 +489,11 @@ private val Contacts = listOf(
     "林知夏" to "上次联系：昨天",
     "周屿" to "上次联系：周二",
     "陈沐" to "上次联系：上周",
+)
+
+private val SymbolRows = listOf(
+    "收藏" to Icons.STAR,
+    "通知" to Icons.BELL,
+    "分享" to Icons.SHARE,
+    "链接" to Icons.LINK,
 )

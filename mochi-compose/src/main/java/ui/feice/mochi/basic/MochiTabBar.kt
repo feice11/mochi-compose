@@ -75,7 +75,12 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -107,7 +112,10 @@ import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.elastic.rubberBand
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.MochiBackdrop
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
+import ui.feice.mochi.effect.glow.MochiGlowState
 import ui.feice.mochi.effect.glow.drawGlow
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
@@ -124,6 +132,7 @@ import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.G2RectClipShape4
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.LocalContentColor
+import ui.feice.mochi.theme.MochiGlass
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHaptics
 import ui.feice.mochi.utils.lerp
@@ -139,6 +148,10 @@ import ui.feice.mochi.utils.smoothstep
  * - 经过的标签颜色连续过渡，不是一下跳过去
  * - 给了 [scrollBehavior] 时，内容往下滚收成只显示当前图标的小胶囊，往上滚或点它展开
  * - 投影是柔和的双层阴影（[drawMochiShadow]，和菜单同一套参数），按住浮起时更深更软
+ *
+ * [material] 不为 null（默认跟主题 [MochiTheme.materials]）时整条换成 iOS 26 的玻璃标签栏：
+ * 玻璃胶囊、灰色选中块、按下鼓成放大图标的玻璃泡，没有投影、发光和水滴，详见文档。背景来源由 [backdrop] 给（[MochiBackdrop]）。
+ * 下面的各种布局、滚动收起、搜索、附件条在玻璃标签栏里一样可用，搜索框和附件条也是玻璃。
  *
  * 三种布局（可以组合）：
  * - 只有图标：`behavior = MochiTabBarDefaults.iconOnlyBehavior()`
@@ -164,9 +177,30 @@ public fun MochiTabBar(
     onReselect: ((Int) -> Unit)? = null,
     search: MochiTabBarSearch? = null,
     accessory: (@Composable (inline: Boolean) -> Unit)? = null,
+    material: MochiGlass? = MochiTheme.materials.bar,
+    backdrop: MochiBackdrop? = LocalMochiBackdrop.current,
 ) {
     val n = items.size
     if (n == 0) return
+    if (material != null) {
+        MochiGlassTabBar(
+            selectedIndex,
+            onSelect,
+            items,
+            enabled,
+            colors,
+            behavior,
+            windowInsets,
+            onReselect,
+            scrollBehavior,
+            search,
+            accessory,
+            material,
+            backdrop,
+            modifier,
+        )
+        return
+    }
     val view = LocalView.current
     val density = LocalDensity.current
     val dark = MochiTheme.colorScheme.isDark
@@ -245,41 +279,20 @@ public fun MochiTabBar(
         // 标签栏收成小圆的程度：滚动收起、进入搜索都会收
         fun barCollapse(): Float = max(collapse(), searchProgress.value)
 
-        // 这一帧三块的位置：展开 →（按 collapse）滚动收起 →（按搜索进度）搜索，逐段插值。
-        // 标签栏和搜索圆钮之间始终隔 SideGap，所以途中的融球颈长度不变
-        fun frame(): TabBarFrame {
-            val c = collapse()
-            val s = searchProgress.value
-            val rowW = barWidth() + searchSlot
-            val left = (maxPx - rowW) / 2f
-            val y1 = rowTop + hPx
-            val eMain = Rect(left, rowTop, left + barWidth(), y1)
-            val eSearch = Rect(eMain.right + gapPx, rowTop, eMain.right + gapPx + hPx, y1)
-            val eAcc = Rect(left, 0f, left + rowW, accPx)
-            // 收起：有附件条时小圆贴左、搜索贴右、附件条填满中间；没有附件条时小圆留在原来的左端
-            val toEdges = accessory != null
-            val cLeft = if (toEdges) 0f else left
-            val cMain = Rect(cLeft, rowTop, cLeft + hPx, y1)
-            val cSearch = if (toEdges) {
-                Rect(
-                    maxPx - hPx,
-                    rowTop,
-                    maxPx,
-                    y1,
-                )
-            } else {
-                Rect(cMain.right + gapPx, rowTop, cMain.right + gapPx + hPx, y1)
-            }
-            val cAcc = Rect(cMain.right + gapPx, rowTop, if (search != null) cSearch.left - gapPx else maxPx, y1)
-            val sMain = Rect(0f, rowTop, hPx, y1)
-            val sSearch = Rect(hPx + gapPx, rowTop, maxPx, y1)
-            return TabBarFrame(
-                main = lerpRect(lerpRect(eMain, cMain, c), sMain, s),
-                search = lerpRect(lerpRect(eSearch, cSearch, c), sSearch, s),
-                accessory = lerpRect(eAcc, cAcc, c),
-                accessoryAlpha = (1f - s).coerceIn(0f, 1f),
-            )
-        }
+        // 这一帧三块的位置：展开 →（按 collapse）滚动收起 →（按搜索进度）搜索，逐段插值
+        fun frame(): TabBarFrame = tabBarFrame(
+            maxPx = maxPx,
+            barWidth = barWidth(),
+            searchSlot = searchSlot,
+            rowTop = rowTop,
+            height = hPx,
+            gap = gapPx,
+            accessoryHeight = accPx,
+            hasAccessory = accessory != null,
+            hasSearch = search != null,
+            collapse = collapse(),
+            search = searchProgress.value,
+        )
 
         LaunchedEffect(state, n, fullPx, hPx) { state.run(n, { selected }, haptics, Size(fullPx, hPx), maxShift) }
 
@@ -348,7 +361,7 @@ public fun MochiTabBar(
                     inline = scrollBehavior?.collapsed == true,
                     blocked = searchActive,
                     colors = colors,
-                    dark = dark,
+                    plate = solidPlate(colors, dark),
                     content = accessory,
                 )
             }
@@ -359,7 +372,7 @@ public fun MochiTabBar(
                     progress = { searchProgress.value },
                     height = behavior.height,
                     colors = colors,
-                    dark = dark,
+                    plate = solidPlate(colors, dark),
                 )
             }
             Box(
@@ -378,7 +391,8 @@ public fun MochiTabBar(
                         // 柔和的双层投影，跟着变形后的底栏轮廓走；按住浮起时更深更软
                         val raised = if (behavior.pressScale > 1f) ((lift.value - 1f) / (behavior.pressScale - 1f)).coerceIn(0f, 1f) else 0f
                         drawMochiShadow(
-                            barP,
+                            bar,
+                            bar.height / 2f,
                             MochiMetaballShadow.elevated(this, lerp(RestElevation, PressedElevation, raised), dark),
                             colors.shadow,
                         )
@@ -512,12 +526,17 @@ public fun MochiTabBar(
                                 selectedness = { selectedness(i) },
                                 extra = extras[i],
                                 icon = icon,
+                                modifier = Modifier.tabSemantics(item.label, i == selected) {
+                                    if (i != selected) currentOnSelect(i) else currentOnReselect?.invoke(i)
+                                },
                             ) { Text(item.label, color = tint, style = InlineLabelStyle, maxLines = 1) }
                         } else {
                             // 只在选中时显示标签：没选中的图标在整格里居中，选中时往上让出标签的位置、标签淡入
                             val shift = if (behavior.showLabels && behavior.selectedLabelOnly) LabelShift else 0.dp
                             Column(
-                                Modifier.weight(1f).fillMaxHeight(),
+                                Modifier.weight(1f).fillMaxHeight().tabSemantics(item.label, i == selected) {
+                                    if (i != selected) currentOnSelect(i) else currentOnReselect?.invoke(i)
+                                },
                                 verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
@@ -555,10 +574,52 @@ public fun MochiTabBar(
 }
 
 /** 一帧里标签栏、搜索圆钮 / 搜索框、附件条各自的位置（px，相对整个标签栏区域） */
-private class TabBarFrame(val main: Rect, val search: Rect, val accessory: Rect, val accessoryAlpha: Float)
+internal class TabBarFrame(val main: Rect, val search: Rect, val accessory: Rect, val accessoryAlpha: Float)
+
+/**
+ * 纯色、玻璃标签栏共用的排布：展开 →（按 [collapse]）滚动收起 →（按 [search] 进度）搜索，逐段插值。
+ * 标签栏和搜索圆钮之间始终隔 [gap]，所以途中的融球颈长度不变
+ */
+internal fun tabBarFrame(
+    maxPx: Float,
+    barWidth: Float,
+    searchSlot: Float,
+    rowTop: Float,
+    height: Float,
+    gap: Float,
+    accessoryHeight: Float,
+    hasAccessory: Boolean,
+    hasSearch: Boolean,
+    collapse: Float,
+    search: Float,
+): TabBarFrame {
+    val rowW = barWidth + searchSlot
+    val left = (maxPx - rowW) / 2f
+    val y1 = rowTop + height
+    val eMain = Rect(left, rowTop, left + barWidth, y1)
+    val eSearch = Rect(eMain.right + gap, rowTop, eMain.right + gap + height, y1)
+    val eAcc = Rect(left, 0f, left + rowW, accessoryHeight)
+    // 收起：有附件条时小圆贴左、搜索贴右、附件条填满中间；没有附件条时小圆留在原来的左端
+    val cLeft = if (hasAccessory) 0f else left
+    val cMain = Rect(cLeft, rowTop, cLeft + height, y1)
+    val cSearch = if (hasAccessory) {
+        Rect(maxPx - height, rowTop, maxPx, y1)
+    } else {
+        Rect(cMain.right + gap, rowTop, cMain.right + gap + height, y1)
+    }
+    val cAcc = Rect(cMain.right + gap, rowTop, if (hasSearch) cSearch.left - gap else maxPx, y1)
+    val sMain = Rect(0f, rowTop, height, y1)
+    val sSearch = Rect(height + gap, rowTop, maxPx, y1)
+    return TabBarFrame(
+        main = lerpRect(lerpRect(eMain, cMain, collapse), sMain, search),
+        search = lerpRect(lerpRect(eSearch, cSearch, collapse), sSearch, search),
+        accessory = lerpRect(eAcc, cAcc, collapse),
+        accessoryAlpha = (1f - search).coerceIn(0f, 1f),
+    )
+}
 
 /** 放在 [rect] 给的位置、大小（每帧只重新布局，不重组） */
-private fun Modifier.placedAt(rect: () -> Rect): Modifier = this
+internal fun Modifier.placedAt(rect: () -> Rect): Modifier = this
     .offset { rect().topLeft.let { IntOffset(it.x.roundToInt(), it.y.roundToInt()) } }
     .layout { m, _ ->
         val r = rect()
@@ -571,29 +632,58 @@ private fun Modifier.placedAt(rect: () -> Rect): Modifier = this
 /** 胶囊底板：柔和投影 + 底色（形状每帧按当前大小取，圆角永远是短边一半） */
 private fun Modifier.capsulePlate(path: G2PathCache, color: Color, shadow: Color, dark: Boolean): Modifier = drawBehind {
     val p = path.get(size.toRect(), size.minDimension / 2f, 1f)
-    drawMochiShadow(p, MochiMetaballShadow.elevated(this, RestElevation, dark), shadow)
+    drawMochiShadow(size.toRect(), size.minDimension / 2f, MochiMetaballShadow.elevated(this, RestElevation, dark), shadow)
     drawPath(p, color)
 }
 
+/** 纯色标签栏的胶囊底板：柔和投影 + 底色 */
+@Composable
+private fun solidPlate(colors: MochiTabBarColors, dark: Boolean): TabBarPlate {
+    val path = remember { G2PathCache() }
+    return TabBarPlate(Modifier.capsulePlate(path, colors.container, colors.shadow, dark))
+}
+
+/**
+ * 附件条、搜索框的底板：纯色标签栏是 [modifier] 画的投影 + 底色；玻璃标签栏是 [under] 画在内容下面的一块玻璃
+ * （玻璃的外阴影、亮边在胶囊外面，不能和内容一起被胶囊裁掉）
+ */
+internal class TabBarPlate(val modifier: Modifier = Modifier, val under: (@Composable BoxScope.() -> Unit)? = null)
+
 /** 标签栏上方的附件条；收起时挪到小圆右边同一行（位置由 [rect] 给），内容按 [inline] 模糊替换成紧凑版 */
 @Composable
-private fun TabBarAccessory(
+internal fun TabBarAccessory(
     rect: () -> Rect,
     alpha: () -> Float,
     inline: Boolean,
     blocked: Boolean,
     colors: MochiTabBarColors,
-    dark: Boolean,
+    plate: TabBarPlate,
     content: @Composable (inline: Boolean) -> Unit,
 ) {
     val glow = rememberMochiGlowState()
-    val path = remember { G2PathCache() }
     Box(
         Modifier
             .placedAt(rect)
             .graphicsLayer { this.alpha = alpha() }
             .mochiPressDeform()
-            .capsulePlate(path, colors.container, colors.shadow, dark)
+            .then(plate.modifier),
+    ) {
+        plate.under?.invoke(this)
+        AccessoryContent(blocked, colors, glow, inline, content)
+    }
+}
+
+@Composable
+private fun BoxScope.AccessoryContent(
+    blocked: Boolean,
+    colors: MochiTabBarColors,
+    glow: MochiGlowState,
+    inline: Boolean,
+    content: @Composable (inline: Boolean) -> Unit,
+) {
+    Box(
+        Modifier
+            .matchParentSize()
             .mochiPressGlow(glow, MochiCapsule)
             // 搜索时附件条淡出，期间不响应点击
             .then(
@@ -616,20 +706,17 @@ private fun TabBarAccessory(
 
 /** 标签栏右边的搜索圆钮：点开后（位置由 [rect] 给）展开成搜索框，输入框随 [progress] 淡入并自动聚焦 */
 @Composable
-private fun TabBarSearchField(
+internal fun TabBarSearchField(
     search: MochiTabBarSearch,
     rect: () -> Rect,
     progress: () -> Float,
     height: Dp,
     colors: MochiTabBarColors,
-    dark: Boolean,
+    plate: TabBarPlate,
 ) {
-    val cs = MochiTheme.colorScheme
     val glow = rememberMochiGlowState()
-    val path = remember { G2PathCache() }
     val requester = remember { FocusRequester() }
     val focus = LocalFocusManager.current
-    val currentSearch by rememberUpdatedState(search)
     // 只在从搜索中退出时清焦点（第一次组合不动别处的焦点）
     val wasActive = remember { booleanArrayOf(search.active) }
     LaunchedEffect(search.active) {
@@ -640,11 +727,26 @@ private fun TabBarSearchField(
         }
         wasActive[0] = search.active
     }
+    Box(Modifier.placedAt(rect).mochiPressDeform().then(plate.modifier)) {
+        plate.under?.invoke(this)
+        SearchContent(search, progress, height, colors, glow, requester)
+    }
+}
+
+@Composable
+private fun BoxScope.SearchContent(
+    search: MochiTabBarSearch,
+    progress: () -> Float,
+    height: Dp,
+    colors: MochiTabBarColors,
+    glow: MochiGlowState,
+    requester: FocusRequester,
+) {
+    val cs = MochiTheme.colorScheme
+    val currentSearch by rememberUpdatedState(search)
     Box(
         Modifier
-            .placedAt(rect)
-            .mochiPressDeform()
-            .capsulePlate(path, colors.container, colors.shadow, dark)
+            .matchParentSize()
             .mochiPressGlow(glow, MochiCapsule)
             .clip(MochiCapsule)
             .clickable(remember { MutableInteractionSource() }, indication = null) {
@@ -691,10 +793,10 @@ private fun TabBarSearchField(
 }
 
 /** 标签栏和搜索圆钮 / 附件条之间的间距 */
-private val SideGap = 8.dp
+internal val SideGap = 8.dp
 
 /** 附件条展开时的高度 */
-private val AccessoryHeight = 48.dp
+internal val AccessoryHeight = 48.dp
 
 /** 进入 / 退出搜索途中，标签栏和搜索框之间融球颈的最大半径 */
 private val LinkFuse = 14.dp
@@ -706,15 +808,30 @@ private const val PressedElevation = 0.6f
 private val BarPadding = 4.dp
 
 /**
+ * 标签一格的读屏语义：整格是一个「标签页」节点，名字是标签文字。只显示图标、或标签宽度还是 0 时，
+ * 文字不可见，读屏和测试都靠这里找到它；整格合成一个节点，选中时不会把图标和文字读两遍
+ */
+internal fun Modifier.tabSemantics(label: String, selected: Boolean, onClick: () -> Unit): Modifier = clearAndSetSemantics {
+    role = Role.Tab
+    contentDescription = label
+    this.selected = selected
+    onClick {
+        onClick()
+        true
+    }
+}
+
+/**
  * 横排标签的一格：图标在左、标签在右，整体在 [width] 给的格宽里居中。
  * 标签占的宽度 = [extra] × 选中程度，没选中时图标正好在格子中间；标签跟着选中程度淡入，超出格子的部分裁掉
  */
 @Composable
-private fun InlineTabCell(
+internal fun InlineTabCell(
     width: () -> Float,
     selectedness: () -> Float,
     extra: Float,
     icon: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
     label: @Composable () -> Unit,
 ) {
     Layout(
@@ -725,7 +842,7 @@ private fun InlineTabCell(
                 }.mochiBlur { labelBlur(selectedness()) },
             ) { label() }
         }),
-        modifier = Modifier.fillMaxHeight().clipToBounds(),
+        modifier = modifier.fillMaxHeight().clipToBounds(),
     ) { (iconM, labelM), c ->
         val w = width().roundToInt()
         val h = c.maxHeight
@@ -744,29 +861,29 @@ private fun InlineTabCell(
  * 只在选中时显示的标签跟着选中程度 [t] 出现 / 消失：模糊淡入淡出（和 [MochiBlurTransitions.Appear] 同样的模糊，
  * 和隐去程度成正比、分档复用模糊效果）。位移由调用方照常给，这里只管透明度和模糊
  */
-private fun labelAlpha(t: Float): Float = smoothstep(0.35f, 1f, t)
+internal fun labelAlpha(t: Float): Float = smoothstep(0.35f, 1f, t)
 
-private fun labelBlur(t: Float): Dp {
+internal fun labelBlur(t: Float): Dp {
     if (labelAlpha(t) < 0.02f) return 0.dp
     val hidden = 1f - t.coerceIn(0f, 1f)
     return MochiBlurTransitions.Appear.blur * hidden
 }
 
 /** 只在选中时显示标签（竖排）时，没选中的图标往下挪多少才在整格里居中：(2dp 间距 + 12sp 行高) / 2 */
-private val LabelShift = 7.dp
+internal val LabelShift = 7.dp
 
 /** 横排标签和图标之间的距离 */
-private val InlineLabelGap = 6.dp
+internal val InlineLabelGap = 6.dp
 
 /** 横排在图标右边的标签：比竖排的大一号，和图标同一行 */
-private val InlineLabelStyle = TextStyle(
+internal val InlineLabelStyle = TextStyle(
     fontSize = 13.sp,
     lineHeight = 16.sp,
     fontWeight = FontWeight.SemiBold,
     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
 )
 
-private val TabLabelStyle = TextStyle(
+internal val TabLabelStyle = TextStyle(
     fontSize = 10.sp,
     lineHeight = 12.sp,
     fontWeight = FontWeight.SemiBold,

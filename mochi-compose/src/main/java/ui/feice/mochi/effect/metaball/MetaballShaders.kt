@@ -57,6 +57,7 @@ layout(color) uniform half4 uShadowColor;
 uniform float uBody;         // 1 = 画本体颜色（形状由外面的 Kyant Path 裁），0 = 画阴影 + 融球颈
 uniform float uBlend;        // 0..1，颜色过渡开关（开头是纯按钮色）
 uniform float uCover;        // 包裹模式：按钮颜色整块过渡成面板色
+uniform float uTranslucent;  // translucent surfaces must not show their own underpaint
 """ + GLOW_UNIFORMS + """
 
 float sdG2(float2 p, float2 c, float2 h, float2 corner) {
@@ -121,6 +122,7 @@ half4 main(float2 fc) {
     float n = fract(sin(dot(fc, float2(12.9898, 78.233))) * 43758.5453) - 0.5;
     sa = clamp(sa * shc.a + n / 255.0, 0.0, 1.0);
     float4 shadow = float4(shc.rgb * sa, sa);
+    if (uTranslucent > 0.5) shadow *= 1.0 - clamp(0.5 - d, 0.0, 1.0);
 
     // 只画融球「颈」：smin 比两块本体多出来的那部分；往本体里多伸 1.5px 藏在本体下面，接缝不露底
     float neck = max(clamp(0.5 - d, 0.0, 1.0) - clamp(-1.0 - min(db, dp), 0.0, 1.0), 0.0);
@@ -168,6 +170,7 @@ internal class MetaballShaders {
             sh.setFloatUniform("uK", max(f.fuse, 0.01f))
             sh.setFloatUniform("uBlend", f.blend)
             sh.setFloatUniform("uCover", f.merge)
+            sh.setFloatUniform("uTranslucent", if (colors.a.alpha < 1f || colors.b.alpha < 1f) 1f else 0f)
             sh.setFloatUniform("uBlendWidth", max(blendWidth, 0.5f))
             sh.setFloatUniform("uShadowA", shadow.ambientOffset, max(shadow.ambientSigma, 0.5f), shadow.ambientAlpha)
             sh.setFloatUniform("uShadowK", shadow.keyOffset, max(shadow.keySigma, 0.5f), shadow.keyAlpha)

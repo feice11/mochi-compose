@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
@@ -73,26 +75,32 @@ import ui.feice.mochi.utils.rememberMochiHaptics
  */
 @Composable
 fun MetaballPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var fuse by remember { mutableFloatStateOf(28f) }
+    var fuse by rememberSaveable { mutableFloatStateOf(28f) }
     DemoPage(entry, modifier) {
-        DemoSection(
-            "把照片拖进相簿",
-            footer = "拖着照片靠近相簿，两块像水滴一样连上；连上时松手，照片被吸进去，张数加一。没连上松手，照片弹回原位。",
-        ) {
-            AlbumStage(fuse)
+        demoItem {
+            DemoSection(
+                "把照片拖进相簿",
+                footer = "拖着照片靠近相簿，两块像水滴一样连上；连上时松手，照片被吸进去，张数加一。没连上松手，照片弹回原位。",
+            ) {
+                AlbumStage(fuse)
+            }
         }
-        DemoSliderSection(
-            "融合半径",
-            "${fuse.roundToInt()} dp",
-            fuse,
-            { fuse = it },
-            valueRange = 0f..60f,
-            footer = "颈部最粗能到多少；0 就是两块各自独立，碰到也不连。",
-        )
-        DemoSection("用法", footer = "用 proximityFuse 乘最大半径，靠近才连上。") {
-            Code(
-                "val renderer = rememberMochiMetaballRenderer()\ndrawMochiMetaball(\n    renderer,\n    MochiMetaballFrame(a, b, fuse),\n    colors, shadow, glow = glow,\n)",
+        demoItem {
+            DemoSliderSection(
+                "融合半径",
+                "${fuse.roundToInt()} dp",
+                fuse,
+                { fuse = it },
+                valueRange = 0f..60f,
+                footer = "颈部最粗能到多少；0 就是两块各自独立，碰到也不连。",
             )
+        }
+        demoItem {
+            DemoSection("用法", footer = "用 proximityFuse 乘最大半径，靠近才连上。") {
+                Code(
+                    "val renderer = rememberMochiMetaballRenderer()\ndrawMochiMetaball(\n    renderer,\n    MochiMetaballFrame(a, b, fuse),\n    colors, shadow, glow = glow,\n)",
+                )
+            }
         }
     }
 }
@@ -119,8 +127,9 @@ private fun AlbumStage(fuse: Float) {
     // 被吸进相簿的进度、下一张弹出来的进度（都是 0..1）
     val absorb = remember { Animatable(0f) }
     val appear = remember { Animatable(1f) }
-    var count by remember { mutableIntStateOf(12) }
-    var shot by remember { mutableIntStateOf(0) }
+    var count by rememberSaveable { mutableIntStateOf(12) }
+    var shot by rememberSaveable { mutableIntStateOf(0) }
+    // Keep semantic alpha: the shared renderer owns both bodies, including their overlap.
     val colors = MochiMetaballColors(a = cs.secondaryContainer, b = cs.tertiaryContainer, shadow = cs.shadow)
     BoxWithConstraints(
         Modifier
@@ -209,7 +218,7 @@ private fun AlbumStage(fuse: Float) {
                     count.toLong(),
                     style = MochiTheme.textStyles.labelLarge,
                     color = cs.onSecondaryContainer,
-                    format = { "相簿 · $it 张" },
+                    format = { "$it 张照片" },
                 )
             }
         }

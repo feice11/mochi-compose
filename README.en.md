@@ -49,11 +49,11 @@ These are screen recordings of the demo app on an emulator. Close-ups play at ha
 
 ### Nothing appearance
 
-The Nothing appearance keeps the layout and motion but changes colors, fonts and icons: dot-matrix icons and digits, red accents and serif titles.
+The Nothing appearance keeps the layout, icons and motion but changes colors and fonts: dot-matrix digits, red accents and serif titles. Liquid glass (a long-term beta) and blur are separate switches available in all three appearances.
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="docs/assets/preview/n_home.png" width="200"><br><sub>Catalog with dot-matrix icons</sub></td>
+    <td align="center" width="33%"><img src="docs/assets/preview/n_home.png" width="200"><br><sub>The catalog in the Nothing appearance</sub></td>
     <td align="center" width="33%"><img src="docs/assets/preview/n_tabbar.gif" width="260"><br><sub>Tab bar (0.5×)</sub></td>
     <td align="center" width="33%"><img src="docs/assets/preview/n_counter.gif" width="260"><br><sub>Dot-matrix digits rolling (0.5×)</sub></td>
   </tr>
@@ -99,6 +99,12 @@ Then the dependency (see the JitPack badge for the version):
 implementation("com.github.feice11:mochi-compose:<version>")
 ```
 
+Icons are a separate module (the full Ionicons set, see [Icons](docs/components/icons.md)):
+
+```kotlin
+implementation("com.github.feice11.mochi-compose:mochi-icons:<version>")
+```
+
 Requires compileSdk 36+ and Kotlin 2.3+ (Capsule depends on Compose 1.10).
 
 ## Usage
@@ -130,10 +136,10 @@ Before building an app with the library (including with an AI), read the [applic
 ## Docs
 
 **Components**
-[Dropdown](docs/components/dropdown.md) · [Tab bar](docs/components/tabbar.md) · [Button](docs/components/button.md) · [Switch](docs/components/switch.md) · [Slider](docs/components/slider.md) · [Stepper](docs/components/stepper.md) · [List](docs/components/list.md) · [Sheet](docs/components/sheet.md) · [Segmented control](docs/components/segmented.md) · [Dialog](docs/components/dialog.md) · [Text input](docs/components/textfield.md) · [Toast](docs/components/toast.md) · [Context menu](docs/components/context-menu.md) · [Large title and search](docs/components/navbar.md) · [Sidebar](docs/components/sidebar.md) · [Wheels, time and date](docs/components/picker.md) · [Calendar](docs/components/calendar.md) · [Color picker](docs/components/color-picker.md) · [Popover and confirmation](docs/components/popover.md) · [Carousel and page control](docs/components/pager.md) · [Pull to refresh and empty state](docs/components/refresh.md) · [Badges, avatars and gauges](docs/components/badge.md) · [Toolbars and hold to confirm](docs/components/toolbar.md)
+[Dropdown](docs/components/dropdown.md) · [Tab bar](docs/components/tabbar.md) · [Button](docs/components/button.md) · [Switch](docs/components/switch.md) · [Slider](docs/components/slider.md) · [Intensity slider](docs/components/intensity-slider.md) · [Stepper](docs/components/stepper.md) · [List](docs/components/list.md) · [Sheet](docs/components/sheet.md) · [Segmented control](docs/components/segmented.md) · [Dialog](docs/components/dialog.md) · [Text input](docs/components/textfield.md) · [Toast](docs/components/toast.md) · [Context menu](docs/components/context-menu.md) · [Large title and search](docs/components/navbar.md) · [Sidebar](docs/components/sidebar.md) · [Wheels, time and date](docs/components/picker.md) · [Calendar](docs/components/calendar.md) · [Color picker](docs/components/color-picker.md) · [Popover and confirmation](docs/components/popover.md) · [Carousel and page control](docs/components/pager.md) · [Pull to refresh and empty state](docs/components/refresh.md) · [Badges, avatars and gauges](docs/components/badge.md) · [Toolbars and hold to confirm](docs/components/toolbar.md) · [Chips](docs/components/chip.md) · [Icons](docs/components/icons.md)
 
 **Guides**
-[App integration](docs/guide/application-integration.md) · [Theme](docs/guide/theme.md) · [Effects](docs/guide/effects.md) · [Content transitions](docs/guide/content-transitions.md) · [Navigation](docs/guide/navigation.md) · [Overscroll](docs/guide/overscroll.md) · [Haptics](docs/guide/haptics.md) · [HDR highlights (experimental)](docs/guide/hdr.md) · [Nothing appearance](docs/guide/nothing-theme.md) · [Compatibility](docs/guide/compatibility.md)
+[App integration](docs/guide/application-integration.md) · [Theme](docs/guide/theme.md) · [Effects](docs/guide/effects.md) · [Content transitions](docs/guide/content-transitions.md) · [Navigation](docs/guide/navigation.md) · [Overscroll](docs/guide/overscroll.md) · [Haptics](docs/guide/haptics.md) · [HDR highlights (experimental)](docs/guide/hdr.md) · [Nothing appearance](docs/guide/nothing-theme.md) · [iOS appearance and glass materials (long-term beta)](docs/guide/ios-theme.md) · [Compatibility](docs/guide/compatibility.md)
 
 **Working on the library**
 [Design philosophy](docs/guide/philosophy.md) · [Design principles](docs/guide/design-principles.md) · [Adding a component](docs/guide/adding-components.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
@@ -186,7 +192,7 @@ Mochi is a one-person side project. If it helps you, you can support it on [afdi
 - Shapes: [Kyant0/Capsule](https://github.com/Kyant0/Capsule)
 - The counter's rolling-wheel animation: [Bear](https://github.com/mif9499)
 - Engineering conventions: [miuix](https://github.com/compose-miuix-ui/miuix)
-- Demo app icons: [Ionicons](https://ionic.io/ionicons)
+- Icons in `mochi-icons` and the demo app: [Ionicons](https://ionic.io/ionicons) (MIT)
 
 ## License
 

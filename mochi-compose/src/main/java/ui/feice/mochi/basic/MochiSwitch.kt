@@ -64,7 +64,7 @@ public object MochiSwitchDefaults {
 
     @Composable
     public fun colors(
-        checkedTrack: Color = MochiTheme.colorScheme.primary,
+        checkedTrack: Color = MochiDefaults.switchTrack(),
         uncheckedTrack: Color = MochiDefaults.controlTrack(),
         thumb: Color = MochiDefaults.controlThumb(),
         thumbShadow: Color = Color.Black.copy(alpha = 0.22f),

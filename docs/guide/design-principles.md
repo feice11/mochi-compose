@@ -37,13 +37,13 @@ Higher in the list wins:
 - Every rounded corner uses `MochiRoundedRectangle` / `MochiCapsule` (`MochiContinuity`), never `RoundedCornerShape`. True circles may use `CircleShape`.
 - Take radii from `MochiTheme.shapes`. Cards and panels use 28dp (`extraLarge`).
 - Square tiles like app icons use the superellipse `MochiSuperellipse` (n = 5 by default): the whole edge curves, with no seam.
-- Exception: shapes that sit on the screen's physical corners (the page shrinking behind a sheet, page transitions) use the screen's circular corner radius so they match the hardware.
+- Navigation transitions retain the screen-provided radii with G2 continuous contours. Source transitions keep the background stationary by default; the captured page uses an exterior alpha mask at its corners. A sheet's background continues to follow its own physical-screen matching and interpolation rules.
 
 See [Theme → MochiShapes](theme.md#mochishapes).
 
 ## 2. Concentric insets and optical balance
 
-Grouped rows slightly relax the roomy corner-height allowance by 4dp (about 66dp to 62dp for an ordinary 34dp icon). Preserve equal heights, complete-row centering, themed sizes and the existing horizontal gutter reference; natural content and vertical padding remain the lower bound.
+Grouped rows follow the iOS 26 UIKit cell: at least 52dp (body line height + 15dp above and below), 16dp side margins, 28dp icon tiles 15dp from the text, 24dp symbols 16dp from the text, and a 26dp card corner. All rows share one height rule and center their content; natural content remains the lower bound. See [List spacing](../components/list.md#spacing-ios-26).
 
 Equal-style options have equal full heights: standard rows own corner safety in their measured height, instead of a shell strip added only at card boundaries. Centers, hit regions and divider spacing share that complete height. No scaling or fixed-height clipping.
 
@@ -54,8 +54,8 @@ Each option is centered within its **complete visible area**, including the shel
 Resolve list whitespace in layout, not by enlarging content. Never derive an automatic group scale from edge whitespace or row count. Type, icons and controls retain themed sizes, safe insets and row alignment.
 
 
-1. **Same shape, concentric**: a rounded element inset by padding inside a rounded container gets corner = container corner − padding (`MochiConcentric`). Examples: list leading icon tiles (12dp = 28 − 16), the tab bar selection.
-2. **Optical text spacing**: text-only rows keep a stable **22dp** horizontal inset (`MochiListDefaults.TextRowPadding`). Boundary spacing reads actual first/last line-box centers, including fallback fonts and ascent/descent. Text is not a fixed 12dp capsule: neither `H` nor individual word ink represents every language. Font, size and line count give stable spacing; wrapping grows naturally. Headers and footers also start at 22dp.
+1. **Same shape, concentric**: a rounded element inset by padding inside a rounded container gets corner = container corner − padding (`MochiConcentric`). Example: the tab bar selection.
+2. **Text start**: text-only rows start their text at **16dp** (`MochiListDefaults.TextRowPadding`, the iOS cell margin); headers and footers start there too. Font, size and line count give stable spacing; wrapping grows naturally.
 3. **Center icons by ink**: `›`, the back arrow and the magnifier are centered on their actual ink, not their bounding box.
 4. **Nothing pokes into a corner**: push it inward, or give it a concentric corner of its own.
 5. **Equal on every side**: an icon in a capsule sits as far from the end as from the top and bottom.
@@ -82,6 +82,7 @@ Demo introduction cards use separate 24dp content padding and the theme's 32dp o
 - Theme color changes (seed, palette style, light/dark) do not swap instantly either: `MochiTheme` interpolates the whole scheme, and components must not animate colors again on top. Falls under "no instant content swaps".
 - Expensive effects (blur, AGSL, soft shadows, refresh rate) are always gated on the `MochiGraphics` level, never on the system version directly; the lowest level must stay fully functional, only drawn more simply.
 - Switching the whole style uses an in-place `crossfade`; switching light/dark is revealed from the finger with `MochiThemeRevealHost`, and applied directly with no animation when the brightness does not actually change; continuous parameters (seed, palette style) use scheme interpolation, not a reveal. Never both: colors snap while a reveal runs.
+- Glass tab bar icons (iOS 26 look) are filled in both the selected and unselected state (`selectedIcon`, matching the SF Symbols `.fill` variants). The state is shown only by color and the selection pill, with no outline / filled swap. Solid tab bars still use outline when unselected and filled when selected.
 - Avatars are always framed: `MochiAvatarButton` when clickable, `MochiFramedAvatar` otherwise. The avatar is concentric with its frame with a gap all round; never draw your own ring.
 
 ## 4. Text
@@ -117,6 +118,8 @@ See [Theme](theme.md).
 - During row deletion, first/last-row padding shrinks continuously with the row, including multiple rows becoming one. Removing the row in its callback must not suddenly release a residual gap.
 - Transform a surface's rounded clip, background, shadow and content together. A stationary outer outline must not clip an inner surface that grows or follows the finger, including toasts.
 - **Offscreen layers must not sit inside a transform:** offscreen compositing (the fade mask's `CompositingStrategy.Offscreen`) clips to the layer's own rectangle. Put translations and scales that follow a morph outside it so the offscreen layer moves as a whole, and only go offscreen when something is actually erased (`mochiFadeMask` turns it off when nothing is masked). Otherwise content that jelly or rubber band moves out of its original rectangle is cut by an invisible box with a straight edge.
+- **Fade on the layer that contains the shadow:** a layer with alpha below 1 is also rendered offscreen into its own rectangle. For surfaces whose shadow or outer stroke draws outside their bounds (glass, floating bars), put the alpha on a wrapper that is large enough to contain the shadow, or on the parameter the library provides (the glass body's `alpha`). Alpha on the surface itself cuts the shadow off at the rectangle and leaves square gray corners outside the rounded shape.
+- **Horizontal scroll rows don't end in a hard cut:** content that scrolls sideways (chips, card carousels) fades on any edge that can still scroll (`mochiScrollFadeMask(state, vertical = false)`; built into `MochiChipGroup`). Inside a container with side padding, extend the scroll area to the screen edges (`bleed` on `MochiChipGroup`) and keep the first item aligned with the cards, instead of slicing a chip in half at the card edge.
 - **Full-bleed content is clipped to its card:** when content has no padding and touches the card edges (demo stages, previews with their own background), the card clips it to its rounded shape, so the content's rectangular background never squares off the corners.
 - Overscroll uses a rubber band (the iOS formula), not a hard stop.
 - With system animations off, elastic effects are disabled and content transitions finish instantly.
@@ -186,12 +189,27 @@ Few and precise: vibrate only when the state actually changes, or when what a re
 - Need a menu? Use `MochiDropdown` / `MochiIconDropdown` / `MochiContextMenu`. Need a button? Use `MochiButton` / `MochiBarIconButton`. Don't extract a piece and redraw the rest yourself; you lose half the effects.
 - When a shared effect falls short, extend the `effect/` module (keeping it backward compatible) instead of writing another copy in the component.
 
+## 10. Long pages use lazy lists
+
+- A page that does not fit on one screen (many sections or settings) uses a lazy list: `MochiLazyLargeTitleScaffold` / `MochiLazyCompactTitleScaffold`, or your own `LazyColumn` + `MochiTitleBar`. Put one section per item (`item { MochiListSection(…) }`); do not put the whole page into one item. Sections with dozens or hundreds of rows use `mochiListSection`: one item per row, still drawn as one card; never one card per row, and never the section heading as its own item.
+- Why: with a plain `Column` + `verticalScroll`, every section stays in the UI tree. On each scroll frame Compose updates the position index of the whole tree, and with an accessibility service running it also rebuilds the semantics tree. The cost grows with the node count, so long pages miss frames on the main thread. A lazy list keeps only the items near the screen. Measured on the sample List page (about forty rows): 42% of the main thread in the position index and 26% in semantics while scrolling (Compose UI 1.10, no switch to turn it off).
+- Items scrolled off screen are disposed: keep user-editable state inside an item (toggles, input, selection) in `rememberSaveable` so it survives; state shared across items lives outside the list.
+- Short pages that fit on one screen (few sections, no scrolling) may keep `MochiLargeTitleScaffold` / `MochiCompactTitleScaffold`.
+- Scroll areas nested in a page (preview cards, lists inside cards) use `Modifier.mochiContainedScroll(effect)`: at their ends they bounce on their own instead of moving the page.
+
+## 11. Copy states facts, not slogans
+
+- Every line of UI text should tell the user one more thing: what the page does, what a value means, what went wrong, what to do next. Delete adjectives that carry no fact (immersive, ultimate, seamless, empower) and slogan subtitles.
+- Do not glue a title to a count or a status to its explanation with "·": counts go in the trailing value, secondary facts in the subtitle, or write a full sentence.
+- Icons come from `mochi-icons`, never emoji; colors only from the theme, no gradient backgrounds; animation only for state changes.
+- The full list with rewrites is in [integration requirements, section 5](application-integration.md#5-copy-and-visuals-avoid-the-ai-look).
+
 ## Checklist
 
 Before you submit a component or demo page:
 
 - [ ] No `RoundedCornerShape`; radii come from `MochiTheme.shapes`
-- [ ] Elements in rounded containers: concentric corners; text-only rows and headers start at 22dp; equal spacing on every side
+- [ ] Elements in rounded containers: concentric corners; list text-only rows and headers start at 16dp (iOS)
 - [ ] Colors and text sizes come from the theme; checked in dark mode
 - [ ] Every content change animates; readings during a drag are shown directly
 - [ ] Card height changes smoothly by default; first layout is immediate; interrupted expansion/shrink continues; existing height animations are not stacked

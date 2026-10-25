@@ -10,11 +10,9 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,11 +32,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -64,9 +64,17 @@ internal object IndexBarGeometry {
     fun centerOf(i: Int, height: Float, count: Int): Float = if (count <= 0) 0f else (i + 0.5f) * height / count
 }
 
+public object MochiIndexBarDefaults {
+    /** 索引条的宽度（触摸范围也是这么宽）。贴着屏幕右边放，旁边的列表内容右边让出这么多，不和字母叠在一起 */
+    public val Width: Dp = 20.dp
+}
+
 /**
  * 字母索引条（通讯录右边的 A–Z）：按住或滑动时每换一个字母轻震一下并回调 [onSelect]（由调用方滚动列表），
  * 左边弹出一个放大的字母气泡跟着手指，字母切换时模糊替换；松手气泡缩回。
+ *
+ * 只占 [MochiIndexBarDefaults.Width] 宽，气泡画在条外面、不占位置。直接贴着屏幕右边放（`Alignment.CenterEnd`，不要再加右边距），
+ * 字母中心离屏幕边 10dp，和 iOS 通讯录一样。
  */
 @Composable
 public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
@@ -81,7 +89,7 @@ public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit,
     Box(modifier.semantics { contentDescription = "索引" }) {
         Column(
             Modifier
-                .width(20.dp)
+                .width(MochiIndexBarDefaults.Width)
                 .pointerInput(labels.size) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
@@ -129,8 +137,11 @@ public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit,
         Box(
             Modifier
                 .align(Alignment.TopStart)
-                .wrapContentSize(unbounded = true)
-                .offset { IntOffset(-BubbleOffset.roundToPx() - BubbleSize.roundToPx(), (fingerY - BubbleSize.toPx() / 2f).roundToInt()) }
+                // 气泡画在条外面、不占位置：索引条只有 20dp 宽，贴着屏幕边放时字母就在边上
+                .layout { m, _ ->
+                    val p = m.measure(Constraints())
+                    layout(0, 0) { p.place(-BubbleOffset.roundToPx() - p.width, (fingerY - p.height / 2f).roundToInt()) }
+                }
                 .graphicsLayer {
                     val s = bubble.value.coerceAtLeast(0f)
                     scaleX = s

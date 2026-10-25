@@ -1,0 +1,516 @@
+# 中文搜索关键词
+accessibility	无障碍 辅助功能
+add	添加 加号 新建
+add-circle	添加 加号 新建 圆形
+airplane	飞机 飞行模式
+alarm	闹钟
+albums	相册 专辑
+alert	提醒 警告 感叹号
+alert-circle	提醒 警告 感叹号 圆形
+american-football	橄榄球 美式 足球
+analytics	分析 统计
+aperture	光圈 镜头
+apps	应用 九宫格
+archive	归档 存档
+arrow-back	箭头 返回 后退 左
+arrow-back-circle	箭头 返回 后退 左 圆形
+arrow-down	箭头 向下 下
+arrow-down-circle	箭头 向下 下 圆形
+arrow-down-left-box	箭头 向下 下 左 方框
+arrow-down-right-box	箭头 向下 下 右 方框
+arrow-forward	箭头 前进 右
+arrow-forward-circle	箭头 前进 右 圆形
+arrow-redo	重做 转发 箭头
+arrow-redo-circle	箭头 重做 圆形
+arrow-undo	撤销 箭头
+arrow-undo-circle	箭头 撤销 圆形
+arrow-up	箭头 向上 上
+arrow-up-circle	箭头 向上 上 圆形
+arrow-up-left-box	箭头 向上 上 左 方框
+arrow-up-right-box	箭头 向上 上 右 方框
+at	艾特 邮箱
+at-circle	艾特 邮箱 圆形
+attach	附件 回形针
+backspace	退格 删除
+bag	购物袋 包
+bag-add	购物袋 包 添加 加号 新建
+bag-check	购物袋 包 勾选
+bag-handle	手提袋 购物 购物袋 包 提手
+bag-remove	购物袋 包 移除 减号
+balloon	气球
+ban	禁止 屏蔽
+bandage	创可贴 绷带
+bar-chart	柱状图 柱 图表
+barbell	杠铃 健身
+barcode	条形码
+baseball	棒球
+basket	篮子 购物篮
+basketball	篮球
+battery-charging	充电中 电池 电量 充电
+battery-dead	没电 电池 电量 耗尽
+battery-full	满电 电池 电量 满
+battery-half	半电量 电池 电量 一半
+beaker	烧杯 实验
+bed	床 睡眠
+beer	啤酒
+bicycle	自行车 骑行
+binoculars	望远镜
+bluetooth	蓝牙
+boat	船
+body	身体 人体
+bonfire	篝火
+book	书 阅读
+bookmark	书签 收藏
+bookmarks	书签 收藏
+bowling-ball	保龄球 球
+briefcase	公文包 工作
+browsers	浏览器 窗口
+brush	画笔 刷子
+bug	虫子 调试
+build	构建 扳手 工具
+bulb	灯泡 想法
+bus	公交 巴士
+business	公司 商业 大楼
+cafe	咖啡 咖啡馆
+calculator	计算器
+calendar	日历 日程
+calendar-clear	日历 日程 空白
+calendar-number	日历 日期 日程 数字
+call	电话 拨号
+camera	相机 拍照
+camera-reverse	切换镜头 翻转相机 相机 拍照 翻转 反转
+car	汽车
+car-sport	跑车 汽车 运动
+card	卡 银行卡
+caret-back	三角箭头 返回 后退 左
+caret-back-circle	三角箭头 返回 后退 左 圆形
+caret-down	三角箭头 向下 下
+caret-down-circle	三角箭头 向下 下 圆形
+caret-forward	三角箭头 前进 右
+caret-forward-circle	三角箭头 前进 右 圆形
+caret-up	三角箭头 向上 上
+caret-up-circle	三角箭头 向上 上 圆形
+cart	购物车
+cash	现金 钱
+cellular	信号 蜂窝
+chatbox	消息 聊天
+chatbox-ellipses	消息 聊天 省略号
+chatbubble	气泡 聊天 消息
+chatbubble-ellipses	气泡 聊天 消息 省略号
+chatbubbles	气泡 聊天 对话
+checkbox	复选框 勾选
+checkmark	对勾 完成
+checkmark-circle	对勾 完成 圆形
+checkmark-done	已读 双对勾 对勾 完成
+checkmark-done-circle	对勾 完成 圆形
+chevron-back	箭头 尖括号 返回 后退 左
+chevron-back-circle	箭头 尖括号 返回 后退 左 圆形
+chevron-collapse	箭头 尖括号 收起 折叠
+chevron-down	箭头 尖括号 向下 下
+chevron-down-circle	箭头 尖括号 向下 下 圆形
+chevron-expand	箭头 尖括号 展开 放大 全屏
+chevron-forward	箭头 尖括号 前进 右
+chevron-forward-circle	箭头 尖括号 前进 右 圆形
+chevron-up	箭头 尖括号 向上 上
+chevron-up-circle	箭头 尖括号 向上 上 圆形
+clipboard	剪贴板
+close	关闭 叉
+close-circle	关闭 叉 圆形
+cloud	云
+cloud-circle	云 圆形
+cloud-done	已同步 云端完成 云 完成
+cloud-download	云端下载 云 下载
+cloud-offline	离线 无网络 云
+cloud-upload	云端上传 云 上传
+cloudy	多云 阴天
+cloudy-night	夜间多云 多云 阴天 夜晚
+code	代码
+code-download	代码 下载
+code-slash	代码 斜杠
+code-working	代码 运行中
+cog	齿轮 设置
+color-fill	油漆桶 填充 颜色
+color-filter	滤镜 颜色 筛选 过滤
+color-palette	颜色 调色板
+color-wand	魔棒 自动美化 颜色
+compass	指南针 罗盘 发现
+construct	工具 施工
+contract	收缩 缩小
+contrast	对比度
+copy	复制
+create	编辑 新建 写
+crop	裁剪
+cube	立方体 3D
+cut	剪切 剪刀
+desktop	桌面 显示器 电脑
+diamond	钻石
+dice	骰子
+disc	光盘 唱片
+document	文档 文件
+document-attach	文档 文件 附件 回形针
+document-lock	加密文档 文档 文件 锁
+document-text	文档 文件 文字 文本
+documents	文档 文件
+download	下载
+duplicate	复制 副本
+ear	耳朵 听
+earth	地球 世界
+easel	画架 演示
+egg	鸡蛋
+ellipse	椭圆 圆
+ellipsis-horizontal	更多 横向省略号 省略号 水平 横向
+ellipsis-horizontal-circle	更多 省略号 水平 横向 圆形
+ellipsis-vertical	更多 竖向省略号 省略号 竖直 纵向
+ellipsis-vertical-circle	更多 省略号 竖直 纵向 圆形
+enter	进入
+exit	退出
+expand	展开 放大 全屏
+extension-puzzle	拼图 扩展 插件
+eye	眼睛 查看 显示
+eye-off	隐藏 不可见 眼睛 查看 显示 关闭
+eyedrop	取色 吸管
+fast-food	快餐 汉堡 快 食物
+female	女 女性
+file-tray	收件箱 托盘 文件
+file-tray-full	文件 托盘 收件箱 满
+file-tray-stacked	文件 托盘 收件箱 堆叠
+film	电影 胶片
+filter	筛选 过滤
+filter-circle	筛选 过滤 圆形
+finger-print	指纹 解锁 手指 打印
+fish	鱼
+fitness	健身 运动
+flag	旗帜 标记 举报
+flame	火焰 热门
+flash	闪电 闪光灯
+flash-off	关闭闪光灯 闪电 闪光灯 关闭
+flashlight	手电筒
+flask	烧瓶 实验
+flower	花
+folder	文件夹
+folder-open	打开文件夹 文件夹 打开 外部链接
+football	足球
+footsteps	脚印 步数
+funnel	漏斗 筛选
+game-controller	游戏手柄 游戏 手柄
+gift	礼物
+git-branch	版本控制 分支
+git-commit	版本控制 提交
+git-compare	版本控制 对比
+git-merge	版本控制 合并
+git-network	版本控制 网络
+git-pull-request	合并请求 版本控制 拉取 请求
+glasses	眼镜
+globe	地球 网络 语言
+golf	高尔夫
+grid	网格
+hammer	锤子
+hand-left	手 左
+hand-right	手 右
+happy	开心 笑脸
+hardware-chip	芯片 处理器 硬件
+headset	耳机 客服
+heart	心 喜欢 收藏
+heart-circle	心 喜欢 收藏 圆形
+heart-dislike	心 喜欢 收藏 不喜欢
+heart-dislike-circle	心 喜欢 收藏 不喜欢 圆形
+heart-half	半颗心 评分 心 喜欢 收藏 一半
+help	帮助 问号
+help-buoy	救生圈 帮助 问号 浮标
+help-circle	帮助 问号 圆形
+home	主页 首页 家
+hourglass	沙漏 等待
+ice-cream	冰淇淋 冰 奶油
+id-card	身份证 证件 身份 卡 银行卡
+image	图片 照片
+images	图片 相册
+infinite	无限 循环
+information	信息 说明
+information-circle	信息 说明 圆形
+invert-mode	反色 深浅模式 模式
+journal	日记 笔记
+key	钥匙 密码
+keypad	拨号盘 键盘
+language	语言 翻译
+laptop	笔记本电脑
+layers	图层
+leaf	叶子 环保
+library	图书馆 资料库
+link	链接
+list	列表
+list-circle	列表 圆形
+locate	定位
+location	位置 定位
+lock-closed	锁定 上锁 锁 关闭
+lock-open	解锁 锁 打开 外部链接
+log-in	登录 入
+log-out	退出登录 登录 出
+logo-alipay	品牌 标志 支付宝
+logo-amazon	品牌 标志 亚马逊
+logo-amplify	品牌 标志
+logo-android	品牌 标志 安卓
+logo-angular	品牌 标志
+logo-appflow	品牌 标志
+logo-apple	品牌 标志 苹果
+logo-apple-appstore	品牌 标志 苹果 应用商店
+logo-apple-ar	品牌 标志
+logo-behance	品牌 标志
+logo-bitbucket	品牌 标志
+logo-bitcoin	品牌 标志 比特币
+logo-buffer	品牌 标志
+logo-capacitor	品牌 标志
+logo-chrome	品牌 标志 谷歌浏览器
+logo-closed-captioning	品牌 标志 字幕
+logo-codepen	品牌 标志
+logo-css3	品牌 标志
+logo-designernews	品牌 标志
+logo-deviantart	品牌 标志
+logo-discord	品牌 标志 聊天
+logo-docker	品牌 标志
+logo-dribbble	品牌 标志
+logo-dropbox	品牌 标志
+logo-edge	品牌 标志 微软浏览器
+logo-electron	品牌 标志
+logo-euro	品牌 标志 欧元
+logo-facebook	品牌 标志
+logo-figma	品牌 标志
+logo-firebase	品牌 标志
+logo-firefox	品牌 标志 火狐
+logo-flickr	品牌 标志
+logo-foursquare	品牌 标志
+logo-github	品牌 标志 代码托管
+logo-gitlab	品牌 标志
+logo-google	品牌 标志 谷歌
+logo-google-playstore	品牌 标志 谷歌 应用商店
+logo-hackernews	品牌 标志
+logo-html5	品牌 标志
+logo-instagram	品牌 标志
+logo-ionic	品牌 标志
+logo-ionitron	品牌 标志
+logo-javascript	品牌 标志
+logo-laravel	品牌 标志
+logo-linkedin	品牌 标志
+logo-markdown	品牌 标志
+logo-mastodon	品牌 标志
+logo-medium	品牌 标志
+logo-microsoft	品牌 标志 微软
+logo-no-smoking	品牌 标志 禁止吸烟
+logo-nodejs	品牌 标志
+logo-npm	品牌 标志
+logo-octocat	品牌 标志
+logo-paypal	品牌 标志 支付
+logo-pinterest	品牌 标志
+logo-playstation	品牌 标志 游戏机
+logo-pwa	品牌 标志
+logo-python	品牌 标志
+logo-react	品牌 标志
+logo-reddit	品牌 标志
+logo-rss	品牌 标志 订阅
+logo-sass	品牌 标志
+logo-skype	品牌 标志 通话
+logo-slack	品牌 标志 聊天
+logo-snapchat	品牌 标志
+logo-soundcloud	品牌 标志
+logo-stackoverflow	品牌 标志
+logo-steam	品牌 标志
+logo-stencil	品牌 标志
+logo-tableau	品牌 标志
+logo-threads	品牌 标志
+logo-tiktok	品牌 标志 抖音
+logo-trapeze	品牌 标志
+logo-tumblr	品牌 标志
+logo-tux	品牌 标志
+logo-twitch	品牌 标志
+logo-twitter	品牌 标志 推特
+logo-usd	品牌 标志 美元
+logo-venmo	品牌 标志 支付
+logo-vercel	品牌 标志
+logo-vimeo	品牌 标志
+logo-vk	品牌 标志
+logo-vue	品牌 标志
+logo-web-component	品牌 标志
+logo-wechat	品牌 标志 微信
+logo-whatsapp	品牌 标志 聊天
+logo-windows	品牌 标志 微软
+logo-wordpress	品牌 标志
+logo-x	品牌 标志 推特
+logo-xbox	品牌 标志 游戏机
+logo-xing	品牌 标志
+logo-yahoo	品牌 标志
+logo-yen	品牌 标志 日元 人民币
+logo-youtube	品牌 标志 视频
+magnet	磁铁
+mail	邮件 信封
+mail-open	已读邮件 邮件 信封 打开 外部链接
+mail-unread	未读邮件 邮件 信封 未读
+male	男 男性
+male-female	性别 男女 男 男性 女 女性
+man	男人
+map	地图
+medal	奖牌
+medical	医疗
+medkit	急救箱 医药
+megaphone	喇叭 公告
+menu	菜单
+mic	麦克风 录音
+mic-circle	麦克风 录音 圆形
+mic-off	关闭麦克风 静音 麦克风 录音 关闭
+mic-off-circle	麦克风 录音 关闭 圆形
+moon	月亮 夜间 深色
+move	移动
+musical-note	音符 音乐
+musical-notes	音符 音乐
+navigate	导航
+navigate-circle	导航 圆形
+newspaper	新闻 报纸
+notifications	通知 铃铛
+notifications-circle	通知 铃铛 圆形
+notifications-off	免打扰 关闭通知 通知 铃铛 关闭
+notifications-off-circle	通知 铃铛 关闭 圆形
+nuclear	核 辐射
+nutrition	营养 水果
+open	打开 外部链接
+options	选项 调节 滑块
+paper-plane	纸飞机 发送 纸 飞机
+partly-sunny	晴转多云 局部 晴天 太阳 浅色 亮度
+pause	暂停
+pause-circle	暂停 圆形
+paw	爪印 宠物
+pencil	铅笔 编辑
+people	人们 群组 联系人
+people-circle	群组 头像 人们 联系人 圆形
+person	个人 用户 联系人
+person-add	添加联系人 加好友 个人 用户 联系人 添加 加号 新建
+person-circle	头像 个人 用户 联系人 圆形
+person-remove	删除联系人 个人 用户 联系人 移除 减号
+phone-landscape	手机 横屏
+phone-portrait	手机 竖屏
+pie-chart	饼图 饼 图表
+pin	图钉 位置
+pint	啤酒杯
+pizza	披萨
+planet	星球
+play	播放
+play-back	快退 播放 返回 后退 左
+play-back-circle	播放 返回 后退 左 圆形
+play-circle	播放 圆形
+play-forward	快进 播放 前进 右
+play-forward-circle	播放 前进 右 圆形
+play-skip-back	上一首 播放 跳过 切歌 返回 后退 左
+play-skip-back-circle	播放 跳过 切歌 返回 后退 左 圆形
+play-skip-forward	下一首 播放 跳过 切歌 前进 右
+play-skip-forward-circle	播放 跳过 切歌 前进 右 圆形
+podium	领奖台 排名
+power	电源 开关
+pricetag	价签 标签
+pricetags	价签 标签
+print	打印
+prism	棱镜
+pulse	心率 脉搏 波形
+push	推送
+qr-code	二维码 代码
+radio	电台 收音机
+radio-button-off	单选 未选 电台 收音机 按钮 关闭
+radio-button-on	单选 选中 电台 收音机 按钮 开启
+rainy	下雨 雨
+reader	阅读 文章
+receipt	收据 账单
+recording	录音 录像
+refresh	刷新
+refresh-circle	刷新 圆形
+reload	重新加载 刷新
+reload-circle	重新加载 刷新 圆形
+remove	移除 减号
+remove-circle	移除 减号 圆形
+reorder-four	四条横线 拖动 排序 四
+reorder-three	三条横线 菜单 排序 拖动 三
+reorder-two	两条横线 拖动 排序 二
+repeat	重复 循环
+resize	调整大小
+restaurant	餐厅 餐具
+return-down-back	回车 换行 返回 向下 下 后退 左
+return-down-forward	回车 返回 向下 下 前进 右
+return-up-back	回车 返回 向上 上 后退 左
+return-up-forward	回车 返回 向上 上 前进 右
+ribbon	丝带 徽章
+rocket	火箭 发布
+rose	玫瑰
+sad	难过 哭脸
+save	保存
+scale	秤 体重
+scan	扫描 扫码
+scan-circle	扫描 扫码 圆形
+school	学校 毕业
+search	搜索 放大镜
+search-circle	搜索 放大镜 圆形
+send	发送
+server	服务器 数据库
+settings	设置 齿轮
+shapes	形状
+share	分享
+share-social	分享 社交
+shield	盾牌 安全 保护
+shield-checkmark	盾牌 安全 保护 对勾 完成
+shield-half	盾牌 安全 保护 一半
+shirt	衬衫 衣服
+shuffle	随机 乱序
+skull	骷髅
+snow	雪 下雪
+sparkles	闪光 星星 特效 AI
+speedometer	速度表 仪表盘 性能
+square	方形 正方形
+star	星星 收藏 评分
+star-half	半星 评分 星星 收藏 一半
+stats-chart	统计图 统计 图表
+stop	停止
+stop-circle	停止 圆形
+stopwatch	秒表 计时
+storefront	商店 店铺
+subway	地铁
+sunny	晴天 太阳 浅色 亮度
+swap-horizontal	左右交换 切换 交换 水平 横向
+swap-vertical	上下交换 排序 交换 切换 竖直 纵向
+sync	同步
+sync-circle	同步 圆形
+tablet-landscape	平板 横屏
+tablet-portrait	平板 竖屏
+telescope	望远镜
+tennisball	网球
+terminal	终端 命令行
+text	文字 文本
+thermometer	温度计 温度
+thumbs-down	点踩 差评 点赞 拇指 向下 下
+thumbs-up	点赞 赞 拇指 向上 上
+thunderstorm	雷雨
+ticket	票 门票 优惠券
+time	时间 时钟
+timer	计时器 倒计时
+today	今天 日历
+toggle	开关
+trail-sign	路标 指示牌 小路 标志
+train	火车
+transgender	跨性别
+trash	垃圾桶 删除
+trash-bin	垃圾桶 删除
+trending-down	下跌 趋势 向下 下
+trending-up	上涨 趋势 向上 上
+triangle	三角形
+trophy	奖杯 成就
+tv	电视
+umbrella	雨伞
+unlink	断开链接
+videocam	摄像机 视频
+videocam-off	关闭摄像头 摄像机 视频 关闭
+volume-high	音量 声音 高
+volume-low	音量 声音 低
+volume-medium	音量 声音 中
+volume-mute	静音 音量 声音
+volume-off	静音 关闭声音 音量 声音 关闭
+walk	步行 走路
+wallet	钱包 支付
+warning	警告 注意
+watch	手表
+water	水 水滴
+wifi	无线网络 WiFi
+wine	红酒 酒杯
+woman	女人

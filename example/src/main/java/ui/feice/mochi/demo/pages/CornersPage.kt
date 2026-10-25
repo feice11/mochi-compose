@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ import ui.feice.mochi.demo.common.DemoSettingsSection
 import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.shape.MochiConcentric
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.shape.MochiSuperellipse
@@ -62,93 +64,115 @@ import ui.feice.mochi.theme.MochiTheme
 fun CornersPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var radius by remember { mutableFloatStateOf(44f) }
-    var comb by remember { mutableStateOf(true) }
-    var compare by remember { mutableStateOf(true) }
-    var exponent by remember { mutableFloatStateOf(5f) }
-    var padding by remember { mutableFloatStateOf(14f) }
+    var radius by rememberSaveable { mutableFloatStateOf(44f) }
+    var comb by rememberSaveable { mutableStateOf(true) }
+    var compare by rememberSaveable { mutableStateOf(true) }
+    var exponent by rememberSaveable { mutableFloatStateOf(5f) }
+    var padding by rememberSaveable { mutableFloatStateOf(14f) }
     DemoPage(entry, modifier) {
-        DemoSection(
-            "曲率梳",
-            footer = "蓝色是库里的连续圆角，红线是同样半径的普通圆角。打开曲率梳：普通圆角的梳子在圆弧开始处突然竖起来，连续圆角平滑地升起、落下。",
-        ) {
-            val g2 = MochiRoundedRectangle(radius.dp)
-            val plain = RoundedCornerShape(radius.dp)
-            Box(Modifier.fillMaxWidth().aspectRatio(1.35f).padding(28.dp)) {
-                Box(Modifier.fillMaxSize().background(cs.primaryContainer, g2))
-                Canvas(Modifier.fillMaxSize()) {
-                    if (compare) drawOutline(plain, cs.error, 1.5.dp.toPx())
-                    if (comb) {
-                        drawComb(outlinePath(g2), cs.primary)
-                        if (compare) drawComb(outlinePath(plain), cs.error)
+        demoItem {
+            DemoSection(
+                "曲率梳",
+                footer = "蓝色是库里的连续圆角，红线是同样半径的普通圆角。打开曲率梳：普通圆角的梳子在圆弧开始处突然竖起来，连续圆角平滑地升起、落下。",
+            ) {
+                val g2 = MochiRoundedRectangle(radius.dp)
+                val plain = RoundedCornerShape(radius.dp)
+                Box(Modifier.fillMaxWidth().aspectRatio(1.35f).padding(28.dp)) {
+                    Box(Modifier.fillMaxSize().background(cs.primaryContainer, g2))
+                    Canvas(Modifier.fillMaxSize()) {
+                        if (compare) drawOutline(plain, cs.error, 1.5.dp.toPx())
+                        if (comb) {
+                            drawComb(outlinePath(g2), cs.primary)
+                            if (compare) drawComb(outlinePath(plain), cs.error)
+                        }
                     }
                 }
             }
         }
-        DemoSliderSection("圆角半径", "${radius.toInt()} dp", radius, { radius = it }, valueRange = 0f..120f)
-        DemoSettingsSection(null) {
-            Toggles("曲率梳", listOf("开" to true, "关" to false), comb) { comb = it }
-            Toggles("对比普通圆角", listOf("开" to true, "关" to false), compare) { compare = it }
+        demoItem {
+            DemoSliderSection("圆角半径", "${radius.toInt()} dp", radius, { radius = it }, valueRange = 0f..120f)
         }
-        DemoSection(
-            "并排看",
-            footer = "同样的半径：左边普通圆角，直边和圆弧的接缝处曲率断开；右边连续圆角，曲率是一条连续的曲线。",
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ComparePane("普通圆角", RoundedCornerShape(36.dp), cs.error, Modifier.weight(1f))
-                ComparePane("连续圆角", MochiRoundedRectangle(36.dp), cs.primary, Modifier.weight(1f))
+        demoItem {
+            DemoSettingsSection(null) {
+                Toggles("曲率梳", listOf("开" to true, "关" to false), comb) { comb = it }
+                Toggles("对比普通圆角", listOf("开" to true, "关" to false), compare) { compare = it }
             }
         }
-        DemoSection(
-            "超椭圆图标",
-            footer = "app 图标那样的方块用超椭圆：整条边都在微微弯，没有直边和圆弧的分界，n 越大越方。",
-        ) {
-            val shape = MochiSuperellipse(exponent)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                listOf(
-                    Icons.CAMERA to cs.tertiaryContainer,
-                    Icons.HEART to cs.primaryContainer,
-                    Icons.NOTE to cs.secondaryContainer,
-                ).forEach { (g, c) ->
-                    Box(Modifier.size(64.dp).background(c, shape), contentAlignment = Alignment.Center) {
-                        Glyph(g, cs.onSurface, size = 30)
+        demoItem {
+            DemoSection(
+                "并排看",
+                footer = "同样的半径：左边普通圆角，直边和圆弧的接缝处曲率断开；右边连续圆角，曲率是一条连续的曲线。",
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ComparePane("普通圆角", RoundedCornerShape(36.dp), cs.error, Modifier.weight(1f))
+                    ComparePane("连续圆角", MochiRoundedRectangle(36.dp), cs.primary, Modifier.weight(1f))
+                }
+            }
+        }
+        demoItem {
+            DemoSection(
+                "超椭圆图标",
+                footer = "app 图标那样的方块用超椭圆：整条边都在微微弯，没有直边和圆弧的分界，n 越大越方。",
+            ) {
+                val shape = MochiSuperellipse(exponent)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    listOf(
+                        Icons.CAMERA to cs.tertiaryContainer,
+                        Icons.HEART to cs.primaryContainer,
+                        Icons.NOTE to cs.secondaryContainer,
+                    ).forEach { (g, c) ->
+                        Box(Modifier.size(64.dp).background(c, shape), contentAlignment = Alignment.Center) {
+                            Glyph(g, cs.onSurface, size = 30)
+                        }
+                    }
+                    Box(Modifier.size(96.dp)) {
+                        Box(Modifier.fillMaxSize().background(cs.surfaceContainerHighest, shape))
+                        Canvas(Modifier.fillMaxSize()) { drawComb(outlinePath(shape), cs.tertiary, scale = 3f) }
                     }
                 }
-                Box(Modifier.size(96.dp)) {
-                    Box(Modifier.fillMaxSize().background(cs.surfaceContainerHighest, shape))
-                    Canvas(Modifier.fillMaxSize()) { drawComb(outlinePath(shape), cs.tertiary, scale = 3f) }
+            }
+        }
+        demoItem {
+            DemoSliderSection("超椭圆指数 n", "%.1f".format(exponent), exponent, { exponent = it }, valueRange = 2f..10f)
+        }
+        demoItem {
+            DemoSection(
+                "同心",
+                footer = "圆角容器里贴着内边距放圆角元素：内圆角 = 外圆角 − 内边距，两条轮廓处处等距。左边内外同半径，角上的缝明显变宽。",
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    NestedPane("同半径", padding.dp, concentric = false, Modifier.weight(1f))
+                    NestedPane("同心", padding.dp, concentric = true, Modifier.weight(1f))
                 }
             }
         }
-        DemoSliderSection("超椭圆指数 n", "%.1f".format(exponent), exponent, { exponent = it }, valueRange = 2f..10f)
-        DemoSection(
-            "同心",
-            footer = "圆角容器里贴着内边距放圆角元素：内圆角 = 外圆角 − 内边距，两条轮廓处处等距。左边内外同半径，角上的缝明显变宽。",
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                NestedPane("同半径", padding.dp, concentric = false, Modifier.weight(1f))
-                NestedPane("同心", padding.dp, concentric = true, Modifier.weight(1f))
-            }
+        demoItem {
+            DemoSliderSection("内边距", "${padding.toInt()} dp", padding, { padding = it }, valueRange = 4f..28f)
         }
-        DemoSliderSection("内边距", "${padding.toInt()} dp", padding, { padding = it }, valueRange = 4f..28f)
-        DemoSection("三层嵌套", footer = "每一层都按同一个规则往里收，再多层也处处等距。") {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                val outer = 40.dp
-                val p = padding.dp
-                Layer(outer, p, cs.primaryContainer) {
-                    Layer(MochiConcentric.inner(outer, p), p, cs.secondaryContainer) {
-                        Layer(MochiConcentric.inner(MochiConcentric.inner(outer, p), p), p, cs.tertiaryContainer) {
-                            Box(
-                                Modifier
-                                    .size(width = 120.dp, height = 56.dp)
-                                    .background(
-                                        cs.surface,
-                                        MochiRoundedRectangle(
-                                            MochiConcentric.inner(MochiConcentric.inner(MochiConcentric.inner(outer, p), p), p),
+        demoItem {
+            DemoSection("三层嵌套", footer = "每一层都按同一个规则往里收，再多层也处处等距。") {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    val outer = 40.dp
+                    val p = padding.dp
+                    Layer(outer, p, cs.primaryContainer) {
+                        Layer(MochiConcentric.inner(outer, p), p, cs.secondaryContainer) {
+                            Layer(MochiConcentric.inner(MochiConcentric.inner(outer, p), p), p, cs.tertiaryContainer) {
+                                Box(
+                                    Modifier
+                                        .size(width = 120.dp, height = 56.dp)
+                                        .background(
+                                            cs.surface,
+                                            MochiRoundedRectangle(
+                                                MochiConcentric.inner(MochiConcentric.inner(MochiConcentric.inner(outer, p), p), p),
+                                            ),
                                         ),
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) { Text("同心", style = ts.subhead, color = cs.onSurface) }
+                                    contentAlignment = Alignment.Center,
+                                ) { Text("同心", style = ts.subhead, color = cs.onSurface) }
+                            }
                         }
                     }
                 }

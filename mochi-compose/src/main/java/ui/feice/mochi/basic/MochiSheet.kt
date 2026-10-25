@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import android.view.Window
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -73,6 +75,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import java.util.WeakHashMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
@@ -87,13 +92,20 @@ import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.effect.elastic.rubberBand
+import ui.feice.mochi.effect.glass.GlassSource
+import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
+import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.navigation.LocalMochiNavSurface
+import ui.feice.mochi.navigation.LocalMochiPredictiveBack
 import ui.feice.mochi.navigation.MochiNavSurface
 import ui.feice.mochi.navigation.MochiNavigator
 import ui.feice.mochi.navigation.MochiScreenCorners
 import ui.feice.mochi.navigation.rememberMochiScreenCorners
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.G2RectClipShape4
+import ui.feice.mochi.theme.LocalMochiElevated
+import ui.feice.mochi.theme.LocalMochiSheetGlass
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
@@ -234,7 +246,7 @@ public fun MochiSheet(
     state: MochiSheetState,
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit = {},
-    color: Color = MochiTheme.colorScheme.surfaceContainerLow,
+    color: Color = MochiDefaults.sheetBackground(),
     grabber: Boolean = true,
     hideNavigationBar: Boolean = true,
     navigator: MochiNavigator? = null,
@@ -269,9 +281,26 @@ public fun MochiSheet(
             }
         }
         val corner = remember(radii) { { radii().let { maxOf(it.topLeft, it.topRight) } } }
-        val navSurface = remember(radii, state, inset, navigationBottom, color) {
+        // 玻璃（iOS 26 UIKitCore SheetLayoutInfo：非全屏档默认 `_UIViewGlass` regular、subvariant "sheet"；
+        // 全屏档默认 systemBackgroundColor）。取样面板底下的内容再叠上压暗层，和眼睛看到的一致。
+        // 原生是二选一，这里按往全屏走的进度把底色淡上来（近似）
+        val under = LocalMochiOverlayGlass.current
+        val sheetMaterial = MochiTheme.materials.sheetGlass
+        val scrimLayer = if (sheetMaterial != null && under != null) rememberLayerBackdrop() else null
+        val sheetSource = if (under != null && scrimLayer != null) {
+            val layer = rememberCombinedBackdrop(under.layer, scrimLayer)
+            val face = rememberCombinedBackdrop(under.face, scrimLayer)
+            remember(layer, face) { GlassSource(layer, face) }
+        } else {
+            null
+        }
+        val glass = rememberGlassFill(sheetMaterial, sheetSource)
+        val opaque = remember(state, glass) { { if (glass == null) 1f else state.largeness } }
+        val navSurface = remember(radii, state, inset, navigationBottom, color, glass, opaque) {
             MochiNavSurface(
                 color = color,
+                glass = glass,
+                opaque = opaque,
                 corners = {
                     val r = radii()
                     if (state.fillsBottom) r.copy(bottomRight = 0f, bottomLeft = 0f) else r
@@ -302,6 +331,8 @@ public fun MochiSheet(
             snapshotFlow { state.height }.first { it > 0f }
             snapshotFlow { state.requested }.collectLatest { on ->
                 if (on) {
+                    // 预测性返回提交后、收到底之前又被打开：缩小进度要跟着弹回去，不然面板一直停在缩小 10% 的宽度
+                    if (state.back.value != 0f) scope.launch { state.back.animateTo(0f, spring) }
                     if (state.top.value.isNaN()) {
                         state.top.snapTo(state.height)
                         // 先等面板组合、排版、画完、帧率回稳（新建浮层、第一次打开时最重），再开始弹出，开头不掉帧
@@ -326,7 +357,11 @@ public fun MochiSheet(
             }
         }
         // 子页由内层 NavHost 处理预测性返回；最后一页退出动画中也不能让连续返回误关外层面板。
-        PredictiveBackHandler(enabled = state.requested && navigator?.canPop != true) { events ->
+        val predictiveBack = LocalMochiPredictiveBack.current
+        BackHandler(enabled = !predictiveBack && state.requested && navigator?.canPop != true) {
+            if (navigator?.isTransitioning != true) state.hide()
+        }
+        PredictiveBackHandler(enabled = predictiveBack && state.requested && navigator?.canPop != true) { events ->
             if (navigator?.isTransitioning == true) {
                 events.collect { }
                 return@PredictiveBackHandler
@@ -357,13 +392,18 @@ public fun MochiSheet(
                     state.height = it.height.toFloat()
                     state.width = it.width
                 }
-                .drawBehind {
-                    // 和对话框、长按预览同一个遮罩色；半屏时浅一些，拉到全屏才到满
-                    val a = 0.7f * state.presence + 0.3f * state.largeness
-                    if (a > 0f) drawRect(scrim, alpha = a.coerceAtMost(1f))
-                }
                 .pointerInput(state) { detectTapGestures { state.hide() } },
         ) {
+            // 和对话框、长按预览同一个遮罩色；半屏时浅一些，拉到全屏才到满。单独一层：玻璃面板要录下它来取样
+            Spacer(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (scrimLayer != null) Modifier.layerBackdrop(scrimLayer) else Modifier)
+                    .drawBehind {
+                        val a = 0.7f * state.presence + 0.3f * state.largeness
+                        if (a > 0f) drawRect(scrim, alpha = a.coerceAtMost(1f))
+                    },
+            )
             Layout(
                 modifier = Modifier.fillMaxSize(),
                 content = {
@@ -391,7 +431,7 @@ public fun MochiSheet(
                                 // 不加系统高度投影，避免轮廓后面出现另一道偏灰的圆角硬边。
                                 shadowElevation = 0f
                             }
-                            .background(color)
+                            .then(if (glass == null) Modifier.background(color) else Modifier)
                             .pointerInput(state) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -472,6 +512,10 @@ public fun MochiSheet(
                                 }
                             },
                     ) {
+                        if (glass != null) {
+                            GlassSurface(glass, Modifier.matchParentSize(), null, null, cornerRadiusPx = corner)
+                            Spacer(Modifier.matchParentSize().drawBehind { drawRect(color, alpha = opaque()) })
+                        }
                         Column(
                             Modifier
                                 .layout { m, c ->
@@ -488,6 +532,8 @@ public fun MochiSheet(
                             CompositionLocalProvider(
                                 LocalMochiSheetCorner provides corner,
                                 LocalMochiNavSurface provides navSurface,
+                                LocalMochiElevated provides true,
+                                LocalMochiSheetGlass provides (glass != null),
                             ) { this@Column.content() }
                         }
                     }

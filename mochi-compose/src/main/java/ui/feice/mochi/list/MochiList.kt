@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,6 +72,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -85,14 +87,17 @@ import ui.feice.mochi.shape.ConcentricBottom
 import ui.feice.mochi.shape.ConcentricEnd
 import ui.feice.mochi.shape.ConcentricStart
 import ui.feice.mochi.shape.ConcentricTop
+import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.shape.mochiConcentricOutline
 import ui.feice.mochi.shape.mochiConcentricPoint
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.LocalMochiControlPalette
+import ui.feice.mochi.theme.LocalMochiSymbolWeight
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiIcon
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.rememberCapBand
+import ui.feice.mochi.utils.MochiHapticProfile
 
 /** 列表的配色 */
 @Immutable
@@ -108,42 +113,57 @@ public class MochiListColors(
     public val chevron: Color = secondary.copy(alpha = 0.7f),
 )
 
+/**
+ * 行首图标的两种样子（iOS 列表里的两种）：
+ * - [Tile]：「设置」App 那种彩色图标块，28×28，到文字 15（文字从 59 开始）
+ * - [Symbol]：没有底块的符号图标，占一块 24 宽、正文行高那么高的位置，图标在里面居中，到文字 16（文字从 56 开始）；
+ *   图标默认用强调色，描边粗细跟标题字重（[ui.feice.mochi.theme.LocalMochiSymbolWeight]）
+ */
+public enum class MochiListLeadingStyle { Tile, Symbol }
+
+/**
+ * 列表的尺寸，照 iOS 26 的 UIKit 列表单元格（UIListContentConfiguration、UITableConstants 的 26.0 数值）：
+ * 行最小高度 = 正文行高 22 + 上下各 15；左右边距 16；分组卡片圆角 26。
+ */
 public object MochiListDefaults {
-    /** 行的最小高度 */
+    /** 行的最小高度（默认字号下：正文行高 22 + 上下各 [RowVerticalPadding]） */
     public val RowMinHeight: Dp = 52.dp
 
-    /** 有行首图标的行的起始内边距（图标块离卡片边 16dp，圆角 28 − 16 = 12 和卡片同心） */
+    /** 行左右的边距：行首图标、纯文字行的文字、行尾的值和控件都离卡片边这么远 */
     public val RowPadding: Dp = 16.dp
 
-    /**
-     * 纯文字行的稳定水平光学留白，不根据每个单词的字形或大写字母高度改变。
-     * 首末留白根据实际排版首 / 末行的行框中心分别计算，不把多行文字当作一个点；分组小标题和说明也从这里开始
-     */
-    public val TextRowPadding: Dp = 22.dp
+    /** 纯文字行的文字起点，分组小标题和说明也从这里开始（iOS 里和 [RowPadding] 相同） */
+    public val TextRowPadding: Dp = 16.dp
 
-    /** 行首图标的占位大小 */
-    public val LeadingSize: Dp = 34.dp
+    /** 图标块（[MochiListLeadingStyle.Tile]）的边长：iOS 26「设置」的图标 28×28 */
+    public val LeadingSize: Dp = 28.dp
 
-    /** 行首图标块的圆角：和卡片圆角同心（卡片圆角 − 行内边距），首末行四周间距相等时和卡片的圆角平行 */
-    public val LeadingCorner: Dp = 12.dp
+    /** 图标块的圆角：iOS 图标的连续圆角，边长的 22.37% */
+    public val LeadingCorner: Dp = 6.25.dp
 
-    /** 行首图标和文字之间的间距 */
-    public val LeadingGap: Dp = 14.dp
+    /** 图标块到文字 */
+    public val LeadingGap: Dp = 15.dp
 
-    /** 标题与副标题/状态行去掉外侧行高留白后，两个内容块之间不再附加间距。 */
-    public val SupportingTextGap: Dp = 0.dp
+    /** 符号图标（[MochiListLeadingStyle.Symbol]）占的宽度，跟着字号缩放（iOS 用 UIFontMetrics 缩放 24） */
+    public val SymbolWidth: Dp = 24.dp
 
-    /** 行内内容上下的最小留白；首末行的同心留白由卡片另行补足。 */
-    public val RowVerticalPadding: Dp = 10.dp
+    /** 符号图标到文字 */
+    public val SymbolGap: Dp = 16.dp
 
-    /** 分组卡片的圆角（= MochiTheme.shapes.extraLarge） */
-    public val SectionCorner: Dp = 28.dp
+    /** 标题和副标题之间 */
+    public val SupportingTextGap: Dp = 4.dp
+
+    /** 行内内容上下的留白 */
+    public val RowVerticalPadding: Dp = 15.dp
+
+    /** 分组卡片的圆角（iOS 26 inset grouped：26） */
+    public val SectionCorner: Dp = 26.dp
 
     /** 分组和分组之间的距离（页面级的节奏，大标题页面、演示页、面板内容都用它） */
     public val SectionSpacing: Dp = 28.dp
 
     /** 小标题到卡片 */
-    public val HeaderGap: Dp = 8.dp
+    public val HeaderGap: Dp = 10.dp
 
     /** 卡片到说明 */
     public val FooterGap: Dp = 8.dp
@@ -153,7 +173,9 @@ public object MochiListDefaults {
         container: Color = MochiDefaults.groupedContainer(),
         content: Color = MochiTheme.colorScheme.onSurface,
         secondary: Color = MochiTheme.colorScheme.onSurfaceVariant,
-        divider: Color = MochiTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        divider: Color = LocalMochiControlPalette.current?.listDivider
+            ?.takeUnless { it == Color.Unspecified }
+            ?: MochiTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
         highlight: Color = MochiTheme.colorScheme.onSurface.copy(alpha = 0.1f),
         accent: Color = MochiTheme.colorScheme.primary,
         destructive: Color = MochiTheme.colorScheme.error,
@@ -189,12 +211,7 @@ internal val LocalListRowGeometry = staticCompositionLocalOf<ListItemInfo?> { nu
  * 和 iOS 一样；不是一按就消失、松手淡完才一下出现）
  */
 @Stable
-internal class ListItemInfo(
-    val inset: Dp,
-    val leading: Boolean = false,
-    var end: Dp = MochiListDefaults.RowPadding,
-    val heightScale: (() -> Float)? = null,
-) {
+internal class ListItemInfo(val inset: Dp, val leading: Boolean = false, var end: Dp = 0.dp, val heightScale: (() -> Float)? = null) {
     /** 自带收起动画的行报告未折叠高度，避免分组把收起中的行误当成矮行并补出留白。 */
     var fullHeight: Int = 0
 
@@ -277,7 +294,7 @@ public fun MochiListSection(
 }
 
 /**
- * 分组卡片上方的小标题：小号加粗、次要色，左边和纯文字行的文字对齐（缩进 22dp），下面留 [MochiListDefaults.HeaderGap]。
+ * 分组卡片上方的小标题：iOS 26 是和正文一样大（17）、半粗、次要色，左边和行里的文字对齐（16dp），下面留 [MochiListDefaults.HeaderGap]。
  * 自己拼分组（卡片里放的不是 MochiListRow）时用它，样式和间距才和列表一致。
  */
 @Composable
@@ -295,7 +312,7 @@ public fun MochiListSectionHeader(text: String, modifier: Modifier = Modifier, c
     )
 }
 
-/** 分组卡片下方的说明：小号、次要色，缩进和纯文字行一样（22dp），上面留 [MochiListDefaults.FooterGap] */
+/** 分组卡片下方的说明：footnote、次要色，缩进和纯文字行一样（16dp），上面留 [MochiListDefaults.FooterGap] */
 @Composable
 public fun MochiListSectionFooter(text: String, modifier: Modifier = Modifier, color: Color = MochiTheme.colorScheme.onSurfaceVariant) {
     Text(
@@ -317,9 +334,28 @@ public fun MochiListCard(
     animateHeight: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val shape = remember { MochiRoundedRectangle(MochiListDefaults.SectionCorner) }
+    ListCardImpl(modifier, colors, showDividers, animateHeight, shape, content = content)
+}
+
+/**
+ * 卡片的实现。懒加载分组（[mochiListSection]）里每一行是卡片的一段：[topEdge] / [bottomEdge] 只在首段 / 末段留首末白，
+ * [link] 非空时在这一段底下画和下一段之间的分隔线（下一段那行按下时一起淡出）。
+ */
+@Composable
+internal fun ListCardImpl(
+    modifier: Modifier,
+    colors: MochiListColors,
+    showDividers: Boolean,
+    animateHeight: Boolean,
+    shape: androidx.compose.ui.graphics.Shape,
+    topEdge: Boolean = true,
+    bottomEdge: Boolean = true,
+    link: SectionSegmentLink? = null,
+    content: @Composable () -> Unit,
+) {
     // 拖动排序时分隔线淡出，不横在浮起的行上
     val dividerAlpha by animateFloatAsState(if (showDividers) 1f else 0f, tween(160), label = "dividers")
-    val shape = MochiTheme.shapes.extraLarge
     val lines = remember { DividerLines() }
     val divider = colors.divider
     val cornerPx = with(LocalDensity.current) { MochiListDefaults.SectionCorner.toPx() }
@@ -343,7 +379,8 @@ public fun MochiListCard(
                 drawContent()
                 val w = 0.5.dp.toPx()
                 lines.items.forEach { l ->
-                    val end = size.width - (l.above?.end ?: MochiListDefaults.RowPadding).toPx()
+                    // 分隔线右端到卡片边（iOS）
+                    val end = size.width - (l.above?.end ?: 0.dp).toPx()
                     val hidden = max(l.above?.press?.value ?: 0f, l.below?.press?.value ?: 0f)
                     if (hidden >= 0.999f) return@forEach
                     val x = l.inset.toPx()
@@ -351,6 +388,16 @@ public fun MochiListCard(
                         dividerAlpha > 0f
                     ) {
                         drawRect(divider, Offset(x, l.y - w / 2f), Size(end - x, w), alpha = (1f - hidden) * dividerAlpha)
+                    }
+                }
+                // 懒加载分组：和下一段之间的线画在这一段底边，起点跟这一段最后一行的文字
+                if (link != null && dividerAlpha > 0f) {
+                    val above = lines.last
+                    val hidden = max(above?.press?.value ?: 0f, link.next()?.press?.value ?: 0f)
+                    val x = (above?.inset ?: MochiListDefaults.RowPadding).toPx()
+                    val end = size.width - (above?.end ?: 0.dp).toPx()
+                    if (hidden < 0.999f && end > x) {
+                        drawRect(divider, Offset(x, size.height - w), Size(end - x, w), alpha = (1f - hidden) * dividerAlpha)
                     }
                 }
             },
@@ -418,14 +465,14 @@ public fun MochiListCard(
         }
         // Keep all rows on their own centerline. Match boundary whitespace by extending the
         // shell and resolving one shared end gutter, instead of moving first/last controls.
-        val top = if (infos.getOrNull(first)?.ownsVerticalInsets ==
+        val top = if (!topEdge || infos.getOrNull(first)?.ownsVerticalInsets ==
             true
         ) {
             0
         } else {
             naturalTop + (controlEnd * topControlWeight - topGap).coerceAtLeast(0f).roundToInt()
         }
-        val bottom = if (infos.getOrNull(last)?.ownsVerticalInsets ==
+        val bottom = if (!bottomEdge || infos.getOrNull(last)?.ownsVerticalInsets ==
             true
         ) {
             0
@@ -453,6 +500,8 @@ public fun MochiListCard(
             y += p.height
         }
         if (list != lines.items) lines.items = list
+        lines.last = infos.getOrNull(last)
+        link?.publish(infos.getOrNull(first))
         layout(width, height) {
             var at = top
             placeables.forEach {
@@ -468,13 +517,20 @@ private data class DividerLine(val y: Float, val inset: Dp, val above: ListItemI
 @Stable
 private class DividerLines {
     var items by mutableStateOf(emptyList<DividerLine>())
+
+    /** 最后一行（懒加载分组画段间分隔线用） */
+    var last: ListItemInfo? = null
 }
 
 /**
- * 一行（iOS 的 UITableViewCell 那种）：
- * - 行首图标（可选）、标题 + 副标题；保留主题字号，长标题单行省略，副标题最多两行
+ * 一行（iOS 26 的列表单元格）：
+ * - 行首图标（可选，[leadingStyle] 选「设置」式图标块还是无底块的符号图标）、标题 + 副标题；保留主题字号，长标题单行省略，副标题最多两行
  * - 行尾：灰色的值、转圈加载、自定义控件（开关等）、蓝色对勾、「›」
  * - 按下：整行灰底高亮（滚动时不闪：稍等一下才亮），松手后淡出
+ *
+ * 尺寸照 iOS 26：最小高度 = 正文行高 + 上下各 15，左右边距 16，图标块 28、到文字 15，符号图标占 24 宽、到文字 16，
+ * 标题到副标题 4；图标、文字块、行尾都在整行里垂直居中，值和标题共用基线。每一行（包括首末行）高度规则相同，
+ * 卡片不给首末行另外加白。
  *
  * @param value 行尾灰色的值（「WEP」「关闭」）
  * @param chevron 行尾的「›」，表示点进去是下一页
@@ -484,6 +540,7 @@ private class DividerLines {
  * @param destructive 标题用警示色（「退出登录」）
  * @param titleTrailing 标题右侧的紧凑状态标记，与标题垂直居中；日期等行尾值仍靠右
  * @param status 右下角的具名状态 chip，与副标题底部对齐；无副标题时独占标题下方一行
+ * @param leadingStyle [leading] 是图标块还是符号图标，决定它占的位置和到文字的距离
  */
 @Composable
 public fun MochiListRow(
@@ -502,10 +559,11 @@ public fun MochiListRow(
     colors: MochiListColors = MochiListDefaults.colors(),
     titleTrailing: (@Composable () -> Unit)? = null,
     status: (@Composable () -> Unit)? = null,
+    leadingStyle: MochiListLeadingStyle = MochiListLeadingStyle.Tile,
 ) {
     ListRowImpl(
         title, modifier, onClick, subtitle, value, leading, trailing, chevron, checked, loading, enabled, destructive, colors,
-        titleTrailing, status,
+        titleTrailing, status, leadingStyle,
     )
 }
 
@@ -530,31 +588,42 @@ internal fun ListRowImpl(
     colors: MochiListColors = MochiListDefaults.colors(),
     titleTrailing: (@Composable () -> Unit)? = null,
     status: (@Composable () -> Unit)? = null,
+    leadingStyle: MochiListLeadingStyle = MochiListLeadingStyle.Tile,
     prefixWidth: Dp = 0.dp,
     prefix: (@Composable () -> Unit)? = null,
 ) {
-    // 文字使用独立的光学留白；圆角元素按自身轮廓同心，二者不共用虚拟胶囊。
-    val pad = if (leading != null) MochiListDefaults.RowPadding else MochiListDefaults.TextRowPadding
-    val inset = prefixWidth + if (leading != null) pad + MochiListDefaults.LeadingSize + MochiListDefaults.LeadingGap else pad
-    val ownInfo = remember(inset, leading != null) { ListItemInfo(inset, leading != null, MochiListDefaults.TextRowPadding) }
+    val density = LocalDensity.current
+    val body = MochiTheme.textStyles.body
+    // 符号图标的位置跟着字号缩放（iOS 用 UIFontMetrics 缩放 24 宽，高取正文行高）
+    val symbol = leading != null && leadingStyle == MochiListLeadingStyle.Symbol
+    val symbolWidth = with(density) { MochiListDefaults.SymbolWidth.value.sp.toDp() }
+    val symbolHeight = with(density) { body.lineHeight.takeIf { it.isSp }?.toDp() ?: MochiListDefaults.SymbolWidth }
+    val leadWidth = when {
+        leading == null -> 0.dp
+        symbol -> symbolWidth + MochiListDefaults.SymbolGap
+        else -> MochiListDefaults.LeadingSize + MochiListDefaults.LeadingGap
+    }
+    // 分隔线从文字起点开始，右端到卡片边
+    val inset = prefixWidth + MochiListDefaults.RowPadding + leadWidth
+    val ownInfo = remember(inset, leading != null) { ListItemInfo(inset, leading != null) }
     val info = LocalListRowGeometry.current ?: ownInfo
-    val grouped = LocalListCardClip.current != null
     val highlight = info.press
     val scope = rememberCoroutineScope()
     val currentOnClick by rememberUpdatedState(onClick)
     val clickable = onClick != null && enabled
     val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
-    val band = rememberCapBand(MochiTheme.textStyles.body)
+    val band = rememberCapBand(body)
     val hasSupporting = subtitle != null || status != null
-    val titleStyle = if (hasSupporting) MochiTheme.textStyles.body.listSupportingStyle() else MochiTheme.textStyles.body
+    val titleStyle = if (hasSupporting) body.listSupportingStyle() else body
     val supportingStyle = MochiTheme.textStyles.subhead.listSupportingStyle()
     val inlineValue = value != null && hasSupporting
     val glyphModifier = Modifier.mochiConcentricPoint()
+    // 最小高度 = 正文行高 + 上下留白（字号变大时一起变高）
+    val minHeight = maxOf(MochiListDefaults.RowMinHeight, symbolHeight + MochiListDefaults.RowVerticalPadding * 2)
     Layout(
         modifier = modifier
             .layoutId(info)
             .fillMaxWidth()
-            // 高亮连同卡片给首末行多留的白一起盖住
             .drawBehind {
                 if (highlight.value > 0f) {
                     drawRect(
@@ -607,18 +676,32 @@ internal fun ListRowImpl(
             Row(Modifier.layoutId(ListRowSlot.Main), verticalAlignment = Alignment.CenterVertically) {
                 prefix?.invoke()
                 if (leading != null) {
-                    // 禁用时图标块和文字一起变淡（iOS）
-                    Box(
-                        Modifier
-                            .listLeadingAnchors()
-                            .mochiConcentricOutline(MochiListDefaults.LeadingCorner)
-                            .size(MochiListDefaults.LeadingSize)
-                            .graphicsLayer { this.alpha = alpha },
-                        contentAlignment = Alignment.Center,
-                    ) { leading() }
-                    Spacer(Modifier.width(MochiListDefaults.LeadingGap))
+                    if (symbol) {
+                        // 符号图标：强调色，描边粗细跟标题字重（iOS 的符号按旁边文字的字体取字重）
+                        Box(
+                            Modifier
+                                .size(symbolWidth, symbolHeight)
+                                .graphicsLayer { this.alpha = alpha },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CompositionLocalProvider(
+                                LocalContentColor provides colors.accent,
+                                LocalMochiSymbolWeight provides (titleStyle.fontWeight ?: FontWeight.Normal),
+                            ) { leading() }
+                        }
+                        Spacer(Modifier.width(MochiListDefaults.SymbolGap))
+                    } else {
+                        // 禁用时图标块和文字一起变淡（iOS）
+                        Box(
+                            Modifier
+                                .size(MochiListDefaults.LeadingSize)
+                                .graphicsLayer { this.alpha = alpha },
+                            contentAlignment = Alignment.Center,
+                        ) { leading() }
+                        Spacer(Modifier.width(MochiListDefaults.LeadingGap))
+                    }
                 }
-                // 右侧文字始终和标题共用基线；有副标题或状态时，值缩小并放进标题行。所有行控件保持行内居中；首末间距由容器留白和整组统一结束列协调，不上下移动行尾。
+                // 右侧文字和标题共用基线；有副标题或状态时，值缩小并放进标题行
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SupportingTextGap)) {
                     Row {
                         Row(
@@ -676,7 +759,7 @@ internal fun ListRowImpl(
             if (value != null && !inlineValue) {
                 ListBlurText(
                     value,
-                    style = MochiTheme.textStyles.body,
+                    style = body,
                     color = colors.secondary.copy(alpha = alpha),
                     modifier = Modifier.layoutId(ListRowSlot.Value).widthIn(max = 168.dp),
                 )
@@ -702,75 +785,27 @@ internal fun ListRowImpl(
         },
     ) { measurables, constraints ->
         val width = constraints.maxWidth
-        val radius = MochiListDefaults.SectionCorner.toPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val tail = measurables.drop(1).map { it.layoutId as ListRowSlot to it.measure(loose) }
-        val outermost = tail.lastOrNull()?.second
-        val rtl = layoutDirection == LayoutDirection.Rtl
-        val endAnchor = outermost?.get(if (rtl) ConcentricStart else ConcentricEnd) ?: AlignmentLine.Unspecified
-        val baseEnd = if (outermost != null && endAnchor != AlignmentLine.Unspecified) {
-            val radiusAtEnd = if (rtl) endAnchor else outermost.width - endAnchor
-            (radius - radiusAtEnd).coerceAtLeast(0f).roundToInt()
-        } else {
-            MochiListDefaults.TextRowPadding.roundToPx()
-        }
-        val outerStart = outermost?.get(ConcentricStart) ?: AlignmentLine.Unspecified
-        val outerEnd = outermost?.get(ConcentricEnd) ?: AlignmentLine.Unspecified
-        val roundedControl = grouped && outermost != null && tail.lastOrNull()?.first == ListRowSlot.Control &&
-            outerStart != AlignmentLine.Unspecified && outerEnd != AlignmentLine.Unspecified && outerEnd > outerStart &&
-            outermost[ConcentricTop] != AlignmentLine.Unspecified && outermost[ConcentricBottom] != AlignmentLine.Unspecified
-        // Reserve the common text gutter once. Placement can use the card's final gutter in
-        // the same pass without remeasuring text or moving controls into its reserved width.
-        val end = if (roundedControl) max(baseEnd, MochiListDefaults.TextRowPadding.roundToPx()) else baseEnd
-        info.controlBaseEnd = if (roundedControl) baseEnd else -1
-        info.controlBudget = end
-        // Separators follow a stable text grid; the shape of a switch/chevron must not move them.
-        info.end = MochiListDefaults.TextRowPadding
-        val start = pad.roundToPx()
-        val gap = 8.dp.roundToPx()
+        // 每一行都自己带上下留白，卡片不给首末行另外加；分隔线跟文字起点，右端到卡片边
+        info.ownsVerticalInsets = true
+        info.controlBaseEnd = -1
+        info.end = 0.dp
+        val start = MochiListDefaults.RowPadding.roundToPx()
+        val end = MochiListDefaults.RowPadding.roundToPx()
+        val gap = TailGap.roundToPx()
         val tailWidth = tail.sumOf { it.second.width } + gap * (tail.size - 1).coerceAtLeast(0)
-        val available = (width - start - end - tailWidth - if (tail.isEmpty()) 0 else gap).coerceAtLeast(0)
+        val mainGap = if (tail.isEmpty()) 0 else MainToTailGap.roundToPx()
+        val available = (width - start - end - tailWidth - mainGap).coerceAtLeast(0)
         val main = measurables[0].measure(loose.copy(minWidth = available, maxWidth = available))
         val vertical = MochiListDefaults.RowVerticalPadding.roundToPx()
         val tallestTail = tail.maxOfOrNull { it.second.height } ?: 0
-
-        // Corner safety belongs to every option. Resolving it before returning the row height
-        // makes first/interior/last cells equal for the same style, including their hit regions.
-        fun safeHeight(p: androidx.compose.ui.layout.Placeable, topLine: AlignmentLine, bottomLine: AlignmentLine): Int {
-            val top = p[topLine]
-            val bottom = p[bottomLine]
-            if (top == AlignmentLine.Unspecified || bottom == AlignmentLine.Unspecified) return p.height
-            return ceil(max(radius * 2f + p.height - top * 2f, radius * 2f - p.height + bottom * 2f)).toInt()
-        }
-        val mainSafeHeight = if (grouped) {
-            safeHeight(
-                main,
-                if (leading != null) ListLeadingTop else ConcentricTop,
-                if (leading != null) ListLeadingBottom else ConcentricBottom,
-            )
-        } else {
-            0
-        }
-        val tailSafeHeight = if (grouped) {
-            tail.filter { it.first != ListRowSlot.Value }.maxOfOrNull {
-                safeHeight(it.second, ConcentricTop, ConcentricBottom)
-            } ?: 0
-        } else {
-            0
-        }
-        val contentHeight = max(MochiListDefaults.RowMinHeight.roundToPx(), max(main.height, tallestTail) + vertical * 2)
-        val referenceHeight = constraints.constrainHeight(maxOf(contentHeight, mainSafeHeight, tailSafeHeight))
-        // Relax the roomy corner allowance by 2dp per side, while preserving real content
-        // padding and the existing horizontal geometry. Every matching cell uses the same rule.
-        val reduction = if (grouped) 4.dp.roundToPx() else 0
-        val height = constraints.constrainHeight(maxOf(contentHeight, mainSafeHeight - reduction, tailSafeHeight - reduction))
-        info.ownsVerticalInsets = grouped
+        val height = constraints.constrainHeight(maxOf(minHeight.roundToPx(), main.height + vertical * 2, tallestTail + vertical))
         val mainY = (height - main.height) / 2f
         val baseline = main[FirstBaseline].takeIf { it != AlignmentLine.Unspecified }?.let { mainY + it }
         val positionedTail = tail.map { (slot, p) ->
             val centered = (height - p.height) / 2f
-            // Values belong to the title line; navigation/selection/loading symbols belong to
-            // the whole row. A subtitle must not pin a row-level symbol to the first baseline.
+            // 值和标题共用基线；导航 / 选中 / 加载这些符号按墨迹中心在整行居中
             val y = when (slot) {
                 ListRowSlot.Value -> {
                     val valueBaseline = p[FirstBaseline]
@@ -786,40 +821,10 @@ internal fun ListRowImpl(
             }
             p to y
         }
-        if (roundedControl) {
-            val (p, y) = positionedTail.last()
-            val r = if (rtl) outerStart else p.width - outerEnd
-            // Keep the end gutter referenced to the previous roomy height. Actual controls
-            // center in the new height; a vertical density adjustment must not move them sideways.
-            val referenceOffset = (referenceHeight - height) / 2f
-            info.controlTop = (y + referenceOffset + p[ConcentricTop] - r).roundToInt()
-            info.controlBottom = (y - referenceOffset + p[ConcentricBottom] + r).roundToInt()
-        }
-        // A leading tile owns the shell's concentric corner on that side. Text line centers are
-        // text-only anchors, not extra tile corners: merging both would inflate its 16dp inset.
-        val mainTop = main[if (leading != null) ListLeadingTop else ConcentricTop]
-            .takeIf { it != AlignmentLine.Unspecified }?.plus(mainY) ?: (mainY + main.height / 2f)
-        val mainBottom = main[if (leading != null) ListLeadingBottom else ConcentricBottom]
-            .takeIf { it != AlignmentLine.Unspecified }?.plus(mainY) ?: (mainY + main.height / 2f)
-        val tops = listOf(mainTop) + positionedTail.mapNotNull { (p, y) ->
-            p[ConcentricTop].takeIf { it != AlignmentLine.Unspecified }?.let { it + y }
-        }
-        val bottoms = listOf(mainBottom) + positionedTail.mapNotNull { (p, y) ->
-            p[ConcentricBottom].takeIf { it != AlignmentLine.Unspecified }?.let { it + y }
-        }
-        val guides = mapOf<AlignmentLine, Int>(
-            ConcentricTop to (tops.minOrNull() ?: height / 2f).roundToInt(),
-            ConcentricBottom to (bottoms.maxOrNull() ?: height / 2f).roundToInt(),
-        )
-        layout(width, height, guides) {
+        layout(width, height) {
             val contentY = info.contentCenterOffset()
             main.placeRelativeWithLayer(start, 0) { translationY = mainY + contentY }
-            val placedEnd = if (roundedControl) {
-                info.resolvedControlEnd.takeIf { it >= 0 }?.coerceAtMost(end) ?: baseEnd
-            } else {
-                end
-            }
-            var x = width - placedEnd - tailWidth
+            var x = width - end - tailWidth
             positionedTail.forEach { (p, y) ->
                 p.placeRelativeWithLayer(x.coerceAtLeast(0), 0) { translationY = y + contentY }
                 x += p.width + gap
@@ -830,18 +835,11 @@ internal fun ListRowImpl(
 
 private enum class ListRowSlot { Main, Value, Indicator, Control, Check, Chevron }
 
-private val ListLeadingTop = HorizontalAlignmentLine { a, b -> minOf(a, b) }
-private val ListLeadingBottom = HorizontalAlignmentLine { a, b -> maxOf(a, b) }
+/** 行尾几样东西之间（值和 ›） */
+private val TailGap = 8.dp
 
-// Keep the actual tile outline separate from text anchors while both pass through the main Row.
-private fun Modifier.listLeadingAnchors(): Modifier = layout { measurable, constraints ->
-    val p = measurable.measure(constraints)
-    layout(
-        p.width,
-        p.height,
-        mapOf(ListLeadingTop to p[ConcentricTop], ListLeadingBottom to p[ConcentricBottom]),
-    ) { p.place(0, 0) }
-}
+/** 文字到行尾（iOS 内容和附件之间 16） */
+private val MainToTailGap = 16.dp
 
 // Trim only the line-height leading at block edges, not font ink or wrapped-line spacing.
 // Keeping the theme's font and size avoids solving compact spacing by shrinking readable text.
@@ -894,9 +892,17 @@ public fun MochiListButton(
 
 /**
  * 卡片里的一行滑块（iOS 设置里的音量、亮度）：左边小图标、滑块、右边大图标排在同一行里，行高和普通行一样。
- * 要说明它调的是什么，用分组的小标题（header），不要把标题和滑块叠成两层。
+ * 分组里只有这一个滑块时，用分组的小标题（header）说明它调的是什么。
+ *
+ * 一个分组里有几个滑块（「强度」「偏移」）时给 [title]：标题和实时数值 [valueText] 在上面一行（共用基线，数值靠右、等宽数字），
+ * 滑块在下面，[supportingText] 是滑块下面的一行说明；整块是同一行，分隔线、首末留白照常。不要自己用 Column 拼「文字行 + 滑块 + 说明」。
+ *
  * @param leading / trailing 两端的图标（比如小喇叭、大喇叭），用次要色画
- * @param origin / gel 见 [MochiSlider]
+ * @param title 滑块调的是什么
+ * @param valueText 当前值的文字（「45%」「120 ms」），拖动时跟着变；由调用方按单位格式化
+ * @param supportingText 滑块下面的说明（「正值提前，负值延后」）
+ * @param onValueChangeFinished 松手时调用（拖动中只改界面、松手再保存）
+ * @param origin / gel / hapticProfile 见 [MochiSlider]
  */
 @Composable
 public fun MochiListSliderRow(
@@ -911,9 +917,22 @@ public fun MochiListSliderRow(
     colors: MochiListColors = MochiListDefaults.colors(),
     origin: Float? = null,
     gel: Float = 0.6f,
+    detents: List<Float> = emptyList(),
+    title: String? = null,
+    valueText: String? = null,
+    supportingText: String? = null,
+    onValueChangeFinished: (() -> Unit)? = null,
+    hapticProfile: MochiHapticProfile = MochiHapticProfile.IosLike,
 ) {
     val info = remember { ListItemInfo(MochiListDefaults.RowPadding) }
     val grouped = LocalListCardClip.current != null
+    if (title != null || supportingText != null) {
+        TitledSliderRow(
+            value, onValueChange, modifier, valueRange, steps, enabled, leading, trailing, colors, origin, gel, detents,
+            title, valueText, supportingText, onValueChangeFinished, hapticProfile, info, grouped,
+        )
+        return
+    }
     info.ownsVerticalInsets = grouped
     Row(
         modifier
@@ -950,12 +969,114 @@ public fun MochiListSliderRow(
                 valueRange = valueRange,
                 steps = steps,
                 origin = origin,
+                detents = detents,
+                onValueChangeFinished = onValueChangeFinished,
                 gel = gel,
+                hapticProfile = hapticProfile,
             )
             trailing?.invoke()
         }
     }
 }
+
+/** 带标题的滑块行：上面「标题 ⋯ 数值」，中间滑块，下面说明；上下留白和普通行一样是 [MochiListDefaults.RowVerticalPadding] */
+@Composable
+private fun TitledSliderRow(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    enabled: Boolean,
+    leading: (@Composable () -> Unit)?,
+    trailing: (@Composable () -> Unit)?,
+    colors: MochiListColors,
+    origin: Float?,
+    gel: Float,
+    detents: List<Float>,
+    title: String?,
+    valueText: String?,
+    supportingText: String?,
+    onValueChangeFinished: (() -> Unit)?,
+    hapticProfile: MochiHapticProfile,
+    info: ListItemInfo,
+    grouped: Boolean,
+) {
+    // 自己带完整的上下留白（文字行 15、说明下 15），卡片不再按锚点补首末白
+    info.ownsVerticalInsets = grouped
+    val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
+    val body = MochiTheme.textStyles.body
+    Column(
+        modifier
+            .layoutId(info)
+            .fillMaxWidth()
+            .padding(horizontal = MochiListDefaults.RowPadding)
+            .layout { measurable, constraints ->
+                val p = measurable.measure(constraints)
+                layout(p.width, p.height) { p.placeWithLayer(0, 0) { translationY = info.contentCenterOffset() } }
+            },
+    ) {
+        Spacer(Modifier.height(MochiListDefaults.RowVerticalPadding))
+        if (title != null) {
+            Row(Modifier.fillMaxWidth()) {
+                ListText(
+                    title,
+                    style = body,
+                    color = colors.content.copy(alpha = alpha),
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f).alignByBaseline(),
+                )
+                if (valueText != null) {
+                    Text(
+                        valueText,
+                        style = body.copy(fontFeatureSettings = "tnum"),
+                        color = colors.secondary.copy(alpha = alpha),
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = MainToTailGap).alignByBaseline(),
+                    )
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CompositionLocalProvider(LocalContentColor provides colors.secondary) {
+                leading?.invoke()
+                MochiSlider(
+                    value,
+                    onValueChange,
+                    Modifier.weight(1f),
+                    enabled = enabled,
+                    valueRange = valueRange,
+                    steps = steps,
+                    origin = origin,
+                    detents = detents,
+                    onValueChangeFinished = onValueChangeFinished,
+                    gel = gel,
+                    hapticProfile = hapticProfile,
+                )
+                trailing?.invoke()
+            }
+        }
+        if (supportingText != null) {
+            ListText(
+                supportingText,
+                style = MochiTheme.textStyles.footnote,
+                color = colors.secondary.copy(alpha = alpha),
+                maxLines = 3,
+            )
+            Spacer(Modifier.height(MochiListDefaults.RowVerticalPadding))
+        } else {
+            // 滑块本身 44 高、滑块圆钮上下各有一段透明的触摸区，再补一点就和顶上的 15 看起来一样
+            Spacer(Modifier.height(SliderBottomPadding))
+        }
+    }
+}
+
+/** 带标题的滑块行没有说明时，滑块下面补的留白（滑块触摸区上下各约 10dp 透明） */
+private val SliderBottomPadding = 5.dp
 
 private const val HighlightDelayMillis = 70L
 

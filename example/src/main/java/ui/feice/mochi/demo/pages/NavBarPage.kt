@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,12 +30,13 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.IconColors
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.MochiBackButton
-import ui.feice.mochi.navigation.MochiCompactTitleScaffold
+import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -44,12 +46,12 @@ import ui.feice.mochi.theme.MochiTheme
 @Composable
 fun NavBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
-    var query by remember { mutableStateOf("") }
-    var editing by remember { mutableStateOf(false) }
-    var refreshed by remember { mutableIntStateOf(0) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var refreshed by rememberSaveable { mutableIntStateOf(0) }
     val shown = Settings.filter { query.isBlank() || it.first.contains(query.trim(), ignoreCase = true) }
 
-    MochiCompactTitleScaffold(
+    MochiLazyCompactTitleScaffold(
         title = entry.title,
         modifier = modifier,
         // iOS 26 的副标题：跟着搜索结果变，模糊替换
@@ -66,45 +68,56 @@ fun NavBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         },
     ) {
         if (shown.isEmpty()) {
-            // iOS 的搜索无结果：居中的放大镜 + 标题 + 说明
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 48.dp, bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Glyph(Icons.SEARCH, cs.onSurfaceVariant, size = 44)
-                Spacer(Modifier.height(4.dp))
-                Text("无结果", style = MochiTheme.textStyles.titleLarge.copy(fontWeight = FontWeight.Bold))
-                Text("没有找到“$query”，试试别的关键词。", style = MochiTheme.textStyles.bodyMedium, color = cs.onSurfaceVariant)
+            demoItem {
+                // iOS 的搜索无结果：居中的放大镜 + 标题 + 说明
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 48.dp, bottom = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Glyph(Icons.SEARCH, cs.onSurfaceVariant, size = 44)
+                    Spacer(Modifier.height(4.dp))
+                    Text("无结果", style = MochiTheme.textStyles.titleLarge.copy(fontWeight = FontWeight.Bold))
+                    Text("没有找到“$query”，试试别的关键词。", style = MochiTheme.textStyles.bodyMedium, color = cs.onSurfaceVariant)
+                }
             }
         }
-        Groups.forEach { (header, names) ->
-            val rows = shown.filter { it.first in names }
-            if (rows.isNotEmpty()) {
-                MochiListSection(header = if (query.isBlank()) header else null) {
-                    rows.forEach { (name, glyph) ->
-                        MochiListRow(
-                            name,
-                            onClick = {},
-                            chevron = !editing,
-                            leading = {
-                                AppIcon(glyph, Tone.Neutral.tile(), MochiListDefaults.LeadingSize, corner = MochiListDefaults.LeadingCorner)
-                            },
-                        )
+        demoItem {
+            Groups.forEach { (header, names) ->
+                val rows = shown.filter { it.first in names }
+                if (rows.isNotEmpty()) {
+                    MochiListSection(header = if (query.isBlank()) header else null) {
+                        rows.forEach { (name, glyph) ->
+                            MochiListRow(
+                                name,
+                                onClick = {},
+                                chevron = !editing,
+                                leading = {
+                                    AppIcon(
+                                        glyph,
+                                        Tone.Neutral.tile(),
+                                        MochiListDefaults.LeadingSize,
+                                        corner = MochiListDefaults.LeadingCorner,
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
-        Text(
-            (if (refreshed > 0) "已刷新 $refreshed 次。" else "") +
-                "分组设置使用紧凑顶栏，搜索结果数量同步更新。聚焦搜索栏后，拖动内容可收起键盘；" +
-                "在顶部下拉过阈值轻震一下并开始刷新，刷新结束后内容平滑收回。",
-            style = MochiTheme.textStyles.footnote,
-            color = cs.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
+        demoItem {
+            Text(
+                (if (refreshed > 0) "已刷新 $refreshed 次。" else "") +
+                    "分组设置使用紧凑顶栏，搜索结果数量同步更新。聚焦搜索栏后，拖动内容可收起键盘；" +
+                    "在顶部下拉过阈值轻震一下并开始刷新，刷新结束后内容平滑收回。",
+                style = MochiTheme.textStyles.footnote,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
     }
 }
 

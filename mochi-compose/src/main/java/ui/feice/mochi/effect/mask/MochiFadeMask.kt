@@ -60,7 +60,7 @@ public object MochiFadeMaskDefaults {
  *
  * - 渐隐曲线是平滑的 S 形（smoothstep 分成多段色标），没有线性渐变那条看得见的「起点线」
  * - 每条边的深浅可以每帧变（[amount]），比如跟着滚动距离：滚到头那一边就是实的
- * - 以后接入模糊时用同一套边和强度：遮罩决定「哪里、多少」，模糊和渐隐只是两种画法
+ * - 主题有 [ui.feice.mochi.theme.MochiMaterials.scrollEdge]（iOS 外观）时，同一套边和强度也用来渐进模糊：越靠边越糊（Android 13+）
  *
  * 可滚动区域请用 [mochiScrollFadeMask]，它按滚动位置自动算每条边的强度。
  */
@@ -68,6 +68,9 @@ public fun Modifier.mochiFadeMask(
     edges: MochiFadeEdges = MochiFadeEdges.vertical(),
     amount: MochiFadeAmount = MochiFadeMaskDefaults.Full,
 ): Modifier = this
+    // 主题有滚动边缘效果（iOS 外观）时，边上同时渐进模糊（Android 13+），见 FadeBlurElement；
+    // 模糊图层也只在有边要遮时才挂，挂上时同样按矩形裁切
+    .then(FadeBlurElement(edges, amount))
     // 离屏合成：DstOut 只擦掉这一层自己的内容，不会把下面的东西也擦出洞来。
     // 离屏缓冲按这一层的矩形裁切，所以只在真的有边要遮时才开：不遮时（菜单放得下、滚到头）
     // 内容可以照常画出矩形外（跟着形变平移、放大），不会被一个看不见的方框切掉
@@ -159,7 +162,7 @@ private fun lazyRemaining(last: Pair<Int, Int>?, total: Int, viewportEnd: Int): 
 }
 
 /** 按「往前 / 往后还能滚多少 px」给每条边的深浅；extentDp 在绘制时换成 px */
-private class ScrollFadeAmount(
+internal class ScrollFadeAmount(
     private val extentDp: Float,
     private val vertical: Boolean,
     private val before: () -> Float,

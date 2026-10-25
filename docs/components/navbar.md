@@ -74,6 +74,19 @@ MochiLargeTitleScaffold(
 
 For push pages, register actions with stable `navId` values, stable icon `contentKey` values and group-item IDs. Prefer the automatically registered `MochiBackButton`. Optional API parameters are not a recommendation to omit sharing in apps. See the [complete app integration](../guide/application-integration.md) and [shared-toolbar rules](../guide/navigation.md#shared-toolbar) for pairing and source-opening exceptions.
 
+## Lazy variants
+
+`MochiLazyLargeTitleScaffold` / `MochiLazyCompactTitleScaffold` take the same parameters as the two above, with `listState: LazyListState` instead of `scrollState` and a `LazyListScope` body. The large title and search bar are item 0; the bar, title handoff, snapping, overscroll scaling, pull to refresh and drag-to-dismiss keyboard behave the same. Use them for long pages that do not fit on one screen; see the [design principles](../guide/design-principles.md#10-long-pages-use-lazy-lists).
+
+```kotlin
+MochiLazyCompactTitleScaffold(title = "Settings") {
+    item { MochiListSection(header = "General") { … } }
+    item { MochiListSection(header = "Privacy") { … } }
+}
+```
+
+One section per item; items scrolled off screen are disposed, so keep user-editable state inside an item in `rememberSaveable`.
+
 ## MochiSearchBar
 
 The iOS search bar (`basic` package):
@@ -89,11 +102,13 @@ Use `MochiBackButton` / `MochiBarButton` / `MochiBarIconButton` in the bar (44dp
 
 ## Scroll edge effect
 
-The large title is 34sp Bold (`textStyles.largeTitle`). The collapsed title is centered and the bar has no divider: when content scrolls under it, the bar fills with the background and fades out 16dp below (the iOS 26 scroll edge effect, without blur).
+The large title is 34sp Bold (`textStyles.largeTitle`). The collapsed title is centered and the bar has no divider: when content scrolls under it, the bar fills with the background and fades out 16dp below (the iOS 26 scroll edge effect). When the theme sets `MochiMaterials.scrollEdge` (the iOS appearance), it is drawn the iOS way instead: the content under the bar is progressively blurred, then covered by the page background or black at a level chosen from the brightness behind; see [iOS appearance](../guide/ios-theme.md#scroll-edge-effect).
+
+The bar's title follows the scroll edge level's own layers (`MochiScrollEdgeLevel.darkText`) rather than the content behind it: in the iOS appearance's light mode, when darker content makes the level drop the white page-color layer and darken instead, the title and subtitle switch to white over 0.3s; in dark mode over very bright content the black layer is thin and they switch to dark text. Levels without darkText fall back to the brightness behind the bar after all edge layers, with a hysteresis margin so it never flickers. `MochiTitleBar` is already wired; for a custom bar pass a `MochiScrollEdgeTone` to `mochiScrollEdgeFade(tone = remember { MochiScrollEdgeTone() })` and color its text with `MochiScrollEdgeDefaults.textColor(tone, defaultColor)`. Glass buttons adapt on their own.
 
 Use it on your own top or bottom bars: `Modifier.mochiScrollEdgeFade(color, bottom = false, extent = 16.dp, alpha = { … })`.
 
-The fade only appears when content has actually scrolled under the bar. At rest there is nothing under the bar, and a full-strength fade would cover the first row of content with the part that extends below the bar, and the bar's own buttons too. Feed `alpha` (`backgroundProgress` on `MochiTitleBar`) from `MochiScrollEdgeDefaults.progress(state)`, where `state` is a `ScrollState`, `LazyListState` or `LazyGridState`. It is 0 at the top and reaches 1 once the content has scrolled 16dp under the bar. `MochiLargeTitleScaffold` and `MochiCompactTitleScaffold` already do this. Do not lay another fade over the whole page from outside: it ends up on top of the page's top bar buttons.
+The fade only appears when content has actually scrolled under the bar. At rest there is nothing under the bar, and a full-strength fade would cover the first row of content with the part that extends below the bar, and the bar's own buttons too. Feed `alpha` (`backgroundProgress` on `MochiTitleBar`) from `MochiScrollEdgeDefaults.progress(state)`, where `state` is a `ScrollState`, `LazyListState` or `LazyGridState`. It is 0 at the top and reaches 1 once the content has scrolled 16dp under the bar. `MochiLargeTitleScaffold` and `MochiCompactTitleScaffold` already do this. The blur is done by the scrolling container itself: on your own pages, add `Modifier.mochiScrollEdgeBlur(distance from the container top to the bar's bottom edge, alpha)` to the scrolling container, with the same `alpha` as the bar's `backgroundProgress`. Without a theme scrollEdge it does nothing. Do not lay another fade over the whole page from outside: it ends up on top of the page's top bar buttons.
 
 The collapsed title fades in while sliding up 6dp into place (iOS 26), in the same direction the large title scrolls away.
 

@@ -7,6 +7,7 @@
 | `ProvideMochiOverscroll { }` | Cresto bounce for lazy lists and scroll modifiers in the subtree |
 | `rememberMochiOverscrollEffect(spec)` | A single list's `overscrollEffect` |
 | `MochiScrollDefaults.flingBehavior(decelerationRate)` | Independent fling deceleration policy |
+| `Modifier.mochiContainedScroll(effect)` | A scroll area nested in a scrolling page: at its ends, drags and flings stay inside and bounce on its own `effect` instead of moving the page |
 | `MochiOverscrollSpec` | Cresto curve coefficient and spring |
 | `effect.offset` | Actual displayed offset in pixels, shared with title and refresh effects |
 
@@ -43,6 +44,7 @@ The default is `DecelerationDefault = DecelerationNormal = 0.998`, ending only n
 
 - Existing Mochi providers, factories, effects and parameter interfaces remain as a delegating facade.
 - The measured viewport determines resistance; layer translation moves content without remeasuring it.
+- Scroll areas nested in a page (preview cards, lists inside cards) use `mochiContainedScroll`: place it outside the scroll container and pass the same `MochiOverscrollEffect` as the container's `overscrollEffect`. Without it, Compose's default nested scrolling hands the leftover drag and fling to the outer page.
 - Large-title scaling and pull-to-refresh observe the actual displayed displacement. The axis must also be observable so an initial zero-offset read is invalidated by the first overscroll; trigger, hold and rearm thresholds all use density-adjusted dp.
 - Custom dropdown scrolling uses the same Cresto engine, adapting bounds, direction and displacement callbacks.
 - Source revision, license and adaptation notices ship in `META-INF/mochi-compose/` inside the AAR/APK.

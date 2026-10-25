@@ -11,8 +11,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.Density
@@ -119,6 +122,8 @@ public class MochiMetaballRenderer internal constructor() {
     internal val shaders: MetaballShaders? get() = SharedMetaballShaders.value
     internal val pathA = G2PathCache()
     internal val pathB = G2PathCache()
+    internal val unionPath = Path()
+    internal val layerPaint = Paint()
 }
 
 private object SharedMetaballShaders {
@@ -145,11 +150,20 @@ public fun DrawScope.drawMochiMetaball(
     val f = frame
     val pathA = renderer.pathA.get(f.a.rect, f.a.cornerRadius, smoothing)
     val pathB = renderer.pathB.get(f.b.rect, f.b.cornerRadius, smoothing)
+    val opaque = colors.a.alpha >= 1f && colors.b.alpha >= 1f
+    val b = f.drawBounds(shadow)
     val shaders = if (MochiGraphics.shaders) renderer.shaders else null
     if (shaders == null) {
         // API < 33 或图形档位低于「高」：没有融球和渐变，两块纯色
-        drawPath(pathA, lerpColor(colors.a, colors.b, f.merge))
-        drawPath(pathB, lerpColor(colors.a, colors.b, max(f.blend, f.merge)))
+        val canvas = drawContext.canvas
+        if (!opaque) canvas.saveLayer(b, renderer.layerPaint)
+        try {
+            val mode = if (opaque) androidx.compose.ui.graphics.BlendMode.SrcOver else BlendMode.Src
+            drawPath(pathA, lerpColor(colors.a, colors.b, f.merge), blendMode = mode)
+            drawPath(pathB, lerpColor(colors.a, colors.b, max(f.blend, f.merge)), blendMode = mode)
+        } finally {
+            if (!opaque) canvas.restore()
+        }
         return
     }
     val blendWidth = min(f.fuse, 10.dp.toPx()).coerceAtLeast(5.dp.toPx())
@@ -163,8 +177,26 @@ public fun DrawScope.drawMochiMetaball(
         glowRadius = glow?.radius ?: 1f,
         glowColor = glow?.spec?.color ?: Color.Transparent,
     )
-    val opaque = colors.a.alpha >= 1f && colors.b.alpha >= 1f
-    val b = f.drawBounds(shadow)
+    if (!opaque) {
+        // Transparent materials cannot hide repeated bodies or their own shadow.
+        // Both clockwise contours form one non-zero fill, retaining the exact G2
+        // outlines. Src replaces the underpaint inside that union in an isolated
+        // layer, then the material is composited onto the page only once.
+        val union = renderer.unionPath.apply {
+            reset()
+            addPath(pathA)
+            if (!f.aCoincidesB) addPath(pathB)
+        }
+        val canvas = drawContext.canvas
+        canvas.saveLayer(b, renderer.layerPaint)
+        try {
+            drawRect(shaders.brush, b.topLeft, b.size)
+            drawPath(union, shaders.bodyBrush, blendMode = BlendMode.Src)
+        } finally {
+            canvas.restore()
+        }
+        return
+    }
     if (opaque) {
         // b 的内部会被不透明的本体整块盖住，这一层（每像素 6 次 SDF）只画四周一圈
         drawRing(shaders.brush, b, f.b.rect.innerHole(f.b.cornerRadius))

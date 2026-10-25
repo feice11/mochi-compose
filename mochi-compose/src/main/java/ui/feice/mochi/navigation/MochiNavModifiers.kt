@@ -189,9 +189,11 @@ private class OccluderNode :
             drawContent()
             return
         }
-        // 录下来原地画；转场时 MochiNavHost 再把同一份画面画到所有页面上面
+        // During a source morph the host owns this exact layer. Drawing it here
+        // too doubles translucent surfaces and the shadow, including carried bars.
         layer.record { this@draw.drawContent() }
-        drawLayer(layer)
+        val entry = handle.entry
+        if (entry == null || nav?.isCarriedUnderSource(entry) != true) drawLayer(layer)
     }
 }
 
@@ -261,7 +263,8 @@ private class SharedElementNode(key: String) :
 }
 
 /**
- * 推入新页时收起（标签栏、底部工具栏用）：上面有页打开时，元素往下滑出屏幕；返回时原路滑回来。
+ * 推入新页时收起（标签栏、底部工具栏用）。侧推时照 iOS 的 hidesBottomBarWhenPushed：元素留在下层页里，跟着它往左退、被新页盖住；
+ * 从来源打开时元素往下滑出屏幕，返回时原路滑回来。
  * 位移只由转场进度决定（同一条非线性弹簧，再加一道缓动：页面长到六成时已经完全收起），
  * 所以返回手势拖一半、中途掉头都是连续的。元素所在的页必须是 [MochiNavHost] 里的一页。
  */

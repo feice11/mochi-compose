@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +70,7 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.MoreDots
 import ui.feice.mochi.demo.common.Toggles
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
@@ -86,18 +88,18 @@ import ui.feice.mochi.utils.MochiHapticProfile
 @Composable
 fun DropdownPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf<String?>(null) }
-    var motionIndex by remember { mutableIntStateOf(0) }
-    var sortIndex by remember { mutableIntStateOf(0) }
+    var motionIndex by rememberSaveable { mutableIntStateOf(0) }
+    var sortIndex by rememberSaveable { mutableIntStateOf(0) }
     var trigger by remember { mutableStateOf(MochiTrigger.Press) }
     var forceMode by remember { mutableStateOf<MochiOpenMode?>(null) }
-    var goo by remember { mutableFloatStateOf(28f) }
-    var smoothing by remember { mutableFloatStateOf(1f) }
-    var gel by remember { mutableFloatStateOf(0.6f) }
+    var goo by rememberSaveable { mutableFloatStateOf(28f) }
+    var smoothing by rememberSaveable { mutableFloatStateOf(1f) }
+    var gel by rememberSaveable { mutableFloatStateOf(0.6f) }
     var pressStyle by remember { mutableStateOf(MochiPressStyle.Grow) }
-    var longList by remember { mutableStateOf(false) }
+    var longList by rememberSaveable { mutableStateOf(false) }
     var layout by remember { mutableStateOf(MochiItemLayout.Material) }
     var haptic by remember { mutableStateOf(MochiHapticProfile.IosLike) }
-    var rubberMax by remember { mutableFloatStateOf(72f) }
+    var rubberMax by rememberSaveable { mutableFloatStateOf(72f) }
     // 选了一项：顶部弹一条提示（库里的 MochiToast，不用 Material 的 Snackbar）
     val toast = rememberMochiToastState()
 
@@ -121,130 +123,144 @@ fun DropdownPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val sortItems = remember(sorts) { sorts.map { MochiItem(it) }.toImmutableList() }
 
     DemoPage(entry, modifier) {
-        DemoSection(
-            "试一试",
-            footer = "按住按钮直接滑到选项上，松手即选中。",
-            padding = 0.dp,
-        ) {
-            Column(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+        demoItem {
+            DemoSection(
+                "试一试",
+                footer = "按住按钮直接滑到选项上，松手即选中。",
+                padding = 0.dp,
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    // 左上：曲线选择
-                    MochiDropdown(
-                        expanded = open == "curve",
-                        onExpandedChange = { open = if (it) "curve" else null },
-                        items = curveItems,
-                        onItemClick = { motionIndex = it },
-                        modifier = Modifier,
-                        selectedIndex = motionIndex,
-                        behavior = behavior(MochiOpenMode.Detach),
-                        physics = physics,
-                        motion = motion,
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MochiBlurText(motion.name, style = ts.labelLarge)
-                        Spacer(Modifier.width(8.dp))
-                        Chevron(up = open == "curve")
-                    }
+                        // 左上：曲线选择
+                        MochiDropdown(
+                            expanded = open == "curve",
+                            onExpandedChange = { open = if (it) "curve" else null },
+                            items = curveItems,
+                            onItemClick = { motionIndex = it },
+                            modifier = Modifier,
+                            selectedIndex = motionIndex,
+                            behavior = behavior(MochiOpenMode.Detach),
+                            physics = physics,
+                            motion = motion,
+                        ) {
+                            MochiBlurText(motion.name, style = ts.labelLarge)
+                            Spacer(Modifier.width(8.dp))
+                            Chevron(up = open == "curve")
+                        }
 
-                    // 右上：⋯ 操作菜单（包裹）
-                    MochiIconDropdown(
-                        expanded = open == "more",
-                        onExpandedChange = { open = if (it) "more" else null },
-                        items = persistentListOf(
-                            MochiItem("拷贝链接", icon = { Glyph(Icons.LINK, it) }),
-                            MochiItem("置顶", icon = { Glyph(Icons.PIN, it) }),
-                            MochiItem("重命名", icon = { Glyph(Icons.EDIT, it) }),
-                            MochiItem("分享", icon = { Glyph(Icons.SHARE, it) }),
-                            MochiItem("删除", destructive = true, icon = { Glyph(Icons.TRASH, it) }),
-                        ),
-                        onItemClick = { toast.show(listOf("已拷贝链接", "已置顶", "进入重命名", "打开分享面板", "已移到回收站")[it]) },
-                        modifier = Modifier,
-                        behavior = behavior(MochiOpenMode.Cover, MochiAlign.End),
-                        physics = physics,
-                        motion = motion,
-                    ) { MoreDots() }
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // 第二行：排序
-                    MochiDropdown(
-                        expanded = open == "sort",
-                        onExpandedChange = { open = if (it) "sort" else null },
-                        items = sortItems,
-                        onItemClick = { sortIndex = it },
-                        modifier = Modifier,
-                        selectedIndex = sortIndex,
-                        behavior = behavior(MochiOpenMode.Detach),
-                        physics = physics,
-                        motion = motion,
-                        menuWidth = 220.dp,
+                        // 右上：⋯ 操作菜单（包裹）
+                        MochiIconDropdown(
+                            expanded = open == "more",
+                            onExpandedChange = { open = if (it) "more" else null },
+                            items = persistentListOf(
+                                MochiItem("拷贝链接", icon = { Glyph(Icons.LINK, it) }),
+                                MochiItem("置顶", icon = { Glyph(Icons.PIN, it) }),
+                                MochiItem("重命名", icon = { Glyph(Icons.EDIT, it) }),
+                                MochiItem("分享", icon = { Glyph(Icons.SHARE, it) }),
+                                MochiItem("删除", destructive = true, icon = { Glyph(Icons.TRASH, it) }),
+                            ),
+                            onItemClick = { toast.show(listOf("已拷贝链接", "已置顶", "进入重命名", "打开分享面板", "已移到回收站")[it]) },
+                            modifier = Modifier,
+                            behavior = behavior(MochiOpenMode.Cover, MochiAlign.End),
+                            physics = physics,
+                            motion = motion,
+                        ) { MoreDots() }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MochiBlurText("排序：${sorts[sortIndex]}", style = ts.labelLarge)
-                        Spacer(Modifier.width(8.dp))
-                        Chevron(up = open != "sort")
-                    }
+                        // 第二行：排序
+                        MochiDropdown(
+                            expanded = open == "sort",
+                            onExpandedChange = { open = if (it) "sort" else null },
+                            items = sortItems,
+                            onItemClick = { sortIndex = it },
+                            modifier = Modifier,
+                            selectedIndex = sortIndex,
+                            behavior = behavior(MochiOpenMode.Detach),
+                            physics = physics,
+                            motion = motion,
+                            menuWidth = 220.dp,
+                        ) {
+                            MochiBlurText("排序：${sorts[sortIndex]}", style = ts.labelLarge)
+                            Spacer(Modifier.width(8.dp))
+                            Chevron(up = open != "sort")
+                        }
 
-                    // 第二行：+ 操作菜单
-                    MochiIconDropdown(
-                        expanded = open == "fab",
-                        onExpandedChange = { open = if (it) "fab" else null },
-                        items = persistentListOf(
-                            MochiItem("新建笔记", icon = { Glyph(Icons.NOTE, it) }),
-                            MochiItem("拍照", icon = { Glyph(Icons.CAMERA, it) }),
-                            MochiItem("扫描文稿", icon = { Glyph(Icons.SCAN, it) }),
-                            MochiItem("录音", icon = { Glyph(Icons.MIC, it) }),
-                        ),
-                        onItemClick = { toast.show(listOf("新建了一条笔记", "打开相机", "打开文稿扫描", "开始录音")[it]) },
-                        modifier = Modifier,
-                        colors = MochiDropdownDefaults.dropdownColors(
-                            buttonColor = cs.primaryContainer,
-                            buttonContentColor = cs.onPrimaryContainer,
-                        ),
-                        behavior = behavior(MochiOpenMode.Detach, MochiAlign.End),
-                        physics = physics,
-                        motion = motion,
-                        size = 56.dp,
-                    ) { Glyph(Icons.PLUS, LocalContentColor.current, size = 24) }
+                        // 第二行：+ 操作菜单
+                        MochiIconDropdown(
+                            expanded = open == "fab",
+                            onExpandedChange = { open = if (it) "fab" else null },
+                            items = persistentListOf(
+                                MochiItem("新建笔记", icon = { Glyph(Icons.NOTE, it) }),
+                                MochiItem("拍照", icon = { Glyph(Icons.CAMERA, it) }),
+                                MochiItem("扫描文稿", icon = { Glyph(Icons.SCAN, it) }),
+                                MochiItem("录音", icon = { Glyph(Icons.MIC, it) }),
+                            ),
+                            onItemClick = { toast.show(listOf("新建了一条笔记", "打开相机", "打开文稿扫描", "开始录音")[it]) },
+                            modifier = Modifier,
+                            colors = MochiDropdownDefaults.dropdownColors(
+                                buttonColor = cs.primaryContainer,
+                                buttonContentColor = cs.onPrimaryContainer,
+                            ),
+                            behavior = behavior(MochiOpenMode.Detach, MochiAlign.End),
+                            physics = physics,
+                            motion = motion,
+                            size = 56.dp,
+                        ) { Glyph(Icons.PLUS, LocalContentColor.current, size = 24) }
+                    }
                 }
             }
         }
-        DemoSettingsSection("交互") {
-            Toggles("打开方式", listOf("按下即开" to MochiTrigger.Press, "长按开" to MochiTrigger.LongPress), trigger) { trigger = it }
-            Toggles("展开形式", listOf("按场景" to null, "全部分离" to MochiOpenMode.Detach, "全部包裹" to MochiOpenMode.Cover), forceMode) {
-                forceMode = it
-                open = null
+        demoItem {
+            DemoSettingsSection("交互") {
+                Toggles("打开方式", listOf("按下即开" to MochiTrigger.Press, "长按开" to MochiTrigger.LongPress), trigger) { trigger = it }
+                Toggles("展开形式", listOf("按场景" to null, "全部分离" to MochiOpenMode.Detach, "全部包裹" to MochiOpenMode.Cover), forceMode) {
+                    forceMode = it
+                    open = null
+                }
+                Toggles("按压反馈", listOf("放大+发光" to MochiPressStyle.Grow, "缩小" to MochiPressStyle.Shrink), pressStyle) { pressStyle = it }
             }
-            Toggles("按压反馈", listOf("放大+发光" to MochiPressStyle.Grow, "缩小" to MochiPressStyle.Shrink), pressStyle) { pressStyle = it }
         }
-        DemoSettingsSection("列表") {
-            Toggles("列表布局", listOf("MD3" to MochiItemLayout.Material, "iOS" to MochiItemLayout.Ios), layout) {
-                layout = it
-                open = null
+        demoItem {
+            DemoSettingsSection("列表") {
+                Toggles("列表布局", listOf("MD3" to MochiItemLayout.Material, "iOS" to MochiItemLayout.Ios), layout) {
+                    layout = it
+                    open = null
+                }
+                Toggles("列表长度", listOf("4 项" to false, "60 项" to true), longList) {
+                    longList = it
+                    sortIndex = 0
+                    open = null
+                }
+                Toggles(
+                    "震动",
+                    listOf("iOS 式" to MochiHapticProfile.IosLike, "丰富" to MochiHapticProfile.Rich, "关" to MochiHapticProfile.Off),
+                    haptic,
+                ) { haptic = it }
             }
-            Toggles("列表长度", listOf("4 项" to false, "60 项" to true), longList) {
-                longList = it
-                sortIndex = 0
-                open = null
-            }
-            Toggles(
-                "震动",
-                listOf("iOS 式" to MochiHapticProfile.IosLike, "丰富" to MochiHapticProfile.Rich, "关" to MochiHapticProfile.Off),
-                haptic,
-            ) { haptic = it }
         }
-        DemoSliderSection("融球半径", "${goo.toInt()} dp", goo, { goo = it }, valueRange = 0f..60f)
-        DemoSliderSection("G2 平滑", "%.2f".format(smoothing), smoothing, { smoothing = it })
-        DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
-        DemoSliderSection("橡皮筋最大拉伸", "${rubberMax.toInt()} dp", rubberMax, { rubberMax = it }, valueRange = 0f..160f)
+        demoItem {
+            DemoSliderSection("融球半径", "${goo.toInt()} dp", goo, { goo = it }, valueRange = 0f..60f)
+        }
+        demoItem {
+            DemoSliderSection("G2 平滑", "%.2f".format(smoothing), smoothing, { smoothing = it })
+        }
+        demoItem {
+            DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
+        }
+        demoItem {
+            DemoSliderSection("橡皮筋最大拉伸", "${rubberMax.toInt()} dp", rubberMax, { rubberMax = it }, valueRange = 0f..160f)
+        }
     }
     MochiToastHost(toast)
 }

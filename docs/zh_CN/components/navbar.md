@@ -74,6 +74,19 @@ MochiLargeTitleScaffold(
 
 侧推页面的 `actions` 默认使用稳定 `navId`，图标按钮还要提供稳定 `contentKey`，组内子项也登记；返回使用自动参与共享的 `MochiBackButton`。源码里的可选参数不是应用里省略共享顶栏的建议。完整可编译应用见 [应用接入规范](../guide/application-integration.md)，配对与来源转场例外见 [导航](../guide/navigation.md#共享顶栏)。
 
+## 懒加载版本
+
+`MochiLazyLargeTitleScaffold` / `MochiLazyCompactTitleScaffold`：参数和上面两个一样，`scrollState` 换成 `listState: LazyListState`，正文是 `LazyListScope`。大标题和搜索栏是列表的第 0 项，顶栏、大标题交接、吸附、越界放大、下拉刷新、拖动收键盘都一样。长页面（一屏放不下）用它，见[设计规范](../guide/design-principles.md#十长页面用懒加载列表)。
+
+```kotlin
+MochiLazyCompactTitleScaffold(title = "设置") {
+    item { MochiListSection(header = "通用") { … } }
+    item { MochiListSection(header = "隐私") { … } }
+}
+```
+
+每个分组一项；项滑出屏幕会被回收，项里用户能改的状态用 `rememberSaveable`。
+
 ## MochiSearchBar
 
 iOS 的搜索栏（`basic` 包）：
@@ -89,11 +102,13 @@ MochiSearchBar(query = q, onQueryChange = { q = it }, placeholder = "搜索", on
 
 ## 滚动边缘效果
 
-大标题是 34sp Bold（`textStyles.largeTitle`）。收起后的小标题居中，顶栏不画分隔线：内容滚到顶栏下面时，顶栏铺上底色并往下渐隐 16dp（iOS 26 的滚动边缘效果，不做模糊）。
+大标题是 34sp Bold（`textStyles.largeTitle`）。收起后的小标题居中，顶栏不画分隔线：内容滚到顶栏下面时，顶栏铺上底色并往下渐隐 16dp（iOS 26 的滚动边缘效果）。主题给了 `MochiMaterials.scrollEdge`（iOS 外观）时改按 iOS 的做法画：栏下面的内容渐进模糊，再按背后亮度分档盖一层页面底色或黑色，见 [iOS 外观](../guide/ios-theme.md#滚动边缘效果)。
+
+栏上的标题跟着滚动边缘那一档的遮罩换色（`MochiScrollEdgeLevel.darkText`），不另看背后内容：iOS 外观浅色模式下内容偏暗时这一档撤掉白色底色、改成压暗，标题、副标题在 0.3s 内换成白字；深色模式下内容很亮时黑色底色只盖薄薄一层，换成深色字。没给 darkText 的档按栏后面叠完之后的亮度判断，回来要越过回差，不会来回闪。`MochiTitleBar` 已经接好；自己画的栏给 `mochiScrollEdgeFade(tone = remember { MochiScrollEdgeTone() })` 传一个 `MochiScrollEdgeTone`，文字颜色用 `MochiScrollEdgeDefaults.textColor(tone, 默认色)`。玻璃按钮自己按背后亮度变色，不需要接。
 
 自己的顶栏或底栏也可以用：`Modifier.mochiScrollEdgeFade(color, bottom = false, extent = 16.dp, alpha = { … })`。
 
-渐隐只在内容真的滚到栏下面时出现。内容停在顶部时栏下面没有东西，渐隐要是全浓，往下延的那一段会压住第一行内容，也会压住栏上的按钮。`alpha`（`MochiTitleBar` 的 `backgroundProgress`）接 `MochiScrollEdgeDefaults.progress(state)`，`state` 可以是 `ScrollState`、`LazyListState` 或 `LazyGridState`：停在顶部是 0，往上滚进 16dp 到 1。`MochiLargeTitleScaffold`、`MochiCompactTitleScaffold` 已经接好。不要在页面外再整体盖一层渐隐：它会叠在页面顶栏的按钮上面。
+渐隐只在内容真的滚到栏下面时出现。内容停在顶部时栏下面没有东西，渐隐要是全浓，往下延的那一段会压住第一行内容，也会压住栏上的按钮。`alpha`（`MochiTitleBar` 的 `backgroundProgress`）接 `MochiScrollEdgeDefaults.progress(state)`，`state` 可以是 `ScrollState`、`LazyListState` 或 `LazyGridState`：停在顶部是 0，往上滚进 16dp 到 1。`MochiLargeTitleScaffold`、`MochiCompactTitleScaffold` 已经接好。模糊由滚动容器自己做：自己的页面在滚动容器上加 `Modifier.mochiScrollEdgeBlur(顶栏下沿离容器顶边的距离, alpha)`，`alpha` 和顶栏的 `backgroundProgress` 用同一个；主题没有 scrollEdge 时它什么都不做。不要在页面外再整体盖一层渐隐：它会叠在页面顶栏的按钮上面。
 
 收起后的小标题淡入的同时从下方 6dp 滑到位（iOS 26），方向和大标题往上滚走一致。
 

@@ -51,6 +51,13 @@ public object MochiPressDefaults {
 public fun Modifier.mochiPressDeform(scale: Float = MochiPressDefaults.Scale, follow: Dp = MochiPressDefaults.Follow): Modifier =
     this then PressDeformElement(scale, follow)
 
+/**
+ * 自己在 Main 阶段消费整下拖动的按钮（按住期间外层不会滚动）用这个：按下立即反馈，不按滚动容器的节奏等待，
+ * 也不把「移动被消费了」当成滚动接手而收回
+ */
+internal fun Modifier.mochiClaimedPressDeform(scale: Float = MochiPressDefaults.Scale, follow: Dp = MochiPressDefaults.Follow): Modifier =
+    this then PressDeformElement(scale, follow, claimed = true)
+
 /** 在同一层合并按压和触发脉冲，并把最终形变限制在调用方提供的局部安全范围内。 */
 internal fun Modifier.mochiBoundedPressDeform(scale: Float, follow: Dp, extraScale: () -> Float, bounds: () -> Rect): Modifier =
     this then PressDeformElement(scale, follow, extraScale, bounds)
@@ -60,8 +67,9 @@ private data class PressDeformElement(
     val follow: Dp,
     val extraScale: (() -> Float)? = null,
     val bounds: (() -> Rect)? = null,
+    val claimed: Boolean = false,
 ) : ModifierNodeElement<PressDeformNode>() {
-    override fun create(): PressDeformNode = PressDeformNode(scale, follow, extraScale, bounds)
+    override fun create(): PressDeformNode = PressDeformNode(scale, follow, extraScale, bounds, claimed)
 
     override fun update(node: PressDeformNode) {
         node.scale = scale
@@ -77,7 +85,13 @@ private data class PressDeformElement(
     }
 }
 
-private class PressDeformNode(var scale: Float, var follow: Dp, var extraScale: (() -> Float)?, var bounds: (() -> Rect)?) :
+private class PressDeformNode(
+    var scale: Float,
+    var follow: Dp,
+    var extraScale: (() -> Float)?,
+    var bounds: (() -> Rect)?,
+    val claimed: Boolean,
+) :
     DelegatingNode(),
     LayoutModifierNode {
     /** (缩放, 0) */
@@ -96,7 +110,7 @@ private class PressDeformNode(var scale: Float, var follow: Dp, var extraScale: 
         delegate(
             SuspendingPointerInputModifierNode {
                 // 触摸节奏（滚动容器里延迟按下、滚动接手时收回、快速轻点补一次回弹）和按压高光共用
-                val inScroll = isInScrollContainer()
+                val inScroll = !claimed && isInScrollContainer()
                 awaitEachGesture {
                     awaitMochiPress(
                         inScrollContainer = inScroll,

@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,9 +42,12 @@ import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
+import ui.feice.mochi.effect.overscroll.MochiOverscrollEffect
 import ui.feice.mochi.effect.overscroll.MochiOverscrollSpec
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
+import ui.feice.mochi.effect.overscroll.mochiContainedScroll
 import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.shape.MochiRoundedRectangle
@@ -56,54 +60,66 @@ import ui.feice.mochi.theme.emphasized
  */
 @Composable
 fun OverscrollPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var ios by remember { mutableStateOf(true) }
+    var ios by rememberSaveable { mutableStateOf(true) }
     val defaults = remember { MochiOverscrollSpec() }
-    var band by remember { mutableFloatStateOf(defaults.rubberBand) }
+    var band by rememberSaveable { mutableFloatStateOf(defaults.rubberBand) }
     val spec = remember(band) { MochiOverscrollSpec(rubberBand = band) }
 
     DemoPage(entry, modifier) {
-        DemoSection("收件箱", footer = "拖出顶部或底部，或者用力甩到头：内容被橡皮筋拉住，松手弹回；越界时往回甩，会先收回越界再继续滚。", padding = 0.dp) {
-            val effect = if (ios) rememberMochiOverscrollEffect(spec) else systemOverscroll()
-            val fling = if (ios) MochiScrollDefaults.flingBehavior() else ScrollableDefaults.flingBehavior()
-            LazyColumn(
-                Modifier
-                    .fillMaxWidth()
-                    .height(360.dp),
-                contentPadding = PaddingValues(vertical = 6.dp),
-                flingBehavior = fling,
-                overscrollEffect = effect,
-            ) {
-                itemsIndexed(Mails) { i, mail -> MailRow(mail, divider = i < Mails.lastIndex) }
+        demoItem {
+            DemoSection("收件箱", footer = "拖出顶部或底部，或者用力甩到头：内容被橡皮筋拉住，松手弹回；越界时往回甩，会先收回越界再继续滚。", padding = 0.dp) {
+                val effect = if (ios) rememberMochiOverscrollEffect(spec) else systemOverscroll()
+                val fling = if (ios) MochiScrollDefaults.flingBehavior() else ScrollableDefaults.flingBehavior()
+                LazyColumn(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(360.dp)
+                        // 收件箱滚到头只在自己里面回弹，不带动外面的页面
+                        .then(if (effect is MochiOverscrollEffect) Modifier.mochiContainedScroll(effect) else Modifier),
+                    contentPadding = PaddingValues(vertical = 6.dp),
+                    flingBehavior = fling,
+                    overscrollEffect = effect,
+                ) {
+                    itemsIndexed(Mails) { i, mail -> MailRow(mail, divider = i < Mails.lastIndex) }
+                }
             }
         }
-        DemoSection("相簿", footer = "横着拖出两端一样回弹。", padding = 0.dp) {
-            val effect = if (ios) rememberMochiOverscrollEffect(spec) else systemOverscroll()
-            val fling = if (ios) MochiScrollDefaults.flingBehavior() else ScrollableDefaults.flingBehavior()
-            LazyRow(
-                Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                flingBehavior = fling,
-                overscrollEffect = effect,
-            ) {
-                itemsIndexed(Albums) { _, album -> AlbumCover(album) }
+        demoItem {
+            DemoSection("相簿", footer = "横着拖出两端一样回弹。", padding = 0.dp) {
+                val effect = if (ios) rememberMochiOverscrollEffect(spec) else systemOverscroll()
+                val fling = if (ios) MochiScrollDefaults.flingBehavior() else ScrollableDefaults.flingBehavior()
+                LazyRow(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    flingBehavior = fling,
+                    overscrollEffect = effect,
+                ) {
+                    itemsIndexed(Albums) { _, album -> AlbumCover(album) }
+                }
             }
         }
-        DemoSettingsSection("调参", footer = "Kyant & Nevoit 的 Cresto 实现，和系统的拉伸效果对比。") {
-            Toggles("效果", listOf("Cresto 回弹" to true, "系统拉伸" to false), ios) { ios = it }
+        demoItem {
+            DemoSettingsSection("调参", footer = "Kyant & Nevoit 的 Cresto 实现，和系统的拉伸效果对比。") {
+                Toggles("效果", listOf("Cresto 回弹" to true, "系统拉伸" to false), ios) { ios = it }
+            }
         }
-        DemoSliderSection(
-            "阻力系数",
-            "%.2f".format(band),
-            band,
-            { band = it },
-            valueRange = 0.3f..0.8f,
-            footer = "越小越拉不动；iOS 大约是 0.55。",
-        )
-        DemoSection("用法") {
-            Code(
-                "// 整个子树都用 Cresto 回弹\nProvideMochiOverscroll {\n    App()\n}\n\n// 配合 iOS 的惯性减速\nLazyColumn(\n    flingBehavior = MochiScrollDefaults.flingBehavior(),\n) { … }",
+        demoItem {
+            DemoSliderSection(
+                "阻力系数",
+                "%.2f".format(band),
+                band,
+                { band = it },
+                valueRange = 0.3f..0.8f,
+                footer = "越小越拉不动；iOS 大约是 0.55。",
             )
+        }
+        demoItem {
+            DemoSection("用法") {
+                Code(
+                    "// 整个子树都用 Cresto 回弹\nProvideMochiOverscroll {\n    App()\n}\n\n// 配合 iOS 的惯性减速\nLazyColumn(\n    flingBehavior = MochiScrollDefaults.flingBehavior(),\n) { … }",
+                )
+            }
         }
     }
 }

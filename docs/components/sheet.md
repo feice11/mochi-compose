@@ -1,6 +1,6 @@
 # MochiSheet
 
-The iOS bottom sheet (without glass).
+The iOS bottom sheet. With liquid glass in the theme it is glass at medium height and turns opaque when pulled to full screen (see "Liquid glass" below).
 
 - **Medium**: the sheet floats 8dp from the sides and bottom, using its original single continuous rounded outline. Each top corner uses the original `max(physicalRadius, 32dp) - floatingInset` radius, capped at a fixed 48dp.
 - **Large**: edge to edge up to just below the status bar, filling through the navigation area to the window bottom. The page behind it (the one with `mochiSheetBackdrop`) shrinks from its top edge into a rounded card that peeks out above the sheet, over black.
@@ -28,7 +28,7 @@ Cards inside the sheet use the same `MochiListDefaults.colors()` as other groupe
 |---|---|
 | state | `rememberMochiSheetState(detents, initial)`; `show()` / `hide()` / `isVisible` |
 | onDismiss | Called after the dismiss animation |
-| color | Sheet color, surfaceContainerLow by default |
+| color | Sheet color, `MochiDefaults.sheetBackground()` by default: the elevated grouped background (iOS `systemGroupedBackground` at the elevated level). Inside the sheet `LocalMochiElevated` is true, so `MochiListCard` uses the elevated card color and stays one step apart from the sheet in light and dark |
 | grabber | The small bar at the top |
 | hideNavigationBar | Hide system navigation icons while floating, true by default; the bar background remains transparent independently of this setting |
 | navigator | The same navigator used by the internal `MochiNavHost`; internal pages handle Back first |
@@ -43,7 +43,7 @@ MochiSheet(sheet, navigator = nav) {
     MochiNavHost(
         nav,
         // Leave corners unset to inherit the sheet's current transition corners
-        spec = MochiNavDefaults.spec(pushBackdrop = MochiTheme.colorScheme.surfaceContainerLow),
+        spec = MochiNavDefaults.spec(pushBackdrop = MochiDefaults.sheetBackground()),
     ) { route ->
         // A page contains MochiSheetHeader and its own content.
         // Reuse navId="sheet.leading" / "sheet.trailing" on each header's buttons.
@@ -85,6 +85,15 @@ Releasing a drag onto a different detent (medium ↔ large) gives a light haptic
 - Fixed: dragging the sheet while it was opening interrupted the animation and stopped the sheet from listening to `hide()`, so it could no longer be closed. Interrupted animations now just stop, and calling `show()` while it is closing reverses it.
 
 - Keep the entire page behind the sheet (`mochiSheetBackdrop`); do not crop its lower half to a rectangular band. At the start of expansion its corner outlines match the physical screen circles. Both the radii and Bezier control points then interpolate continuously with expansion progress; only at the full detent do they reach the sheet's continuous top-left/top-right corner shapes (48dp on a device reporting 58dp physical corners). The bottom corners use the corresponding top-side targets too, and all radii compensate for scale. Do not abruptly switch between circular and continuous shapes. Returning to medium resets the backing layer's transform and clipping.
+
+## Liquid glass
+
+When the theme has a glass material (`MochiTheme.materials.sheetGlass`), the sheet background follows iOS 26 (UIKitCore, reverse engineered, `SheetLayoutInfo`): below the large detent it is a regular `_UIViewGlass` (subvariant "sheet"); at the large detent it is the opaque system background. The glass samples the page under the sheet together with the dimming layer.
+
+- Pages keep using `MochiDefaults.sheetBackground()` / `groupedBackground()` as their background. Read inside a glass sheet they are transparent and the sheet draws the background, so pages need no branch on the glass switch. Read them inside the sheet (in the `MochiSheet { … }` content); read outside, they return the opaque color.
+- Natively the two backgrounds switch outright; here the opaque color fades in with the progress toward full screen (an approximation).
+- During navigation inside the sheet pages are transparent, so the lower page fades out as the new page covers it and the two never overlap (an approximation; the native behavior was not recovered). At full screen it behaves like an opaque sheet.
+- When floating, the 8pt inset and 32pt minimum corner radius match `_UISheetPresentationMetrics` mediumSheetInset / minimumFloatingCornerRadii.
 
 ## Performance
 

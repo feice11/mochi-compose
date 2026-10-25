@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +61,7 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.SectionTitle
 import ui.feice.mochi.demo.common.Tone
+import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiMorphIcon
@@ -77,17 +79,25 @@ import ui.feice.mochi.theme.emphasized
  */
 @Composable
 fun ElasticPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var maxPull by remember { mutableFloatStateOf(72f) }
-    var gel by remember { mutableFloatStateOf(0.6f) }
+    var maxPull by rememberSaveable { mutableFloatStateOf(72f) }
+    var gel by rememberSaveable { mutableFloatStateOf(0.6f) }
     DemoPage(entry, modifier) {
-        DemoSection("橡皮筋", footer = "按住通知往任意方向拖：越远越拉不动，通知朝手指那侧拉长；松手弹回原位。") {
-            LockScreen(maxPull)
+        demoItem {
+            DemoSection("橡皮筋", footer = "按住通知往任意方向拖：越远越拉不动，通知朝手指那侧拉长；松手弹回原位。") {
+                LockScreen(maxPull)
+            }
         }
-        DemoSliderSection("最大拉伸", "${maxPull.roundToInt()} dp", maxPull, { maxPull = it }, valueRange = 0f..160f)
-        DemoSection("果冻", footer = "点一下切换：拇指按速度沿运动方向拉长，到位时压扁再回弹。") {
-            FocusSwitch(gel)
+        demoItem {
+            DemoSliderSection("最大拉伸", "${maxPull.roundToInt()} dp", maxPull, { maxPull = it }, valueRange = 0f..160f)
         }
-        DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
+        demoItem {
+            DemoSection("果冻", footer = "点一下切换：拇指按速度沿运动方向拉长，到位时压扁再回弹。") {
+                FocusSwitch(gel)
+            }
+        }
+        demoItem {
+            DemoSliderSection("果冻感", "%.2f".format(gel), gel, { gel = it })
+        }
     }
 }
 
@@ -155,7 +165,7 @@ private fun FocusSwitch(gel: Float) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val pos = remember { Animatable(0f) }
-    var on by remember { mutableStateOf(false) }
+    var on by rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
