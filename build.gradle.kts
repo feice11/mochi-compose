@@ -56,7 +56,7 @@ tasks.register("updateBaselineProfiles") {
 
 // Maven Central：四个库模块的坐标、POM 都在 gradle.properties（GROUP、POM_*）。
 // javadoc 发空包：AGP 自带的 javadoc 生成读不了依赖里 Java 17 的 sealed 类会失败，Central 只要求有这个 jar。
-// 有签名密钥（CI 发布时的 signingInMemoryKey）才签名，本地和 JitPack 的 publishToMavenLocal 不需要密钥
+// 有签名密钥（CI 发布时的 signingInMemoryKey）才签名，本地 publishToMavenLocal 不需要密钥
 subprojects {
     plugins.withId("com.vanniktech.maven.publish") {
         extensions.configure<com.vanniktech.maven.publish.MavenPublishBaseExtension> {
