@@ -37,9 +37,10 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import kotlin.math.roundToInt
+import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.effect.content.MochiDrawIcon
 import ui.feice.mochi.effect.content.MochiMorphIconDefaults
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask
@@ -162,6 +163,7 @@ public fun MochiRemovableChip(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+@Suppress("ktlint:compose:content-slot-reused") // 两个分支互斥，由参数决定、不会在同一个实例里来回切
 public fun MochiChipGroup(
     modifier: Modifier = Modifier,
     wrap: Boolean = false,
@@ -211,9 +213,9 @@ private val PressRoom = 6.dp
 private fun ChipCore(
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier,
     enabled: Boolean,
     colors: MochiChipColors,
+    modifier: Modifier = Modifier,
     contentPadding: PaddingValues = MochiChipDefaults.ContentPadding,
     content: @Composable RowScope.() -> Unit,
 ) {

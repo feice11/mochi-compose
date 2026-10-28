@@ -41,7 +41,7 @@ MochiListPickerRow("Repeat", options, index, { index = it })
 ```
 
 - `MochiDateField` / `MochiTimeField` (iOS `.compact`): the grey capsule at the row end is itself a `MochiPopoverButton`: it scales and glows on press and its grey blends into the [calendar](calendar.md) or time-wheel panel. The capsule text blur-replaces on change and uses the accent color while open. The format follows the system locale; pass `format` to override
-- `MochiListPickerRow` (iOS Picker `.menu`): the grey capsule at the row end (value + up/down chevrons) is a [dropdown](dropdown.md) button; press and slide to pick, with a checkmark on the selected option. The row itself draws no press highlight, since only the capsule triggers
+- `MochiListPickerRow` (iOS Picker `.menu`): like `MochiListRow`, `leadingStyle` picks a tile or a bare symbol for the leading icon. the grey capsule at the row end (value + up/down chevrons) is a [dropdown](dropdown.md) button; press and slide to pick, with a checkmark on the selected option. The row itself draws no press highlight, since only the capsule triggers
 
 ## Parameters
 

@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
+import ui.feice.mochi.basic.parts.ControlSmoothing
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiDefaults
@@ -112,6 +112,7 @@ public fun MochiStepSlider(
     val fillPath = remember { G2PathCache() }
     val dark = MochiTheme.colorScheme.isDark
     val shadowColor = MochiTheme.colorScheme.shadow
+    val shadow = MochiTheme.shadows.low
     Box(
         modifier
             .fillMaxWidth()
@@ -177,7 +178,7 @@ public fun MochiStepSlider(
                 // 外胶囊 + 一层很淡的柔和投影
                 val outer = Rect(0f, 0f, size.width, size.height)
                 val outerPath = containerPath.get(outer, size.height / 2f, ControlSmoothing)
-                drawMochiShadow(outer, size.height / 2f, MochiMetaballShadow.elevated(this, elevation = 0.2f, dark = dark), shadowColor)
+                drawMochiShadow(outer, size.height / 2f, shadow.resolve(this, dark), shadowColor)
                 drawPath(outerPath, colors.container, alpha = alpha)
                 // 刻度点
                 val dot = h * 0.11f

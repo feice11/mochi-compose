@@ -41,12 +41,12 @@ MochiTheme(
 ) { … }
 ```
 
-- `glass`：标签栏（含搜索框、附件条）等浮在内容上的栏是玻璃；关掉是纯色胶囊加投影
+- `glass`：标签栏（含搜索框、附件条）等浮在内容上的栏，以及栏里的按钮、菜单、面板、弹窗是玻璃；关掉是纯色胶囊加投影。它不改正文内容：正文按钮只有写了玻璃样式（`MochiButtonStyle.ProminentGlass` 等）才是玻璃，`Filled` 等纯色样式始终是纯色，见[按钮](../components/button.md)
 - `blur`：滚到顶栏、底栏下面的内容渐进模糊并按亮度压暗；关掉是底色渐隐
 - `themeAccent`：玻璃保持中性，选中项用主题的强调色。iOS 配色传 false（用 iOS 按玻璃算出的强调色），其他配色传 true
 - 默认（不传）是 `MochiMaterials()`：都关。`iosMaterials` 在 mochi-ios 里，玻璃样式、通透度等参数见 [iOS 外观与玻璃材质](ios-theme.md)
 
-组件自己读材质（`MochiTheme.materials`），页面不需要判断开关。液态玻璃每帧都要重新渲染背后的内容，更耗电：适合交给用户打开，打开前提示代价。
+组件自己读材质（`MochiTheme.materials`），页面不需要判断开关。只想让某一块区域不用玻璃时用 `MochiMaterialsScope(MochiMaterials()) { … }`，它只换材质，不重设配色和字体。液态玻璃每帧都要重新渲染背后的内容，更耗电：适合交给用户打开，打开前提示代价。
 
 液态玻璃是**长期 Beta**：外观参数、性能和公开 API 都可能在小版本里调整，不保证兼容；不同机型的渲染开销差别也大。正式产品里建议默认关闭，交给用户打开。模糊效果（`blur`）不在此列。
 
@@ -126,6 +126,27 @@ MD3 字阶：`displayLarge/Medium/Small`、`headlineLarge/Medium/Small`、`title
 | extraLargeIncreased | 32.dp |
 | extraExtraLarge | 48.dp |
 | full | 胶囊（`MochiCapsule`） |
+
+## 阴影档位（`MochiShadows`）
+
+组件从主题里选阴影档位，数值都在一张表里，换阴影风格只改一处。
+
+| 档位 | 谁在用 |
+|---|---|
+| `contact` / `contactPressed` | 开关、滑块的拇指，分段控件的选中块（只有一层贴着的软影） |
+| `low` | 步进滑条的滑块 |
+| `raised` | 静止的标签栏 |
+| `lifted` | 按住的标签栏、索引条、提示条 |
+| `floating` | 展开的菜单和气泡、警告框、侧边栏（菜单展开时从 `rest` 插值过来） |
+
+每一档 `MochiShadowLevel` 是往里收、大半径的淡环境影加一层很软的接触影，浅色、深色各有一份不透明度。可以换掉某一档，也可以整表换掉：
+
+```kotlin
+MochiTheme(colors = scheme, shadows = MochiShadows(floating = MochiShadows().floating.copy(ambientAlpha = 0.08f))) { App() }
+MochiTheme(colors = scheme, shadows = MochiShadows.None) { App() } // 全平
+```
+
+自己写组件时读 `MochiTheme.shadows.<档位>.resolve(density, dark, visibility)`，用 `drawMochiShadow` 画；按压、展开的过渡用 `lerp(a, b, t)` 在两档之间插值。
 
 ## 同心圆角
 

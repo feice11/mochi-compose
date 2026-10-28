@@ -113,13 +113,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.menu.AnchorTracker
+import ui.feice.mochi.basic.menu.Overlay
+import ui.feice.mochi.basic.menu.rememberMochiEngine
 import ui.feice.mochi.effect.elastic.MochiRubberBandState
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
 import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
 import ui.feice.mochi.effect.elastic.rubberStretched
+import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
-import ui.feice.mochi.effect.glass.LocalMochiWindowBackdrop
+import ui.feice.mochi.effect.glass.glassOn
+import ui.feice.mochi.effect.glass.overlayBackdropSource
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.MochiGlowState
@@ -195,7 +200,7 @@ internal fun MochiStyle.liquid(cover: Boolean): MochiStyle = copy(
     panelCornerRadius = LiquidMenu.CornerRadius,
     panelPadding = LiquidMenu.Inset,
     itemHeight = LiquidMenu.ItemHeight,
-    menuWidth = if (menuWidth == MochiDropdownDefaults.MenuWidth || menuWidth == MochiDropdownDefaults.IconMenuWidth) LiquidMenu.Width else menuWidth,
+    menuWidth = if (menuWidth in DefaultMenuWidths) LiquidMenu.Width else menuWidth,
 )
 
 /**
@@ -204,19 +209,18 @@ internal fun MochiStyle.liquid(cover: Boolean): MochiStyle = copy(
  * 时长和 iOS 录屏对得上，但实机拖沓发硬，回到 liquidMorph 的 0.8 / 0.3
  */
 @Composable
-internal fun liquidMotion(liquid: Boolean, motion: MochiMotion): MochiMotion =
-    if (liquid && motion == MochiTheme.motionScheme.menu) {
-        MochiMotions.Ios27Menu
-    } else {
-        motion
-    }
+internal fun liquidMotion(liquid: Boolean, motion: MochiMotion): MochiMotion = if (liquid && motion == MochiTheme.motionScheme.menu) {
+    MochiMotions.Ios27Menu
+} else {
+    motion
+}
 
 /** 按钮组里的一格按下时图标的不透明度（iOS 录屏里「⋯」按下后的深浅量出来的，约 0.23，近似） */
 private const val GroupItemPressedAlpha = 0.23f
 
 /** 菜单这会儿是不是玻璃菜单：主题有菜单玻璃，窗口里有页面录制可取样 */
 @Composable
-internal fun liquidMenu(): Boolean = MochiTheme.materials.menuGlass != null && LocalMochiWindowBackdrop.current != null
+internal fun liquidMenu(): Boolean = glassOn(GlassRole.Menu) && overlayBackdropSource() != null
 
 /**
  * iOS 27 玻璃菜单的排版，读自 24A435 UIKit：_UIContextMenuPlatformMetrics_Glass（圆角、留白、行高、边距、图标框）、
@@ -414,7 +418,7 @@ internal fun DropdownCore(
     }
 
     // 栏里的按钮（返回按钮的历史菜单等）在有玻璃材质和背景来源时按钮本身画成玻璃；按钮组里的一格由组画
-    val buttonGlass = if (group == null) LocalButtonGlass.current else null
+    val buttonGlass = if (group == null) LocalBarControlGlass.current else null
     // 布局里的真按钮。菜单打开期间隐藏，由浮层里的克隆 + shader 接管
     Box(
         modifier = modifier
@@ -462,17 +466,20 @@ internal fun DropdownCore(
                 onDrawBehind { if (buttonGlass == null) drawOutline(outline, style.buttonColor) }
             }
             // 长按还没打开前，按钮自己画发光（打开后由浮层的融球 shader 画）；玻璃按钮不画（近似：玻璃的按压光没接这条手势）
-            .then(if (group != null || buttonGlass != null) Modifier else Modifier.mochiGlow(glow, buttonShape, origin = { anchor.rect.topLeft }))
+            .then(
+                Modifier.mochiGlow(glow, buttonShape, origin = { anchor.rect.topLeft }).takeIf { group == null && buttonGlass == null }
+                    ?: Modifier,
+            )
             .sizeIn(minWidth = buttonMinWidth, minHeight = buttonMinHeight),
         contentAlignment = Alignment.Center,
     ) {
-        if (buttonGlass != null) GlassSurface(buttonGlass, Modifier.matchParentSize(), null, null)
+        if (buttonGlass != null) GlassSurface(buttonGlass, null, null, Modifier.matchParentSize())
         Row(
             Modifier.padding(buttonPadding),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CompositionLocalProvider(LocalContentColor provides style.onButtonColor, LocalButtonGlass provides null) { buttonContent() }
+            CompositionLocalProvider(LocalContentColor provides style.onButtonColor, LocalBarControlGlass provides null) { buttonContent() }
         }
     }
 
@@ -535,3 +542,6 @@ public fun MochiIconDropdown(
 /** 半透明的按钮色合成到 [under] 上变成不透明色；不透明和完全透明的原样返回 */
 internal fun opaqueButtonColor(color: Color, under: Color): Color =
     if (color.alpha > 0f && color.alpha < 1f) color.compositeOver(under.copy(alpha = 1f)) else color
+
+/** 没改过的默认菜单宽度：液态菜单换成自己的宽度 */
+private val DefaultMenuWidths = setOf(MochiDropdownDefaults.MenuWidth, MochiDropdownDefaults.IconMenuWidth)

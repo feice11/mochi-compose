@@ -68,7 +68,15 @@ fun ChipPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             DemoSection("多选", footer = "选中时文字前面一笔画出对勾，芯片跟着变宽；再点一次原路擦掉。选项不多时折行排满，一眼看全。") {
                 MochiChipGroup(wrap = true, contentPadding = PaddingValues(0.dp)) {
                     Tastes.forEach { t ->
-                        MochiChip(t, selected = t in tastes, onClick = { tastes = if (t in tastes) tastes - t else tastes + t }, showCheck = true)
+                        MochiChip(t, selected = t in tastes, onClick = {
+                            tastes = if (t in
+                                tastes
+                            ) {
+                                tastes - t
+                            } else {
+                                tastes + t
+                            }
+                        }, showCheck = true)
                     }
                 }
                 MochiBlurText(
@@ -111,7 +119,14 @@ fun ChipPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     }
 }
 
-private val Mailboxes = listOf("全部" to "mail", "未读" to "mail-unread", "已标记" to "flag", "有附件" to "attach", "今天" to "today", "本周" to "calendar")
+private val Mailboxes = listOf(
+    "全部" to "mail",
+    "未读" to "mail-unread",
+    "已标记" to "flag",
+    "有附件" to "attach",
+    "今天" to "today",
+    "本周" to "calendar",
+)
 private val MailCounts = listOf(1284, 37, 12, 206, 9, 58)
 private val Tastes = listOf("甜", "咸", "辣", "酸", "清淡", "重口", "素食", "海鲜")
 private val AllFilters = listOf("价格 < 100", "有货", "包邮", "4 星以上", "附近 3 公里")

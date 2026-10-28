@@ -49,9 +49,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
-import ui.feice.mochi.effect.glass.LocalMochiBackdrop
-import ui.feice.mochi.effect.glass.mochiBackdropSource
-import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.MochiRefreshIndicator
 import ui.feice.mochi.basic.Text
@@ -61,6 +58,12 @@ import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.mochiBlur
 import ui.feice.mochi.effect.content.mochiBlurAlpha
 import ui.feice.mochi.effect.content.mochiRevealBlur
+import ui.feice.mochi.effect.glass.LocalGlassSources
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
+import ui.feice.mochi.effect.glass.MochiNoGlassShadow
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
 import ui.feice.mochi.effect.overscroll.MochiOverscrollEffect
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
@@ -415,29 +418,33 @@ private fun MochiTitleScaffold(
                     }
                     if (searchBar != null) {
                         if (largeTitle) Spacer(Modifier.height(12.dp))
-                        searchBar()
+                        // 搜索栏在正文的标题区里，背后只有页面底色：玻璃不画外阴影
+                        CompositionLocalProvider(LocalMochiGlassShadow provides MochiNoGlassShadow) { searchBar() }
                     }
                 }
             }
         } else {
             null
         }
-        body(
-            TitleBodyParams(
-                modifier = Modifier
-                    .fillMaxSize()
-                    // 录的是渐进模糊之后的样子：栏里的玻璃取样的和眼睛看到的一致（录原样的话贴边那圈会露出清晰的内容）
-                    .mochiBackdropSource(barBackdrop)
-                    .mochiScrollEdgeBlur(barBottom) { smoothstep(0f, edgeFade, scroll.value()) },
-                overscroll = overscroll,
-                // 紧凑页没有标题占位；刷新留白由整个正文一次性承担。
-                hold = if (largeTitle) Modifier else Modifier.mochiRefreshHold(refresh),
-                barHeight = barHeight,
-                top = if (largeTitle) 0.dp else 12.dp,
-                spacing = contentSpacing,
-                header = header,
-            ),
-        )
+        // 正文里打开的菜单、面板：导航主机不录整页时取样这份正文
+        CompositionLocalProvider(LocalGlassSources provides LocalGlassSources.current.let { it.copy(page = barBackdrop ?: it.page) }) {
+            body(
+                TitleBodyParams(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // 录的是渐进模糊之后的样子：栏里的玻璃取样的和眼睛看到的一致（录原样的话贴边那圈会露出清晰的内容）
+                        .mochiBackdropSource(barBackdrop)
+                        .mochiScrollEdgeBlur(barBottom) { smoothstep(0f, edgeFade, scroll.value()) },
+                    overscroll = overscroll,
+                    // 紧凑页没有标题占位；刷新留白由整个正文一次性承担。
+                    hold = if (largeTitle) Modifier else Modifier.mochiRefreshHold(refresh),
+                    barHeight = barHeight,
+                    top = if (largeTitle) 0.dp else 12.dp,
+                    spacing = contentSpacing,
+                    header = header,
+                ),
+            )
+        }
 
         if (onRefresh != null) {
             // 转圈在「顶栏下沿」和「被拉下来的内容上沿」之间居中

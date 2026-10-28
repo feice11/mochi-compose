@@ -4,136 +4,84 @@
 package ui.feice.mochi.basic
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
-import ui.feice.mochi.effect.content.MochiBlurCrossfade
-import ui.feice.mochi.effect.content.MochiBlurTransitions
-import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.mochiBlur
 import ui.feice.mochi.effect.content.mochiBlurAlpha
 import ui.feice.mochi.effect.content.mochiBounce
-import ui.feice.mochi.effect.elastic.MochiFollowSpring
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
-import ui.feice.mochi.effect.elastic.mochiPressDeform
-import ui.feice.mochi.effect.elastic.rubberBand
 import ui.feice.mochi.effect.glass.LocalMochiBackdrop
 import ui.feice.mochi.effect.glass.MochiBackdrop
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
-import ui.feice.mochi.effect.glow.MochiGlowState
 import ui.feice.mochi.effect.glow.drawGlow
-import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.effect.metaball.MochiBlob
 import ui.feice.mochi.effect.metaball.MochiMetaballColors
 import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.metaball.drawMochiMetaball
 import ui.feice.mochi.effect.metaball.proximityFuse
 import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.navigation.mochiNavOccluder
 import ui.feice.mochi.shape.G2PathCache
-import ui.feice.mochi.shape.G2RectClipShape4
-import ui.feice.mochi.shape.MochiCapsule
-import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiGlass
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.lerp
 import ui.feice.mochi.utils.MochiHaptics
 import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.smoothstep
@@ -204,6 +152,7 @@ public fun MochiTabBar(
     val view = LocalView.current
     val density = LocalDensity.current
     val dark = MochiTheme.colorScheme.isDark
+    val shadows = MochiTheme.shadows
     val haptics = remember(view, behavior.hapticProfile) { MochiHaptics(view, behavior.hapticProfile) }
     val state = remember { TabBarState(selectedIndex.toFloat()) }
     val selected by rememberUpdatedState(selectedIndex.coerceIn(0, n - 1))
@@ -393,7 +342,7 @@ public fun MochiTabBar(
                         drawMochiShadow(
                             bar,
                             bar.height / 2f,
-                            MochiMetaballShadow.elevated(this, lerp(RestElevation, PressedElevation, raised), dark),
+                            lerp(shadows.raised, shadows.lifted, raised).resolve(this, dark),
                             colors.shadow,
                         )
                         drawPath(barP, colors.container)
@@ -629,169 +578,6 @@ internal fun Modifier.placedAt(rect: () -> Rect): Modifier = this
         layout(w, h) { p.place(0, 0) }
     }
 
-/** 胶囊底板：柔和投影 + 底色（形状每帧按当前大小取，圆角永远是短边一半） */
-private fun Modifier.capsulePlate(path: G2PathCache, color: Color, shadow: Color, dark: Boolean): Modifier = drawBehind {
-    val p = path.get(size.toRect(), size.minDimension / 2f, 1f)
-    drawMochiShadow(size.toRect(), size.minDimension / 2f, MochiMetaballShadow.elevated(this, RestElevation, dark), shadow)
-    drawPath(p, color)
-}
-
-/** 纯色标签栏的胶囊底板：柔和投影 + 底色 */
-@Composable
-private fun solidPlate(colors: MochiTabBarColors, dark: Boolean): TabBarPlate {
-    val path = remember { G2PathCache() }
-    return TabBarPlate(Modifier.capsulePlate(path, colors.container, colors.shadow, dark))
-}
-
-/**
- * 附件条、搜索框的底板：纯色标签栏是 [modifier] 画的投影 + 底色；玻璃标签栏是 [under] 画在内容下面的一块玻璃
- * （玻璃的外阴影、亮边在胶囊外面，不能和内容一起被胶囊裁掉）
- */
-internal class TabBarPlate(val modifier: Modifier = Modifier, val under: (@Composable BoxScope.() -> Unit)? = null)
-
-/** 标签栏上方的附件条；收起时挪到小圆右边同一行（位置由 [rect] 给），内容按 [inline] 模糊替换成紧凑版 */
-@Composable
-internal fun TabBarAccessory(
-    rect: () -> Rect,
-    alpha: () -> Float,
-    inline: Boolean,
-    blocked: Boolean,
-    colors: MochiTabBarColors,
-    plate: TabBarPlate,
-    content: @Composable (inline: Boolean) -> Unit,
-) {
-    val glow = rememberMochiGlowState()
-    Box(
-        Modifier
-            .placedAt(rect)
-            .graphicsLayer { this.alpha = alpha() }
-            .mochiPressDeform()
-            .then(plate.modifier),
-    ) {
-        plate.under?.invoke(this)
-        AccessoryContent(blocked, colors, glow, inline, content)
-    }
-}
-
-@Composable
-private fun BoxScope.AccessoryContent(
-    blocked: Boolean,
-    colors: MochiTabBarColors,
-    glow: MochiGlowState,
-    inline: Boolean,
-    content: @Composable (inline: Boolean) -> Unit,
-) {
-    Box(
-        Modifier
-            .matchParentSize()
-            .mochiPressGlow(glow, MochiCapsule)
-            // 搜索时附件条淡出，期间不响应点击
-            .then(
-                if (blocked) {
-                    Modifier.pointerInput(Unit) {
-                        awaitEachGesture { awaitFirstDown(pass = PointerEventPass.Initial).consume() }
-                    }
-                } else {
-                    Modifier
-                },
-            )
-            .clip(MochiCapsule),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        CompositionLocalProvider(LocalContentColor provides colors.selectedContent) {
-            MochiBlurCrossfade(inline, Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) { content(it) }
-        }
-    }
-}
-
-/** 标签栏右边的搜索圆钮：点开后（位置由 [rect] 给）展开成搜索框，输入框随 [progress] 淡入并自动聚焦 */
-@Composable
-internal fun TabBarSearchField(
-    search: MochiTabBarSearch,
-    rect: () -> Rect,
-    progress: () -> Float,
-    height: Dp,
-    colors: MochiTabBarColors,
-    plate: TabBarPlate,
-) {
-    val glow = rememberMochiGlowState()
-    val requester = remember { FocusRequester() }
-    val focus = LocalFocusManager.current
-    // 只在从搜索中退出时清焦点（第一次组合不动别处的焦点）
-    val wasActive = remember { booleanArrayOf(search.active) }
-    LaunchedEffect(search.active) {
-        if (search.active) {
-            requester.requestFocus()
-        } else if (wasActive[0]) {
-            focus.clearFocus()
-        }
-        wasActive[0] = search.active
-    }
-    Box(Modifier.placedAt(rect).mochiPressDeform().then(plate.modifier)) {
-        plate.under?.invoke(this)
-        SearchContent(search, progress, height, colors, glow, requester)
-    }
-}
-
-@Composable
-private fun BoxScope.SearchContent(
-    search: MochiTabBarSearch,
-    progress: () -> Float,
-    height: Dp,
-    colors: MochiTabBarColors,
-    glow: MochiGlowState,
-    requester: FocusRequester,
-) {
-    val cs = MochiTheme.colorScheme
-    val currentSearch by rememberUpdatedState(search)
-    Box(
-        Modifier
-            .matchParentSize()
-            .mochiPressGlow(glow, MochiCapsule)
-            .clip(MochiCapsule)
-            .clickable(remember { MutableInteractionSource() }, indication = null) {
-                if (currentSearch.active) requester.requestFocus() else currentSearch.onActiveChange(true)
-            }
-            .semantics { contentDescription = search.placeholder },
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        // 放大镜所在的格子和圆钮一样大：没展开时它就在圆心，展开后留在左端（和胶囊圆头同心）
-        Row(Modifier.wrapContentWidth(Alignment.Start, unbounded = true).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(height), contentAlignment = Alignment.Center) {
-                val icon = search.icon
-                if (icon != null) icon(colors.content) else MagnifierGlyph(colors.content, glyphSize = 22.dp)
-            }
-        }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(start = height - 8.dp, end = 20.dp)
-                .graphicsLayer { alpha = smoothstep(0.35f, 1f, progress()) },
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (search.query.isEmpty()) {
-                Text(
-                    search.placeholder,
-                    style = MochiTheme.textStyles.bodyLarge,
-                    color = colors.content,
-                    maxLines = 1,
-                )
-            }
-            BasicTextField(
-                value = search.query,
-                onValueChange = search.onQueryChange,
-                enabled = search.active,
-                singleLine = true,
-                textStyle = MochiTheme.textStyles.bodyLarge.copy(color = cs.onSurface),
-                cursorBrush = SolidColor(cs.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { currentSearch.onSearch(currentSearch.query) }),
-                modifier = Modifier.fillMaxWidth().focusRequester(requester),
-            )
-        }
-    }
-}
-
 /** 标签栏和搜索圆钮 / 附件条之间的间距 */
 internal val SideGap = 8.dp
 
@@ -801,210 +587,4 @@ internal val AccessoryHeight = 48.dp
 /** 进入 / 退出搜索途中，标签栏和搜索框之间融球颈的最大半径 */
 private val LinkFuse = 14.dp
 
-/** 静止和按住时的浮起程度（[MochiMetaballShadow.elevated]） */
-private const val RestElevation = 0.35f
-private const val PressedElevation = 0.6f
-
 private val BarPadding = 4.dp
-
-/**
- * 标签一格的读屏语义：整格是一个「标签页」节点，名字是标签文字。只显示图标、或标签宽度还是 0 时，
- * 文字不可见，读屏和测试都靠这里找到它；整格合成一个节点，选中时不会把图标和文字读两遍
- */
-internal fun Modifier.tabSemantics(label: String, selected: Boolean, onClick: () -> Unit): Modifier = clearAndSetSemantics {
-    role = Role.Tab
-    contentDescription = label
-    this.selected = selected
-    onClick {
-        onClick()
-        true
-    }
-}
-
-/**
- * 横排标签的一格：图标在左、标签在右，整体在 [width] 给的格宽里居中。
- * 标签占的宽度 = [extra] × 选中程度，没选中时图标正好在格子中间；标签跟着选中程度淡入，超出格子的部分裁掉
- */
-@Composable
-internal fun InlineTabCell(
-    width: () -> Float,
-    selectedness: () -> Float,
-    extra: Float,
-    icon: @Composable () -> Unit,
-    modifier: Modifier = Modifier,
-    label: @Composable () -> Unit,
-) {
-    Layout(
-        contents = listOf(icon, {
-            Box(
-                Modifier.graphicsLayer {
-                    mochiBlurAlpha(labelAlpha(selectedness()), labelBlur(selectedness()))
-                }.mochiBlur { labelBlur(selectedness()) },
-            ) { label() }
-        }),
-        modifier = modifier.fillMaxHeight().clipToBounds(),
-    ) { (iconM, labelM), c ->
-        val w = width().roundToInt()
-        val h = c.maxHeight
-        val ip = iconM.first().measure(Constraints())
-        val lp = labelM.first().measure(Constraints())
-        layout(w, h) {
-            val group = ip.width + extra * selectedness()
-            val x = ((w - group) / 2f).roundToInt()
-            ip.place(x, (h - ip.height) / 2)
-            lp.place(x + ip.width + InlineLabelGap.roundToPx(), (h - lp.height) / 2)
-        }
-    }
-}
-
-/**
- * 只在选中时显示的标签跟着选中程度 [t] 出现 / 消失：模糊淡入淡出（和 [MochiBlurTransitions.Appear] 同样的模糊，
- * 和隐去程度成正比、分档复用模糊效果）。位移由调用方照常给，这里只管透明度和模糊
- */
-internal fun labelAlpha(t: Float): Float = smoothstep(0.35f, 1f, t)
-
-internal fun labelBlur(t: Float): Dp {
-    if (labelAlpha(t) < 0.02f) return 0.dp
-    val hidden = 1f - t.coerceIn(0f, 1f)
-    return MochiBlurTransitions.Appear.blur * hidden
-}
-
-/** 只在选中时显示标签（竖排）时，没选中的图标往下挪多少才在整格里居中：(2dp 间距 + 12sp 行高) / 2 */
-internal val LabelShift = 7.dp
-
-/** 横排标签和图标之间的距离 */
-internal val InlineLabelGap = 6.dp
-
-/** 横排在图标右边的标签：比竖排的大一号，和图标同一行 */
-internal val InlineLabelStyle = TextStyle(
-    fontSize = 13.sp,
-    lineHeight = 16.sp,
-    fontWeight = FontWeight.SemiBold,
-    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-)
-
-internal val TabLabelStyle = TextStyle(
-    fontSize = 10.sp,
-    lineHeight = 12.sp,
-    fontWeight = FontWeight.SemiBold,
-    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-)
-
-/** 选中块的位置（以「第几项」为单位，可以是小数）、拖在后面的水滴、底栏的跟手位移，和它们的弹簧 */
-@Stable
-internal class TabBarState(initial: Float) {
-    var pos by mutableFloatStateOf(initial)
-        private set
-
-    /** 每秒移动几项（≈ 每秒移动几个自身宽度，给果冻用） */
-    var vel by mutableFloatStateOf(0f)
-        private set
-
-    /** 拖在选中块后面的水滴（以「第几项」为单位） */
-    var tail by mutableFloatStateOf(initial)
-        private set
-
-    // Bound visual separation smoothly, without snapping or resetting the follower's velocity
-    // when a fast tap skips several items. All droplet/neck geometry reads this same position.
-    val dropletPosition: Float get() = pos + rubberBand(tail - pos, 1f, 0.5f)
-
-    /** 底栏（连同选中块、图标）被手指带着的位移（px） */
-    var offset by mutableStateOf(Offset.Zero)
-        private set
-
-    var held by mutableStateOf(false)
-
-    /** 手指位置（以「第几项」为单位，没截断） */
-    var finger by mutableFloatStateOf(initial)
-
-    /** 手指相对按下点的位移（px），每帧在循环里读 */
-    var drag: Offset = Offset.Zero
-
-    /** 松手后、新的 selectedIndex 传进来之前，先往这里去（不然会先被拉回旧位置一帧） */
-    private var settle: Int? = null
-    private var settleFrames = 0
-
-    fun release(target: Int?) {
-        held = false
-        drag = Offset.Zero
-        settle = target
-        settleFrames = 6
-    }
-
-    private fun target(n: Int, selected: Int): Float {
-        if (held) {
-            val c = finger.coerceIn(0f, n - 1f)
-            return c + rubberBand(finger - c, 1f, 0.35f)
-        }
-        val s = settle
-        if (s != null) {
-            if (s == selected || settleFrames-- <= 0) settle = null else return s.toFloat()
-        }
-        return selected.toFloat()
-    }
-
-    private fun atRest(t: Float, a: MochiFollowSpring, b: MochiFollowSpring, o: MochiFollowSpring): Boolean = !held &&
-        settle == null &&
-        abs(pos - t) < 0.001f &&
-        abs(a.velocity.x) < 0.01f &&
-        abs(tail - t) < 0.001f &&
-        abs(b.velocity.x) < 0.01f &&
-        o.value.getDistance() < 0.1f &&
-        o.velocity.getDistance() < 1f
-
-    suspend fun run(n: Int, selected: () -> Int, haptics: MochiHaptics, bar: Size, maxShift: Offset) {
-        val spring = MochiFollowSpring(0.42f, 0.72f)
-        // 水滴只稍慢于选中块；拖动时更紧，松手仍沿同一弹簧连续追上。
-        val tailSpring = MochiFollowSpring(0.24f, 0.9f)
-        // 底栏位移：松手带一点果冻回弹
-        val shift = MochiFollowSpring(0.3f, 0.62f)
-        spring.snapTo(Offset(pos, 0f))
-        tailSpring.snapTo(Offset(tail, 0f))
-        shift.snapTo(offset)
-        var nearest = selected()
-        while (true) {
-            val t = target(n, selected())
-            if (atRest(t, spring, tailSpring, shift)) {
-                pos = t
-                tail = t
-                vel = 0f
-                offset = Offset.Zero
-                spring.snapTo(Offset(t, 0f))
-                tailSpring.snapTo(Offset(t, 0f))
-                shift.snapTo(Offset.Zero)
-                snapshotFlow { held to selected() }.first { (h, s) -> h || s.toFloat() != pos }
-                continue
-            }
-            val dt = spring.awaitFrameDelta()
-            spring.response = if (held) 0.22f else 0.42f
-            spring.dampingRatio = if (held) 0.86f else 0.72f
-            pos = spring.step(Offset(t, 0f), dt).x
-            vel = spring.velocity.x
-            tailSpring.response = if (held) 0.16f else 0.24f
-            tail = tailSpring.step(Offset(pos, 0f), dt).x
-            val d = drag
-            val shiftTarget = if (held) {
-                Offset(rubberBand(d.x, bar.width, maxShift.x), rubberBand(d.y, bar.height * 4f, maxShift.y))
-            } else {
-                Offset.Zero
-            }
-            offset = shift.step(shiftTarget, dt)
-            val k = pos.roundToInt().coerceIn(0, n - 1)
-            if (held && k != nearest) haptics.tick()
-            nearest = k
-        }
-    }
-}
-
-internal fun Rect.scaleAround(sx: Float, sy: Float): Rect {
-    val c = center
-    val hw = width * sx / 2f
-    val hh = height * sy / 2f
-    return Rect(c.x - hw, c.y - hh, c.x + hw, c.y + hh)
-}
-
-internal fun lerpRect(a: Rect, b: Rect, t: Float): Rect = if (t == 0f) {
-    a
-} else {
-    Rect(lerp(a.left, b.left, t), lerp(a.top, b.top, t), lerp(a.right, b.right, t), lerp(a.bottom, b.bottom, t))
-}

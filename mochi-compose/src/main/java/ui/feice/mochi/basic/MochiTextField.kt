@@ -183,6 +183,7 @@ public object MochiTextFieldDefaults {
  * - [secure]：密码点，右边小眼睛切换显示，斜杠原位画出 / 收回
  * - [error] 不为 null：底色带一点警示色、下面模糊淡入说明，并左右抖一下（iOS 密码输错）；[shakeTrigger] 变化时也抖
  * - [maxLength]：超出的字输不进去，下方右侧的字数像计数器一样滚动
+ * - [selectAllOnFocus]：获得焦点时选中全部文字，一输入就整段换掉（Safari 的地址栏、改名框）
  *
  * 想要聚焦，把 `Modifier.focusRequester(...)` 传进 [modifier] 就行。
  */
@@ -208,9 +209,13 @@ public fun MochiTextField(
     colors: MochiTextFieldColors = MochiTextFieldDefaults.colors(),
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    selectAllOnFocus: Boolean = false,
 ) {
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
+    // 选区自己记着；文字从外面改了（清除、换了一份）就按新文字、光标放到末尾
+    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    val current = if (field.text == value) field else TextFieldValue(value, TextRange(value.length))
     var revealed by remember { mutableStateOf(false) }
     val shake = rememberMochiShake(shakeTrigger)
     val container by animateColorAsState(
@@ -262,8 +267,12 @@ public fun MochiTextField(
                 FieldPlaceholder(placeholder, value.isEmpty(), textStyle, colors.placeholder)
                 MochiSelectionColors(colors.cursor) {
                     BasicTextField(
-                        value = value,
-                        onValueChange = { v -> onValueChange(if (maxLength != null) v.take(maxLength) else v) },
+                        value = current,
+                        onValueChange = { v ->
+                            val t = if (maxLength != null) v.text.take(maxLength) else v.text
+                            field = if (t == v.text) v else TextFieldValue(t, v.selection.clampTo(t.length))
+                            if (t != value) onValueChange(t)
+                        },
                         enabled = enabled,
                         singleLine = singleLine,
                         maxLines = maxLines,
@@ -279,7 +288,12 @@ public fun MochiTextField(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(requester)
-                            .onFocusChanged { focused = it.isFocused },
+                            .onFocusChanged {
+                                if (selectAllOnFocus && it.isFocused && !focused) {
+                                    field = current.copy(selection = TextRange(0, current.text.length))
+                                }
+                                focused = it.isFocused
+                            },
                     )
                 }
             }
@@ -942,3 +956,6 @@ private fun EyeGlyph(color: Color, slash: Float) {
         }
     }
 }
+
+/** 截短文字后把选区收进新长度 */
+private fun TextRange.clampTo(length: Int): TextRange = TextRange(start.coerceAtMost(length), end.coerceAtMost(length))

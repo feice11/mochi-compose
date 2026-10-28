@@ -10,3 +10,4 @@ captures/
 .kotlin/
 .claude/
 artifacts/
+hs_err_pid*.log

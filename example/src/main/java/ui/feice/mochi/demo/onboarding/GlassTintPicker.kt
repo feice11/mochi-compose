@@ -59,7 +59,13 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import ui.feice.mochi.basic.MochiDialog
+import ui.feice.mochi.basic.MochiDialogAction
+import ui.feice.mochi.basic.MochiDialogActionRole
+import ui.feice.mochi.basic.MochiMiniature
 import ui.feice.mochi.basic.MochiSegmentedControl
+import ui.feice.mochi.basic.MochiSelectFrame
+import ui.feice.mochi.basic.MochiSelectionCheck
 import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.MochiTabBar
 import ui.feice.mochi.basic.MochiTabBarDefaults
@@ -108,6 +114,7 @@ import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiMaterials
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.emphasized
+import ui.feice.mochi.utils.MochiPrerendered
 import ui.feice.mochi.utils.rememberMochiHaptics
 
 /** 主题页顶上「液态玻璃」入口的路由，也是卡片的转场来源 */
@@ -169,7 +176,7 @@ internal fun GlassEntryCard(modifier: Modifier = Modifier) {
             }
             .padding(8.dp),
     ) {
-        Prerendered(snapshotKey, Modifier.fillMaxWidth().height(168.dp).clip(MochiRoundedRectangle(20.dp))) {
+        MochiPrerendered(snapshotKey, Modifier.fillMaxWidth().height(168.dp).clip(MochiRoundedRectangle(20.dp))) {
             val backdrop = rememberMochiBackdrop(bg)
             Image(
                 painterResource(R.drawable.scenery_dunes),
@@ -202,35 +209,6 @@ internal fun GlassEntryCard(modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
-    }
-}
-
-/**
- * 预渲染：[content] 先正常画几帧（玻璃要等背景录好才画得对），然后整块截成一张位图，之后只画这张图、不再组合 [content]。
- * [key] 变了（比如换了样式、通透度、深浅色）就重新画一次再截
- */
-@Composable
-private fun Prerendered(key: Any, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    var image by remember(key) { mutableStateOf<ImageBitmap?>(null) }
-    val shot = image
-    if (shot != null) {
-        Image(shot, contentDescription = null, modifier = modifier, contentScale = ContentScale.FillBounds)
-        return
-    }
-    val layer = rememberGraphicsLayer()
-    Box(
-        modifier.drawWithContent {
-            layer.record { this@drawWithContent.drawContent() }
-            drawLayer(layer)
-        },
-        content = content,
-    )
-    LaunchedEffect(key) {
-        repeat(4) { withFrameNanos { } }
-        delay(250)
-        // 卡片在列表里还没画过（滚在屏幕外时只组合不绘制）时图层是空的，截不了图：等它真的画出来
-        while (layer.size.width <= 0 || layer.size.height <= 0) withFrameNanos { }
-        image = layer.toImageBitmap()
     }
 }
 
@@ -314,10 +292,11 @@ internal fun GlassTintSettings(
         Text(
             if (ios27) {
                 "「透明」更通透，「色调」增加不透明度、让内容和控件更清楚，往右逐渐变成接近不透明的毛玻璃。" +
-                    "iOS 27 的玻璃是照 iOS 27 录屏拟合的近似值，通透度和 iOS 26 各记一个。第二条调玻璃亮度：中间是原样，往左压暗、往右提亮，" +
+                    "iOS 27 的玻璃已搁置，是照 iOS 27 录屏拟合的近似值，通透度和 iOS 26 各记一个。第二条调玻璃亮度：中间是原样，往左压暗、往右提亮，" +
                     "浅色调的是玻璃上那层白的浓淡，深色调的是那层黑的浓淡；浅色、深色各记一个，调的是预览当前那种。三套主题共用这一份玻璃设置。"
             } else {
                 "「透明」更通透，「色调」增加不透明度、让内容和控件更清楚，往右逐渐变成接近不透明的毛玻璃。" +
+                    "滑条调的是「透」那档，栏和按钮用它；选择列表和面板用「实」，相当于滑条拉到最右，不跟滑条变。" +
                     "玻璃不跟背后变色：浅色、深色各一份固定配方，提亮暗处、压暗亮处、略降对比度并提一点饱和度；" +
                     "背后从纯黑到纯白，图标对玻璃最透明时也不低于 3:1，默认约 6:1，四分之三处约 9:1。三套主题共用这一份玻璃设置。"
             },
@@ -395,6 +374,20 @@ private fun GlassStylePicker(appearance: DemoAppearance, look: GlassLook, modifi
         onDispose { if (GlassPreviewBenchmarkResetCarousel === reset) GlassPreviewBenchmarkResetCarousel = null }
     }
     val preloaded = rememberPreloadedPhotos(StylePhotos)
+    // 选 iOS 27 先弹提示：这套玻璃已搁置，按住「打开」才切过去，取消就留在 iOS 26
+    var shelvedNotice by remember { mutableStateOf(false) }
+    MochiDialog(
+        visible = shelvedNotice,
+        onDismissRequest = { shelvedNotice = false },
+        title = "iOS 27 玻璃已搁置",
+        message = "等 iOS 26 的玻璃完善了再接着做 iOS 27。现在的 iOS 27 玻璃是照录屏拟合的近似值，暂时不再更新。",
+        actions = persistentListOf(
+            MochiDialogAction("取消", MochiDialogActionRole.Cancel),
+            MochiDialogAction("按住打开", MochiDialogActionRole.Primary, holdToConfirm = true) {
+                appearance.glassStyle = IosGlassStyle.Ios27
+            },
+        ),
+    )
     LaunchedEffect(rotation) {
         while (true) {
             delay(3000)
@@ -402,13 +395,17 @@ private fun GlassStylePicker(appearance: DemoAppearance, look: GlassLook, modifi
         }
     }
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        listOf(IosGlassStyle.Ios26 to "iOS 26", IosGlassStyle.Ios27 to "iOS 27").forEach { (style, label) ->
+        listOf(IosGlassStyle.Ios26 to "iOS 26", IosGlassStyle.Ios27 to "iOS 27（搁置）").forEach { (style, label) ->
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 val selected = appearance.glassStyle == style
-                SelectFrame(selected, radius = 22.dp, modifier = Modifier.fillMaxWidth().aspectRatio(1.35f), onClick = {
+                MochiSelectFrame(selected, cornerRadius = 22.dp, modifier = Modifier.fillMaxWidth().aspectRatio(1.35f), onClick = {
                     if (!selected) {
-                        haptics.confirm()
-                        appearance.glassStyle = style
+                        if (style == IosGlassStyle.Ios27) {
+                            shelvedNotice = true
+                        } else {
+                            haptics.confirm()
+                            appearance.glassStyle = style
+                        }
                     }
                 }) {
                     GlassLookTheme(look, style) { StyleThumb(StylePhotos[photo], preloaded) }
@@ -416,7 +413,7 @@ private fun GlassStylePicker(appearance: DemoAppearance, look: GlassLook, modifi
                 Spacer(Modifier.height(8.dp))
                 Text(label, style = MochiTheme.textStyles.body.emphasized())
                 Spacer(Modifier.height(6.dp))
-                CheckDot(selected)
+                MochiSelectionCheck(selected)
             }
         }
     }
@@ -427,7 +424,7 @@ private fun GlassStylePicker(appearance: DemoAppearance, look: GlassLook, modifi
 private fun StyleThumb(@DrawableRes photo: Int, preloaded: Map<Int, ImageBitmap>) {
     val ground = MochiDefaults.groupedContainer()
     val backdrop = rememberMochiBackdrop(ground)
-    Miniature(scale = 0.5f) {
+    MochiMiniature(scale = 0.5f) {
         Box(Modifier.fillMaxSize().background(ground)) {
             SqueezeSlide(photo, Modifier.fillMaxSize().mochiBackdropSource(backdrop)) { res -> CarouselPhoto(res, preloaded) }
             MochiTabBar(

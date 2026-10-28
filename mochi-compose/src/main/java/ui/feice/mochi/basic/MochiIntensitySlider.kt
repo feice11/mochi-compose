@@ -62,6 +62,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.basic.parts.ControlSmoothing
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.utils.rememberMochiHaptics

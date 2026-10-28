@@ -91,7 +91,10 @@ import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiButton
 import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.basic.MochiMiniature
 import ui.feice.mochi.basic.MochiPageControl
+import ui.feice.mochi.basic.MochiSelectFrame
+import ui.feice.mochi.basic.MochiSelectionCheck
 import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.DemoAppearance
@@ -108,9 +111,12 @@ import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiBlurTransitions
 import ui.feice.mochi.effect.content.MochiThemeRevealState
+import ui.feice.mochi.effect.content.crossfadeOrChange
 import ui.feice.mochi.effect.content.mochiBlur
 import ui.feice.mochi.effect.content.mochiBlurAlpha
 import ui.feice.mochi.effect.content.mochiBlurReveal
+import ui.feice.mochi.effect.content.revealIfShadeChanges
+import ui.feice.mochi.effect.content.revealOrChange
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
@@ -134,31 +140,8 @@ import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.defaultTextStyles
 import ui.feice.mochi.theme.emphasized
+import ui.feice.mochi.theme.isDark
 import ui.feice.mochi.utils.rememberMochiHaptics
-
-/** 有揭开转场就揭开，没有就直接改 */
-internal fun MochiThemeRevealState?.redress(change: () -> Unit) {
-    if (this == null) change() else reveal(change = change)
-}
-
-/**
- * 换明暗：深浅真的变了才从手指处揭开；没变（比如系统是浅色时在「浅色」和「自动」之间切、或者只是换了取色方式）
- * 就直接改，颜色自己插值过去，不硬上揭开动画。
- */
-internal fun MochiThemeRevealState?.rebright(fromDark: Boolean, toDark: Boolean, change: () -> Unit) {
-    if (fromDark != toDark) redress(change) else change()
-}
-
-/** 换整套风格（Mochi ↔ Nothing）：原位的内容模糊转场，颜色照常插值，不从手指扩散 */
-internal fun MochiThemeRevealState?.restyle(change: () -> Unit) {
-    if (this == null) change() else crossfade(change)
-}
-
-internal fun ColorSchemeMode.isDark(systemDark: Boolean): Boolean = when (this) {
-    ColorSchemeMode.Light, ColorSchemeMode.MonetLight -> false
-    ColorSchemeMode.Dark, ColorSchemeMode.MonetDark -> true
-    else -> systemDark
-}
 
 internal fun NothingMode.isDark(systemDark: Boolean): Boolean = when (this) {
     NothingMode.Light -> false
@@ -540,7 +523,7 @@ private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
             listOf(DemoStyle.Mochi to "Mochi", DemoStyle.Nothing to "Nothing").forEachIndexed { index, (style, label) ->
                 Column(Modifier.weight(1f).pop(t, 2 + index), horizontalAlignment = Alignment.CenterHorizontally) {
                     val selected = appearance.style == style
-                    SelectFrame(selected, radius = 30.dp, modifier = Modifier.fillMaxWidth().aspectRatio(0.56f), onClick = {
+                    MochiSelectFrame(selected, cornerRadius = 30.dp, modifier = Modifier.fillMaxWidth().aspectRatio(0.56f), onClick = {
                         if (!selected) {
                             haptics.confirm()
                             appearance.style = style
@@ -551,80 +534,9 @@ private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
                     Spacer(Modifier.height(12.dp))
                     Text(label, style = MochiTheme.textStyles.bodyLarge.emphasized())
                     Spacer(Modifier.height(6.dp))
-                    CheckDot(selected)
+                    MochiSelectionCheck(selected)
                 }
             }
-        }
-    }
-}
-
-/**
- * 选择框：选中时外面亮起一圈同心描边（和莫奈色块、框式头像同一个语言），里面的内容往里让出一圈缝；
- * 没选中的稍微缩小。整块按压跟手形变；里面的内容不接收触摸（只是预览）。
- */
-@Composable
-internal fun SelectFrame(
-    selected: Boolean,
-    radius: Dp,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    // 选中时带回弹弹起来（和卡片弹出同一种手感），没选中的收小一点
-    val sel by animateFloatAsState(if (selected) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = 380f), label = "frame")
-    val ring = lerp(MochiTheme.colorScheme.outlineVariant, MochiTheme.colorScheme.primary, sel.coerceIn(0f, 1f))
-    val inset = 6.dp
-    Box(
-        modifier
-            .mochiPressDeform()
-            .graphicsLayer {
-                val s = 0.95f + 0.05f * sel
-                scaleX = s
-                scaleY = s
-            }
-            // 没选中也有一圈细描边，选中时加粗并变成主色
-            .border(1.5.dp + 1.dp * sel.coerceIn(0f, 1f), ring, MochiRoundedRectangle(radius)),
-    ) {
-        Box(Modifier.fillMaxSize().padding(inset)) {
-            val inner = MochiRoundedRectangle(radius - inset)
-            Box(
-                Modifier.fillMaxSize().graphicsLayer {
-                    shape = inner
-                    clip = true
-                },
-            ) { content() }
-        }
-        // 盖在最上面接住点击，下面的预览控件收不到
-        Box(
-            Modifier.matchParentSize().clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        )
-    }
-}
-
-@Composable
-internal fun CheckDot(selected: Boolean) {
-    val cs = MochiTheme.colorScheme
-    MochiBlurCrossfade(selected, transition = MochiBlurTransitions.Appear) { on ->
-        Box(
-            Modifier
-                .size(24.dp)
-                .then(
-                    if (on) {
-                        Modifier.background(
-                            cs.primary,
-                            MochiRoundedRectangle(12.dp),
-                        )
-                    } else {
-                        Modifier.border(1.5.dp, cs.outlineVariant, MochiRoundedRectangle(12.dp))
-                    },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (on) Glyph(Icons.CHECK, cs.onPrimary, size = 15)
         }
     }
 }
@@ -641,7 +553,7 @@ private fun StylePreview(style: DemoStyle, appearance: DemoAppearance) {
         LocalMochiControlPalette provides if (nothing) nothingControlPalette(dark) else null,
     ) {
         MochiTheme(colors = colors, textStyles = textStyles) {
-            Miniature(scale = 0.56f) {
+            MochiMiniature(scale = 0.56f) {
                 Column(
                     Modifier.fillMaxSize().background(MochiDefaults.groupedBackground()).padding(horizontal = 16.dp, vertical = 28.dp),
                 ) {
@@ -697,21 +609,6 @@ private fun nothingButton() = ui.feice.mochi.basic.MochiButtonDefaults.colors(Mo
     content = Color.White,
 )
 
-/** 按 [scale] 缩小摆放：内容按放大后的尺寸排版，再整体缩回来（字号、控件都是真实比例） */
-@Composable
-internal fun Miniature(scale: Float, content: @Composable () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .requiredSize(maxWidth / scale, maxHeight / scale)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                },
-        ) { content() }
-    }
-}
-
 // ---------- 第 4 页：外观 ----------
 
 private enum class Shade(val label: String) { Light("浅色"), Dark("深色"), Auto("自动") }
@@ -761,11 +658,11 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
         Row(Modifier.fillMaxWidth().pop(t, 2), horizontalArrangement = Arrangement.SpaceEvenly) {
             Shade.entries.forEach { s ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    SelectFrame(s == shade, radius = 20.dp, modifier = Modifier.width(84.dp).aspectRatio(0.56f), onClick = {
+                    MochiSelectFrame(s == shade, cornerRadius = 20.dp, modifier = Modifier.width(84.dp).aspectRatio(0.56f), onClick = {
                         if (s != shade) {
                             haptics.tick()
                             val toDark = if (nothing) s.nothingMode().isDark(systemDark) else mochiMode(s, false).isDark(systemDark)
-                            reveal.rebright(nowDark, toDark) {
+                            reveal.revealIfShadeChanges(nowDark, toDark) {
                                 if (nothing) {
                                     appearance.nothingMode = s.nothingMode()
                                 } else {
@@ -779,7 +676,7 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
                     Spacer(Modifier.height(10.dp))
                     Text(s.label, style = MochiTheme.textStyles.bodyMedium)
                     Spacer(Modifier.height(6.dp))
-                    CheckDot(s == shade)
+                    MochiSelectionCheck(s == shade)
                 }
             }
         }

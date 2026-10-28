@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.parts.drawG2Capsule
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiTheme
 

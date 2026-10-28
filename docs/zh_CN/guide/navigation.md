@@ -174,6 +174,8 @@ MochiPeerTransition(
 
 `MochiNavHost(predictiveBack = false)` 关闭系统手势的预测性返回预览，普通返回仍然退页。嵌套主机及底部面板通过 `LocalMochiPredictiveBack` 继承；应用内全屏右滑手势独立保留。演示在主题 → 外观提供持久化开关。
 
+`MochiNavHost(windowGlass = false)` 不把整页录下来给浮层（菜单、警告框、面板）的玻璃取样。页面里有 WebView 时要关：WebView 被画进玻璃的离屏图层，在 Vulkan 渲染的机器上会让渲染线程崩溃。关掉后浮层改为取样打开它那一处的背景来源：`LocalMochiBackdrop`（页面自己用截图做的来源），再没有就用标题脚手架、标签页脚手架给顶栏录的正文；都没有才画材质的纯色。浮层里不再继承页面的 `LocalMochiBackdrop`，面板里的按钮不会取样到被面板盖住的页面。共享顶栏的转场里，玻璃按钮改为取样按钮自己所在页的背景，转场途中仍是玻璃，不变成纯色。
+
 `MochiTabScaffold(collapseOnScroll = false)` 让底栏在正文滚动时保持展开；默认 true 保留库原行为。再点当前标签回顶、保存各标签位置、进入新页时隐藏均不受影响。演示首页使用 false。
 
 来源转场中的遮挡栏由导航主机单独绘制，原页面和收起栏的代绘层不再同时画同一份栏及阴影；侧推时仍只由原页面绘制。往返及中途取消都沿用这份归属规则。

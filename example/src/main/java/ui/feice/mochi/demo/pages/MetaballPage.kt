@@ -58,7 +58,6 @@ import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.effect.metaball.MochiBlob
 import ui.feice.mochi.effect.metaball.MochiMetaballColors
 import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.metaball.drawMochiMetaball
 import ui.feice.mochi.effect.metaball.proximityFuse
 import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
@@ -155,7 +154,7 @@ private fun AlbumStage(fuse: Float) {
             b = MochiBlob(b, corner.coerceAtMost(side / 2f)),
             fuse = px(fuse) * maxOf(near, k),
         )
-        val shadow = MochiMetaballShadow.elevated(density, 1f, cs.isDark)
+        val shadow = MochiTheme.shadows.floating.resolve(density, cs.isDark)
         val latestNear by rememberUpdatedState(near)
         Box(
             Modifier

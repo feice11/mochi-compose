@@ -151,7 +151,7 @@ Spacer(
 
 `proximityFuse(a, b, restGap)` 给出「靠近就连上」的系数：间距 ≥ restGap 时是 0，贴上时是 1。乘上最大融合半径就是 `fuse`。
 
-`MochiMetaballShadow.elevated(density, elevation, dark, visibility)` 按浮起程度给出两层阴影；不要阴影用 `MochiMetaballShadow.None`。
+`MochiMetaballShadow.elevated(density, elevation, dark, visibility)` 按浮起程度给出两层阴影；不要阴影用 `MochiMetaballShadow.None`。在主题里优先用阴影档位 `MochiTheme.shadows.floating.resolve(density, dark)`（见 [阴影档位](theme.md#阴影档位mochishadows)），应用换了档位表，你的组件也跟着换。
 
 半透明填充在融合表面保持原来的透明度，包括两块重叠、拖尾藏在选中块内部的情况。渲染器只把一份本体合成到页面上，自身阴影留在表面外；调用方不要在下面再画一遍本体。所有主题都遵守这条规则，包括 iOS 的半透明语义填充。
 
@@ -188,18 +188,19 @@ Modifier.mochiFadeMask(MochiFadeEdges.vertical()) { edge -> … }
 
 ## 柔和投影
 
-`DrawScope.drawMochiShadow(path, shadow, color)`（`effect/shadow`）给任意形状投一层和融球同一套参数的双层阴影：一层大而淡的环境阴影，加一层小而实的接触阴影，边缘是高斯模糊，没有断层和色带。阴影垫在形状下面，先画阴影，再画形状本体：本体的抗锯齿边缘直接盖在阴影上，不会留一圈硬灰线。半透明的本体会透出下面的阴影。
+`DrawScope.drawMochiShadow(path, shadow, color)`（`effect/shadow`）给任意形状投一层和融球同一套参数的阴影（`MochiMetaballShadow` 有环境、接触两层，环境层可以用 `ambientInset` 先往里收再模糊；`elevated` 预设是往里收的大半径淡环境层加很软很淡的接触层，边上只有很淡的一点，不出硬线），边缘是高斯模糊，没有断层和色带。阴影垫在形状下面，先画阴影，再画形状本体：本体的抗锯齿边缘直接盖在阴影上，不会留一圈硬灰线。半透明的本体会透出下面的阴影。
 
 ```kotlin
+val shadowLevel = MochiTheme.shadows.raised // 在 @Composable 里读
 drawBehind {
     val p = pathCache.get(size.toRect(), size.minDimension / 2f, 1f)
     // 胶囊、圆角矩形用矩形版本：给出矩形和圆角
-    drawMochiShadow(size.toRect(), size.minDimension / 2f, MochiMetaballShadow.elevated(this, elevation = 0.35f, dark), MochiTheme.colorScheme.shadow)
+    drawMochiShadow(size.toRect(), size.minDimension / 2f, shadowLevel.resolve(this, dark), MochiTheme.colorScheme.shadow)
     drawPath(p, container)
 }
 ```
 
-浮起的表面用它，不用 Material 的 `shadowElevation`。标签栏、搜索圆钮、附件条、分档滑条和开关 / 滑块的拇指已经接入。
+浮起的表面用它，不用 Material 的 `shadowElevation`。标签栏、搜索圆钮、附件条、分档滑条、开关 / 滑块的拇指、警告框和提示条已经接入。
 
 胶囊和圆角矩形用矩形版本 `drawMochiShadow(rect, cornerRadius, shadow, color)`。Android 13 起它用着色器直接算圆角矩形的高斯模糊阴影，一次绘制、不生成任何纹理；模糊过的阴影上看不出连续曲率和圆弧圆角的差别。路径版本走系统的 `setShadowLayer`，系统会按路径内容给每个形状生成一张模糊纹理，而且一直留着，形状每帧在变（动画、拖动、收起）时显存会一直涨。在 Android 16 真机上，非 iOS 外观的底栏滚动收起时，每帧漏一张，滑几十次就漏到数百 MB。所以路径版本只用在形状不变的地方。
 
@@ -245,6 +246,18 @@ API 28 以下画不了任意形状的模糊阴影，退化成按外接矩形的�
 - 拍照用 PixelCopy 拷屏幕上真正显示的像素（Android 8.0 以上）；系统关闭动画、更低的系统或拷贝失败时直接改，不做转场。
 
 同一个状态还有 `state.crossfade { 改主题 }`：原位的内容模糊转场，旧画面变糊、淡出，新画面同时从模糊里清晰起来，约 0.5 秒，不从手指扩散（两层的模糊半径都逐帧连续，不用分级缓存，免得一级一级跳；换主题的重排在动画开始前就做完）；期间 `isRevealing` 同样为 true，配色一步到位：颜色的过渡由交叉淡化完成，再逐帧插值会让整棵树每帧重组、转场卡顿。系统不支持模糊时只是淡入淡出。
+
+设置页拿到的状态一般可能是 null（预览、测试里没接 Host），而且只在深浅真的变了时才想要揭开。三个辅助函数：
+
+```kotlin
+reveal.revealOrChange { controller.keyColor = it }              // 揭开；状态是 null 就直接改
+reveal.revealIfShadeChanges(nowDark, mode.isDark(systemDark)) {  // 深浅变了才揭开，
+    controller.colorSchemeMode = mode                           // 没变就原地插值过去
+}
+reveal.crossfadeOrChange { settings.style = it }                 // 换整套风格：原位模糊交叉
+```
+
+`ColorSchemeMode.isDark(systemDark)` 判断一个模式此刻是不是深色。
 
 怎么选：换整套风格（Mochi ↔ Nothing）用 `crossfade`；换明暗用 `reveal`，但只有深浅真的变了才揭开（比如系统是浅色时在「浅色」和「自动」之间切，画面不变，就直接改）。
 

@@ -5,6 +5,8 @@
 
 package ui.feice.mochi.theme
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -192,7 +194,8 @@ public data class MochiGlassRecipe(
  * 标题脚手架会把正文录给顶栏按钮，MochiNavHost 会把整页录给浮层（菜单、警告框、面板），不用另外接。
  * 正文里的控件（列表里的搜索框、分段控件）不做玻璃：玻璃不能取样包含它自己的内容。
  * 玻璃（[MochiGlass] 及各处玻璃材质）是长期 Beta：外观、性能和 API 都可能在小版本里调整，不保证兼容；[scrollEdge] 不在此列。
- * 正文里的按钮例外：[control] 是玻璃时，填充 / 色调按钮画成 iOS 的 prominentGlass / glass，clear 两种用 [clear]，背景是一块纯色画布（见 MochiButton）。
+ * 材质只管浮在内容上的栏、菜单、面板、弹窗和栏里的控件，不改正文内容：正文按钮画不画玻璃由按钮样式决定，
+ * 写了玻璃样式（MochiButtonStyle.ProminentGlass / Glass / ClearGlass / ProminentClearGlass）且 [control] 是玻璃时才画（clear 两种用 [clear]），背景是一块纯色画布（见 MochiButton）。
  */
 @Immutable
 public data class MochiMaterials(
@@ -218,6 +221,15 @@ public data class MochiMaterials(
 /** 当前主题的材质；默认全部纯色。外观模块（比如 mochi-ios）在根部提供。 */
 public val LocalMochiMaterials: androidx.compose.runtime.ProvidableCompositionLocal<MochiMaterials> =
     staticCompositionLocalOf { MochiMaterials() }
+
+/**
+ * 只给 [content] 这一块换材质，配色、字体、控件配色都不动。比如带 WebView 的页面整块不用玻璃：
+ * `MochiMaterialsScope(MochiMaterials()) { … }`；只关正文按钮的玻璃不需要它，按钮写纯色样式就行
+ */
+@Composable
+public fun MochiMaterialsScope(materials: MochiMaterials, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalMochiMaterials provides materials, content = content)
+}
 
 /**
  * 滚动边缘效果（iOS 26 的 scroll edge effect，UIKit 的 ScrollEdgeEffectView）。栏朝内容的一侧铺一层遮罩，

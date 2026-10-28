@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.menu
 
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -35,6 +35,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.BarGroupHandle
+import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.basic.MochiOpenMode
+import ui.feice.mochi.basic.MochiPressStyle
+import ui.feice.mochi.basic.MochiStyle
+import ui.feice.mochi.basic.MochiTrigger
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.MochiGlowState

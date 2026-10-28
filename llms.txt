@@ -46,6 +46,7 @@ otherwise report "not applicable" with a reason. Explicit user instructions prev
   Filled / Sharp). Do not use Material Icons, hand-drawn paths or emoji as icons.
 - Chips: MochiChip / MochiChipGroup / MochiRemovableChip for filters and tags; never restyle
   MochiButton into chips.
+- Appearance pickers with previews: MochiSelectFrame + MochiMiniature + MochiSelectionCheck.
 - Horizontal scroll rows fade on edges that can still scroll (built into MochiChipGroup; use
   mochiScrollFadeMask(state, vertical = false) for your own). Inside padded containers pass
   MochiChipGroup(contentPadding = PaddingValues(0.dp), bleed = <padding>).

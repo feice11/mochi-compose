@@ -58,9 +58,9 @@ import java.util.Locale
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.launch
 import ui.feice.mochi.basic.MochiButtonStyle
-import ui.feice.mochi.basic.MochiGlyphs
 import ui.feice.mochi.basic.MochiIconButton
 import ui.feice.mochi.basic.Text
+import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.shape.drawG2RoundRect

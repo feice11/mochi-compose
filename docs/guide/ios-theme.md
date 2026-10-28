@@ -95,7 +95,7 @@ Other places each have their own material, falling back in this order when unset
 | `alert` | Alerts and confirmation dialogs | `menu` |
 | `sheet` | Sheets (not wired up yet: pages inside a sheet paint an opaque background that would cover the glass) | `bar` |
 
-With both the iOS 26 and iOS 27 styles, menus and alerts use the regular glass (`menu` and `alert` are null and fall back to `bar`).
+The iOS 26 style has two levels, as on iOS. Bars, bar buttons, alerts and glass-style buttons use the clear level (`bar`, following the transparency slider). Selection lists (dropdowns, context menus, popovers) and sheets use the solid level (`menu`, `sheet`, fixed at `IosGlass26.SolidTint` = 1, the right end of the slider, close to opaque frosted glass). The iOS 27 style is shelved; its menus, sheets and alerts fall back to `bar`.
 
 With menu glass on (`menu` set and the page recorded as a backdrop), dropdowns and context menus switch to the iOS 27 glass menu. The values are read from 24A435's UIKit (`_UIContextMenuPlatformMetrics_Glass` and the cell constraint code), not eyeballed:
 
@@ -110,11 +110,13 @@ Glass needs a backdrop source. These are already wired up:
 - For a page built from a lazy list plus `MochiTitleBar`: `val backdrop = rememberMochiBarBackdrop()`, add `Modifier.mochiBackdropSource(backdrop)` to the list (before `mochiScrollEdgeBlur`), and pass `MochiTitleBar(…, backdrop = backdrop)`. `rememberMochiBarBackdrop()` returns null when the theme's buttons are not glass, so nothing extra is recorded
 - The outermost `MochiNavHost` records the whole page for overlays (menus, popovers, alerts). An overlay opened from inside another overlay sees that recording with the outer overlay on top
 
-Controls inside the body (a search field in a list, segmented controls, ordinary buttons) stay solid: glass cannot sample content that contains itself.
+Controls inside the body (a search field in a list, segmented controls, buttons with solid styles) stay solid: glass cannot sample content that contains itself. For a glass button in content use a glass style (`ProminentGlass` / `Glass` / `ClearGlass` / `ProminentClearGlass`), drawn over a solid canvas; see [Button](../components/button.md).
 
 Pressing glass lights iOS's glow under the finger (`_UIFlexInteractionLittleGlowView`, the same one the glass tab bar uses): the shadow of a 93pt circle at up to 0.2845 opacity. The glass underneath goes through a saturation-boosting matrix and is blended in through that shape, so it brightens the glass's own color instead of laying white over it. Past the touch slop it follows the finger and grows to 2× at half brightness; on release it grows to 4× and fades. For your own glass use `MochiGlassSurface(modifier, material, backdrop, cornerRadius, interactionSource) { … }`; passing an `interactionSource` turns on the glow.
 
 For a single piece of glass use `MochiGlassCapsule(backdrop, modifier, material = MochiTheme.materials.bar) { … }`: a capsule (continuous curvature; a circle when width equals height), drawn the same way as the glass tab bar (hairline, dark ring and outer shadow outside the outline, plus the glass body), with the recipe picked by the theme's light or dark. It is visual only and handles no clicks. The outer shadow draws outside the capsule's bounds: to fade it, put the alpha on a wrapper at least 24dp larger, because alpha on its own `modifier` clips the shadow into square corners. The sample's Liquid Glass page uses it for the round button and search bar from iOS's "Liquid Glass" settings page (sizes measured from a recording: 48pt button, 48pt-high search bar, 11pt gap).
+
+To draw several rounded rectangles as one surface that fuses together (a bar shrinking into a capsule, buttons pulled into a capsule or growing out of one), use `MochiGlassBlobs(blobs = { listOf(MochiBlob(rect, radius), …) }, fuse = { radius }, alpha = { … })`. The first blob is the main shape and the rest merge into it in order (up to 6); the closer one is, the thicker the neck, and blobs at least `fuse` apart stay separate. With glass in the theme it is one piece of glass on Android 13+ and one piece per blob on older versions; without glass it draws the bar buttons' solid color with metaball necks between close blobs. It only draws the base; put icons and text on top.
 
 ## Scroll edge effect
 
@@ -148,6 +150,8 @@ iOS 26 has a "Clear ↔ Tinted" slider in Settings › Display & Brightness › 
 - The segment values were derived from readability, not measured at the ends of the iOS slider (not read yet), so they are an approximation
 
 ## iOS 27 glass
+
+> **Shelved:** iOS 27 glass resumes once the iOS 26 glass is finished. What follows is the existing approximation, not being updated for now.
 
 `MochiIosTheme(glassStyle = IosGlassStyle.Ios27)` / `iosMaterials(isDark, glassTint, IosGlassStyle.Ios27, …)` / `IosGlass27.regular(isDark, density, tint)` switch to the iOS 27 (24A435) Regular glass. The default is still iOS 26.5 (`IosGlassStyle.Ios26`).
 
@@ -223,7 +227,7 @@ From iOS 26.5 (`IosGlass26`). An iPhone 17 Pro Max (3x) simulator on a GitHub ma
 | Rim | Key / fill highlight: native key −45°, fill 135° (Mochi turns it vertical: key from straight above, fill from straight below, 30% kept at the sides), 1pt tall (Mochi keeps 1dp, color is the ambient color outside the edge (only the backdrop outside the glass, blurred 8dp, sampled 4dp out) with no inward seep (it reads as a halo inside the glass); curvature 0.4 with a soft end, gain 1.5), amount 0.5, curvature 0.7, white; spread 90° for the 300×62 capsule and 360×72 card, 97.9° at 170×170, 117.8° at 360×180 (interpolated by √area in between); mixed with the highlight layer's vibrantColorMatrix. On device the rim also uses HDR headroom, which Android cannot show | Native (read from the iOS 26.5 simulator's layer tree; the spread interpolation is an approximation) |
 | Tab bar icons, pill | Unselected, selected and pill color matrices, one set each for light and dark | Native |
 | Flipping | Light glass flips to dark below luminance 0.2, dark glass flips to light above 0.85 (Mochi does not flip: fixed recipes) | Native |
-| Shadow | 8pt down, 16.4pt softness; the strength follows the backdrop luminance: 0.068 for light glass on white, 2.2 / 2.52 / 2.67 times that at luminance 0.72 / 0.5 / 0.21; 0.54 times for dark glass on any color | Screenshots |
+| Shadow | 8pt down, 16.4pt softness; the strength follows the backdrop luminance: 0.068 for light glass on white, 2.2 / 2.52 / 2.67 times that at luminance 0.72 / 0.5 / 0.21; 0.54 times for dark glass on any color. Mochi actually uses its own values: the shadow shape inset 6dp, 22dp softness, 2.0 times for light glass, so no solid band hugs the glass's lower edge | Screenshots (actual values chosen by Mochi) |
 
 Against iOS screenshots (same backdrop, same pixel position): 0–3/255 inside the glass, 0.7–5.1/255 on the rim, 0–0.3/255 outside (shadow included); 1–3/255 for the tab bar glass, pill and icon colors; the contour is within 0.45px. iOS 26.5 glass has no dark ring, no dark stroke and no blur fill.
 

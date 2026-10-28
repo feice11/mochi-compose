@@ -34,7 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import ui.feice.mochi.effect.glass.drawGlassOuterShadow
+import ui.feice.mochi.effect.glass.engine.drawGlassOuterShadow
 import ui.feice.mochi.navigation.NavPageMask
 import ui.feice.mochi.navigation.NavPageOutline
 import ui.feice.mochi.shape.addG2RoundRect

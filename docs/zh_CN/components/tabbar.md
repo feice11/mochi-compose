@@ -274,7 +274,7 @@ MochiTabBar(
 
 ## 投影
 
-底栏、搜索圆钮和附件条都用 `drawMochiShadow` 投影，和菜单是同一套双层阴影参数 `MochiMetaballShadow.elevated`：一层大而淡的环境阴影，加一层小而实的接触阴影，边缘柔和、没有断层。不用 Material 的 elevation 阴影。按住标签栏时底栏浮起，阴影随之变深变软；深色模式下阴影会加重，否则看不出来。投影颜色取 `colors.shadow`。
+底栏、搜索圆钮和附件条都用 `drawMochiShadow` 投影，和菜单是同一套阴影参数 `MochiMetaballShadow.elevated`：往里收、大半径的淡环境影，加一层很软很淡的接触影，边上只有很淡的一点、没有断层。不用 Material 的 elevation 阴影。按住标签栏时底栏浮起，阴影随之变大变软；深色模式下阴影会加重，否则看不出来。投影颜色取 `colors.shadow`。
 
 ## 玻璃的光学来源与外阴影
 

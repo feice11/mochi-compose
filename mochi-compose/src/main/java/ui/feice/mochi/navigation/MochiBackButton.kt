@@ -23,7 +23,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.toImmutableList
-import ui.feice.mochi.basic.LocalButtonGlass
+import ui.feice.mochi.basic.LocalBarControlGlass
 import ui.feice.mochi.basic.MochiAlign
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiButtonColors
@@ -82,7 +82,7 @@ public fun MochiBackButton(
         }
     }
     // 一层层往里推时返回按钮留在原位，不跟着页面滑（见 MochiNavBarItem.kt）
-    val shared = modifier.navBarShape(BackBarItemId, colors.container, glass = barGlass(colors) != null)
+    val shared = modifier.navBarShape(BackBarItemId, colors.container, glass = barGlass(colors))
     val sharedChevron: @Composable () -> Unit = {
         Box(Modifier.mochiNavBarItem(BackBarItemId, contentKey = BackBarItemId), contentAlignment = Alignment.Center) { chevron() }
     }
@@ -99,7 +99,7 @@ public fun MochiBackButton(
     val items = remember(earlier, history) { earlier.reversed().map { MochiItem(history(it)) }.toImmutableList() }
     var open by remember { mutableStateOf(false) }
     // 和不带历史时的 MochiBarIconButton 一样，按钮本身画成栏的玻璃
-    CompositionLocalProvider(LocalButtonGlass provides barGlass(colors)) {
+    CompositionLocalProvider(LocalBarControlGlass provides barGlass(colors)) {
         MochiIconDropdown(
             expanded = open,
             onExpandedChange = { open = it },

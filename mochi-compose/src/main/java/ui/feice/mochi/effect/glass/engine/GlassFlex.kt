@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.effect.glass
+package ui.feice.mochi.effect.glass.engine
 
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.abs
@@ -67,10 +67,13 @@ internal fun glassFlexTarget(spec: GlassFlexSpec, width: Float, height: Float, d
 private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 
 /** _UIFlexInteractionSmallVariantSpec（associatedDimension 44） */
-private val Small = GlassFlexSpec(lift = 16f, threshold = 6000f, response = 0.4f, damping = 0.375f, trackingResponse = 0.262f, trackingDamping = 0.625f)
+private val Small =
+    GlassFlexSpec(lift = 16f, threshold = 6000f, response = 0.4f, damping = 0.375f, trackingResponse = 0.262f, trackingDamping = 0.625f)
 
 /** _UIFlexInteractionUltraSmallVariantSpec：small 的子类，只把阈值改成 2000 */
-private val UltraSmall = GlassFlexSpec(lift = 16f, threshold = 2000f, response = 0.4f, damping = 0.375f, trackingResponse = 0.262f, trackingDamping = 0.625f)
+private val UltraSmall =
+    GlassFlexSpec(lift = 16f, threshold = 2000f, response = 0.4f, damping = 0.375f, trackingResponse = 0.262f, trackingDamping = 0.625f)
 
 /** _UIFlexInteractionLargeVariantSpec（associatedDimension 160） */
-private val Large = GlassFlexSpec(lift = 4f, threshold = 24000f, response = 0.36f, damping = 0.6f, trackingResponse = 0.314f, trackingDamping = 0.625f)
+private val Large =
+    GlassFlexSpec(lift = 4f, threshold = 24000f, response = 0.36f, damping = 0.6f, trackingResponse = 0.314f, trackingDamping = 0.625f)

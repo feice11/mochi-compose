@@ -34,6 +34,7 @@ import androidx.compose.ui.text.TextStyle
  *
  * [materials] 决定浮在内容上的栏用纯色还是液态玻璃、滚动边缘要不要渐进模糊，和配色无关：任何主题都能打开。
  * 玻璃、模糊的配方在 mochi-ios 里（`iosMaterials(isDark, glass = …, blur = …)`），默认纯色（[MochiMaterials] 的默认值）。
+ * [shadows] 是阴影档位表（[MochiShadows]），组件只选档位，换一套就整体换阴影风格。
  * 组件都从主题读这些，应用里不需要按主题、按开关分别写组件。
  */
 @Composable
@@ -44,6 +45,7 @@ public fun MochiTheme(
     motionScheme: MochiMotionScheme = defaultMotionScheme(),
     systemBarAppearance: Boolean = true,
     materials: MochiMaterials = LocalMochiMaterials.current,
+    shadows: MochiShadows = LocalMochiShadows.current,
     content: @Composable () -> Unit,
 ) {
     MochiTheme(
@@ -53,6 +55,7 @@ public fun MochiTheme(
         motionScheme = motionScheme,
         systemBarAppearance = systemBarAppearance,
         materials = materials,
+        shadows = shadows,
         content = content,
     )
 }
@@ -95,7 +98,7 @@ private class SchemeTransition(initial: MochiColorScheme) {
 /** 配色过渡时长 */
 private const val ColorTransitionMillis = 420
 
-/** 直接给一套配色的版本；[materials] 默认沿用外层提供的材质 */
+/** 直接给一套配色的版本；[materials]、[shadows] 默认沿用外层提供的 */
 @Composable
 public fun MochiTheme(
     colors: MochiColorScheme,
@@ -104,6 +107,7 @@ public fun MochiTheme(
     motionScheme: MochiMotionScheme = defaultMotionScheme(),
     systemBarAppearance: Boolean = true,
     materials: MochiMaterials = LocalMochiMaterials.current,
+    shadows: MochiShadows = LocalMochiShadows.current,
     content: @Composable () -> Unit,
 ) {
     // HDR 窗口模式只由最外层（最先出现）的 MochiTheme 管一次，见 MochiHdrWindowEffect
@@ -116,6 +120,7 @@ public fun MochiTheme(
         LocalMochiShapes provides shapes,
         LocalMochiMotionScheme provides motionScheme,
         LocalMochiMaterials provides materials,
+        LocalMochiShadows provides shadows,
         LocalContentColor provides colors.onSurface,
         LocalTextStyle provides textStyles.bodyLarge,
         content = content,
@@ -144,6 +149,11 @@ public object MochiTheme {
     public val materials: MochiMaterials
         @Composable @ReadOnlyComposable
         get() = LocalMochiMaterials.current
+
+    /** 阴影档位，见 [MochiShadows] */
+    public val shadows: MochiShadows
+        @Composable @ReadOnlyComposable
+        get() = LocalMochiShadows.current
 }
 
 // 没包 MochiTheme 时也能用：默认浅色配色和默认 token

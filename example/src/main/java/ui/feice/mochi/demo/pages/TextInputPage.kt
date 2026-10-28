@@ -3,16 +3,12 @@
 
 package ui.feice.mochi.demo.pages
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,32 +20,28 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.persistentListOf
 import ui.feice.mochi.basic.MochiButton
-import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiCodeField
 import ui.feice.mochi.basic.MochiDialog
 import ui.feice.mochi.basic.MochiDialogAction
 import ui.feice.mochi.basic.MochiDialogActionRole
 import ui.feice.mochi.basic.MochiDialogTextField
-import ui.feice.mochi.basic.MochiIconButton
 import ui.feice.mochi.basic.MochiInlineTextField
 import ui.feice.mochi.basic.MochiListFormRow
 import ui.feice.mochi.basic.MochiListTextFieldRow
 import ui.feice.mochi.basic.MochiSearchBar
 import ui.feice.mochi.basic.MochiTextField
-import ui.feice.mochi.basic.MochiTextFieldDefaults
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.AppIcon
 import ui.feice.mochi.demo.common.Code
+import ui.feice.mochi.demo.common.DemoChatBubble
+import ui.feice.mochi.demo.common.DemoComposerRow
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
@@ -57,11 +49,9 @@ import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
-import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.list.MochiListSection
-import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -371,65 +361,14 @@ private fun CodeSection() {
 /** iMessage 式输入栏：胶囊输入框随内容长高，有字时麦克风换成发送键 */
 @Composable
 private fun ComposerSection() {
-    val cs = MochiTheme.colorScheme
-    val ts = MochiTheme.textStyles
     val sent = remember { mutableStateListOf("晚上一起吃饭吗？") }
-    var msg by rememberSaveable { mutableStateOf("") }
     DemoSection("消息输入栏", footer = "胶囊输入框随内容长高，发送键落在最后一行右边；有字时麦克风模糊替换成发送键。") {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.End) {
-            sent.forEach { m ->
-                Box(
-                    Modifier
-                        .widthIn(max = 240.dp)
-                        .background(cs.primary, MochiRoundedRectangle(18.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                ) { Text(m, style = ts.body, color = cs.onPrimary) }
-            }
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            sent.forEach { m -> DemoChatBubble(true, m) }
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // 默认尺寸就是输入框的高度（MochiTextFieldDefaults.Height = MochiButtonDefaults.Height），两者同高、同一条中线
-            MochiIconButton(onClick = {}) { Glyph(Icons.PLUS, cs.onSurface, size = 22) }
-            MochiTextField(
-                msg,
-                { msg = it },
-                Modifier.weight(1f),
-                placeholder = "信息",
-                singleLine = false,
-                maxLines = 5,
-                clearButton = false,
-                trailing = {
-                    MochiBlurCrossfade(msg.isNotBlank()) { canSend ->
-                        if (canSend) {
-                            MochiIconButton(
-                                onClick = {
-                                    sent.add(msg.trim())
-                                    if (sent.size > 4) sent.removeAt(0)
-                                    msg = ""
-                                },
-                                size = MochiTextFieldDefaults.TrailingButtonSize,
-                                style = MochiButtonStyle.Filled,
-                                colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled),
-                            ) { SendArrow(cs.onPrimary) }
-                        } else {
-                            Box(Modifier.size(MochiTextFieldDefaults.TrailingButtonSize), contentAlignment = Alignment.Center) {
-                                Glyph(Icons.MIC, cs.onSurfaceVariant, size = 22)
-                            }
-                        }
-                    }
-                },
-            )
-        }
-    }
-}
-
-/** 发送键里的 ↑ */
-@Composable
-private fun SendArrow(color: Color) {
-    Canvas(Modifier.size(16.dp)) {
-        val w = 2.2.dp.toPx()
-        val cx = size.width / 2f
-        drawLine(color, Offset(cx, size.height * 0.92f), Offset(cx, size.height * 0.1f), w, StrokeCap.Round)
-        drawLine(color, Offset(cx, size.height * 0.1f), Offset(size.width * 0.16f, size.height * 0.46f), w, StrokeCap.Round)
-        drawLine(color, Offset(cx, size.height * 0.1f), Offset(size.width * 0.84f, size.height * 0.46f), w, StrokeCap.Round)
+        DemoComposerRow("信息", { m ->
+            sent.add(m)
+            if (sent.size > 4) sent.removeAt(0)
+        })
     }
 }

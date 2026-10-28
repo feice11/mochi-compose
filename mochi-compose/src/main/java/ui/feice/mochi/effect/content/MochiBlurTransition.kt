@@ -49,6 +49,8 @@ import ui.feice.mochi.theme.MochiGraphics
  * @param slide 完全隐去时沿 direction 方向的位移，按内容自己的高度算（计数器的数字滚动用它）
  * @param enter 新内容出现的动画（不该过冲，不然透明度和模糊会冲过头）
  * @param exit 旧内容消失的动画，比出现快一点：旧的先让开，新的再清晰起来
+ * @param overflow 内容画出自己边界的距离。包着玻璃（外阴影画在玻璃外面）时传 [ui.feice.mochi.effect.glass.mochiGlassOverflow]：
+ *   模糊和半透明的图层按这一圈往外留边，过渡中阴影不会被切成直角矩形。默认 0（文字、图标）
  */
 @Immutable
 public data class MochiBlurTransition(
@@ -57,6 +59,7 @@ public data class MochiBlurTransition(
     val slide: Float = 0f,
     val enter: AnimationSpec<Float> = ContentSpring,
     val exit: AnimationSpec<Float> = ContentSpring,
+    val overflow: Dp = 0.dp,
 )
 
 /** 内容变换统一的弹簧：SwiftUI 的 snappy，300ms、回弹 0.15（利落，收尾带一点点弹，不拖） */
@@ -243,13 +246,15 @@ private fun <T> BlurLayer(s: BlurSlot<T>, transition: MochiBlurTransition, conte
             // 透明度走 smoothstep：淡到一半时已经糊开了，不会看到两份清楚的字叠在一起
             val a = p * p * (3f - 2f * p)
             mochiBlurAlpha(a, layerBlur(s, transition))
+            // 内容画出边界（玻璃阴影）时，半透明也不开按自身范围的离屏层：那一层会把阴影切成直角，透明度直接乘到每一笔上
+            if (transition.overflow > 0.dp && a < 1f) compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
             // 缩放和位移用没截断的进度：snappy 弹簧收尾那一点点回弹在这里看得到（透明度、模糊照样截断）
             val raw = s.p.value
             val k = transition.scale + (1f - transition.scale) * raw
             scaleX = k
             scaleY = k
             translationY = s.sign * (1f - raw) * transition.slide * size.height
-        }.mochiBlur { layerBlur(s, transition) },
+        }.mochiBlur(overflow = transition.overflow) { layerBlur(s, transition) },
     ) { measurables, constraints ->
         val pls = measurables.map { it.measure(constraints) }
         val w = pls.maxOfOrNull { it.width } ?: 0

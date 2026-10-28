@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.menu
 
 import android.os.Build
 import android.provider.Settings
@@ -108,6 +108,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.MochiAlign
+import ui.feice.mochi.basic.MochiOpenMode
+import ui.feice.mochi.basic.MochiStyle
 import ui.feice.mochi.effect.elastic.MochiRubberBandState
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch

@@ -25,8 +25,9 @@ import ui.feice.mochi.theme.defaultTextStyles
  * [highContrast] 对应 iOS 的「增强对比度」；应用里要直接用 iOS 原色时读 [LocalIosPalette]。
  * [glass] / [blur] 是两个独立开关：浮在内容上的栏用液态玻璃、滚动边缘做渐进模糊，默认都开（iOS 的样子）；
  * 关掉玻璃后栏是纯色，关掉模糊后滚动边缘是底色渐隐。
- * [glassTint] 是液态玻璃的通透度（iOS 设置里「透明 ↔ 色调」那条），0..1，默认 0.5 = iOS 默认，见 [IosGlass26.fixed]。
- * [glassStyle] 选玻璃的样式：iOS 26.5（[IosGlass26]，默认）或 iOS 27（[IosGlass27]，录屏拟合的近似值）；
+ * [glassTint] 是液态玻璃「透」档的通透度（iOS 设置里「透明 ↔ 色调」那条），0..1，默认 0.5 = iOS 默认，见 [IosGlass26.fixed]；
+ * 栏、栏里的按钮、警告框、玻璃样式的按钮用它。选择列表（菜单、气泡）和面板用「实」档（[IosGlass26.SolidTint]），不跟它变。
+ * [glassStyle] 选玻璃的样式：iOS 26.5（[IosGlass26]，默认）或 iOS 27（[IosGlass27]，录屏拟合的近似值，已搁置：先把 iOS 26 做完善）；
  * [glassLightBrightness] / [glassDarkBrightness] 是 iOS 27 玻璃浅色、深色各自的亮度（−1..1，0 原样），iOS 26 玻璃不用。
  *
  * 玻璃要背景来源才看得到背后的内容（`rememberMochiBackdrop` + `Modifier.mochiBackdropSource` + `LocalMochiBackdrop`），
@@ -69,7 +70,8 @@ public fun MochiIosTheme(
  * 液态玻璃和滚动边缘模糊这两种材质，任何主题都能用（传给 `MochiTheme(materials = …)` 或各外观主题的 materials 参数）：
  *
  * - [glass]：浮在内容上的栏是玻璃；[glassStyle] 是 [IosGlassStyle.Ios27] 时用 [IosGlass27]，亮度只对它有效；
- *   [density] 给 iOS 27 的一像素暗描边用
+ *   [density] 给 iOS 27 的一像素暗描边用。iOS 26 样式分两档：[glassTint] 是「透」（栏、按钮、警告框），
+ *   菜单和面板是「实」（[IosGlass26.SolidTint]，滑条最右）；iOS 27 已搁置，全部用同一份
  * - [blur]：滚动边缘是渐进模糊 + 按亮度分档的压暗（[IosScrollEdge.Soft]）
  * - [blurOnly]：仅保留模糊与面色，移除折射、色散、光学边缘和按压玻璃泡；默认 false。
  * - [themeAccent]：玻璃本身保持中性，选中的图标和文字用主题自己的强调色（标签栏配色的 selectedContent），
@@ -86,19 +88,32 @@ public fun iosMaterials(
     blur: Boolean = true,
     themeAccent: Boolean = false,
     blurOnly: Boolean = false,
-): MochiMaterials = MochiMaterials(
-    bar = if (!glass) {
+): MochiMaterials {
+    val bar = if (!glass) {
         null
     } else {
         when (glassStyle) {
             IosGlassStyle.Ios26 -> IosGlass.regular(isDark, glassTint)
             IosGlassStyle.Ios27 -> IosGlass27.regular(isDark, density, glassTint, glassLightBrightness, glassDarkBrightness)
         }.finish(themeAccent, blurOnly)
-    },
-    scrollEdge = if (blur) IosScrollEdge.Soft else null,
-    // iOS 27 没有 .clear 的数据，两种样式都用 iOS 26 的原生值
-    clear = if (glass) IosGlass.clear(isDark).finish(themeAccent, blurOnly) else null,
-)
+    }
+    // iOS 26 的「实」档：选择列表（菜单、气泡）和面板用滑条最右的值，不跟通透度变；iOS 27 已搁置，仍全跟栏
+    val solid = if (glass && glassStyle == IosGlassStyle.Ios26) {
+        IosGlass.regular(isDark, IosGlass26.SolidTint).finish(themeAccent, blurOnly)
+    } else {
+        null
+    }
+    return MochiMaterials(
+        bar = bar,
+        scrollEdge = if (blur) IosScrollEdge.Soft else null,
+        menu = solid,
+        // 警告框是「透」档：不写的话会经菜单回退成「实」
+        alert = bar,
+        sheet = solid,
+        // iOS 27 没有 .clear 的数据，两种样式都用 iOS 26 的原生值
+        clear = if (glass) IosGlass.clear(isDark).finish(themeAccent, blurOnly) else null,
+    )
+}
 
 private fun MochiGlass.finish(themeAccent: Boolean, blurOnly: Boolean): MochiGlass =
     (if (themeAccent) withThemeAccent() else this).let { if (blurOnly) it.asBlurOnly() else it }

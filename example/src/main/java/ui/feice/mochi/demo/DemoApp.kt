@@ -65,8 +65,6 @@ import com.kyant.capsule.ContinuousRoundedRectangle
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
-import ui.feice.mochi.effect.glass.mochiBackdropSource
-import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiDialog
 import ui.feice.mochi.basic.MochiDialogAction
@@ -98,16 +96,17 @@ import ui.feice.mochi.demo.common.iconColors
 import ui.feice.mochi.demo.onboarding.GlassEntryCard
 import ui.feice.mochi.demo.onboarding.GlassTintPage
 import ui.feice.mochi.demo.onboarding.isDark
-import ui.feice.mochi.demo.onboarding.rebright
-import ui.feice.mochi.demo.onboarding.restyle
 import ui.feice.mochi.demo.pages.PushDemoScreen
 import ui.feice.mochi.demo.pages.SharedBarScreen
 import ui.feice.mochi.demo.pages.sharedBarTitle
+import ui.feice.mochi.effect.content.crossfadeOrChange
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.effect.content.mochiBlurReveal
+import ui.feice.mochi.effect.content.revealIfShadeChanges
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
+import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
@@ -138,6 +137,7 @@ import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.PaletteStyle
 import ui.feice.mochi.theme.ThemeController
 import ui.feice.mochi.theme.emphasized
+import ui.feice.mochi.theme.isDark
 import ui.feice.mochi.theme.mochiOpticalLeading
 
 /**
@@ -209,11 +209,8 @@ private fun HomeScreen(controller: ThemeController, modifier: Modifier = Modifie
     ) { page ->
         when (page) {
             0 -> CatalogGrid("组件", catalog.filter { it.group == CatalogGroup.Components })
-
             1 -> CatalogGrid("效果", catalog.filter { it.group == CatalogGroup.Effects })
-
             2 -> CatalogGrid("导航", catalog.filter { it.group == CatalogGroup.Navigation })
-
             else -> ThemeTab(controller)
         }
     }
@@ -404,7 +401,7 @@ private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememb
                                 listOf("Mochi" to DemoStyle.Mochi, "Nothing" to DemoStyle.Nothing, "iOS" to DemoStyle.Ios),
                                 settings.style,
                             ) {
-                                reveal.restyle { settings.style = it }
+                                reveal.crossfadeOrChange { settings.style = it }
                             }
                             MochiListRow(
                                 "预测性返回",
@@ -414,7 +411,7 @@ private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememb
                             MochiListRow(
                                 "衬线体标题",
                                 subtitle = "大标题和导航标题用系统衬线体（宋体），正文不变",
-                                trailing = { MochiSwitch(settings.serif, { on -> reveal.restyle { settings.serif = on } }) },
+                                trailing = { MochiSwitch(settings.serif, { on -> reveal.crossfadeOrChange { settings.serif = on } }) },
                             )
                         }
                     }
@@ -432,7 +429,7 @@ private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememb
                                     // 确认框开着时开关先停在打开，取消再回到关（iOS 需要确认的开关也是这样）
                                     MochiSwitch(settings.liquidGlass || confirmGlass, { on ->
                                         // 打开前先提醒耗电；关掉直接生效
-                                        if (on) confirmGlass = true else reveal.restyle { settings.liquidGlass = false }
+                                        if (on) confirmGlass = true else reveal.crossfadeOrChange { settings.liquidGlass = false }
                                     })
                                 },
                             )
@@ -446,7 +443,9 @@ private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememb
                             MochiListRow(
                                 "模糊效果",
                                 subtitle = "顶栏、底栏下面的内容渐进模糊",
-                                trailing = { MochiSwitch(settings.blurEffects, { on -> reveal.restyle { settings.blurEffects = on } }) },
+                                trailing = {
+                                    MochiSwitch(settings.blurEffects, { on -> reveal.crossfadeOrChange { settings.blurEffects = on } })
+                                },
                             )
                         }
                     }
@@ -458,7 +457,7 @@ private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememb
                                 listOf("跟随系统" to NothingMode.System, "浅" to NothingMode.Light, "深" to NothingMode.Dark),
                                 appearance.nothingMode,
                             ) {
-                                reveal.rebright(nowDark, it.isDark(systemDark)) { appearance.nothingMode = it }
+                                reveal.revealIfShadeChanges(nowDark, it.isDark(systemDark)) { appearance.nothingMode = it }
                             }
                         } else {
                             Toggles(
@@ -471,7 +470,7 @@ private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememb
                                 ),
                                 controller.colorSchemeMode,
                             ) {
-                                reveal.rebright(nowDark, it.isDark(systemDark)) { controller.colorSchemeMode = it }
+                                reveal.revealIfShadeChanges(nowDark, it.isDark(systemDark)) { controller.colorSchemeMode = it }
                             }
                             Toggles(
                                 "取色算法",
@@ -551,7 +550,7 @@ private fun ThemeTab(controller: ThemeController, scroll: LazyListState = rememb
         actions = persistentListOf(
             MochiDialogAction("取消", MochiDialogActionRole.Cancel),
             MochiDialogAction("打开", MochiDialogActionRole.Primary) {
-                appearance?.let { settings -> reveal.restyle { settings.liquidGlass = true } }
+                appearance?.let { settings -> reveal.crossfadeOrChange { settings.liquidGlass = true } }
             },
         ),
     )

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -40,13 +38,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.MochiBarIconButton
-import ui.feice.mochi.basic.MochiButtonDefaults
-import ui.feice.mochi.basic.MochiButtonStyle
-import ui.feice.mochi.basic.MochiIconButton
-import ui.feice.mochi.basic.MochiTextField
-import ui.feice.mochi.basic.MochiTextFieldDefaults
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
+import ui.feice.mochi.demo.common.DemoChatBubble
+import ui.feice.mochi.demo.common.DemoComposerRow
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.demoItem
@@ -72,7 +67,6 @@ import ui.feice.mochi.navigation.MochiTitleBar
 import ui.feice.mochi.navigation.MochiTitleBarDefaults
 import ui.feice.mochi.navigation.rememberMochiNavigator
 import ui.feice.mochi.navigation.rememberMochiSidebarState
-import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 
@@ -178,7 +172,6 @@ fun SidebarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var msg by rememberSaveable { mutableStateOf("") }
     val sent = remember(chat?.id) { mutableStateListOf<String>() }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + MochiTitleBarDefaults.Height
     // 每个对话各自的滚动位置；顶栏的底色和渐隐跟着当前对话是否滚进顶栏下面（停在顶部时不盖住第一条消息）
@@ -214,51 +207,20 @@ private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
                             }
                         }
                     } else {
-                        items(c.messages.size) { i -> Bubble(c.messages[i].first, c.messages[i].second) }
+                        items(c.messages.size) { i -> DemoChatBubble(c.messages[i].first, c.messages[i].second) }
                     }
-                    items(sent.size) { i -> Bubble(true, sent[i]) }
+                    items(sent.size) { i -> DemoChatBubble(true, sent[i]) }
                 }
             }
-            Row(
+            DemoComposerRow(
+                "问点什么",
+                { sent.add(it) },
                 Modifier
-                    .fillMaxWidth()
                     // 浮动侧边栏打开时会藏起小白条：用不随显隐变化的安全区，输入栏不会跳
                     .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
                     .imePadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                MochiIconButton(onClick = {}) { Glyph(Icons.PLUS, cs.onSurface, size = 22) }
-                MochiTextField(
-                    msg,
-                    { msg = it },
-                    Modifier.weight(1f),
-                    placeholder = "问点什么",
-                    singleLine = false,
-                    maxLines = 5,
-                    clearButton = false,
-                    trailing = {
-                        MochiBlurCrossfade(msg.isNotBlank()) { canSend ->
-                            if (canSend) {
-                                MochiIconButton(
-                                    onClick = {
-                                        sent.add(msg.trim())
-                                        msg = ""
-                                    },
-                                    size = MochiTextFieldDefaults.TrailingButtonSize,
-                                    style = MochiButtonStyle.Filled,
-                                    colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled),
-                                ) { UpArrow(cs.onPrimary) }
-                            } else {
-                                Box(Modifier.size(MochiTextFieldDefaults.TrailingButtonSize), contentAlignment = Alignment.Center) {
-                                    Glyph(Icons.MIC, cs.onSurfaceVariant, size = 22)
-                                }
-                            }
-                        }
-                    },
-                )
-            }
+            )
         }
         MochiTitleBar(
             title = chat?.title ?: "新对话",
@@ -266,24 +228,6 @@ private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
             navigationIcon = { MochiBarIconButton(onClick = onMenu, navId = "sidebar-menu") { SidebarGlyph(cs.onSurface) } },
             actions = { MochiBarIconButton(onClick = onNew, navId = "sidebar-new") { Glyph(Icons.EDIT, cs.onSurface, size = 20) } },
         )
-    }
-}
-
-@Composable
-private fun Bubble(mine: Boolean, text: String) {
-    val cs = MochiTheme.colorScheme
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
-        if (mine) {
-            Box(
-                Modifier
-                    .widthIn(max = 280.dp)
-                    .background(cs.primary, MochiRoundedRectangle(18.dp))
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-            ) { Text(text, style = MochiTheme.textStyles.body, color = cs.onPrimary) }
-        } else {
-            // AI 回答不加气泡，像 ChatGPT / Claude 那样直接铺在页面上
-            Text(text, Modifier.padding(horizontal = 2.dp, vertical = 4.dp), style = MochiTheme.textStyles.body, color = cs.onSurface)
-        }
     }
 }
 
@@ -324,16 +268,5 @@ private fun SidebarGlyph(color: Color) {
             StrokeCap.Round,
         )
         drawLine(color, Offset(size.width * 0.12f, size.height * 0.66f), Offset(size.width * 0.6f, size.height * 0.66f), w, StrokeCap.Round)
-    }
-}
-
-@Composable
-private fun UpArrow(color: Color) {
-    Canvas(Modifier.size(16.dp)) {
-        val w = 2.2.dp.toPx()
-        val cx = size.width / 2f
-        drawLine(color, Offset(cx, size.height * 0.92f), Offset(cx, size.height * 0.1f), w, StrokeCap.Round)
-        drawLine(color, Offset(cx, size.height * 0.1f), Offset(size.width * 0.16f, size.height * 0.46f), w, StrokeCap.Round)
-        drawLine(color, Offset(cx, size.height * 0.1f), Offset(size.width * 0.84f, size.height * 0.46f), w, StrokeCap.Round)
     }
 }

@@ -6,6 +6,7 @@
 package ui.feice.mochi.effect.glass
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -18,6 +19,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import ui.feice.mochi.effect.glass.engine.GlassBody
 import ui.feice.mochi.theme.MochiDefaults
 
 /**
@@ -74,7 +76,7 @@ public fun Modifier.mochiBackdropSource(backdrop: MochiBackdrop?): Modifier = if
  */
 @Composable
 public fun rememberMochiBarBackdrop(background: Color = MochiDefaults.groupedBackground()): MochiBackdrop? =
-    if (ui.feice.mochi.theme.MochiTheme.materials.controlGlass != null) rememberMochiBackdrop(background) else null
+    if (glassOn(GlassRole.Control)) rememberMochiBackdrop(background) else null
 
 /** 浮在内容上的玻璃从这里拿背景来源；null 时玻璃按材质的 fallback 画纯色 */
 public val LocalMochiBackdrop: androidx.compose.runtime.ProvidableCompositionLocal<MochiBackdrop?> =
@@ -87,20 +89,37 @@ internal class GlassSource(val layer: Backdrop, val face: Backdrop)
 internal val MochiBackdrop.source: GlassSource get() = GlassSource(layer, layer)
 
 /**
- * 窗口层面「浮层底下」的内容：最外层的 MochiNavHost 录整页提供它，每个浮层再叠上自己的内容传给从它里面打开的浮层
- * （面板里点开的菜单能透出面板）。只给浮层用：页面里的玻璃取样它会取到自己
+ * 玻璃取样用的几份背景，合在一个 [LocalGlassSources] 里传；谁提供谁只改自己那一项（`copy(bar = …)`）。
+ * 页面自己的来源仍是公开的 [LocalMochiBackdrop]（应用接入用它），不在这里。
+ *
+ * - [window]：窗口层面「浮层底下」的内容。最外层的 MochiNavHost 录整页提供它，每个浮层再叠上自己的内容传给从它里面打开的浮层
+ *   （面板里点开的菜单能透出面板）。只给浮层用：页面里的玻璃取样它会取到自己
+ * - [page]：标题脚手架、标签页脚手架给顶栏录的正文，也给从正文里打开的浮层当后备取样来源（见 [overlayBackdropSource]）
+ * - [overlay]：当前浮层（菜单、警告框、面板）的玻璃取样的那份：打开这个浮层时它底下的内容
+ * - [bar]：栏里的玻璃取样的那份：栏自己的底色（滚动边缘渐隐）叠在背景来源上面，见 MochiTitleBar
  */
-internal val LocalMochiWindowBackdrop: androidx.compose.runtime.ProvidableCompositionLocal<GlassSource?> =
-    staticCompositionLocalOf { null }
+@Immutable
+internal data class GlassSources(
+    val window: GlassSource? = null,
+    val page: MochiBackdrop? = null,
+    val overlay: GlassSource? = null,
+    val bar: GlassSource? = null,
+)
 
-/** 当前浮层（菜单、警告框、面板）的玻璃取样的那份：打开这个浮层时它底下的内容 */
-internal val LocalMochiOverlayGlass: androidx.compose.runtime.ProvidableCompositionLocal<GlassSource?> =
-    staticCompositionLocalOf { null }
+internal val LocalGlassSources: androidx.compose.runtime.ProvidableCompositionLocal<GlassSources> =
+    staticCompositionLocalOf { GlassSources() }
 
-/** 栏里的玻璃取样的那份：栏自己的底色（滚动边缘渐隐）叠在背景来源上面，见 MochiTitleBar */
-internal val LocalMochiBarSource: androidx.compose.runtime.ProvidableCompositionLocal<GlassSource?> =
-    staticCompositionLocalOf { null }
+/**
+ * 浮层（菜单、警告框、面板）底下的内容：通常是最外层 MochiNavHost 录的整页。导航主机不录整页时
+ * （`MochiNavHost(windowGlass = false)`，页面里有 WebView），退回到打开浮层那一处页面的背景来源（[LocalMochiBackdrop]），
+ * 页面自己用截图做的来源也能让菜单是玻璃；再没有就用标题脚手架录的正文（[GlassSources.page]），都没有才画纯色
+ */
+@Composable
+internal fun overlayBackdropSource(): GlassSource? {
+    val sources = LocalGlassSources.current
+    return sources.window ?: LocalMochiBackdrop.current?.source ?: sources.page?.source
+}
 
 /** 栏里的按钮、搜索框取样的背景：有栏底色的叠加版就用它，否则用背景来源本身 */
 @Composable
-internal fun barGlassSource(): GlassSource? = LocalMochiBarSource.current ?: LocalMochiBackdrop.current?.source
+internal fun barGlassSource(): GlassSource? = LocalGlassSources.current.bar ?: LocalMochiBackdrop.current?.source

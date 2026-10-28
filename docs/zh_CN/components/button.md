@@ -35,7 +35,7 @@ MochiButtonGroup {
 
 | 参数 | 说明 |
 |---|---|
-| style | `Filled` / `Tonal` / `Outlined` / `Text`，以及 iOS 的 `ProminentClearGlass` / `ClearGlass`（开玻璃时是 .clear 玻璃，不开时分别和 `Filled` / `Tonal` 一样） |
+| style | 纯色：`Filled` / `Tonal` / `Outlined` / `Text`，主题开不开液态玻璃都是纯色。玻璃：iOS 的 `ProminentGlass` / `Glass` / `ProminentClearGlass` / `ClearGlass`，主题有控件玻璃时才是玻璃，没有时 prominent 两种和 `Filled` 一样、另外两种和 `Tonal` 一样 |
 | colors | `MochiButtonDefaults.colors(style)`：底色、内容色、描边、按下时叠的颜色、高光色、不可用时的颜色 |
 | cornerRadius | 圆角；不给就是胶囊 |
 | contentPadding | 默认左右 24dp、上下 12dp；最小高度 48dp |
@@ -58,8 +58,9 @@ MochiButtonGroup {
 顶栏（大标题页面、面板头部）里只放这几种，它们同高（44dp）、同底色，摆在一起才协调：
 
 - `MochiBarButton(text, onClick, navId = "app.primary")`：文字胶囊（「编辑」「完成」）
-- `MochiBarIconButton(onClick, navId = "app.primary", contentKey = "edit") { Icon }`：44dp 圆形图标按钮
-- `MochiBarGroup(navId = "app.primary") { MochiBarGroupItem(onClick, navId = "app.primary", contentKey = "edit") { Icon } … }`：几个图标按钮共用一个胶囊（iOS 26 顶栏的按钮组），按下任意一项整个胶囊发光、跟手形变。弹菜单的一项用 `MochiBarGroupDropdownItem(expanded, onExpandedChange, items, onItemClick) { Icon }`，用法同 `MochiIconDropdown`，按下时图标变暗（见[下拉菜单](dropdown.md)）
+- `MochiBarIconButton(onClick, navId = "app.primary", contentKey = "edit") { Icon }`：44dp 圆形图标按钮。栏按钮禁用时底色不变，只把图标、文字变淡
+- `MochiBarGroup(navId = "app.primary") { MochiBarGroupItem(onClick, navId = "app.primary", contentKey = "edit") { Icon } … }`：几个图标按钮共用一个胶囊（iOS 26 顶栏的按钮组），按下任意一项整个胶囊发光、跟手形变。弹菜单的一项用 `MochiBarGroupDropdownItem(expanded, onExpandedChange, items, onItemClick) { Icon }`，用法同 `MochiIconDropdown`，按下时图标变暗（见[下拉菜单](dropdown.md)）。纯色的组展开时菜单从整个胶囊长出来、带融球颈，和玻璃组一样不从单独那一格长出来
+- `MochiBarIconDropdown(expanded, onExpandedChange, items, onItemClick) { Icon }`：单独一个弹菜单的圆按钮（「⋯」），44dp，和 `MochiBarIconButton` 同尺寸同材质。只有一个按钮时用它，不要用只放一项的 `MochiBarGroup`（组两端有留白，画出来是椭圆）
 - **侧推页面默认必须登记稳定 `navId`**，让顶栏留在原位变形；图标传稳定 `contentKey`，按钮组的子项也登记。`MochiBackButton` 自动参与。见 [导航 → 共享顶栏](../guide/navigation.md#共享顶栏)
 - `MochiBackButton()`（navigation 包）：圆形返回，默认执行 MochiNavigator 的 pop
 
@@ -69,9 +70,9 @@ MochiButtonGroup {
 
 ## 开了液态玻璃
 
-主题的控件是玻璃（`MochiTheme.materials.controlGlass`）时，不在栏里的 `MochiButton` / `MochiIconButton`：填充按钮画成 iOS 的 prominentGlass，色调按钮画成 glass，`ProminentClearGlass` / `ClearGlass` 画成 prominentClearGlass / clearGlass，描边和文字按钮不变。自定义配色也一样画成玻璃，底色全透明的除外。iOS 26（24A435 UIKitCore 逆向）里 glass 两种是 `_UIViewGlass` regular（variant 0），clear 两种是 clear（variant 1，`MochiMaterials.clear`，iOS 的原生值），都不自适应、可形变、胶囊；prominent 两种另外把按钮底色设成玻璃的 tintColor。正文里的玻璃不能取样包含它自己的页面，背景是一块纯色画布：prominent 两种用自己的底色，并去掉配方里的面色调整，底色原样透出来，只加上下的边光和阴影；色调按钮用默认配色时用材质的 fallback 色，自定义了就用那个底色；clearGlass 用自己的底色。半透明的底色（比如 iOS 配色的 secondarySystemFill）先垫一层 surface 色，真正垫在按钮下面的是什么不知道，是近似。纯色画布上折射、模糊看不出来，所以 clear 和 regular 在填充按钮上几乎一样。几种都去掉原生的暗色细描边（纯色上它是贴着按钮的一圈黑边）；边光保持按钮自己的色相、略提亮，下面比上面弱，照 iOS 纯色截图估的，是近似。tintColor 怎么混进玻璃没逆出来，这是近似。页面里不用写按玻璃开关的分支。
+正文里的按钮画不画玻璃由**样式**决定，和 iOS 26 一样：主题开了液态玻璃，`Filled` / `Tonal` / `Outlined` / `Text` 仍是纯色，橙色的填充按钮就是橙色的纯色按钮。要玻璃就写玻璃样式：主题的控件是玻璃（`MochiTheme.materials.controlGlass`）时，不在栏里的 `MochiButton` / `MochiIconButton` 用 `ProminentGlass` 画成 iOS 的 prominentGlass，`Glass` 画成 glass，`ProminentClearGlass` / `ClearGlass` 画成 prominentClearGlass / clearGlass；主题没有玻璃时它们退回 `Filled` / `Tonal` 的纯色，所以页面里不用写按玻璃开关的分支。自定义配色也一样画成玻璃，底色全透明的除外。（以前填充、色调按钮会跟着主题自动变成玻璃，升级后要玻璃的地方改写成玻璃样式。）iOS 26（24A435 UIKitCore 逆向）里 glass 两种是 `_UIViewGlass` regular（variant 0），clear 两种是 clear（variant 1，`MochiMaterials.clear`，iOS 的原生值），都不自适应、可形变、胶囊；prominent 两种另外把按钮底色设成玻璃的 tintColor。正文里的玻璃不能取样包含它自己的页面，背景是一块纯色画布：prominent 两种用自己的底色，并去掉配方里的面色调整，底色原样透出来，只加上下的边光和阴影；色调按钮用默认配色时用材质的 fallback 色，自定义了就用那个底色；clearGlass 用自己的底色。半透明的底色（比如 iOS 配色的 secondarySystemFill）先垫一层 surface 色，真正垫在按钮下面的是什么不知道，是近似。纯色画布上折射、模糊看不出来，所以 clear 和 regular 在填充按钮上几乎一样。几种都去掉原生的暗色细描边（纯色上它是贴着按钮的一圈黑边）；边光保持按钮自己的色相、略提亮，下面比上面弱，照 iOS 纯色截图估的，是近似。tintColor 怎么混进玻璃没逆出来，这是近似。
 
-按钮组（`MochiButtonGroup`）里的玻璃按钮由组画：同一种材质的按钮一层玻璃画完，形状是这些按钮的并集，按下的按钮和连上的邻居做光滑并集，融球颈也是玻璃（像 SwiftUI 的 GlassEffectContainer；一层最多融 7 个按钮，要 Android 13+，更低的系统按纯色画）。
+按钮组（`MochiButtonGroup`）里用玻璃样式的按钮由组画（同一组里纯色和玻璃样式可以混排，纯色的照常画）：同一种材质的按钮一层玻璃画完，形状是这些按钮的并集，按下的按钮和连上的邻居做光滑并集，融球颈也是玻璃（像 SwiftUI 的 GlassEffectContainer；一层最多融 7 个按钮，要 Android 13+，更低的系统按纯色画）。
 
 玻璃按钮（正文的、栏里的）按下和拖动的手感照 iOS 的 `_UIFlexInteraction`（24A435 UIKitCore 逆向），不用 `behavior` 里的 `pressScale`、`maxGrow`、`follow`：
 - 按下放大到 `(长边 + lift) / 长边`，横竖同一倍数。长边不到 120dp 的按钮 lift 是 16dp（44dp 的图标按钮放大到约 1.36 倍）；更长的按钮按短边在 16dp（44）和 4dp（160）之间插值。

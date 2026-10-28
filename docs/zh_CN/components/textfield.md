@@ -29,6 +29,7 @@ MochiTextField(name, { name = it }, placeholder = "昵称")
 | supportingText | 普通说明 | null |
 | maxLength | 字数上限，同时显示字数 | null |
 | clearButton | 聚焦且有内容时显示清除按钮 | true |
+| selectAllOnFocus | 获得焦点时全选，一输入就整段换掉（地址栏、改名） | false |
 | shape | 形状 | `MochiTextFieldDefaults.Shape` |
 | colors | 配色 | `MochiTextFieldDefaults.colors()` |
 

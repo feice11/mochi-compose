@@ -66,6 +66,7 @@ internal object Icons {
     val CHEVRON_RIGHT = DemoIcon("chevron-forward", optical = false)
     val CLOSE = DemoIcon("close", optical = false)
     val CHECK = DemoIcon("checkmark", optical = false)
+    val ARROW_UP = DemoIcon("arrow-up", optical = false)
 
     // 目录：组件
     val DROPDOWN = DemoIcon("chevron-down-circle")

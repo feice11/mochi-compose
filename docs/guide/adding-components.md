@@ -8,7 +8,7 @@ Inspect existing entries and completion state in `example/src/main/java/ui/feice
 
 ## 2. Component code
 
-Put it in `mochi-compose/src/main/java/ui/feice/mochi/basic/`, one set of files per component:
+Put it in `mochi-compose/src/main/java/ui/feice/mochi/basic/` (or the domain package: `list/`, `navigation/`, `picker/`), one set of files per component. Internals shared with other components go in a subpackage such as `basic/menu/` or `basic/parts/`; see [Where new files go](../../CONTRIBUTING.md#where-new-files-go--新文件放哪).
 
 | File | Contents |
 |---|---|

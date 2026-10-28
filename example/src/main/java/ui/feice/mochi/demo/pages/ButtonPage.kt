@@ -40,7 +40,7 @@ import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
 
 /**
- * 按钮：四种样式、图标按钮，以及按下时和旁边按钮融在一起的按钮组。
+ * 按钮：四种纯色样式、四种玻璃样式、图标按钮，以及按下时和旁边按钮融在一起的按钮组（组里用玻璃样式，开了液态玻璃时是一块玻璃）。
  */
 @Composable
 fun ButtonPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
@@ -64,8 +64,15 @@ fun ButtonPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     MochiButton(tap, Modifier.weight(1f), enabled, MochiButtonStyle.Outlined, behavior = behavior) { Text("描边") }
                     MochiButton(tap, Modifier.weight(1f), enabled, MochiButtonStyle.Text, behavior = behavior) { Text("文字") }
                 }
+                // 玻璃样式：主题开了液态玻璃才是玻璃，没开时和填充、色调一样；上面四种永远是纯色
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MochiButton(tap, Modifier.weight(1f), enabled, MochiButtonStyle.ProminentClearGlass, behavior = behavior) { Text("通透填充") }
+                    MochiButton(tap, Modifier.weight(1f), enabled, MochiButtonStyle.ProminentGlass, behavior = behavior) { Text("玻璃填充") }
+                    MochiButton(tap, Modifier.weight(1f), enabled, MochiButtonStyle.Glass, behavior = behavior) { Text("玻璃") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MochiButton(tap, Modifier.weight(1f), enabled, MochiButtonStyle.ProminentClearGlass, behavior = behavior) {
+                        Text("通透填充")
+                    }
                     MochiButton(tap, Modifier.weight(1f), enabled, MochiButtonStyle.ClearGlass, behavior = behavior) { Text("通透") }
                 }
                 MochiButton(tap, Modifier.fillMaxWidth(), enabled, behavior = behavior) {
@@ -83,7 +90,7 @@ fun ButtonPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
                     MochiButtonGroup(spacing = spacing.dp, behavior = groupBehavior) {
                         listOf(Icons.SHARE, Icons.EDIT, Icons.PIN, Icons.TRASH).forEach { icon ->
-                            MochiIconButton(tap, enabled = enabled, behavior = behavior) {
+                            MochiIconButton(tap, enabled = enabled, style = MochiButtonStyle.Glass, behavior = behavior) {
                                 Glyph(icon, LocalContentColor.current, size = 22)
                             }
                         }
@@ -93,15 +100,15 @@ fun ButtonPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     MochiButtonGroup(spacing = spacing.dp, behavior = groupBehavior) {
                         listOf("粗体", "斜体", "下划线").forEach { t ->
-                            MochiButton(tap, enabled = enabled, style = MochiButtonStyle.Tonal, behavior = behavior) { Text(t) }
+                            MochiButton(tap, enabled = enabled, style = MochiButtonStyle.Glass, behavior = behavior) { Text(t) }
                         }
                     }
                 }
                 // 意思相反（取消 / 完成）：不融
                 Box(Modifier.fillMaxWidth().padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
                     MochiButtonGroup(spacing = spacing.dp, behavior = groupBehavior) {
-                        MochiButton(tap, enabled = enabled, style = MochiButtonStyle.Tonal, behavior = behavior) { Text("取消") }
-                        MochiButton(tap, enabled = enabled, behavior = behavior) { Text("完成") }
+                        MochiButton(tap, enabled = enabled, style = MochiButtonStyle.Glass, behavior = behavior) { Text("取消") }
+                        MochiButton(tap, enabled = enabled, style = MochiButtonStyle.ProminentGlass, behavior = behavior) { Text("完成") }
                     }
                 }
             }
@@ -120,10 +127,10 @@ fun ButtonPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         demoItem {
             DemoSection("用法") {
                 Code(
-                    "MochiButton(onClick = { … }) { Text(\"完成\") }\n\n// 挨着的按钮：按下时融在一起\nMochiButtonGroup {\n    MochiIconButton(onClick = { … }) { Icon(…) }\n    MochiIconButton(onClick = { … }) { Icon(…) }\n}",
+                    "MochiButton(onClick = { … }) { Text(\"完成\") }\n\n// 玻璃：写玻璃样式，主题没开液态玻璃时自动是纯色\nMochiButton(onClick = { … }, style = MochiButtonStyle.ProminentGlass) { Text(\"完成\") }\n\n// 挨着的按钮：按下时融在一起\nMochiButtonGroup {\n    MochiIconButton(onClick = { … }) { Icon(…) }\n    MochiIconButton(onClick = { … }) { Icon(…) }\n}",
                 )
                 Text(
-                    "样式：Filled / Tonal / Outlined / Text；cornerRadius 不给就是胶囊。",
+                    "纯色样式：Filled / Tonal / Outlined / Text，开了液态玻璃也是纯色。玻璃样式：ProminentGlass / Glass / ProminentClearGlass / ClearGlass。cornerRadius 不给就是胶囊。",
                     style = MochiTheme.textStyles.bodyMedium,
                     color = MochiTheme.colorScheme.onSurfaceVariant,
                 )

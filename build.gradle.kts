@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.roborazzi) apply false
+    alias(libs.plugins.maven.publish) apply false
     alias(libs.plugins.spotless)
 }
 
@@ -15,13 +17,13 @@ spotless {
     val composeRules = "io.nlopez.compose.rules:ktlint:${libs.versions.composeRules.get()}"
     kotlin {
         target("**/*.kt")
-        targetExclude("**/build/**", "spotless/**")
+        targetExclude("**/build/**", "spotless/**", "artifacts/**")
         ktlint(ktlintVersion).customRuleSets(listOf(composeRules))
         licenseHeaderFile(rootProject.file("spotless/copyright.kt"))
     }
     kotlinGradle {
         target("**/*.kts")
-        targetExclude("**/build/**", "spotless/**")
+        targetExclude("**/build/**", "spotless/**", "artifacts/**")
         ktlint(ktlintVersion)
         // 许可头后面正文的第一行
         licenseHeaderFile(rootProject.file("spotless/copyright.kts"), "^(plugins|import|pluginManagement|rootProject|@file)")
@@ -48,6 +50,24 @@ tasks.register("updateBaselineProfiles") {
                 .toList()
             out.writeText(names.joinToString("") { "HSPL$it;->**(**)**\nL$it;\n" })
             println("${out.path}: ${names.size} classes")
+        }
+    }
+}
+
+// Maven Central：四个库模块的坐标、POM 都在 gradle.properties（GROUP、POM_*）。
+// javadoc 发空包：AGP 自带的 javadoc 生成读不了依赖里 Java 17 的 sealed 类会失败，Central 只要求有这个 jar。
+// 有签名密钥（CI 发布时的 signingInMemoryKey）才签名，本地和 JitPack 的 publishToMavenLocal 不需要密钥
+subprojects {
+    plugins.withId("com.vanniktech.maven.publish") {
+        extensions.configure<com.vanniktech.maven.publish.MavenPublishBaseExtension> {
+            configure(
+                com.vanniktech.maven.publish.AndroidSingleVariantLibrary(
+                    javadocJar = com.vanniktech.maven.publish.JavadocJar.Empty(),
+                    sourcesJar = com.vanniktech.maven.publish.SourcesJar.Sources(),
+                    variant = "release",
+                ),
+            )
+            if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
         }
     }
 }

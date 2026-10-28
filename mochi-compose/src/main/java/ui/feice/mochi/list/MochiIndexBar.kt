@@ -46,7 +46,6 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.effect.content.MochiBlurText
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
@@ -86,6 +85,7 @@ public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit,
     val scope = rememberCoroutineScope()
     val accent = MochiTheme.colorScheme.primary
     val dark = MochiTheme.colorScheme.isDark
+    val shadow = MochiTheme.shadows.lifted
     Box(modifier.semantics { contentDescription = "索引" }) {
         Column(
             Modifier
@@ -152,7 +152,7 @@ public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit,
                 .size(BubbleSize)
                 .drawWithCache {
                     val path = Path().apply { addOval(Rect(Offset.Zero, size)) }
-                    onDrawBehind { drawMochiShadow(path, MochiMetaballShadow.elevated(this, 0.6f, dark), Color.Black) }
+                    onDrawBehind { drawMochiShadow(path, shadow.resolve(this, dark), Color.Black) }
                 }
                 .background(MochiDefaults.groupedContainer(), CircleShape),
             contentAlignment = Alignment.Center,

@@ -1,13 +1,12 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.menu
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -39,10 +38,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -63,13 +58,19 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.LiquidMenu
+import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.basic.MochiItemLayout
+import ui.feice.mochi.basic.MochiStyle
+import ui.feice.mochi.basic.Text
+import ui.feice.mochi.basic.liquid
+import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.drawGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.continuityFor
-import ui.feice.mochi.theme.MochiIcon
 import ui.feice.mochi.theme.MochiTheme
 
 /** 按着选项时高亮块缩到多少 */
@@ -263,7 +264,7 @@ internal fun MochiList(
                             if (ios) {
                                 // 勾在最左，单选菜单里每行都留位置，文字才对齐
                                 if (radio) {
-                                    Box(Modifier.size(20.dp)) { if (selected) CheckMark(color) }
+                                    Box(Modifier.size(20.dp)) { if (selected) MochiGlyphs.Check(color) }
                                     Spacer(Modifier.width(10.dp))
                                 }
                                 ItemLabel(item.label, color, Modifier.weight(1f))
@@ -277,7 +278,7 @@ internal fun MochiList(
                                     Spacer(Modifier.width(12.dp))
                                 }
                                 ItemLabel(item.label, color, Modifier.weight(1f))
-                                if (selected) CheckMark(color)
+                                if (selected) MochiGlyphs.Check(color)
                             }
                         }
                     }
@@ -294,12 +295,12 @@ internal fun MochiList(
  * iOS 的行占满菜单宽，Mochi 的列表整体缩进 [LiquidMenu.Inset]，这里都减掉它
  */
 @Composable
-private fun LiquidRow(item: MochiItem, color: Color, selected: Boolean, radio: Boolean, icons: Boolean, modifier: Modifier) {
+private fun LiquidRow(item: MochiItem, color: Color, selected: Boolean, radio: Boolean, icons: Boolean, modifier: Modifier = Modifier) {
     val m = LiquidMenu
     val l = m.Padding + if (radio) m.SelectionIndent else 0.dp
     Box(modifier.padding(end = m.Padding - m.Inset), contentAlignment = Alignment.CenterStart) {
         if (selected) {
-            Box(Modifier.offset(x = l / 2 + m.CheckOffset - m.Inset - CheckSize / 2).size(CheckSize)) { CheckMark(color) }
+            Box(Modifier.offset(x = l / 2 + m.CheckOffset - m.Inset - CheckSize / 2).size(CheckSize)) { MochiGlyphs.Check(color) }
         }
         if (item.icon != null) {
             Box(
@@ -326,18 +327,4 @@ private fun ItemLabel(text: String, color: Color, modifier: Modifier = Modifier)
         minFontScale = 0.85f,
         modifier = modifier,
     )
-}
-
-@Composable
-private fun CheckMark(color: Color) {
-    MochiIcon("checkmark", Modifier.size(20.dp), tint = color) { slot ->
-        Canvas(slot) {
-            val p = Path().apply {
-                moveTo(size.width * 0.20f, size.height * 0.52f)
-                lineTo(size.width * 0.42f, size.height * 0.72f)
-                lineTo(size.width * 0.80f, size.height * 0.30f)
-            }
-            drawPath(p, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-    }
 }

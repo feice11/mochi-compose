@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.basic.parts.drawG2Capsule
+import ui.feice.mochi.basic.parts.drawPillThumb
 import ui.feice.mochi.effect.elastic.MochiFollowSpring
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
@@ -99,6 +101,7 @@ public fun MochiSwitch(
     val glow = rememberMochiGlowState()
     val scope = rememberCoroutineScope()
     val thumbPath = remember { G2PathCache() }
+    val shadows = MochiTheme.shadows
     val trackPath = remember { G2PathCache() }
     val interactive = enabled && onCheckedChange != null
 
@@ -186,7 +189,15 @@ public fun MochiSwitch(
                     val cx = inset + thumbW / 2f + p * travel
                     val cy = size.height / 2f
                     val rect = Rect(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f)
-                    drawPillThumb(rect, colors.thumb.copy(alpha = colors.thumb.alpha * alpha), colors.thumbShadow, k, glow, thumbPath)
+                    drawPillThumb(
+                        rect,
+                        colors.thumb.copy(alpha = colors.thumb.alpha * alpha),
+                        colors.thumbShadow,
+                        k,
+                        shadows,
+                        glow,
+                        thumbPath,
+                    )
                 },
         )
     }

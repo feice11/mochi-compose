@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.effect.glass
+package ui.feice.mochi.effect.glass.engine
 
 import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
@@ -230,7 +230,16 @@ private class GlassNode(
             finishEffect
         } else {
             val shader = finishShader ?: glassFinishShader().also { finishShader = it }
-            glassFinishEffect(d, shader, r, glassSize, Offset(reach.toFloat(), reach.toFloat()), p.cornerRadius, pageLane.toFloat(), p.merge).also {
+            glassFinishEffect(
+                d,
+                shader,
+                r,
+                glassSize,
+                Offset(reach.toFloat(), reach.toFloat()),
+                p.cornerRadius,
+                pageLane.toFloat(),
+                p.merge,
+            ).also {
                 finishEffect = it
                 finishKey = nextFinishKey
             }

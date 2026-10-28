@@ -44,6 +44,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.basic.parts.drawG2Capsule
+import ui.feice.mochi.basic.parts.drawPillThumb
 import ui.feice.mochi.effect.elastic.MochiFollowSpring
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
@@ -133,6 +135,7 @@ public fun MochiSlider(
     val glow = rememberMochiGlowState()
     val scope = rememberCoroutineScope()
     val thumbPath = remember { G2PathCache() }
+    val shadows = MochiTheme.shadows
     val inactivePath = remember { G2PathCache() }
     val activePath = remember { G2PathCache() }
 
@@ -273,7 +276,15 @@ public fun MochiSlider(
                     val w = thumbW * lerp(1f, 1.2f, k) * (1f + abs(s)) * (1f - squash)
                     val h = thumbH * lerp(1f, 1.25f, k) * jellyCrossScale(abs(s)) * (1f + squash * 0.6f)
                     val rect = Rect(tx - w / 2f, cy - h / 2f, tx + w / 2f, cy + h / 2f)
-                    drawPillThumb(rect, colors.thumb.copy(alpha = colors.thumb.alpha * alpha), colors.thumbShadow, k, glow, thumbPath)
+                    drawPillThumb(
+                        rect,
+                        colors.thumb.copy(alpha = colors.thumb.alpha * alpha),
+                        colors.thumbShadow,
+                        k,
+                        shadows,
+                        glow,
+                        thumbPath,
+                    )
                 },
         )
     }

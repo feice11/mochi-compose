@@ -38,6 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -62,6 +65,7 @@ import ui.feice.mochi.effect.elastic.rubberBand
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
+import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiTheme
@@ -147,6 +151,9 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
     val drag = remember { Animatable(0f) }
     var held by remember { mutableStateOf(false) }
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
+    val dark = MochiTheme.colorScheme.isDark
+    val shadowColor = MochiTheme.colorScheme.shadow
+    val shadow = MochiTheme.shadows.lifted
 
     LaunchedEffect(state.current) {
         val t = state.current
@@ -254,10 +261,12 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
                         transformOrigin = TransformOrigin(0.5f, 0f)
                         translationY = drag.value - 10.dp.toPx() * (1f - p) - 18.dp.toPx() * exit
                         alpha = smoothstep(0f, 0.2f, p) * (1f - exit)
-                        shadowElevation = 14.dp.toPx() * p * (1f - exit)
-                        shape = MochiCapsule
-                        clip = true
                     }
+                    // 柔和投影（和菜单同一套），不用系统按光源算的阴影：那个底边一道实影，又硬又重。画在裁切外面
+                    .drawBehind {
+                        drawMochiShadow(size.toRect(), size.minDimension / 2f, shadow.resolve(this, dark), shadowColor)
+                    }
+                    .clip(MochiCapsule)
                     .background(colors.container)
                     .mochiPressGlow(glow, MochiCapsule)
                     .pointerInput(toast.id) {

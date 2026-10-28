@@ -274,7 +274,7 @@ Only `height`, `itemWidth`, `showLabels`, `selectedLabelOnly` and `hapticProfile
 
 ## Shadow
 
-The bar, the search button and the accessory all cast their shadow with `drawMochiShadow`, using the same two-layer parameters as menus, `MochiMetaballShadow.elevated`: a large faint ambient layer plus a small solid contact layer, with soft edges and no banding. Material elevation shadows are not used. While the bar is pressed it lifts, and its shadow gets deeper and softer. In dark mode the shadow is heavier so it stays visible. The shadow color is `colors.shadow`.
+The bar, the search button and the accessory all cast their shadow with `drawMochiShadow`, using the same parameters as menus, `MochiMetaballShadow.elevated`: a faint, inset, widely blurred ambient layer plus a very soft, faint contact layer, so only a trace of shadow sits at the edge and there is no banding. Material elevation shadows are not used. While the bar is pressed it lifts, and its shadow gets wider and softer. In dark mode the shadow is heavier so it stays visible. The shadow color is `colors.shadow`.
 
 ## Optical sources and exterior shadows
 

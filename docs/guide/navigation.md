@@ -174,6 +174,8 @@ MochiPeerTransition(
 
 `MochiNavHost(predictiveBack = false)` disables system predictive-back previews while ordinary back still pops. Nested hosts and sheets inherit `LocalMochiPredictiveBack`. The app's full-screen swipe-back gesture remains independent. The demo stores this preference under Theme → Appearance.
 
+`MochiNavHost(windowGlass = false)` stops recording the page for overlay glass (menus, alerts, sheets). Turn it off for pages with a WebView: drawing a WebView into glass's offscreen layers crashes the render thread on Vulkan devices. Overlays then sample the source where they were opened: `LocalMochiBackdrop` (for example a source the page builds from a snapshot), otherwise the content the title or tab scaffold records for its bar; only with neither do they draw the material's solid color. Overlays no longer inherit the page's `LocalMochiBackdrop`, so buttons in a sheet never sample the page the sheet covers. During shared top-bar transitions, glass buttons sample the background of their own page, so they stay glass instead of turning solid.
+
 `MochiTabScaffold(collapseOnScroll = false)` keeps the bar expanded while scrolling; the default true preserves existing library behavior. Reselect-to-top, independent tab positions and hiding when covered still work. The demo home passes false.
 
 During source morphs the navigation host exclusively draws registered occluders; the original page and carried-bar layer do not also paint the same surface and shadow. During side pushes the original page remains the sole owner. Reverse and cancelled transitions use the same ownership rule.

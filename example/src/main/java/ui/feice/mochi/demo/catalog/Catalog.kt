@@ -281,7 +281,7 @@ val catalog: List<CatalogEntry> = listOf(
     CatalogEntry(
         id = "loading",
         title = "加载与进度",
-        summary = "转圈、下拉刷新辐条、HUD、App Store 下载按钮、环形进度、仪表、储存空间条、骨架",
+        summary = "转圈、下拉刷新辐条、HUD、App Store 下载按钮、环形进度、储存空间条、骨架",
         group = CatalogGroup.Components,
         status = CatalogStatus.Ready,
         glyph = Icons.PULSE,

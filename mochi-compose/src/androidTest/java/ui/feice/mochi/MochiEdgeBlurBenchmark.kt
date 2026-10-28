@@ -25,7 +25,7 @@ import kotlin.math.min
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import ui.feice.mochi.effect.mask.variableBlur
+import ui.feice.mochi.effect.mask.maskedBlur
 
 /**
  * 渐进模糊（滚动边缘、渐变遮罩边）的离屏渲染基准：旧实现（整层过两遍 25 抽头、每个取样算 exp）vs 现在（只在要模糊的那块上跑、13 抽头、常数权重）。
@@ -202,7 +202,7 @@ class MochiEdgeBlurBenchmark {
             RenderNode("band").apply {
                 setPosition(0, 0, er - el, eb - et)
                 setRenderEffect(
-                    variableBlur(ew, eh, s.cw.toFloat(), s.ch.toFloat()) {
+                    maskedBlur(s.sigma, ew, eh, s.cw.toFloat(), s.ch.toFloat()) {
                         setFloatUniform("uMode", s.mode)
                         setFloatUniform("uLen", s.len)
                         setFloatUniform("uAmt", s.amt)

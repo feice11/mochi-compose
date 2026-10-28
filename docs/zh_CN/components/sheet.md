@@ -13,10 +13,13 @@ iOS 的底部面板。主题开了液态玻璃时，半屏是玻璃、拉到全�
 val sheet = rememberMochiSheetState()          // 半屏 + 全屏
 Page(Modifier.mochiSheetBackdrop(sheet))       // 后面的页面
 MochiSheet(sheet, onDismiss = { … }) {
-    // 面板内容（不要放竖着滚动的东西）
+    MochiSheetHeader("标题")
+    MochiSheetContent { … }                    // 放不下时自己能滚，不要再套滚动容器
 }
 Button(onClick = { sheet.show() })
 ```
+
+`MochiSheetContent` 放不下时能竖着滚：往上推时先把面板拉到最高一档再滚内容，内容滚到顶再往下拖拖的是面板，松手按速度吸附到最近的一档（和 iOS 一样）。
 
 只要全屏：`rememberMochiSheetState(detents = listOf(MochiSheetDetent.Large))`。
 

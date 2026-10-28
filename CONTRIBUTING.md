@@ -12,22 +12,59 @@ Read [Application integration](docs/guide/application-integration.md) ([中文](
 ## Project layout / 工程结构
 
 ```
-mochi-compose/      library, published via JitPack (package ui.feice.mochi) / 组件库
-  theme/            MochiTheme, color scheme, text styles, shapes, motion scheme
-  basic/            components: dropdown, tab bar, buttons, switch, slider, sheet, … / 组件
-  list/             grouped list sections, rows, swipe rows / 分组卡片列表
-  navigation/       MochiNavHost, navigator, transitions, predictive back, large titles / 导航与转场
-  picker/           wheels, time / date pickers, calendar / 滚筒与日期
-  effect/           public effects: glow, elastic, metaball, overscroll, content transitions / 通用效果
-  gesture/          press-and-slide gestures (internal) / 按住滑选手势
-  anim/             MochiMotion / MochiMotions curve presets / 曲线预设
-  shape/            Capsule path wrappers, shader SDF approximations / 形状
-  overlay/          InWindowOverlay (DecorView overlays) / 浮层
-  utils/            haptics, coordinates / 震动、坐标
-mochi-nothing/      optional Nothing appearance / 可选 Nothing 外观
-example/            demo catalog app + MochiAppStarter skeleton / 示例 app 与应用骨架
-docs/               English docs; docs/zh_CN/ Chinese docs / 文档
+mochi-compose/        library, published to Maven Central as io.github.feice11 (package ui.feice.mochi) / 组件库
+  theme/              MochiTheme, color scheme, control palette, materials, shadow levels, text styles, shapes, motion / 主题、配色、材质、阴影档位
+  basic/              components: buttons, dropdown, sheet, dialog, tab bar, slider, switch, … / 组件
+    menu/             menu engine shared by dropdown, context menu and popover (internal) / 菜单引擎（内部）
+    parts/            drawing parts shared by several controls: thumbs, glyphs (internal) / 共用绘制零件（内部）
+  list/               grouped list sections, rows, swipe rows, index bar / 分组卡片列表
+  navigation/         MochiNavHost, navigator, transitions, predictive back, large titles, tab scaffold / 导航与转场
+  picker/             wheels, time / date pickers, calendar, color picker / 滚筒、日期、取色
+  effect/             public effects, one package per effect / 通用效果，一个效果一个包
+    content/          content transitions: blur swap, counters, morphing icons / 内容变换
+    elastic/          press deformation and elastic motion / 按压形变
+    glass/            liquid glass surfaces and backdrops; engine/ is the render pipeline (internal) / 液态玻璃，engine/ 是内部渲染管线
+    glow/ hdr/        glow and HDR highlights / 光晕、HDR 高光
+    mask/             edge blur, fade masks, smooth gradients / 边缘模糊、渐隐遮罩
+    metaball/         metaball fusing and shadows / 融球与阴影
+    overscroll/       overscroll and fling; cresto/ is the adapted Cresto overscroll (internal) / 回弹与惯性，cresto/ 是改编的 Cresto 回弹（内部）
+    shadow/           shadows / 阴影
+  gesture/            press-and-slide gestures (internal) / 按住滑选手势
+  anim/               MochiMotion / MochiMotions curve presets / 曲线预设
+  shape/              capsule paths, shader SDF approximations / 形状
+  overlay/            InWindowOverlay (DecorView overlays) / 浮层
+  utils/              haptics, coordinates, prerendering / 震动、坐标、预渲染
+mochi-ios/            optional iOS appearance and the liquid glass / scroll edge materials / 可选 iOS 外观与玻璃材质
+mochi-nothing/        optional Nothing appearance / 可选 Nothing 外观
+mochi-icons/          MochiIonicon, the full Ionicons set / 图标
+example/              demo catalog app / 示例 app
+  demo/               app shell, appearance settings / 外壳与外观设置
+    catalog/          catalog entries / 目录条目
+    pages/            one demo page per component / 每个组件一个演示页
+    common/           demo-only helpers (DemoPage, DemoSection, …); apps must not depend on them / 演示专用辅助
+    onboarding/ about/  first-run onboarding, about page / 引导、关于
+  starter/            MochiAppStarter, the copyable app skeleton / 可复制的应用骨架
+docs/                 English docs; docs/zh_CN/ Chinese docs with the same file names / 文档，中文在 zh_CN 同名文件
+spotless/             license header templates / 版权头模板
+artifacts/            local research and screenshots, git-ignored, never committed / 本地资料，不提交
 ```
+
+### Where new files go / 新文件放哪
+
+1. A public component goes in `basic/` or in its domain package (`list/`, `navigation/`, `picker/`), as one set of files: `MochiXxx.kt`, `MochiXxxDefaults.kt`, plus internal files used only by it (for example `SheetGeometry.kt`) next to it.
+   公开组件放 `basic/` 或对应领域包（`list/`、`navigation/`、`picker/`），一个组件一组文件：`MochiXxx.kt`、`MochiXxxDefaults.kt`，只属于它的 internal 文件（如 `SheetGeometry.kt`）放在旁边。
+2. Internals shared by two or more components go in a subpackage (`basic/menu/`, `basic/parts/`, `effect/glass/engine/`), not back into the root of `basic/`.
+   两个以上组件共用的内部实现放子包（`basic/menu/`、`basic/parts/`、`effect/glass/engine/`），不要放回 `basic/` 根下。
+3. A visual effect that works on its own goes in `effect/<name>/`, public with KDoc, so components reuse it instead of copying it.
+   能单独用的视觉效果放 `effect/<效果名>/`，公开并写 KDoc，组件复用它，不另抄一份。
+4. Anything specific to one appearance goes in its module (`mochi-ios`, `mochi-nothing`); `mochi-compose` never depends on them.
+   只属于某种外观的东西放对应模块（`mochi-ios`、`mochi-nothing`），`mochi-compose` 不依赖它们。
+5. Tests mirror the package of the code they test: pure math (geometry, colors) and screenshot tests in `src/test`, anything that needs a device in `src/androidTest`.
+   测试和被测代码同包：纯计算（几何、颜色）和截图测试放 `src/test`，需要设备的放 `src/androidTest`。
+6. Keep files under about 600 lines. When a component grows past that, move its state class, geometry or sub-parts into sibling files of the same package (`TabBarState.kt`, `NavGeometry.kt`, `MochiListRow.kt`) instead of letting one file hold everything.
+   单个文件控制在 600 行左右。组件长过这个数，把状态类、几何计算、子部件拆到同包的兄弟文件（`TabBarState.kt`、`NavGeometry.kt`、`MochiListRow.kt`），不要一个文件装所有东西。
+7. Nothing temporary in the repository root. Debug screenshots and comparison material go in `artifacts/`.
+   根目录不放临时文件，调试截图和对照资料放 `artifacts/`。
 
 ## Before you start / 开始之前
 
@@ -76,6 +113,8 @@ Respect the user's requested verification scope. Compilation is not interaction 
 ## Testing / 测试
 
 - `./gradlew :mochi-compose:assembleRelease :example:assembleRelease`
+- `./gradlew :mochi-compose:verifyRoborazziDebug`: unit tests plus screenshot tests. Main components in light and dark are rendered on the JVM (Robolectric) and compared with the baselines in `mochi-compose/src/test/screenshots/`; no emulator needed. After an intended visual change, re-record with `./gradlew :mochi-compose:recordRoborazziDebug`, look at the changed images in the diff, and commit them. CI runs this and also compiles the device tests.
+  单元测试加截图测试：主要组件的浅色、深色在 JVM（Robolectric）上渲染，和 `mochi-compose/src/test/screenshots/` 里的基准图比，不用模拟器。有意改了外观就用 `./gradlew :mochi-compose:recordRoborazziDebug` 重录，在 diff 里看过变化的图再提交。CI 会跑这一项，并编译设备测试。
 - Try it in the example app on an emulator, and on a real device when you can. Check light and dark mode, a large font size, and system animations turned off.
   在示例 app 里实际操作：先模拟器，最好再真机。看浅色和深色、大字号，以及关掉系统动画的情况。
 - Changes to the metaball shader: add a scene to `MochiRenderBenchmark` and run `./gradlew :mochi-compose:connectedDebugAndroidTest`.
@@ -94,6 +133,12 @@ Pass `comparison=finish` to compare the original finishing pass against bounded/
 `comparison=edge-face` isolates the edge-varying face atlas; `comparison=pipeline` combines it with the finish changes. An optional `glassStyle=Ios26` or `Ios27` fixes the recipe family and is restored afterwards. / `comparison=edge-face` 单独比较边缘模糊的面色管线；`comparison=pipeline` 同时对照面色与收尾优化。可传 `glassStyle=Ios26` 或 `Ios27` 固定配方系列，结束后恢复原选择。
 
 `comparison=face-inputs` isolates dependency-keyed immutable filter reuse. Release glass-test targets additionally load `proguard-benchmark-target.pro`, generated from the harness/runner's shared-class references, to keep test entry points that application-only R8 analysis would remove. This contract covers `SharedTextureComparison`; other UI tests normally use Debug. Record whether this test contract was present with each APK hash. / `comparison=face-inputs` 单独对照按依赖复用不可变滤镜对象。Release 玻璃测试构建另外加载按测试引用生成的 `proguard-benchmark-target.pro`，保留只由测试入口使用的共享类成员；该清单针对 `SharedTextureComparison`，其他 UI 测试通常使用 Debug。每个 APK 的哈希记录应同时说明是否启用了这份测试契约。
+
+## Releasing / 发布
+
+Push a tag `v<version>` (for example `v0.2.0`) and the Publish workflow tests and uploads mochi-compose, mochi-icons, mochi-ios and mochi-nothing to Maven Central as `io.github.feice11:<module>:<version>`. Coordinates and POM fields live in `gradle.properties`; the workflow needs the `MAVEN_CENTRAL_USERNAME` / `MAVEN_CENTRAL_PASSWORD` (Central Portal user token) and `SIGNING_KEY` / `SIGNING_KEY_PASSWORD` secrets. Move the `Unreleased` section of the changelog under the new version first. `./gradlew publishToMavenLocal -PVERSION_NAME=…` works without a signing key for local testing.
+
+推一个 `v<版本>` 的 tag（比如 `v0.2.0`），Publish 工作流先跑测试，再把 mochi-compose、mochi-icons、mochi-ios、mochi-nothing 发到 Maven Central，坐标 `io.github.feice11:<模块>:<版本>`。坐标和 POM 信息在 `gradle.properties`；工作流要用仓库 Secrets：`MAVEN_CENTRAL_USERNAME` / `MAVEN_CENTRAL_PASSWORD`（Central Portal 生成的 User Token）、`SIGNING_KEY` / `SIGNING_KEY_PASSWORD`。发之前先把更新日志里的「未发布」改成新版本号。本地试发布用 `./gradlew publishToMavenLocal -PVERSION_NAME=…`，不需要签名密钥。
 
 ## Commits / 提交
 

@@ -1,6 +1,8 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
+@file:Suppress("ktlint:compose:compositionlocal-allowlist") // 栏按钮组内部传递的句柄，不出这个包
+
 package ui.feice.mochi.basic
 
 import androidx.compose.foundation.background
@@ -26,9 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -42,11 +44,12 @@ import kotlinx.collections.immutable.ImmutableList
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.glass.GlassFill
+import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.glass.barGlassSource
+import ui.feice.mochi.effect.glass.engine.rememberGlassGlowState
 import ui.feice.mochi.effect.glass.glassGlowInput
 import ui.feice.mochi.effect.glass.rememberGlassFill
-import ui.feice.mochi.effect.glass.rememberGlassGlowState
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
@@ -77,10 +80,10 @@ public fun MochiBarButton(
     navId: String? = null,
 ) {
     val glass = barGlass(colors)
-    CompositionLocalProvider(LocalButtonGlass provides glass) {
+    CompositionLocalProvider(LocalBarControlGlass provides glass) {
         MochiButton(
             onClick = onClick,
-            modifier = modifier.barShape(navId, colors, glass != null).height(MochiButtonDefaults.BarItemSize),
+            modifier = modifier.barShape(navId, colors, glass).height(MochiButtonDefaults.BarItemSize),
             enabled = enabled,
             colors = colors,
             contentPadding = MochiButtonDefaults.BarContentPadding,
@@ -115,9 +118,15 @@ public fun MochiBarIconButton(
     content: @Composable () -> Unit,
 ) {
     val glass = barGlass(colors)
-    CompositionLocalProvider(LocalButtonGlass provides glass) {
-        MochiIconButton(onClick, modifier.barShape(navId, colors, glass != null), enabled, colors = colors, size = MochiButtonDefaults.BarItemSize) {
-            Box(if (navId != null) Modifier.mochiNavBarItem(navId, contentKey) else Modifier, contentAlignment = Alignment.Center) { content() }
+    CompositionLocalProvider(LocalBarControlGlass provides glass) {
+        MochiIconButton(
+            onClick,
+            modifier.barShape(navId, colors, glass),
+            enabled,
+            colors = colors,
+            size = MochiButtonDefaults.BarItemSize,
+        ) {
+            Box(navItem(navId, contentKey), contentAlignment = Alignment.Center) { content() }
         }
     }
 }
@@ -139,23 +148,72 @@ public fun MochiBarGroup(
     val glow = rememberMochiGlowState(MochiGlowDefaults.spec(colors.glow))
     val glass = barGlass(colors)
     if (glass != null) {
-        GlassBarGroup(glass, modifier, colors, navId, content)
+        GlassBarGroup(glass, colors, navId, modifier, content)
         return
     }
-    CompositionLocalProvider(LocalContentColor provides colors.content, LocalBarGroup provides null) {
+    // 纯色的组也交给组里的下拉菜单：菜单从整个胶囊长出来、和胶囊连着融球颈（不从透明的那一格单独长出来）
+    val layer = rememberGraphicsLayer()
+    val handle = remember(layer, colors.container) { BarGroupHandle(layer, colors.container) }
+    val view = LocalView.current
+    CompositionLocalProvider(LocalContentColor provides colors.content, LocalBarGroup provides handle) {
         Row(
             modifier
-                .barShape(navId, colors, glass = false)
+                .barShape(navId, colors, glass = null)
+                .onGloballyPositioned { handle.rect = Rect(it.positionInWindow() + view.windowOriginOnScreen(), it.size.toSize()) }
+                .graphicsLayer { alpha = if (handle.hidden) 0f else 1f }
                 .mochiPressDeform()
                 .height(MochiButtonDefaults.BarItemSize)
                 .background(colors.container, MochiCapsule)
                 .mochiPressGlow(glow, MochiCapsule)
                 // 描边和单个按钮一样跟着按压形变走（colors.outline 透明时不画）
                 .mochiBorder(1.dp, colors.outline, MochiCapsule)
+                // 组里的内容录一份，菜单展开时浮层把它画在面板上（同玻璃组）
+                .drawWithContent {
+                    layer.record { this@drawWithContent.drawContent() }
+                    drawLayer(layer)
+                }
                 .padding(GroupPadding),
             verticalAlignment = Alignment.CenterVertically,
             content = content,
         )
+    }
+}
+
+/**
+ * 栏里弹菜单的圆形图标按钮（iOS 的「⋯」单独成一个圆）：44dp，和 [MochiBarIconButton] 同尺寸、同材质（玻璃或纯色），
+ * 菜单就是 [MochiIconDropdown] 的完整效果（融球、果冻、按住滑选）。只有一个按钮时用它，不要用只放一项的 [MochiBarGroup]（组两端有留白，不是圆）。
+ * @param navId 见 [MochiBarIconButton]
+ * @param contentKey 见 [MochiBarIconButton]
+ */
+@Composable
+public fun MochiBarIconDropdown(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    items: ImmutableList<MochiItem>,
+    onItemClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    selectedIndex: Int = -1,
+    colors: MochiButtonColors = MochiButtonDefaults.barColors(),
+    navId: String? = null,
+    contentKey: Any? = null,
+    icon: @Composable () -> Unit,
+) {
+    val glass = barGlass(colors)
+    CompositionLocalProvider(LocalBarControlGlass provides glass) {
+        MochiIconDropdown(
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+            items = items,
+            onItemClick = onItemClick,
+            modifier = modifier.barShape(navId, colors, glass),
+            enabled = enabled,
+            selectedIndex = selectedIndex,
+            colors = MochiDropdownDefaults.iconDropdownColors(buttonColor = colors.container, buttonContentColor = colors.content),
+            size = MochiButtonDefaults.BarItemSize,
+        ) {
+            Box(navItem(navId, contentKey), contentAlignment = Alignment.Center) { icon() }
+        }
     }
 }
 
@@ -182,7 +240,7 @@ public fun RowScope.MochiBarGroupItem(
             .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Box(if (navId != null) Modifier.mochiNavBarItem(navId, contentKey) else Modifier, contentAlignment = Alignment.Center) { content() }
+        Box(navItem(navId, contentKey), contentAlignment = Alignment.Center) { content() }
     }
 }
 
@@ -190,9 +248,9 @@ public fun RowScope.MochiBarGroupItem(
 @Composable
 private fun GlassBarGroup(
     glass: GlassFill,
-    modifier: Modifier,
     colors: MochiButtonColors,
     navId: String?,
+    modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit,
 ) {
     val glow = rememberGlassGlowState()
@@ -202,12 +260,12 @@ private fun GlassBarGroup(
     CompositionLocalProvider(LocalContentColor provides colors.content, LocalBarGroup provides handle) {
         Box(
             modifier
-                .barShape(navId, colors, glass = true)
+                .barShape(navId, colors, glass = glass)
                 .height(MochiButtonDefaults.BarItemSize)
                 .glassGlowInput(glow)
                 .onGloballyPositioned { handle.rect = Rect(it.positionInWindow() + view.windowOriginOnScreen(), it.size.toSize()) },
         ) {
-            GlassSurface(glass, Modifier.matchParentSize(), null, glow, alpha = { if (handle.hidden) 0f else 1f })
+            GlassSurface(glass, null, glow, Modifier.matchParentSize(), alpha = { if (handle.hidden) 0f else 1f })
             Row(
                 Modifier
                     // 组里的内容录一份：菜单从组里脱出来时浮层接手画整个组，在玻璃上面画这份
@@ -224,16 +282,17 @@ private fun GlassBarGroup(
 }
 
 /**
- * 玻璃按钮组交给组里下拉菜单（[MochiBarGroupDropdownItem]）的东西：组在屏幕上的位置、组里内容的录制 [content]。
- * 菜单浮层接手画整个组（组和菜单融成一块玻璃，见 MenuLens 的 smooth）期间 [hidden] 为 true，组自己不画
+ * 按钮组交给组里下拉菜单（[MochiBarGroupDropdownItem]）的东西：组在屏幕上的位置、组里内容的录制 [content]。
+ * 菜单浮层接手画整个组期间 [hidden] 为 true，组自己不画：玻璃组和菜单融成一块玻璃（见 MenuLens 的 smooth），
+ * 纯色组（[color] 是组的底色）由融球从组的胶囊长出面板
  */
 @Stable
-internal class BarGroupHandle(val content: GraphicsLayer) {
+internal class BarGroupHandle(val content: GraphicsLayer, val color: Color? = null) {
     var rect: Rect = Rect.Zero
     var hidden by mutableStateOf(false)
 }
 
-/** 当前所在的玻璃按钮组；纯色的组和组外面是 null */
+/** 当前所在的按钮组；组外面是 null */
 internal val LocalBarGroup = staticCompositionLocalOf<BarGroupHandle?> { null }
 
 /**
@@ -257,7 +316,10 @@ public fun RowScope.MochiBarGroupDropdownItem(
     icon: @Composable () -> Unit,
 ) {
     // 这一格自己不画底色（组的胶囊就是底），菜单的按钮色跟着透明；图标色跟组
-    val colors = MochiDropdownDefaults.iconDropdownColors().copy(buttonColor = Color.Transparent, buttonContentColor = LocalContentColor.current)
+    val colors = MochiDropdownDefaults.iconDropdownColors().copy(
+        buttonColor = Color.Transparent,
+        buttonContentColor = LocalContentColor.current,
+    )
     DropdownCore(
         expanded = expanded,
         onExpandedChange = onExpandedChange,
@@ -277,7 +339,7 @@ public fun RowScope.MochiBarGroupDropdownItem(
         modifier = modifier,
         group = LocalBarGroup.current,
     ) {
-        Box(if (navId != null) Modifier.mochiNavBarItem(navId, contentKey) else Modifier, contentAlignment = Alignment.Center) { icon() }
+        Box(navItem(navId, contentKey), contentAlignment = Alignment.Center) { icon() }
     }
 }
 
@@ -288,11 +350,11 @@ public fun RowScope.MochiBarGroupDropdownItem(
 @Composable
 internal fun barGlass(colors: MochiButtonColors): GlassFill? {
     val default = colors == MochiButtonDefaults.barColors()
-    return rememberGlassFill(if (default) MochiTheme.materials.controlGlass else null, barGlassSource())
+    return rememberGlassFill(GlassRole.Control).takeIf { default }
 }
 
 /** [glass]：按钮画成玻璃，侧推转场里共享顶栏也按玻璃画（见 MochiNavBarItem.kt） */
-private fun Modifier.barShape(navId: String?, colors: MochiButtonColors, glass: Boolean): Modifier =
+private fun Modifier.barShape(navId: String?, colors: MochiButtonColors, glass: GlassFill?): Modifier =
     if (navId != null) navBarShape(navId, colors.container, glass = glass) else this
 
 /** 按钮组里每一项的宽度，和单个圆按钮一样大，组里的图标间距和分开的按钮一致 */
@@ -300,3 +362,6 @@ private val GroupItemWidth = 44.dp
 
 /** 胶囊两端多留一点，图标离胶囊端点和离上下边差不多远 */
 private val GroupPadding = PaddingValues(horizontal = 2.dp)
+
+/** 登记了 navId 的栏按钮内容参与共享顶栏转场，没登记就是普通内容 */
+private fun navItem(navId: String?, contentKey: Any?): Modifier = navId?.let { Modifier.mochiNavBarItem(it, contentKey) } ?: Modifier

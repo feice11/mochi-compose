@@ -25,6 +25,22 @@ jobs:
       - name: Build library
         run: ./gradlew --no-daemon :mochi-compose:assembleRelease :mochi-compose:publishToMavenLocal
 
+      # 单元测试，四个库模块都跑；mochi-compose 的截图测试和 src/test/screenshots 里的基准图比，外观变了就失败
+      - name: Unit and screenshot tests
+        run: ./gradlew --no-daemon :mochi-compose:verifyRoborazziDebug :mochi-ios:testReleaseUnitTest :mochi-nothing:testReleaseUnitTest :mochi-icons:testReleaseUnitTest
+
+      # 设备测试这里跑不了（要真机或模拟器），至少保证能编译，不然改了内部 API 没人发现
+      - name: Compile device tests
+        run: ./gradlew --no-daemon :mochi-compose:compileDebugAndroidTestKotlin :example:compileDebugAndroidTestKotlin
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: |
+            */build/reports/tests/
+            */build/outputs/roborazzi/
+
       # 签名：仓库 Secrets 里配了 GOO_KEYSTORE_BASE64 等就用你自己的 key；
       # 没配就临时生成一把（每次构建都不同，覆盖安装会提示签名冲突，需要先卸载旧版）
       - name: Prepare signing key

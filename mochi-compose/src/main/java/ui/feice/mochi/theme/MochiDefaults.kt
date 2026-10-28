@@ -1,6 +1,8 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
+@file:Suppress("ktlint:compose:compositionlocal-allowlist") // LocalMochiSheetGlass：面板告诉页面底色要透明，主题级
+
 package ui.feice.mochi.theme
 
 import androidx.compose.runtime.Composable
@@ -60,7 +62,13 @@ public object MochiDefaults {
     @Composable
     @ReadOnlyComposable
     public fun sheetBackground(): Color = MochiTheme.colorScheme.run {
-        if (LocalMochiSheetGlass.current) Color.Transparent else if (isDark) surfaceContainerLow else surfaceContainer
+        if (LocalMochiSheetGlass.current) {
+            Color.Transparent
+        } else if (isDark) {
+            surfaceContainerLow
+        } else {
+            surfaceContainer
+        }
     }
 
     /**

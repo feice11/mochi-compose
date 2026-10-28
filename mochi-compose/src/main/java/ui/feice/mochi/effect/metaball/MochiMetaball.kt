@@ -79,7 +79,10 @@ public class MochiMetaballFrame(
 @Immutable
 public data class MochiMetaballColors(val a: Color, val b: Color, val shadow: Color)
 
-/** 两层投影（px）：大而淡的环境光阴影 + 小而实的接触阴影 */
+/**
+ * 两层投影（px）：大而淡、往里收的环境影 + 小而很淡的接触影。
+ * [ambientInset] 把环境影的形状先往里收这么多再模糊：形状边上只剩很淡的一点，浓度往外慢慢散开，看着轻、没有贴边的一圈
+ */
 @Immutable
 public data class MochiMetaballShadow(
     val ambientOffset: Float,
@@ -88,29 +91,22 @@ public data class MochiMetaballShadow(
     val keyOffset: Float,
     val keySigma: Float,
     val keyAlpha: Float,
+    val ambientInset: Float = 0f,
 ) {
     public companion object {
         /** 没有阴影 */
         public val None: MochiMetaballShadow = MochiMetaballShadow(0f, 0.5f, 0f, 0f, 0.5f, 0f)
 
         /**
-         * 按「浮起程度」给阴影：越高越深越软（大尺寸的玻璃投更深更柔的影子）。
+         * 按「浮起程度」给阴影：越高越淡越散（大尺寸的玻璃投更大更柔的影子）。
+         * 组件里优先用主题的档位（`MochiTheme.shadows.floating.resolve(…)`，见 [ui.feice.mochi.theme.MochiShadows]），
+         * 这里是默认档位表背后的连续版本：0 = [ui.feice.mochi.theme.MochiShadows.rest]，1 = floating。
          * @param elevation 0..1（比如展开进度）
          * @param visibility 0..1，整体淡入淡出
          * @param dark 深色背景上阴影要更重才看得出
          */
         public fun elevated(density: Density, elevation: Float, dark: Boolean, visibility: Float = 1f): MochiMetaballShadow =
-            with(density) {
-                val cl = elevation.coerceIn(0f, 1f)
-                MochiMetaballShadow(
-                    ambientOffset = lerp(2.dp.toPx(), 8.dp.toPx(), cl),
-                    ambientSigma = lerp(6.dp.toPx(), 22.dp.toPx(), cl),
-                    ambientAlpha = (if (dark) lerp(0.22f, 0.42f, cl) else lerp(0.06f, 0.13f, cl)) * visibility,
-                    keyOffset = lerp(0.5.dp.toPx(), 1.5.dp.toPx(), cl),
-                    keySigma = lerp(1.5.dp.toPx(), 3.dp.toPx(), cl),
-                    keyAlpha = (if (dark) 0.25f else lerp(0.07f, 0.09f, cl)) * visibility,
-                )
-            }
+            ui.feice.mochi.theme.elevation(elevation.coerceIn(0f, 1f)).resolve(density, dark, visibility)
     }
 }
 

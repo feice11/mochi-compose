@@ -1,6 +1,8 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
+@file:Suppress("ktlint:compose:compositionlocal-allowlist") // LocalMochiIconDraw：图标出场进度，和 LocalMochiIconProvider 一样是主题级
+
 package ui.feice.mochi.theme
 
 import androidx.compose.foundation.Image

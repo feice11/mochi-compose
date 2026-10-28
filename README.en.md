@@ -6,7 +6,7 @@
 
 A soft, springy Jetpack Compose component library that follows your finger. Color and type come from MD3 Expressive, interaction and motion are modeled on iOS 26, and every shape uses G2 continuous corners.
 
-[![JitPack](https://jitpack.io/v/feice11/mochi-compose.svg)](https://jitpack.io/#feice11/mochi-compose)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.feice11/mochi-compose)](https://central.sonatype.com/artifact/io.github.feice11/mochi-compose)
 [![Build](https://github.com/feice11/mochi-compose/actions/workflows/build.yml/badge.svg)](https://github.com/feice11/mochi-compose/actions/workflows/build.yml)
 ![minSdk](https://img.shields.io/badge/minSdk-23-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
@@ -81,29 +81,21 @@ The library does not depend on material3. See [Nothing appearance](docs/guide/no
 
 ## Install
 
-Published through JitPack. Add the repository in `settings.gradle.kts`:
+Published on Maven Central, no extra repository needed (see the badge for the version):
 
 ```kotlin
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-        maven("https://jitpack.io")
-    }
-}
+implementation("io.github.feice11:mochi-compose:<version>")
 ```
 
-Then the dependency (see the JitPack badge for the version):
+Icons and appearances are separate modules; add what you use (they all depend on mochi-compose):
 
 ```kotlin
-implementation("com.github.feice11:mochi-compose:<version>")
+implementation("io.github.feice11:mochi-icons:<version>")   // full Ionicons set, see Icons
+implementation("io.github.feice11:mochi-ios:<version>")     // iOS appearance and glass materials
+implementation("io.github.feice11:mochi-nothing:<version>") // Nothing appearance
 ```
 
-Icons are a separate module (the full Ionicons set, see [Icons](docs/components/icons.md)):
-
-```kotlin
-implementation("com.github.feice11.mochi-compose:mochi-icons:<version>")
-```
+Old 0.1.x versions remain on JitPack (`com.github.feice11:mochi-compose`, with the `maven("https://jitpack.io")` repository).
 
 Requires compileSdk 36+ and Kotlin 2.3+ (Capsule depends on Compose 1.10).
 
@@ -136,7 +128,7 @@ Before building an app with the library (including with an AI), read the [applic
 ## Docs
 
 **Components**
-[Dropdown](docs/components/dropdown.md) · [Tab bar](docs/components/tabbar.md) · [Button](docs/components/button.md) · [Switch](docs/components/switch.md) · [Slider](docs/components/slider.md) · [Intensity slider](docs/components/intensity-slider.md) · [Stepper](docs/components/stepper.md) · [List](docs/components/list.md) · [Sheet](docs/components/sheet.md) · [Segmented control](docs/components/segmented.md) · [Dialog](docs/components/dialog.md) · [Text input](docs/components/textfield.md) · [Toast](docs/components/toast.md) · [Context menu](docs/components/context-menu.md) · [Large title and search](docs/components/navbar.md) · [Sidebar](docs/components/sidebar.md) · [Wheels, time and date](docs/components/picker.md) · [Calendar](docs/components/calendar.md) · [Color picker](docs/components/color-picker.md) · [Popover and confirmation](docs/components/popover.md) · [Carousel and page control](docs/components/pager.md) · [Pull to refresh and empty state](docs/components/refresh.md) · [Badges, avatars and gauges](docs/components/badge.md) · [Toolbars and hold to confirm](docs/components/toolbar.md) · [Chips](docs/components/chip.md) · [Icons](docs/components/icons.md)
+[Dropdown](docs/components/dropdown.md) · [Tab bar](docs/components/tabbar.md) · [Button](docs/components/button.md) · [Switch](docs/components/switch.md) · [Slider](docs/components/slider.md) · [Intensity slider](docs/components/intensity-slider.md) · [Stepper](docs/components/stepper.md) · [List](docs/components/list.md) · [Sheet](docs/components/sheet.md) · [Segmented control](docs/components/segmented.md) · [Dialog](docs/components/dialog.md) · [Text input](docs/components/textfield.md) · [Toast](docs/components/toast.md) · [Context menu](docs/components/context-menu.md) · [Large title and search](docs/components/navbar.md) · [Sidebar](docs/components/sidebar.md) · [Wheels, time and date](docs/components/picker.md) · [Calendar](docs/components/calendar.md) · [Color picker](docs/components/color-picker.md) · [Popover and confirmation](docs/components/popover.md) · [Carousel and page control](docs/components/pager.md) · [Pull to refresh and empty state](docs/components/refresh.md) · [Badges, avatars and gauges](docs/components/badge.md) · [Toolbars and hold to confirm](docs/components/toolbar.md) · [Chips](docs/components/chip.md) · [Selection cards and miniatures](docs/components/select-frame.md) · [Icons](docs/components/icons.md)
 
 **Guides**
 [App integration](docs/guide/application-integration.md) · [Theme](docs/guide/theme.md) · [Effects](docs/guide/effects.md) · [Content transitions](docs/guide/content-transitions.md) · [Navigation](docs/guide/navigation.md) · [Overscroll](docs/guide/overscroll.md) · [Haptics](docs/guide/haptics.md) · [HDR highlights (experimental)](docs/guide/hdr.md) · [Nothing appearance](docs/guide/nothing-theme.md) · [iOS appearance and glass materials (long-term beta)](docs/guide/ios-theme.md) · [Compatibility](docs/guide/compatibility.md)

@@ -61,18 +61,22 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
+import ui.feice.mochi.basic.menu.MochiPx
+import ui.feice.mochi.basic.menu.PanelGlass
+import ui.feice.mochi.basic.menu.computeFrame
+import ui.feice.mochi.basic.menu.round
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.effect.metaball.MochiBlob
 import ui.feice.mochi.effect.metaball.MochiMetaballColors
 import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.metaball.drawMochiMetaball
 import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
-import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
-import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.G2RectClipShape
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.lerp
 import ui.feice.mochi.utils.smoothstep
 import ui.feice.mochi.utils.windowOriginOnScreen
 
@@ -344,9 +348,10 @@ private fun PopoverOverlay(
             }
         }
         val frame = { frameState.value }
+        val shadows = MochiTheme.shadows
 
         // 主题有菜单玻璃（menuGlass）且浮层底下有页面录制时，面板画成玻璃（随展开淡入）；玻璃面板不画纯色的小箭头
-        val glass = rememberGlassFill(MochiTheme.materials.menuGlass, LocalMochiOverlayGlass.current)
+        val glass = rememberGlassFill(GlassRole.Menu)
         Spacer(
             Modifier
                 .fillMaxSize()
@@ -354,7 +359,7 @@ private fun PopoverOverlay(
                     val f = frame()
                     val cl = progress.value.coerceIn(0f, 1f)
                     val dark = colors.panel.luminance() < 0.5f
-                    val shadow = MochiMetaballShadow.elevated(this, cl, dark, (progress.value * 3f).coerceIn(0f, 1f))
+                    val shadow = lerp(shadows.rest, shadows.floating, cl).resolve(this, dark, (progress.value * 3f).coerceIn(0f, 1f))
                     val mf = if (singleBlob) {
                         val blob = MochiBlob(f.panel, f.panelRadius)
                         MochiMetaballFrame(blob, blob, 0f)

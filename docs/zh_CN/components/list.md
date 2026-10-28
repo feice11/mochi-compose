@@ -13,7 +13,7 @@ iOS 设置那种分组卡片（inset grouped）。包名 `ui.feice.mochi.list`�
   - 跟手，松手按位置和速度吸附到打开或收回。
   - 滑过 60% 宽度时，最靠右的操作撑满整行并轻震；这时松手直接执行它。是删除的话，整行滑出、高度收起，下面的行顶上来，收完才回调。
   - 往右拉被橡皮筋拉住；打开时点一下这一行就收回。
-- 另有 **MochiActivityIndicator**（iOS 的 8 辐条转圈：胶囊辐条，一道亮光顺时针平滑扫过，默认浅色黑 60% / 深色白 80%）、**MochiProgressBar**（G2 胶囊进度条，默认高 6dp）和 **MochiProgressRing**（环形进度：给值是 App Store 下载圈，`null` 是一直绕着转的不确定进度，`sweep` 小于 360 是开口朝下的仪表，中间可以放停止方块或数值）。进度条和环形进度的轨道默认是进度色的 30%（`MochiProgressDefaults.TrackAlpha`）。都在 `basic` 包里。演示见「组件 → 加载与进度」。
+- 另有 **MochiActivityIndicator**（iOS 的 8 辐条转圈：胶囊辐条，一道亮光顺时针平滑扫过，默认浅色黑 60% / 深色白 80%）、**MochiProgressBar**（G2 胶囊进度条，默认高 6dp）和 **MochiProgressRing**（环形进度：给值是 App Store 下载圈，`null` 是一直绕着转的不确定进度，`sweep` 小于 360 是开口朝下的仪表，中间可以放停止方块或数值）。进度条和环形进度的轨道默认是进度色的 30%（`MochiProgressDefaults.TrackAlpha`）。都在 `basic` 包里。演示见「组件 → 加载与进度」；仪表直接用 `MochiGauge`（「组件 → 徽标、头像与仪表」）。
 
 ## 用法
 

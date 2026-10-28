@@ -41,7 +41,7 @@ MochiListPickerRow("重复", options, index, { index = it })
 ```
 
 - `MochiDateField` / `MochiTimeField`（iOS 的 `.compact`）：行尾的灰色胶囊本身就是一个 `MochiPopoverButton`，按下放大发光、灰色融进弹出的[月历](calendar.md)或时间滚筒面板；值变化时胶囊文字模糊替换，打开期间文字用强调色。格式默认跟随系统区域，可以传 `format`
-- `MochiListPickerRow`（iOS 的 Picker `.menu`）：行尾的灰色胶囊（当前值 + 上下双箭头）就是一个[下拉菜单](dropdown.md)按钮，按住直接滑选，选中项带对勾。行本身不另画按下高亮：触发者只有胶囊
+- `MochiListPickerRow`（iOS 的 Picker `.menu`）：行首图标和 `MochiListRow` 一样用 `leadingStyle` 选图标块或无底块符号图标。行尾的灰色胶囊（当前值 + 上下双箭头）就是一个[下拉菜单](dropdown.md)按钮，按住直接滑选，选中项带对勾。行本身不另画按下高亮：触发者只有胶囊
 
 ## 参数
 

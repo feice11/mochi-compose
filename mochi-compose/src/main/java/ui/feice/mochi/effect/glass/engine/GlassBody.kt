@@ -3,7 +3,7 @@
 
 @file:Suppress("ktlint:compose:multiple-emitters-check") // The pre-Android 13 path returns immediately.
 
-package ui.feice.mochi.effect.glass
+package ui.feice.mochi.effect.glass.engine
 
 import android.os.Build
 import androidx.compose.foundation.layout.Box
@@ -13,6 +13,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
@@ -22,17 +23,17 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
+import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiGlassRecipe
@@ -86,12 +87,20 @@ internal fun GlassBody(
         )
         return
     }
+    // 外阴影按所在位置的强度缩放（背后没内容时淡掉，见 LocalMochiGlassShadow）
+    val shadow = LocalMochiGlassShadow.current
     // 圆角（全分辨率 px）；胶囊按短边的一半。几块融在一起时按主形状算，不按外包框
     val params: (Size) -> GlassParams = { full ->
         val m = merge?.invoke()
         val s = m?.shape?.size ?: full
-        val r = (cornerRadiusPx?.invoke() ?: cornerRadius?.let { it.value * density } ?: (s.minDimension / 2f)).coerceAtMost(s.minDimension / 2f)
-        GlassParams(recipe(), r, m)
+        val r = (
+            cornerRadiusPx?.invoke() ?: cornerRadius?.let {
+                it.value * density
+            } ?: (s.minDimension / 2f)
+            ).coerceAtMost(s.minDimension / 2f)
+        val base = recipe()
+        val f = shadow().coerceIn(0f, 1f)
+        GlassParams(if (f >= 1f || base.shadowOpacity <= 0f) base else base.copy(shadowOpacity = base.shadowOpacity * f), r, m)
     }
     // 光斑要读画好的玻璃：有光斑时把玻璃录成一份来源
     val glassLayer = if (glow != null) rememberLayerBackdrop() else null

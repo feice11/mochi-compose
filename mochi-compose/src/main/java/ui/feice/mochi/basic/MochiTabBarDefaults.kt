@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.theme.LocalMochiControlPalette
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
@@ -112,9 +114,9 @@ public object MochiTabBarDefaults {
         indicator: Color = MochiTheme.colorScheme.secondaryContainer,
         // 选中项：外观主题可以在控件配色里指定（Nothing 用红色）；玻璃标签栏的选中块是中性灰，用主题强调色才看得出选中
         selectedContent: Color = LocalMochiControlPalette.current?.tabSelected?.takeIf { it.isSpecified }
-            ?: MochiTheme.colorScheme.run { if (MochiTheme.materials.bar != null) primary else onSecondaryContainer },
+            ?: MochiTheme.colorScheme.run { if (glassOn(GlassRole.Bar)) primary else onSecondaryContainer },
         // 玻璃标签栏（iOS）的未选中项用正文色，纯色底栏用次要色
-        content: Color = MochiTheme.colorScheme.run { if (MochiTheme.materials.bar != null) onSurface else onSurfaceVariant },
+        content: Color = MochiTheme.colorScheme.run { if (glassOn(GlassRole.Bar)) onSurface else onSurfaceVariant },
         shadow: Color = MochiTheme.colorScheme.shadow,
         badge: Color = MochiTheme.colorScheme.error,
         onBadge: Color = MochiTheme.colorScheme.onError,

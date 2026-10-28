@@ -17,6 +17,10 @@
 | 卡片打开整页 | 整张来源卡片标 `mochiNavSource`，使用相同来源 key 调用 `push(route, from = key)` | 所有页面都带 `from`；继续使用废弃的 `mochiSharedElement` |
 | 返回 | `MochiBackButton` 默认执行当前导航器的 `pop`，不在导航主机里或已在第一页时交给系统返回（关面板、退出 Activity）；需要历史时传 `history` 路由标题映射 | 在页面再装一个竞争的返回处理器；把返回按钮重画成普通点击图标 |
 | 顶栏一组操作 | `MochiBarGroup` + `MochiBarGroupItem`；组与子项分别登记形状和内容 | 只给组 ID、不给子项 ID；给每页加路由前缀导致内容永远配不上 |
+| 页面里有 WebView | 栏的玻璃不取样 WebView：WebView 放在 `mochiBackdropSource` 外面，取样来源里放网页截图；`MochiNavHost(windowGlass = false)`，菜单、面板外面包一层 `LocalMochiBackdrop` 提供这份来源（仍是玻璃） | WebView 进了玻璃的取样来源，Vulkan 渲染的机器上渲染线程崩溃（毛玻璃、液态玻璃、玻璃菜单都会） |
+| 正文里的玻璃按钮 / 纯色按钮 | 要玻璃写 `style = MochiButtonStyle.ProminentGlass`（或 `Glass` / `ClearGlass` / `ProminentClearGlass`），主题没玻璃时自动退回纯色；要纯色就用 `Filled` / `Tonal`，主题开了液态玻璃也不变 | 指望 `Filled` 跟着主题变成玻璃；为了得到纯色按钮去关全局玻璃开关或自己画底色 |
+| 一整块区域不要玻璃（比如带 WebView 的页面） | `MochiMaterialsScope(MochiMaterials()) { … }`：只换这一块的材质，配色、字体不动 | 在这块里再包一层 `MochiTheme` 重设所有主题；页面里按玻璃开关写分支 |
+| 栏里单个弹菜单的按钮（「⋯」） | `MochiBarIconDropdown`：44dp 圆，和 `MochiBarIconButton` 同材质；和栏按钮同一排的搜索框用 `MochiGlassSurface`，纯色时两者同色 | 只放一项的 `MochiBarGroup`（椭圆）；同一排的搜索框和按钮高度、底色各写一套 |
 | 底部标签栏 | 根页用 `MochiTabScaffold`：各标签保存状态与位置、再点当前标签回顶、正文底部自动让出标签栏、推入新页时收起；程序切标签用 `rememberMochiTabScaffoldState().select(i)`。只有特殊布局才直接用 `MochiTabBar` + `mochiHideWhenCovered` | 手写 `when (tab)` 切页丢滚动位置；列表末尾手写 `Spacer(112.dp)`；回顶只接了部分标签 |
 | 多页面板 | 独立导航器同时传入 `MochiSheet` 与内层 `MochiNavHost`；内部省略 `corners` 自动继承面板转场圆角（全屏底部直角），并使用 `MochiSheetHeader` | 返回先关面板；强制 None 导致侧推无圆角；内部顶栏未登记共享 |
 | 分组内容 | 页面用 `groupedBackground`，卡片优先 `MochiListSection` / `MochiListCard`、设置及键值行用 `MochiListRow`（尺寸照 iOS 26） | 自画灰白底色；通用卡片 padding 再套裸 Row，绕过文字缩进与行高规则 |
@@ -60,7 +64,7 @@ fun AppTheme(style: AppStyle, dark: Boolean, glass: Boolean, blur: Boolean, cont
 
 - 只用一种外观时直接用现成的入口：`MochiTheme(controller)`、`MochiNothingTheme(materials = …)`、`MochiIosTheme(glass = …, blur = …)`。
 - 组件颜色从主题来：标签栏的选中色、开关颜色、列表分隔线不要按外观手传 `colors`；外观差异写进 `MochiControlPalette`，所有用到它的组件一起变。
-- 玻璃、模糊交给 `materials`：`MochiTabBar`、`MochiTabScaffold`、`MochiTitleBar`、标题骨架、`MochiGlassCapsule` 自己读，页面里不判断开关。玻璃要背景来源，`MochiTabScaffold` 已经接好；自己摆的栏按 [iOS 外观与玻璃材质](ios-theme.md) 接 `mochiBackdropSource`。
+- 玻璃、模糊交给 `materials`：材质只管浮在内容上的栏、菜单、面板、弹窗和栏里的控件，不改正文内容（正文按钮看样式，见上表）。`MochiTabBar`、`MochiTabScaffold`、`MochiTitleBar`、标题骨架、`MochiGlassCapsule` 自己读，页面里不判断开关。玻璃要背景来源，`MochiTabScaffold` 已经接好；自己摆的栏按 [iOS 外观与玻璃材质](ios-theme.md) 接 `mochiBackdropSource`。
 - 液态玻璃更耗电、更占 GPU：让用户自己打开，打开前用带警告图标的 `MochiDialog` 说明代价（普通点按确认即可），关掉立即生效。
 - 整套换装（换外观、换明暗、开关材质）用 [主题揭开](effects.md#主题揭开) 的原位模糊过渡，不要瞬切。
 
@@ -80,6 +84,7 @@ fun AppTheme(style: AppStyle, dark: Boolean, glass: Boolean, blur: Boolean, cont
 | 点一下展开更多 | `MochiListDisclosure`（箭头转动、高度动画） | 带箭头的行 + `if (expanded)`，内容瞬间出现 |
 | 几个选项选一个（深色模式、排序） | `MochiListPickerRow`；两态用行尾 `MochiSwitch` | 带箭头的行，点一下就切换（箭头表示进入下一页） |
 | 横向一排可选项 | 2～5 个短选项占满一行用 `MochiSegmentedControl`；筛选、标签、更多选项用 `MochiChipGroup` + `MochiChip`（多选传 `showCheck = true`）；进下一页选的用 `MochiListPickerRow` | `MochiButton` 改 `minHeight` / padding 拼成芯片 |
+| 带预览的外观选项（浅色 / 深色、风格） | `MochiSelectFrame` + `MochiMiniature`（缩小的真实界面）+ 下面的 `MochiSelectionCheck` | `border` + `clickable` 自己拼选中框、手画示意图 |
 | 通讯录式字母索引 | `MochiIndexBar` 用 `Alignment.CenterEnd` 贴屏幕右边放，列表内容右边让出 `MochiIndexBarDefaults.Width` | 给索引条再加右边距，或让列表内容压到字母下面 |
 | 自己写的横向滑动区域（卡片轮播、标签条） | `Modifier.mochiScrollFadeMask(state, vertical = false)` 加在 `horizontalScroll` / `LazyRow` 外面；在有左右边距的容器里让滑动区域伸到屏幕边 | 两头不加遮罩，内容在边距处被硬切 |
 | 已生效的筛选条件、录入的标签 | `MochiRemovableChip(label, onRemove)`：整个芯片点了就移除 | 按钮文字里写「×」 |

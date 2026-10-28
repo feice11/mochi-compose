@@ -5,11 +5,8 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    `maven-publish`
+    alias(libs.plugins.maven.publish)
 }
-
-group = "ui.feice.mochi"
-version = (findProperty("VERSION_NAME") as String?) ?: "0.1.0"
 
 android {
     namespace = "ui.feice.mochi.icons"
@@ -20,11 +17,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
-        }
-    }
 }
 
 kotlin {
@@ -36,16 +28,4 @@ dependencies {
     api(project(":mochi-compose"))
     implementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.junit)
-}
-
-// 和 mochi-compose 一起由 JitPack 的 publishToMavenLocal 发布
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                from(components["release"])
-                artifactId = "mochi-icons"
-            }
-        }
-    }
 }

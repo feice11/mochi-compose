@@ -25,7 +25,8 @@ import ui.feice.mochi.theme.MochiGraphics
 
 /**
  * 给任意形状投一层柔和的双层阴影（和菜单、融球同一套参数 [MochiMetaballShadow]）：
- * 大而淡的环境阴影 + 小而实的接触阴影，边缘是高斯模糊、没有断层，不用 Material 的光源阴影。
+ * 往里收、大半径的淡环境影 + 很软很淡的接触影，边缘是高斯模糊、没有断层，不用 Material 的光源阴影。
+ * 环境影的内收（[MochiMetaballShadow.ambientInset]）在这个任意形状版本里按外接矩形等比缩小形状来做。
  *
  * 阴影垫在形状下面（形状本身几乎不画），先画阴影，再画形状本体：本体的抗锯齿边缘直接盖在柔和的阴影上，
  * 不会出现一圈发硬的灰线（挖洞裁切没有抗锯齿，边上会留一圈硬线）。
@@ -42,17 +43,24 @@ public fun DrawScope.drawMochiShadow(path: Path, shadow: MochiMetaballShadow, co
         val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
         drawIntoCanvas { c ->
             val canvas = c.nativeCanvas
-            fun layer(offset: Float, sigma: Float, alpha: Float) {
+            fun layer(offset: Float, sigma: Float, alpha: Float, inset: Float) {
                 if (alpha <= 0f) return
+                val b = path.getBounds()
+                val shrink = inset > 0f && b.width > inset * 2f && b.height > inset * 2f
+                if (shrink) {
+                    canvas.save()
+                    canvas.scale((b.width - inset * 2f) / b.width, (b.height - inset * 2f) / b.height, b.center.x, b.center.y)
+                }
                 // setShadowLayer 的半径按 Skia 的换算 sigma = r · 0.57735 + 0.5 反推
                 val radius = max(0.5f, (sigma - 0.5f) / 0.57735f)
                 // 形状本身用几乎透明的颜色画（阴影色不是不透明的，所以阴影按阴影色自己的透明度画，不受它影响）
                 paint.color = color.copy(alpha = 1f / 255f).toArgb()
                 paint.setShadowLayer(radius, 0f, offset, color.copy(alpha = color.alpha * alpha).toArgb())
                 canvas.drawPath(native, paint)
+                if (shrink) canvas.restore()
             }
-            layer(shadow.ambientOffset, shadow.ambientSigma, shadow.ambientAlpha)
-            layer(shadow.keyOffset, shadow.keySigma, shadow.keyAlpha)
+            layer(shadow.ambientOffset, shadow.ambientSigma, shadow.ambientAlpha, shadow.ambientInset)
+            layer(shadow.keyOffset, shadow.keySigma, shadow.keyAlpha, 0f)
         }
     } else {
         val bounds = path.getBounds()
@@ -85,15 +93,14 @@ private const val FallbackRings = 4
 public fun DrawScope.drawMochiShadow(rect: Rect, cornerRadius: Float, shadow: MochiMetaballShadow, color: Color) {
     if (shadow.ambientAlpha <= 0f && shadow.keyAlpha <= 0f) return
     if (MochiGraphics.softShadows) {
+        // 环境影的形状往里收 ambientInset（不收过半），圆角跟着收，保持同心
+        val inset = shadow.ambientInset.coerceIn(0f, minOf(rect.width, rect.height) / 2f - 0.5f).coerceAtLeast(0f)
         drawRoundRectShadow(
-            rect,
-            cornerRadius,
+            rect.deflate(inset),
+            (cornerRadius - inset).coerceAtLeast(0f),
             shadow.ambientSigma,
             shadow.ambientOffset,
-            color.copy(
-                alpha =
-                    color.alpha * shadow.ambientAlpha,
-            ),
+            color.copy(alpha = color.alpha * shadow.ambientAlpha),
         )
         drawRoundRectShadow(rect, cornerRadius, shadow.keySigma, shadow.keyOffset, color.copy(alpha = color.alpha * shadow.keyAlpha))
     } else {
@@ -105,7 +112,7 @@ public fun DrawScope.drawMochiShadow(rect: Rect, cornerRadius: Float, shadow: Mo
  * 一层圆角矩形的模糊阴影（高斯 [sigma]、往下偏 [dy]、颜色 [color]），见 [drawMochiShadow] 的矩形版本。
  *
  * Android 13+ 用着色器直接算「圆角矩形卷积高斯」的解析近似（erf 近似 + 竖向 4 点积分），一次绘制、不生成任何纹理，
- * 形状每帧变也没有缓存要回收。系统的 setShadowLayer / 模糊遮罩会给每个新形状生成一张模糊纹理并一直留着，
+ * 形状每帧变也没有缓存要回收；输出加 ±0.5/255 的抖动（阴影是很淡、跨度很大的渐变，8bit 量化后会一圈圈地出色带）。系统的 setShadowLayer / 模糊遮罩会给每个新形状生成一张模糊纹理并一直留着，
  * 动画中的形状（底栏收起、拇指拖动）会让显存一直涨。更低的系统没有运行时着色器，仍用 setShadowLayer
  */
 internal fun DrawScope.drawRoundRectShadow(rect: Rect, cornerRadius: Float, sigma: Float, dy: Float, color: Color) {
@@ -181,7 +188,10 @@ half4 main(float2 coord) {
         v += shadowX(p.x, p.y - y, uSigma, uRadius, halfSize) * gaussian(y, uSigma) * step;
         y += step;
     }
-    return uColor * half(clamp(v, 0.0, 1.0));
+    // 抖动按预乘后的不透明度加，消掉 8bit 色带
+    float n = fract(sin(dot(coord, float2(12.9898, 78.233))) * 43758.5453) - 0.5;
+    float a = v > 0.0 ? clamp(v * float(uColor.a) + n / 255.0, 0.0, 1.0) : 0.0;
+    return uColor.a > 0.0 ? half4(uColor.rgb / uColor.a * half(a), half(a)) : half4(0.0);
 }
 """
 

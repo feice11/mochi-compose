@@ -23,6 +23,13 @@ import androidx.compose.ui.platform.LocalContext
  */
 public enum class ColorSchemeMode { System, Light, Dark, MonetSystem, MonetLight, MonetDark }
 
+/** 这个模式此刻是不是深色：跟随系统的两种看 [systemDark]（`isSystemInDarkTheme()`） */
+public fun ColorSchemeMode.isDark(systemDark: Boolean): Boolean = when (this) {
+    ColorSchemeMode.Light, ColorSchemeMode.MonetLight -> false
+    ColorSchemeMode.Dark, ColorSchemeMode.MonetDark -> true
+    ColorSchemeMode.System, ColorSchemeMode.MonetSystem -> systemDark
+}
+
 /**
  * 主题控制器：管配色模式、种子色、取色算法和对比度。属性都是可观察状态，改了界面会自动重组。
  *

@@ -26,7 +26,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -48,11 +48,13 @@ import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.parts.ControlShadowAlpha
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.drawGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
+import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.mochiConcentricOutline
 import ui.feice.mochi.theme.MochiDefaults
@@ -96,9 +98,19 @@ public data class MochiSegmentedBehavior(
 )
 
 public object MochiSegmentedDefaults {
+    /**
+     * 轨道默认不透明：系统的填充色（半透明灰）先叠到分组底色上（深色时叠到卡片色上）再用，
+     * 放在卡片、面板、截图或网页上面时不透出下面的东西，在哪里看起来都是同一块灰
+     */
+    @Composable
+    public fun trackColor(): Color {
+        val base = MochiTheme.colorScheme.run { if (isDark) MochiDefaults.groupedContainer() else surfaceContainer }
+        return MochiDefaults.fill().compositeOver(base)
+    }
+
     @Composable
     public fun colors(
-        track: Color = MochiDefaults.fill(),
+        track: Color = trackColor(),
         thumb: Color = MochiTheme.colorScheme.run { if (isDark) surfaceBright else surfaceContainerLowest },
         selectedContent: Color = MochiTheme.colorScheme.onSurface,
         // iOS：选中和没选中都是主文字色，只靠字重区分
@@ -148,15 +160,15 @@ public fun MochiSegmentedControl(
     val glow = rememberMochiGlowState()
     val trackGlow = rememberMochiGlowState()
     val thumbPath = remember { G2PathCache() }
+    val shadow = MochiTheme.shadows.contact
+    val dark = MochiTheme.colorScheme.isDark
     val trackPath = remember { G2PathCache() }
-    val shadowPath = remember { G2PathCache() }
     val lift = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
     val dims = remember { SegmentDims() }
     val padPx = with(density) { Pad.toPx() }
     val hPx = with(density) { behavior.height.toPx() }
     val maxShift = with(density) { Offset(4.dp.toPx(), 2.dp.toPx()) }
-    val shadowY = with(density) { 1.dp.toPx() }
     val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
 
     LaunchedEffect(state, n, dims.width, hPx) {
@@ -200,9 +212,10 @@ public fun MochiSegmentedControl(
                 val tp = trackPath.get(track, track.height / 2f, 1f)
                 drawPath(tp, colors.track)
                 drawGlow(trackGlow, Outline.Generic(tp), trackGlow.center, intensityScale = 0.5f)
-                // 选中块的投影：往下错 1dp 的淡影
-                val sp = shadowPath.get(ind, ind.height / 2f, 1f)
-                translate(top = shadowY) { drawPath(sp, colors.shadow.copy(alpha = 0.10f)) }
+                // 选中块的投影：和开关拇指同一档（contact）的软影，不是错开一层的实心影（那样边上是一道硬线）；
+                // 阴影色按拇指默认阴影色的浓度（22%）
+                val shadowColor = colors.shadow.copy(alpha = colors.shadow.alpha * ControlShadowAlpha)
+                drawMochiShadow(ind, ind.height / 2f, shadow.resolve(this, dark), shadowColor)
                 val p = thumbPath.get(ind, ind.height / 2f, 1f)
                 drawPath(p, colors.thumb)
                 drawGlow(glow, Outline.Generic(p), glow.center)

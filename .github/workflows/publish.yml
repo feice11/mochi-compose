@@ -1,0 +1,53 @@
+name: Publish
+
+# 推一个 v 开头的 tag（比如 v0.2.0）就把 mochi-compose、mochi-icons、mochi-ios、mochi-nothing 发到 Maven Central，
+# 版本号取 tag 去掉 v。也可以在 Actions 页面手动运行，填版本号。
+# 需要仓库 Secrets：MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD（central.sonatype.com 生成的 User Token），
+# SIGNING_KEY（ASCII 格式的 GPG 私钥全文）/ SIGNING_KEY_PASSWORD
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号，比如 0.2.0"
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            V="${{ github.event.inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      # 发之前先过一遍测试，没过就不发
+      - name: Test
+        run: ./gradlew --no-daemon :mochi-compose:verifyRoborazziDebug :mochi-ios:testReleaseUnitTest :mochi-nothing:testReleaseUnitTest :mochi-icons:testReleaseUnitTest
+
+      - name: Publish to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: >
+          ./gradlew --no-daemon -PVERSION_NAME=$VERSION
+          :mochi-compose:publishToMavenCentral :mochi-icons:publishToMavenCentral
+          :mochi-ios:publishToMavenCentral :mochi-nothing:publishToMavenCentral

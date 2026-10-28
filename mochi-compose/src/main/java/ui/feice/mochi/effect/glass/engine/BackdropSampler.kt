@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.effect.glass
+package ui.feice.mochi.effect.glass.engine
 
 import android.app.Activity
 import android.content.Context

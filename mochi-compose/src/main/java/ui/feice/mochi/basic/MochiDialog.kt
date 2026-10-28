@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -53,14 +54,15 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import ui.feice.mochi.effect.glass.GlassSurface
-import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
-import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.effect.elastic.mochiPressDeform
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.rememberGlassFill
+import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.MochiConcentricContainer
 import ui.feice.mochi.shape.MochiRoundedRectangle
@@ -236,6 +238,9 @@ public fun MochiDialog(
         val inset = MochiDialogDefaults.ButtonInset
         val corner = MochiDialogDefaults.ButtonHeight / 2 + inset
         val shape = remember(corner) { MochiRoundedRectangle(corner) }
+        val dark = MochiTheme.colorScheme.isDark
+        val shadowColor = MochiTheme.colorScheme.shadow
+        val shadow = MochiTheme.shadows.floating
         // 卡片在根坐标里的范围：点在卡片外面才算「点外面」
         val card = remember { floatArrayOf(0f, 0f, 0f, 0f) }
         Box(
@@ -263,7 +268,7 @@ public fun MochiDialog(
         ) {
             MochiConcentricContainer(corner, inset) {
                 // 主题有警告框玻璃（alertGlass）且浮层底下有页面录制时，卡片画成玻璃；否则纯色
-                val glass = rememberGlassFill(MochiTheme.materials.alertGlass, LocalMochiOverlayGlass.current)
+                val glass = rememberGlassFill(GlassRole.Alert)
                 Box(
                     modifier
                         .padding(horizontal = 36.dp)
@@ -293,13 +298,27 @@ public fun MochiDialog(
                             // 不裁切：按钮按下放大时可以探出卡片一点（和别处的按钮一样）
                             this.shape = shape
                             clip = false
-                            shadowElevation = 24.dp.toPx() * p
                         }
+                        // 柔和投影（和菜单同一套），不用系统按光源算的阴影：那个底边一道实影，又硬又重。玻璃自己带外阴影
+                        .then(
+                            if (glass == null) {
+                                Modifier.drawBehind {
+                                    drawMochiShadow(
+                                        size.toRect(),
+                                        corner.toPx(),
+                                        shadow.resolve(this, dark, presence.value.coerceIn(0f, 1f)),
+                                        shadowColor,
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            },
+                        )
                         .then(if (glass == null) Modifier.background(colors.container, shape) else Modifier)
                         .mochiAnimateHeight(shape),
                     // 边缘接按钮的环境光
                 ) {
-                    if (glass != null) GlassSurface(glass, Modifier.matchParentSize(), corner, null)
+                    if (glass != null) GlassSurface(glass, corner, null, Modifier.matchParentSize())
                     Column {
                         Column(
                             Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp),
@@ -320,7 +339,11 @@ public fun MochiDialog(
                             if (message != null) {
                                 Text(
                                     message,
-                                    style = MochiTheme.textStyles.bodyLarge.copy(fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
+                                    style = MochiTheme.textStyles.bodyLarge.copy(
+                                        fontSize = 15.sp,
+                                        lineHeight = 20.sp,
+                                        letterSpacing = 0.sp,
+                                    ),
                                     color = colors.message,
                                 )
                             }
@@ -395,6 +418,8 @@ private fun DialogButton(action: MochiDialogAction, colors: MochiDialogColors, o
         onClick = onClick,
         modifier = modifier,
         enabled = action.enabled,
+        // iOS 26 警告框的按钮是玻璃（主题有控件玻璃时）；没有玻璃时退回填充 / 色调的纯色
+        style = if (primary) MochiButtonStyle.ProminentGlass else MochiButtonStyle.Glass,
         colors = c,
         minHeight = MochiDialogDefaults.ButtonHeight,
         contentPadding = PaddingValues(horizontal = 12.dp),

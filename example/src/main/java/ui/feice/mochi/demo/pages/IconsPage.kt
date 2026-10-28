@@ -292,7 +292,7 @@ private fun LazyListScope.iconRows(
             // 首列图标块贴内容左边（和上面的卡片、搜索框对齐），末列贴右边（右边让出索引条），中间等距；
             // 按格子等分再居中的话，两边各空出半个格子的余量，和卡片对不齐
             Layout(
-                content = { row.forEach { info -> IconCell(info.name, style, Modifier, onPick) } },
+                content = { row.forEach { info -> IconCell(info.name, style, onPick) } },
                 modifier = Modifier
                     .then(if (r < rows.lastIndex) Modifier.keepBelow(8.dp) else Modifier)
                     .fillMaxWidth()
@@ -326,7 +326,7 @@ private fun Modifier.keepBelow(gap: Dp): Modifier {
 }
 
 @Composable
-private fun IconCell(name: String, style: MochiIconStyle, modifier: Modifier, onPick: (String) -> Unit) {
+private fun IconCell(name: String, style: MochiIconStyle, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
     var taps by remember { mutableIntStateOf(0) }
@@ -414,11 +414,29 @@ private class Category(val title: String, private val pattern: Regex?) {
 
 private val Categories = listOf(
     Category("全部", null),
-    Category("箭头", Regex("^(arrow|chevron|caret|return|swap|trending|expand|contract|resize|move|enter|exit|log-|open|reload|refresh|repeat|sync|shuffle|push)")),
-    Category("媒体", Regex("^(play|pause|stop|musical|volume|mic|videocam|film|camera|image|albums|radio-?$|recording|headset|disc|aperture|color|brush|easel|tv)")),
-    Category("设备", Regex("^(phone|tablet|laptop|desktop|watch|print|hardware|server|battery|bluetooth|wifi|cellular|keypad|game|power|flashlight|calculator|save)")),
+    Category(
+        "箭头",
+        Regex(
+            "^(arrow|chevron|caret|return|swap|trending|expand|contract|resize|move|enter|exit|log-|open|reload|refresh|repeat|sync|shuffle|push)",
+        ),
+    ),
+    Category(
+        "媒体",
+        Regex(
+            "^(play|pause|stop|musical|volume|mic|videocam|film|camera|image|albums|radio-?$|recording|headset|disc|aperture|color|brush|easel|tv)",
+        ),
+    ),
+    Category(
+        "设备",
+        Regex(
+            "^(phone|tablet|laptop|desktop|watch|print|hardware|server|battery|bluetooth|wifi|cellular|keypad|game|power|flashlight|calculator|save)",
+        ),
+    ),
     Category("沟通", Regex("^(chat|mail|call|send|paper-plane|notifications|megaphone|share|at|people|person|link|unlink)")),
-    Category("天气", Regex("^(sunny|moon|cloud|rainy|snow|thunderstorm|partly|umbrella|thermometer|water|flame|leaf|earth|planet|flower|rose)")),
+    Category(
+        "天气",
+        Regex("^(sunny|moon|cloud|rainy|snow|thunderstorm|partly|umbrella|thermometer|water|flame|leaf|earth|planet|flower|rose)"),
+    ),
     Category("品牌", Regex("^logo-")),
 )
 

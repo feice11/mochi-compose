@@ -220,6 +220,27 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+/**
+ * 换配色的统一入口：有揭开状态就从 [origin] 揭开（见 [MochiThemeRevealState.reveal]），
+ * 没有（状态是 null，比如预览、测试里没接 [MochiThemeRevealHost]）就直接改，颜色照常插值过去
+ */
+public fun MochiThemeRevealState?.revealOrChange(origin: Offset? = null, change: () -> Unit) {
+    if (this == null) change() else reveal(origin, change)
+}
+
+/**
+ * 换明暗：深浅真的变了（[fromDark] ≠ [toDark]）才揭开；没变（比如系统是浅色时在「浅色」和「自动」之间切、或者只换了取色方式）
+ * 就直接改，颜色自己插值过去，不硬上揭开动画。深浅用 [ui.feice.mochi.theme.ColorSchemeMode.isDark] 算
+ */
+public fun MochiThemeRevealState?.revealIfShadeChanges(fromDark: Boolean, toDark: Boolean, origin: Offset? = null, change: () -> Unit) {
+    if (fromDark != toDark) revealOrChange(origin, change) else change()
+}
+
+/** 换整套风格（字体、图标、外观都变）：有状态就原位模糊交叉（[MochiThemeRevealState.crossfade]），没有就直接改 */
+public fun MochiThemeRevealState?.crossfadeOrChange(change: () -> Unit) {
+    if (this == null) change() else crossfade(change)
+}
+
 /** 创建揭开转场的状态。系统关掉动画时 [MochiThemeRevealState.reveal] 直接执行改动。 */
 @Composable
 public fun rememberMochiThemeRevealState(): MochiThemeRevealState {

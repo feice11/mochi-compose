@@ -51,6 +51,7 @@ uniform float uK;            // smooth-min 半径（px）
 uniform float uBlendWidth;   // 颈部颜色过渡带宽（px）
 uniform float3 uShadowA;     // 环境阴影：x = 向下偏移, y = sigma, z = 不透明度
 uniform float3 uShadowK;     // 接触阴影：同上
+uniform float uShadowInset;  // 环境阴影的形状先往里收多少（px）
 layout(color) uniform half4 uBtnColor;
 layout(color) uniform half4 uPanColor;
 layout(color) uniform half4 uShadowColor;
@@ -117,7 +118,7 @@ half4 main(float2 fc) {
     }
 
     float4 shc = float4(uShadowColor);
-    float sa = soft(shape(fc - float2(0.0, uShadowA.x)), uShadowA.y) * uShadowA.z
+    float sa = soft(shape(fc - float2(0.0, uShadowA.x)) + uShadowInset, uShadowA.y) * uShadowA.z
              + soft(shape(fc - float2(0.0, uShadowK.x)), uShadowK.y) * uShadowK.z;
     float n = fract(sin(dot(fc, float2(12.9898, 78.233))) * 43758.5453) - 0.5;
     sa = clamp(sa * shc.a + n / 255.0, 0.0, 1.0);
@@ -174,6 +175,7 @@ internal class MetaballShaders {
             sh.setFloatUniform("uBlendWidth", max(blendWidth, 0.5f))
             sh.setFloatUniform("uShadowA", shadow.ambientOffset, max(shadow.ambientSigma, 0.5f), shadow.ambientAlpha)
             sh.setFloatUniform("uShadowK", shadow.keyOffset, max(shadow.keySigma, 0.5f), shadow.keyAlpha)
+            sh.setFloatUniform("uShadowInset", shadow.ambientInset)
             sh.setFloatUniform("uTouch", touch.x, touch.y)
             sh.setFloatUniform("uGlow", glow.coerceIn(0f, 1f))
             sh.setFloatUniform("uGlowR", max(glowRadius, 1f))

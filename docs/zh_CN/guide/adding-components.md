@@ -8,7 +8,7 @@
 
 ## 2. 组件代码
 
-放在 `mochi-compose/src/main/java/ui/feice/mochi/basic/`，一个组件一组文件：
+放在 `mochi-compose/src/main/java/ui/feice/mochi/basic/`（或对应领域包：`list/`、`navigation/`、`picker/`），一个组件一组文件。和其他组件共用的内部实现放子包，如 `basic/menu/`、`basic/parts/`，见 [新文件放哪](../../../CONTRIBUTING.md#where-new-files-go--新文件放哪)。
 
 | 文件 | 内容 |
 |---|---|

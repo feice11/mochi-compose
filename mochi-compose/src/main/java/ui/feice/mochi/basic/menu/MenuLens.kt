@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.menu
 
 import android.graphics.RuntimeShader
 import android.os.Build
@@ -12,11 +12,11 @@ import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kotlin.math.min
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
-import kotlin.math.min
 
 /**
  * iOS 玻璃菜单开合时的透镜（AnimationKit LiquidMorphAnimation，iOS 26.0 24A435 逆向）。

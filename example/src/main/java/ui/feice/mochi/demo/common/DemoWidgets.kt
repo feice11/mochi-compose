@@ -117,8 +117,8 @@ import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
-import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.LocalMochiListItemSpacing
+import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.list.MochiListSectionFooter
@@ -235,7 +235,8 @@ internal fun DemoPage(
                             // 说明限高（图标和大标题不受影响）：超出的部分在卡片里自己滚着看，上下边有短渐隐遮罩
                             val descScroll = rememberScrollState()
                             // 最多露三行简介，再多在卡片里滚
-                            val maxDesc = with(density) { ts.bodyLarge.lineHeight.takeIf { it.isSpecified }?.let { (it * 3).toDp() } } ?: 72.dp
+                            val maxDesc =
+                                with(density) { ts.bodyLarge.lineHeight.takeIf { it.isSpecified }?.let { (it * 3).toDp() } } ?: 72.dp
                             Column(
                                 Modifier
                                     .heightIn(max = maxDesc)
@@ -581,9 +582,9 @@ internal fun Chevron(up: Boolean) {
     }
 }
 
+/** 「更多」的三个点（选择列表、导航栏的按钮共用） */
 @Composable
-internal fun MoreDots() {
-    val color = LocalContentColor.current
+internal fun MoreDots(color: Color = LocalContentColor.current) {
     MochiIcon("ellipsis-horizontal", Modifier.size(22.dp), tint = color) { slot ->
         Canvas(slot) {
             val r = size.width * 0.085f

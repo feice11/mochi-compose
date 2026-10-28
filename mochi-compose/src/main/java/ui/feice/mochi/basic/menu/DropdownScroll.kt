@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.menu
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.ScrollScope

@@ -110,6 +110,7 @@ Stroked contours are drawn along their own direction from start to end, each one
 - At radius 0 no layer is created, so there is no extra cost at rest.
 - Put offset and scale in a graphicsLayer outside it, and set alpha with `mochiBlurAlpha(alpha, radius)`: `Modifier.graphicsLayer { mochiBlurAlpha(a, r); scaleX = s }.mochiBlur { r }`. While blurring, the alpha is applied directly to the blurred image instead of opening a separate full offscreen layer for it. On a phone that layer costs more than the blur itself.
 - Put a clip inside it to keep the soft spill, or outside it to clip the spill too.
+- When the content draws outside its bounds (the outer shadow of glass), pass `overflow`: `mochiBlur(overflow = mochiGlassOverflow()) { r }`, and for blur replace or appear/disappear use `MochiBlurTransitions.Replace.copy(overflow = mochiGlassOverflow())`. The blur layer records that extra margin, and fading no longer opens an offscreen layer clipped to the content, so the shadow is not cut into a sharp rectangle mid-transition. Text and icons don't need it; the extra margin is blurred too.
 - At startup each blur step is drawn once on an invisible offscreen canvas in the background, so the render thread compiles its shaders ahead of time and the first blur transition does not drop frames compiling them.
 - The theme reveal transition still changes its radius continuously every frame and does not go through this.
 

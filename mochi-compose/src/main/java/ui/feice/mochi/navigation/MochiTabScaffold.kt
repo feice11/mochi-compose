@@ -46,6 +46,9 @@ import ui.feice.mochi.basic.MochiTabBarColors
 import ui.feice.mochi.basic.MochiTabBarDefaults
 import ui.feice.mochi.basic.MochiTabItem
 import ui.feice.mochi.basic.rememberMochiTabBarScrollBehavior
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.LocalGlassSources
+import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import ui.feice.mochi.theme.MochiDefaults
@@ -142,7 +145,7 @@ public fun MochiTabScaffold(
 ) {
     val scrollBehavior = rememberMochiTabBarScrollBehavior()
     val backdrop = rememberMochiBackdrop(background)
-    val glass = MochiTheme.materials.bar != null
+    val glass = glassOn(GlassRole.Bar)
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var barPx by remember { mutableIntStateOf(0) }
@@ -174,7 +177,10 @@ public fun MochiTabScaffold(
                     state.pages[page] = slot
                     onDispose { if (state.pages[page] === slot) state.pages.remove(page) }
                 }
-                CompositionLocalProvider(LocalMochiTabPage provides slot) { content(page) }
+                CompositionLocalProvider(
+                    LocalMochiTabPage provides slot,
+                    LocalGlassSources provides LocalGlassSources.current.copy(page = backdrop),
+                ) { content(page) }
             }
         }
         // 纯色标签栏后面垫一层底色、朝内容那侧渐隐（iOS 26 滚动边缘效果）；玻璃标签栏直接透出内容

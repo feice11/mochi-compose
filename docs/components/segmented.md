@@ -1,6 +1,6 @@
 # Segmented control
 
-The iOS 26 segmented control (without glass): a gray capsule track with the selected item as a raised light capsule, all segments equal width. Glow and deformation are the same as the [Tab bar](tabbar.md).
+The iOS 26 segmented control (without glass): an opaque gray capsule track (it does not show what is behind it on cards, sheets, glass or web content) with the selected item as a raised light capsule, all segments equal width. Glow and deformation are the same as the [Tab bar](tabbar.md).
 
 ```kotlin
 var i by remember { mutableIntStateOf(0) }

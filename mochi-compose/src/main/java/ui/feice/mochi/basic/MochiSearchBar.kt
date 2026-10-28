@@ -44,11 +44,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.glass.barGlassSource
+import ui.feice.mochi.effect.glass.engine.rememberGlassGlow
 import ui.feice.mochi.effect.glass.rememberGlassFill
-import ui.feice.mochi.effect.glass.rememberGlassGlow
-import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiIcon
 import ui.feice.mochi.theme.MochiTheme
@@ -88,12 +89,12 @@ public fun MochiSearchBar(
     val hint = cs.onSurfaceVariant
 
     // 放在提供了背景来源的栏里（标题脚手架的顶栏）且主题有 controlGlass 时，输入框画成玻璃；正文里的仍是纯色底
-    val glass = rememberGlassFill(MochiTheme.materials.controlGlass, barGlassSource())
+    val glass = rememberGlassFill(GlassRole.Control)
     val fieldInteraction = remember { MutableInteractionSource() }
     val glassGlow = if (glass != null) rememberGlassGlow(fieldInteraction) else null
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(MochiSearchBarDefaults.Height)) {
-            if (glass != null) GlassSurface(glass, Modifier.matchParentSize(), null, glassGlow)
+            if (glass != null) GlassSurface(glass, null, glassGlow, Modifier.matchParentSize())
             Row(
                 Modifier
                     .matchParentSize()
@@ -161,8 +162,10 @@ public fun MochiSearchBar(
                 modifier = Modifier
                     .padding(start = 8.dp)
                     .semantics { contentDescription = cancelText },
+                // iOS 26 搜索栏旁的取消钮是玻璃圆钮；主题没有玻璃时是和搜索框同色的纯色圆
+                style = MochiButtonStyle.Glass,
                 colors = MochiButtonDefaults.colors(
-                    MochiButtonStyle.Tonal,
+                    MochiButtonStyle.Glass,
                 ).copy(container = fieldColor, pressedContainer = fieldColor, content = cs.onSurface),
                 size = 36.dp,
             ) { ClearGlyph(cs.onSurface, glyphSize = 12.dp, stroke = 1.8.dp) }

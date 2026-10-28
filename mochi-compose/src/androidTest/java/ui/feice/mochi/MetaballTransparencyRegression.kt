@@ -186,7 +186,12 @@ class MetaballTransparencyRegression {
             }
         } as LayoutCoordinates
         val fill = Color(0xFF606070).copy(alpha = 0.16f)
-        val group = ButtonGroupState().apply { coords = coordinates(Rect(0f, 0f, 480f, 360f)) }
+        val group = ButtonGroupState().apply {
+            coords = coordinates(Rect(0f, 0f, 480f, 360f))
+            fusePx = 30f
+            reachPx = 40f
+            attractPx = 0f
+        }
         repeat(3) { index ->
             val rect = Rect(40f + index * 88f, 100f, 120f + index * 88f, 180f)
             val coords = coordinates(rect)
@@ -202,7 +207,7 @@ class MetaballTransparencyRegression {
                 }
             }
         }
-        val bitmap = render("three-buttons", Color.White) { group.draw(this, MochiMetaballRenderer(), 30f, 40f, 0f) }
+        val bitmap = render("three-buttons", Color.White) { group.draw(this, MochiMetaballRenderer()) }
         try {
             // Both necks and all three centres must have the same single fill.
             for (y in 125 until 155) {
@@ -213,7 +218,7 @@ class MetaballTransparencyRegression {
         }
         val solid = fill.copy(alpha = 1f)
         group.buttons.forEach { it.container = solid }
-        val opaque = render("opaque-buttons", Color.White) { group.draw(this, MochiMetaballRenderer(), 30f, 40f, 0f) }
+        val opaque = render("opaque-buttons", Color.White) { group.draw(this, MochiMetaballRenderer()) }
         try {
             for (y in 125 until 155) {
                 for (x in 60 until 276) assertColor(opaque, x, y, solid)

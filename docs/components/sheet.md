@@ -13,10 +13,13 @@ The iOS bottom sheet. With liquid glass in the theme it is glass at medium heigh
 val sheet = rememberMochiSheetState()          // medium + large
 Page(Modifier.mochiSheetBackdrop(sheet))       // the page behind
 MochiSheet(sheet, onDismiss = { … }) {
-    // content (nothing that scrolls vertically)
+    MochiSheetHeader("Title")
+    MochiSheetContent { … }                    // scrolls by itself when it does not fit; do not add another scroll container
 }
 Button(onClick = { sheet.show() })
 ```
+
+`MochiSheetContent` scrolls vertically when it does not fit: pushing up first raises the sheet to its highest detent, then scrolls the content; dragging down with the content at the top moves the sheet, and releasing snaps to the nearest detent by velocity (as on iOS).
 
 Large only: `rememberMochiSheetState(detents = listOf(MochiSheetDetent.Large))`.
 

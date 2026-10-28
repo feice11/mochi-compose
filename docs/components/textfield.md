@@ -29,6 +29,7 @@ To focus from code, pass `Modifier.focusRequester(...)` in `modifier`.
 | supportingText | Helper message | null |
 | maxLength | Character limit, also shows the count | null |
 | clearButton | Clear button while focused and non-empty | true |
+| selectAllOnFocus | Select all text on focus, so typing replaces it (address bars, rename fields) | false |
 | shape | Shape | `MochiTextFieldDefaults.Shape` |
 | colors | Colors | `MochiTextFieldDefaults.colors()` |
 

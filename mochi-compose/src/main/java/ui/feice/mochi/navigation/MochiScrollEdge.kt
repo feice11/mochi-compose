@@ -40,7 +40,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import ui.feice.mochi.effect.glass.BackdropSampler
+import ui.feice.mochi.effect.glass.engine.BackdropSampler
 import ui.feice.mochi.effect.mask.MochiSmoothGradient
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask as maskScrollFade
 import ui.feice.mochi.theme.LocalMochiColorScheme

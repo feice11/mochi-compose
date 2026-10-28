@@ -91,8 +91,7 @@ private class PressDeformNode(
     var extraScale: (() -> Float)?,
     var bounds: (() -> Rect)?,
     val claimed: Boolean,
-) :
-    DelegatingNode(),
+) : DelegatingNode(),
     LayoutModifierNode {
     /** (缩放, 0) */
     private var press by mutableStateOf(Offset(1f, 0f))

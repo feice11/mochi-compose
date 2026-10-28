@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -58,6 +60,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.Layout
@@ -71,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -92,9 +98,13 @@ import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.effect.elastic.rubberBand
+import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSource
 import ui.feice.mochi.effect.glass.GlassSurface
-import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
+import ui.feice.mochi.effect.glass.LocalGlassSources
+import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
+import ui.feice.mochi.effect.glass.MochiNoGlassShadow
+import ui.feice.mochi.effect.glass.glassFor
 import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.navigation.LocalMochiNavSurface
 import ui.feice.mochi.navigation.LocalMochiPredictiveBack
@@ -235,7 +245,8 @@ public fun Modifier.mochiSheetBackdrop(state: MochiSheetState): Modifier = this
  *   拉到全屏、或者面板关掉时恢复。藏起来时从屏幕底边上滑还能临时叫出来
  * - 面板显示期间系统导航栏底色和分隔线透明，关闭系统对比度遮罩；最后一个面板关闭后恢复原设置
  *
- * 内容不要放会竖着滚动的东西（和面板的拖动冲突）。
+ * 内容放在 [MochiSheetContent] 里：放不下时能竖着滚，滚到顶再往下拖、往上推还没到最高一档时拖的是面板（和 iOS 一样）。
+ * 不要再自己套一层竖着滚动的容器。
  * [modifier] 作用在面板本身上（面板挂在窗口的浮层里，没有别的根布局）。
  * @param navigator 面板内 [ui.feice.mochi.navigation.MochiNavHost] 的同一个导航器；有子页时优先退页，退回根页后才关闭面板
  */
@@ -284,8 +295,8 @@ public fun MochiSheet(
         // 玻璃（iOS 26 UIKitCore SheetLayoutInfo：非全屏档默认 `_UIViewGlass` regular、subvariant "sheet"；
         // 全屏档默认 systemBackgroundColor）。取样面板底下的内容再叠上压暗层，和眼睛看到的一致。
         // 原生是二选一，这里按往全屏走的进度把底色淡上来（近似）
-        val under = LocalMochiOverlayGlass.current
-        val sheetMaterial = MochiTheme.materials.sheetGlass
+        val under = LocalGlassSources.current.overlay
+        val sheetMaterial = MochiTheme.materials.glassFor(GlassRole.Sheet)
         val scrimLayer = if (sheetMaterial != null && under != null) rememberLayerBackdrop() else null
         val sheetSource = if (under != null && scrimLayer != null) {
             val layer = rememberCombinedBackdrop(under.layer, scrimLayer)
@@ -383,6 +394,68 @@ public fun MochiSheet(
         }
         TransparentSheetNavigationBar()
         if (hideNavigationBar) HideNavBarWhileFloating(state)
+
+        // 面板里的内容能竖着滚（[MochiSheetContent]）：往上滚先把面板拉到最高一档再滚内容；
+        // 内容滚到顶还往下拖，拖的是面板。松手按速度投影吸附到最近的一档，和拖面板本身同一套规则
+        val sheetScroll = remember(state) {
+            object : NestedScrollConnection {
+                var moving = false
+                var raw = 0f
+
+                fun move(delta: Float): Float {
+                    if (!moving) {
+                        moving = true
+                        raw = state.top.value
+                        state.dragging = true
+                    }
+                    val highest = state.detents.minOf { state.topOf(it) }
+                    val next = (raw + delta).coerceIn(highest, state.height)
+                    val used = next - raw
+                    raw = next
+                    if (raw > state.largeTop + 0.5f) state.bottomFilled = false
+                    scope.launch { state.top.snapTo(raw) }
+                    return used
+                }
+
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (source != NestedScrollSource.UserInput || !state.requested || state.top.value.isNaN()) return Offset.Zero
+                    val top = if (moving) raw else state.top.value
+                    val highest = state.detents.minOf { state.topOf(it) }
+                    // 往上：面板还没到最高一档，先拉面板
+                    if (available.y < 0f && top > highest + 0.5f) return Offset(0f, move(available.y))
+                    // 面板已经被往下拖开了：往回推先推面板
+                    if (available.y < 0f && moving) return Offset(0f, move(available.y))
+                    return Offset.Zero
+                }
+
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (source != NestedScrollSource.UserInput || !state.requested || state.top.value.isNaN()) return Offset.Zero
+                    // 内容滚到顶了还往下拖：拖面板
+                    if (available.y > 0f) return Offset(0f, move(available.y))
+                    return Offset.Zero
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    if (!moving) return Velocity.Zero
+                    moving = false
+                    state.dragging = false
+                    val v = available.y
+                    val projected = raw + v * 0.22f
+                    val targets = state.detents.map { state.topOf(it) } + state.height
+                    val target = targets.minBy { abs(it - projected) }
+                    if (target == state.height) {
+                        state.hide()
+                    } else {
+                        val expandingToLarge = MochiSheetDetent.Large in state.detents && target == state.largeTop
+                        scope.launch {
+                            val settled = interruptible { state.top.animateTo(target, spring, initialVelocity = v) }
+                            if (settled && state.requested && expandingToLarge) state.bottomFilled = true
+                        }
+                    }
+                    return available
+                }
+            }
+        }
 
         val scrim = MochiDefaults.scrim()
         Box(
@@ -497,6 +570,7 @@ public fun MochiSheet(
                                 }
                             }
                             .pointerInput(Unit) { detectTapGestures { } }
+                            .nestedScroll(sheetScroll)
                             // 小横条浮在顶部中间，不占位置：头部按钮才能贴着圆角放（和圆角同心）
                             .drawWithContent {
                                 drawContent()
@@ -513,7 +587,7 @@ public fun MochiSheet(
                             },
                     ) {
                         if (glass != null) {
-                            GlassSurface(glass, Modifier.matchParentSize(), null, null, cornerRadiusPx = corner)
+                            GlassSurface(glass, null, null, Modifier.matchParentSize(), cornerRadiusPx = corner)
                             Spacer(Modifier.matchParentSize().drawBehind { drawRect(color, alpha = opaque()) })
                         }
                         Column(
@@ -675,6 +749,8 @@ public fun MochiSheetContent(
     Column(
         modifier
             .fillMaxWidth()
+            // 放不下时能竖着滚：滚到顶再往下拖、往上推还没到最高一档时，拖的是面板（见 MochiSheet）
+            .verticalScroll(rememberScrollState())
             .layout { m, c ->
                 val inset = sheetHeaderInset(corner)
                 val w = (c.maxWidth - inset * 2).coerceAtLeast(0)
@@ -702,14 +778,15 @@ public fun MochiSheetHeader(
     Layout(
         modifier = modifier.fillMaxWidth(),
         content = {
-            Box { navigationIcon?.invoke() }
+            // 标题行背后是面板的纯色底，按钮玻璃不画外阴影
+            Box { CompositionLocalProvider(LocalMochiGlassShadow provides MochiNoGlassShadow) { navigationIcon?.invoke() } }
             Text(
                 title,
                 style = MochiTheme.textStyles.navTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Box { actions?.invoke() }
+            Box { CompositionLocalProvider(LocalMochiGlassShadow provides MochiNoGlassShadow) { actions?.invoke() } }
         },
     ) { ms, c ->
         val item = MochiButtonDefaults.BarItemSize.roundToPx()

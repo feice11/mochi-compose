@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -48,32 +49,38 @@ import ui.feice.mochi.theme.MochiGraphics
  * - 半径为 0（或者系统不支持模糊）时不建任何图层，和没加一样
  * - 位移、缩放、透明度、裁剪放在它外面的 graphicsLayer 里：`Modifier.graphicsLayer { alpha = … }.mochiBlur { … }`；
  *   想让模糊外溢的那圈也被裁掉，把裁剪放在它外面，想让外溢的软边留着，把裁剪放在它里面
+ * - [overflow]：内容画出自己边界的距离（玻璃的外阴影，见 [ui.feice.mochi.effect.glass.mochiGlassOverflow]）。
+ *   模糊图层按这一圈往外多录，模糊时外面的阴影不会被切成直角矩形；默认 0，只录内容自己的范围
  */
-public fun Modifier.mochiBlur(continuous: Boolean = false, radius: () -> Dp): Modifier = // 内容垫一层自己的图层：模糊程度变了要重画这一层时只录一个图层引用，不把整块内容重新录一遍
-    this then CachedBlurElement(radius, continuous) then Modifier.graphicsLayer()
+public fun Modifier.mochiBlur(continuous: Boolean = false, overflow: Dp = 0.dp, radius: () -> Dp): Modifier =
+    // 内容垫一层自己的图层：模糊程度变了要重画这一层时只录一个图层引用，不把整块内容重新录一遍
+    this then CachedBlurElement(radius, continuous, overflow) then Modifier.graphicsLayer()
 
-private class CachedBlurElement(val radius: () -> Dp, val continuous: Boolean) : ModifierNodeElement<CachedBlurNode>() {
-    override fun create(): CachedBlurNode = CachedBlurNode(radius, continuous)
+private class CachedBlurElement(val radius: () -> Dp, val continuous: Boolean, val overflow: Dp) : ModifierNodeElement<CachedBlurNode>() {
+    override fun create(): CachedBlurNode = CachedBlurNode(radius, continuous, overflow)
 
     override fun update(node: CachedBlurNode) {
         node.radius = radius
         node.continuous = continuous
+        node.overflow = overflow
     }
 
-    override fun hashCode(): Int = radius.hashCode() * 31 + continuous.hashCode()
+    override fun hashCode(): Int = (radius.hashCode() * 31 + continuous.hashCode()) * 31 + overflow.hashCode()
 
-    override fun equals(other: Any?): Boolean = other is CachedBlurElement && other.radius === radius && other.continuous == continuous
+    override fun equals(other: Any?): Boolean =
+        other is CachedBlurElement && other.radius === radius && other.continuous == continuous && other.overflow == overflow
 
     override fun InspectorInfo.inspectableProperties() {
         name = "mochiBlur"
         properties["continuous"] = continuous
+        properties["overflow"] = overflow
     }
 }
 
 /** 这一刻怎么模糊：原分辨率下的半径 [radius]（px）、降采样倍数 [k]、低分辨率上实际用的半径 [low] */
 private data class BlurPlan(val radius: Float, val k: Int, val low: Float)
 
-private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean) :
+private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean, var overflow: Dp) :
     Modifier.Node(),
     DrawModifierNode {
     // 重组时换成新的 lambda 也不重画：派生状态下次重算时读最新的那个（读的通常是同一批状态）
@@ -109,19 +116,26 @@ private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean) :
             }
         }
         val k = p.k
+        // 内容画出边界的那一圈（外阴影）也录进来：带模糊的图层按自己的范围离屏，范围外的会被切掉
+        val over = ceil(overflow.toPx() / k).toInt().coerceAtLeast(0)
+        val shift = over.toFloat() * k
         i.renderEffect = e
-        i.record(IntSize(ceil(size.width / k).toInt(), ceil(size.height / k).toInt())) {
-            if (k == 1) {
-                this@draw.drawContent()
-            } else {
-                scale(1f / k, pivot = Offset.Zero) { this@draw.drawContent() }
+        i.record(IntSize(ceil(size.width / k).toInt() + over * 2, ceil(size.height / k).toInt() + over * 2)) {
+            translate(over.toFloat(), over.toFloat()) {
+                if (k == 1) {
+                    this@draw.drawContent()
+                } else {
+                    scale(1f / k, pivot = Offset.Zero) { this@draw.drawContent() }
+                }
             }
         }
         if (continuous) {
             // 连续：半径每帧都在变，本来就要每帧重新模糊，只用这一层离屏（和直接设 renderEffect 一样多）——
             // 再套缓存层只会每帧多一次渲染目标切换（手机 GPU 上这比省下的像素更贵）。模糊的外溢不受这一层大小限制
             releaseCache()
-            if (k == 1) drawLayer(i) else scale(k.toFloat(), pivot = Offset.Zero) { drawLayer(i) }
+            translate(-shift, -shift) {
+                if (k == 1) drawLayer(i) else scale(k.toFloat(), pivot = Offset.Zero) { drawLayer(i) }
+            }
             return
         }
         // 分档：大多数帧档位不变、只是在移动 / 缩放 / 淡化。模糊结果画进缓存层（四周留出外溢的那圈），
@@ -131,13 +145,13 @@ private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean) :
             outer = it
         }
         val pad = ceil(3f * blurSigma(p.radius) / k).roundToInt() + 1
-        val w = ceil(size.width / k).toInt()
-        val h = ceil(size.height / k).toInt()
+        val w = ceil(size.width / k).toInt() + over * 2
+        val h = ceil(size.height / k).toInt() + over * 2
         o.record(IntSize(w + pad * 2, h + pad * 2)) {
             translate(pad.toFloat(), pad.toFloat()) { drawLayer(i) }
         }
         withTransform({
-            translate(-pad.toFloat() * k, -pad.toFloat() * k)
+            translate(-pad.toFloat() * k - shift, -pad.toFloat() * k - shift)
             if (k != 1) scale(k.toFloat(), k.toFloat(), pivot = Offset.Zero)
         }) { drawLayer(o) }
     }

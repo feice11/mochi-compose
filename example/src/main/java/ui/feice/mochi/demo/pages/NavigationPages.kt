@@ -3,7 +3,6 @@
 
 package ui.feice.mochi.demo.pages
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -14,8 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.delay
@@ -32,6 +29,7 @@ import ui.feice.mochi.demo.common.DemoIcon
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Icons
+import ui.feice.mochi.demo.common.MoreDots
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
@@ -42,7 +40,6 @@ import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.MochiBackButton
 import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
 import ui.feice.mochi.navigation.MochiNavigator
-import ui.feice.mochi.theme.MochiIcon
 import ui.feice.mochi.theme.MochiTheme
 
 /** 「侧推」演示页：iOS 的推入 / 返回，以及它能被随时打断的几种玩法 */
@@ -181,18 +178,6 @@ private fun StepActions(layout: BarLayout) {
         BarLayout.HeartTrashGroup -> MochiBarGroup(navId = "trailing") {
             MochiBarGroupItem(onClick = {}, navId = "heart", contentKey = Icons.HEART) { Glyph(Icons.HEART, tint, size = 22) }
             MochiBarGroupItem(onClick = {}, navId = "trash", contentKey = Icons.TRASH) { Glyph(Icons.TRASH, tint, size = 22) }
-        }
-    }
-}
-
-/** 「⋯」：三个实心圆点，按墨迹居中 */
-@Composable
-private fun MoreDots(tint: Color) {
-    MochiIcon("ellipsis-horizontal", Modifier.size(22.dp), tint = tint) { slot ->
-        Canvas(slot) {
-            val r = 2.1.dp.toPx()
-            val gap = 6.6.dp.toPx()
-            for (i in -1..1) drawCircle(tint, r, Offset(center.x + i * gap, center.y))
         }
     }
 }

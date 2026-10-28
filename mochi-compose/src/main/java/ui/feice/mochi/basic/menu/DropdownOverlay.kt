@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.menu
 
 import android.provider.Settings
 import android.view.View
@@ -82,8 +82,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -131,11 +131,27 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.BarGroupHandle
+import ui.feice.mochi.basic.LocalBarControlGlass
+import ui.feice.mochi.basic.MochiAlign
+import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.basic.MochiItemLayout
+import ui.feice.mochi.basic.MochiOpenMode
+import ui.feice.mochi.basic.MochiStyle
+import ui.feice.mochi.basic.MochiTrigger
+import ui.feice.mochi.basic.Text
+import ui.feice.mochi.basic.liquid
+import ui.feice.mochi.basic.popoverPlacement
 import ui.feice.mochi.effect.elastic.MochiRubberBandState
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
 import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
 import ui.feice.mochi.effect.elastic.rubberStretched
+import ui.feice.mochi.effect.glass.GlassFill
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.engine.GlassMerge
+import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.MochiGlowState
@@ -148,18 +164,12 @@ import ui.feice.mochi.effect.mask.mochiFadeMask
 import ui.feice.mochi.effect.metaball.MochiBlob
 import ui.feice.mochi.effect.metaball.MochiMetaballColors
 import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.metaball.drawMochiMetaball
 import ui.feice.mochi.effect.metaball.proximityFuse
 import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
 import ui.feice.mochi.gesture.MochiCallbacks
 import ui.feice.mochi.gesture.MochiController
 import ui.feice.mochi.gesture.mochiButtonGesture
-import ui.feice.mochi.effect.glass.GlassFill
-import ui.feice.mochi.effect.glass.GlassMerge
-import ui.feice.mochi.effect.glass.GlassSurface
-import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
-import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.G2RectClipShape
@@ -167,6 +177,7 @@ import ui.feice.mochi.shape.addG2RoundRect
 import ui.feice.mochi.shape.continuityFor
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.lerp
 import ui.feice.mochi.utils.MochiHapticProfile
 import ui.feice.mochi.utils.MochiHaptics
 import ui.feice.mochi.utils.lerp
@@ -283,14 +294,15 @@ internal fun MochiOverlay(
         val safeTop = WindowInsets.statusBars.getTop(density).toFloat()
         val safeBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
         // 主题有菜单玻璃（menuGlass）且浮层底下有页面录制时，面板画成玻璃
-        val glass = rememberGlassFill(MochiTheme.materials.menuGlass, LocalMochiOverlayGlass.current)
+        val glass = rememberGlassFill(GlassRole.Menu)
         // iOS 的玻璃菜单（style.liquid）：从按钮开始就是玻璃，跟着当前面板实时变形，开合途中玻璃里有透镜
         val liquidGlass = glass != null && style.liquid
         // 菜单从玻璃按钮组里弹出来：整个组直接变形成菜单（组藏起来，面板从组的胶囊长出来，收起时缩回组的胶囊），
         // 组里的图标（连同弹菜单的那一格）画在面板上，开头淡出、收起最后淡回。不画成两块：单独从那一格长出来时组还留在原地，像分开的两块玻璃
-        val mergeGroup = if (liquidGlass) group else null
+        // 纯色的组（group.color）也一样：融球从组的胶囊长出面板，按钮那一端用组的底色
+        val mergeGroup = if (liquidGlass || group?.color != null) group else null
         // 按钮本身已经是玻璃（按钮组、栏里的玻璃下拉按钮）：浮层从头到尾都是玻璃，开头、结尾不先画成按钮的纯色
-        val glassButton = liquidGlass && (group != null || LocalButtonGlass.current != null)
+        val glassButton = liquidGlass && ((group != null && group.color == null) || LocalBarControlGlass.current != null)
         val anchor = mergeGroup?.rect?.translate(-o) ?: button
         val start = anchor
         val panelWidth = if (matchAnchorWidth) max(px.menuWidth, anchor.width) else px.menuWidth
@@ -344,7 +356,14 @@ internal fun MochiOverlay(
                 val f = computeFrame(
                     p = progress.value, velocity = progress.velocity,
                     button = start, target = target, upward = upward, px = px,
-                    pressScale = if (mergeGroup != null) 1f else press(), pull = rubber.pull, cover = cover, elastic = elastic, liquid = style.liquid,
+                    pressScale = if (mergeGroup !=
+                        null
+                    ) {
+                        1f
+                    } else {
+                        press()
+                    },
+                    pull = rubber.pull, cover = cover, elastic = elastic, liquid = style.liquid,
                 )
                 // 按钮组菜单收起时不踢（iOS 录屏里收起没有往外踢的那一下）
                 val dy = lens.kickOffset(density, anchor, target)
@@ -352,6 +371,7 @@ internal fun MochiOverlay(
             }
         }
         val frame = { frameState.value }
+        val shadows = MochiTheme.shadows
 
         if (liquidGlass) {
             LaunchedEffect(progress, lens) {
@@ -378,19 +398,34 @@ internal fun MochiOverlay(
                     // 跟着按压 / 展开平滑出现，不会一按就「啪」地冒出来
                     val vis = (progress.value * 3f + abs(press() - 1f) * 10f).coerceIn(0f, 1f)
                     val dark = style.panelColor.luminance() < 0.5f
-                    val shadow = MochiMetaballShadow.elevated(this, cl, dark, vis)
+                    val shadow = lerp(shadows.rest, shadows.floating, cl).resolve(this, dark, vis)
                     // 先画阴影 + 融球颈，再用 Kyant 连续曲率 Path 画本体（形状抗锯齿），
                     // 本体颜色也由 shader 算：按钮色 → 面板色的渐变融色和按压发光都在里面
                     // 玻璃菜单：面板的纯色跟着玻璃淡入淡掉（只留阴影），收起最后一段按钮的颜色回来
+                    val base = mergeGroup?.color?.let { metaballColors.copy(a = it) } ?: metaballColors
                     val colors = if (liquidGlass) {
-                        val b = metaballColors.b
+                        val b = base.b
                         val glassIn = if (glassButton) 1f else glassAlpha(progress.value)
-                        metaballColors.copy(b = b.copy(alpha = b.alpha * (1f - glassIn)))
+                        base.copy(b = b.copy(alpha = b.alpha * (1f - glassIn)))
                     } else {
-                        metaballColors
+                        base
                     }
                     // 从按钮组里脱出来时按压的光交给组的玻璃，这里不画
-                    drawMochiMetaball(renderer, f.metaball, colors, shadow, style.g2Smoothing, if (group != null) null else glow, glowOrigin = o)
+                    drawMochiMetaball(
+                        renderer,
+                        f.metaball,
+                        colors,
+                        shadow,
+                        style.g2Smoothing,
+                        if (group !=
+                            null
+                        ) {
+                            null
+                        } else {
+                            glow
+                        },
+                        glowOrigin = o,
+                    )
                 },
         )
 
@@ -424,7 +459,13 @@ internal fun MochiOverlay(
                         scaleX = f.scale
                         scaleY = f.scale
                         // 从按钮组里脱出来时这一格的图标跟着组画（见上），克隆只留手势
-                        alpha = if (mergeGroup != null) 0f else if (cover) 1f - smoothstep(0f, 0.25f, progress.value) else 1f
+                        alpha = if (mergeGroup != null) {
+                            0f
+                        } else if (cover) {
+                            1f - smoothstep(0f, 0.25f, progress.value)
+                        } else {
+                            1f
+                        }
                     }
                     .padding(buttonPadding),
                 horizontalArrangement = Arrangement.Center,
@@ -463,191 +504,191 @@ internal fun MochiOverlay(
         ) {
             // iOS 玻璃菜单：开合途中内容经过透镜（放大、模糊、贴边位移，见 MenuLens）
             Box(if (liquidGlass) Modifier.fillMaxSize().menuLens(lens, frame, target, density) else Modifier.fillMaxSize()) {
-            // 其余带玻璃的面板（弹出层）：玻璃盖在融球画的纯色面板上面，随展开淡入
-            if (glass != null && !liquidGlass) {
-                with(density) {
-                    Box(Modifier.offset { target.topLeft.round() }.size(target.width.toDp(), target.height.toDp())) {
-                        PanelGlass(glass, target, frame, style.panelCornerRadius) { smoothstep(0f, 0.6f, progress.value) }
+                // 其余带玻璃的面板（弹出层）：玻璃盖在融球画的纯色面板上面，随展开淡入
+                if (glass != null && !liquidGlass) {
+                    with(density) {
+                        Box(Modifier.offset { target.topLeft.round() }.size(target.width.toDp(), target.height.toDp())) {
+                            PanelGlass(glass, target, frame, style.panelCornerRadius) { smoothstep(0f, 0.6f, progress.value) }
+                        }
                     }
                 }
-            }
-            with(density) {
-                Box(
-                    Modifier
-                        .offset { target.topLeft.round() }
-                        .size(target.width.toDp(), target.height.toDp())
-                        .pointerInput(controller, target, scroller, hasContent) {
-                            awaitEachGesture {
-                                val down = awaitFirstDown(requireUnconsumed = false)
-                                val origin2 = target.topLeft + o
-                                // 放不下时竖着拖 = 滚动（越过触摸阈值后），否则按住滑动选择；
-                                // 列表还在惯性滑动时这一按只是把它接住，不点选项
-                                val canScroll = controller.maxScroll > 0f
-                                val caught = scroller.stop()
-                                if (!caught) {
-                                    callbacks.panelPressed(true)
-                                    controller.track(origin2 + down.position)
-                                }
-                                down.consume()
-                                val tracker = VelocityTracker()
-                                tracker.addPosition(down.uptimeMillis, down.position)
-                                val slop = viewConfiguration.touchSlop
-                                var scrolling = false
-                                // 内容里自己处理拖动的控件（滚筒、滑块、横向列表）接手了这次拖动：面板放手，不发光、不滚、不点选
-                                var contentOwns = false
-                                while (true) {
-                                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                    if (!scrolling && !contentOwns && c.isConsumed) {
-                                        contentOwns = true
-                                        if (!caught) callbacks.panelPressed(false)
-                                        controller.pointer = null
-                                        controller.hover = -1
+                with(density) {
+                    Box(
+                        Modifier
+                            .offset { target.topLeft.round() }
+                            .size(target.width.toDp(), target.height.toDp())
+                            .pointerInput(controller, target, scroller, hasContent) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val origin2 = target.topLeft + o
+                                    // 放不下时竖着拖 = 滚动（越过触摸阈值后），否则按住滑动选择；
+                                    // 列表还在惯性滑动时这一按只是把它接住，不点选项
+                                    val canScroll = controller.maxScroll > 0f
+                                    val caught = scroller.stop()
+                                    if (!caught) {
+                                        callbacks.panelPressed(true)
+                                        controller.track(origin2 + down.position)
+                                    }
+                                    down.consume()
+                                    val tracker = VelocityTracker()
+                                    tracker.addPosition(down.uptimeMillis, down.position)
+                                    val slop = viewConfiguration.touchSlop
+                                    var scrolling = false
+                                    // 内容里自己处理拖动的控件（滚筒、滑块、横向列表）接手了这次拖动：面板放手，不发光、不滚、不点选
+                                    var contentOwns = false
+                                    while (true) {
+                                        val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!scrolling && !contentOwns && c.isConsumed) {
+                                            contentOwns = true
+                                            if (!caught) callbacks.panelPressed(false)
+                                            controller.pointer = null
+                                            controller.hover = -1
+                                        }
+                                        if (contentOwns) {
+                                            if (!c.pressed) break
+                                            continue
+                                        }
+                                        tracker.addPosition(c.uptimeMillis, c.position)
+                                        if (canScroll && !scrolling && abs(c.position.y - down.position.y) > slop) {
+                                            scrolling = true
+                                            if (!caught) callbacks.panelPressed(false)
+                                            controller.pointer = null
+                                            controller.hover = -1
+                                        }
+                                        if (scrolling) {
+                                            scroller.dragBy(c.position.y - c.previousPosition.y)
+                                        } else if (!caught) {
+                                            controller.track(origin2 + c.position)
+                                        }
+                                        // 内容模式下没在滚就不消费移动：滚筒这类控件要等越过触摸阈值才接手，
+                                        // 期间的移动被面板消费掉，它会以为「别人接手了」而放弃，结果划不动
+                                        if (!hasContent || scrolling) c.consume()
+                                        if (!c.pressed) break
                                     }
                                     if (contentOwns) {
-                                        if (!c.pressed) break
-                                        continue
-                                    }
-                                    tracker.addPosition(c.uptimeMillis, c.position)
-                                    if (canScroll && !scrolling && abs(c.position.y - down.position.y) > slop) {
-                                        scrolling = true
-                                        if (!caught) callbacks.panelPressed(false)
-                                        controller.pointer = null
-                                        controller.hover = -1
+                                        if (caught) scroller.settle()
+                                        return@awaitEachGesture
                                     }
                                     if (scrolling) {
-                                        scroller.dragBy(c.position.y - c.previousPosition.y)
-                                    } else if (!caught) {
-                                        controller.track(origin2 + c.position)
+                                        scroller.fling(-tracker.calculateVelocity().y)
+                                        return@awaitEachGesture
                                     }
-                                    // 内容模式下没在滚就不消费移动：滚筒这类控件要等越过触摸阈值才接手，
-                                    // 期间的移动被面板消费掉，它会以为「别人接手了」而放弃，结果划不动
-                                    if (!hasContent || scrolling) c.consume()
-                                    if (!c.pressed) break
+                                    if (caught) {
+                                        scroller.settle()
+                                        return@awaitEachGesture
+                                    }
+                                    callbacks.panelPressed(false)
+                                    val h = controller.hover
+                                    controller.pointer = null
+                                    if (h >= 0) callbacks.select(h) else controller.hover = -1
                                 }
-                                if (contentOwns) {
-                                    if (caught) scroller.settle()
-                                    return@awaitEachGesture
-                                }
-                                if (scrolling) {
-                                    scroller.fling(-tracker.calculateVelocity().y)
-                                    return@awaitEachGesture
-                                }
-                                if (caught) {
-                                    scroller.settle()
-                                    return@awaitEachGesture
-                                }
-                                callbacks.panelPressed(false)
-                                val h = controller.hover
-                                controller.pointer = null
-                                if (h >= 0) callbacks.select(h) else controller.hover = -1
-                            }
-                        },
-                ) {
-                    if (content != null) {
-                        PanelContent(content, contentPadding, { contentHeight = it }, frame, target, effects, pivot)
-                        return@Box
-                    }
-                    if (header != null) {
-                        Text(
-                            header,
-                            style = headerStyle,
-                            color = style.onPanelColor.copy(alpha = 0.6f),
+                            },
+                    ) {
+                        if (content != null) {
+                            PanelContent(content, contentPadding, { contentHeight = it }, frame, target, effects, pivot)
+                            return@Box
+                        }
+                        if (header != null) {
+                            Text(
+                                header,
+                                style = headerStyle,
+                                color = style.onPanelColor.copy(alpha = 0.6f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = px.panelPadding.toDp() + HeaderPadding, end = px.panelPadding.toDp() + HeaderPadding)
+                                    .padding(top = px.panelPadding.toDp() + HeaderTop)
+                                    .graphicsLayer {
+                                        val f = frame()
+                                        val ev = effects().coerceIn(0f, 1f)
+                                        alpha = ev
+                                        translationX = f.panel.center.x - target.center.x
+                                        translationY = f.panel.center.y - target.center.y
+                                    },
+                            )
+                        }
+                        MochiList(
+                            items = items,
+                            selectedIndex = selectedIndex,
+                            style = style,
+                            px = px,
+                            motion = motion,
+                            upward = upward,
+                            hover = { controller.hover },
+                            pointer = { controller.pointer },
+                            contentOrigin = {
+                                val f = frame()
+                                o + target.topLeft + Offset(px.panelPadding, px.panelPadding + headerPx) + (f.panel.center - target.center)
+                            },
+                            effects = effects,
+                            onSelect = { callbacks.select(it) },
+                            scroll = { controller.scroll },
+                            window = ((target.height + px.rubberMax) / itemH).toInt() + 2,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = px.panelPadding.toDp() + HeaderPadding, end = px.panelPadding.toDp() + HeaderPadding)
-                                .padding(top = px.panelPadding.toDp() + HeaderTop)
+                                .fillMaxSize()
+                                .padding(style.panelPadding)
+                                .padding(top = headerPx.toDp())
+                                // 显影、跟随面板的平移放在遮罩外层：遮罩开离屏图层时按自己的矩形裁切，
+                                // 平移放在里面的话，内容一跟着果冻 / 橡皮筋移出矩形就被切出一条直边
+                                // 内容「显影」：透明度 + 轻微放大（原点在按钮那一角），并跟着面板的拉伸走。
+                                // 不做模糊：RenderEffect 模糊每帧重采样，边缘有锯齿描边，还很吃 GPU
                                 .graphicsLayer {
                                     val f = frame()
                                     val ev = effects().coerceIn(0f, 1f)
                                     alpha = ev
+                                    // iOS 玻璃菜单不另外缩放（放大交给透镜）
+                                    val s = if (liquidGlass) 1f else 0.94f + 0.06f * ev
+                                    scaleX = s
+                                    scaleY = s
+                                    transformOrigin = pivot
                                     translationX = f.panel.center.x - target.center.x
                                     translationY = f.panel.center.y - target.center.y
-                                },
-                        )
-                    }
-                    MochiList(
-                        items = items,
-                        selectedIndex = selectedIndex,
-                        style = style,
-                        px = px,
-                        motion = motion,
-                        upward = upward,
-                        hover = { controller.hover },
-                        pointer = { controller.pointer },
-                        contentOrigin = {
-                            val f = frame()
-                            o + target.topLeft + Offset(px.panelPadding, px.panelPadding + headerPx) + (f.panel.center - target.center)
-                        },
-                        effects = effects,
-                        onSelect = { callbacks.select(it) },
-                        scroll = { controller.scroll },
-                        window = ((target.height + px.rubberMax) / itemH).toInt() + 2,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(style.panelPadding)
-                            .padding(top = headerPx.toDp())
-                            // 显影、跟随面板的平移放在遮罩外层：遮罩开离屏图层时按自己的矩形裁切，
-                            // 平移放在里面的话，内容一跟着果冻 / 橡皮筋移出矩形就被切出一条直边
-                            // 内容「显影」：透明度 + 轻微放大（原点在按钮那一角），并跟着面板的拉伸走。
-                            // 不做模糊：RenderEffect 模糊每帧重采样，边缘有锯齿描边，还很吃 GPU
-                            .graphicsLayer {
-                                val f = frame()
-                                val ev = effects().coerceIn(0f, 1f)
-                                alpha = ev
-                                // iOS 玻璃菜单不另外缩放（放大交给透镜）
-                                val s = if (liquidGlass) 1f else 0.94f + 0.06f * ev
-                                scaleX = s
-                                scaleY = s
-                                transformOrigin = pivot
-                                translationX = f.panel.center.x - target.center.x
-                                translationY = f.panel.center.y - target.center.y
-                            }
-                            // 能滚的菜单：还能往哪边滚，那一边渐隐（通用渐变遮罩，深浅跟着离边的距离连续变）
-                            .mochiFadeMask(MochiFadeEdges.vertical(MenuFadeExtent)) { edge ->
-                                val max = controller.maxScroll
-                                val e = with(density) { MenuFadeExtent.toPx() }
-                                when {
-                                    max <= 0f -> 0f
-                                    edge == MochiFadeEdge.Top -> (controller.scroll / e).coerceIn(0f, 1f)
-                                    edge == MochiFadeEdge.Bottom -> ((max - controller.scroll) / e).coerceIn(0f, 1f)
-                                    else -> 0f
                                 }
-                            },
-                    ) {
-                        // 滚动条：贴在右侧内边距里的细胶囊，越界时被压短（和 iOS 一样）
-                        if (items.size * itemH > viewport) {
-                            Spacer(
-                                Modifier
-                                    .fillMaxSize()
-                                    .drawBehind {
-                                        val a = barAlpha.value
-                                        if (a <= 0.01f) return@drawBehind
-                                        val content = items.size * itemH
-                                        val max = content - size.height
-                                        val sc = controller.scroll
-                                        val over = if (sc < 0f) {
-                                            -sc
-                                        } else if (sc > max) {
-                                            sc - max
-                                        } else {
-                                            0f
-                                        }
-                                        val w = 3.dp.toPx()
-                                        val h = (size.height * size.height / content - over).coerceAtLeast(w * 3f)
-                                        val y = (sc.coerceIn(0f, max) / max) * (size.height - h)
-                                        val x = size.width + px.panelPadding / 2f - w / 2f
-                                        drawRoundRect(
-                                            style.onPanelColor.copy(alpha = 0.35f * a),
-                                            topLeft = Offset(x, y),
-                                            size = Size(w, h),
-                                            cornerRadius = CornerRadius(w / 2f),
-                                        )
-                                    },
-                            )
+                                // 能滚的菜单：还能往哪边滚，那一边渐隐（通用渐变遮罩，深浅跟着离边的距离连续变）
+                                .mochiFadeMask(MochiFadeEdges.vertical(MenuFadeExtent)) { edge ->
+                                    val max = controller.maxScroll
+                                    val e = with(density) { MenuFadeExtent.toPx() }
+                                    when {
+                                        max <= 0f -> 0f
+                                        edge == MochiFadeEdge.Top -> (controller.scroll / e).coerceIn(0f, 1f)
+                                        edge == MochiFadeEdge.Bottom -> ((max - controller.scroll) / e).coerceIn(0f, 1f)
+                                        else -> 0f
+                                    }
+                                },
+                        ) {
+                            // 滚动条：贴在右侧内边距里的细胶囊，越界时被压短（和 iOS 一样）
+                            if (items.size * itemH > viewport) {
+                                Spacer(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .drawBehind {
+                                            val a = barAlpha.value
+                                            if (a <= 0.01f) return@drawBehind
+                                            val content = items.size * itemH
+                                            val max = content - size.height
+                                            val sc = controller.scroll
+                                            val over = if (sc < 0f) {
+                                                -sc
+                                            } else if (sc > max) {
+                                                sc - max
+                                            } else {
+                                                0f
+                                            }
+                                            val w = 3.dp.toPx()
+                                            val h = (size.height * size.height / content - over).coerceAtLeast(w * 3f)
+                                            val y = (sc.coerceIn(0f, max) / max) * (size.height - h)
+                                            val x = size.width + px.panelPadding / 2f - w / 2f
+                                            drawRoundRect(
+                                                style.onPanelColor.copy(alpha = 0.35f * a),
+                                                topLeft = Offset(x, y),
+                                                size = Size(w, h),
+                                                cornerRadius = CornerRadius(w / 2f),
+                                            )
+                                        },
+                                )
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }
@@ -703,17 +744,21 @@ private const val AutoScrollSpeed = 6f
 private fun glassAlpha(p: Float): Float = (4f * p).coerceIn(0f, 1f)
 
 /** 内容图层套上 [MenuLens]：按当前面板中心放大，位移和模糊的范围换算回放大前的坐标 */
-private fun Modifier.menuLens(lens: MenuLens, frame: () -> DropdownFrame, target: Rect, density: Density): Modifier =
-    graphicsLayer {
-        val f = frame()
-        val s = lens.scale(density, target.height)
-        val c = f.panel.center
-        scaleX = s
-        scaleY = s
-        transformOrigin = TransformOrigin(c.x / size.width, c.y / size.height)
-        val panel = Rect(c.x + (f.panel.left - c.x) / s, c.y + (f.panel.top - c.y) / s, c.x + (f.panel.right - c.x) / s, c.y + (f.panel.bottom - c.y) / s)
-        renderEffect = lens.effect(density, panel, f.panelRadius, s)
-    }
+private fun Modifier.menuLens(lens: MenuLens, frame: () -> DropdownFrame, target: Rect, density: Density): Modifier = graphicsLayer {
+    val f = frame()
+    val s = lens.scale(density, target.height)
+    val c = f.panel.center
+    scaleX = s
+    scaleY = s
+    transformOrigin = TransformOrigin(c.x / size.width, c.y / size.height)
+    val panel = Rect(
+        c.x + (f.panel.left - c.x) / s,
+        c.y + (f.panel.top - c.y) / s,
+        c.x + (f.panel.right - c.x) / s,
+        c.y + (f.panel.bottom - c.y) / s,
+    )
+    renderEffect = lens.effect(density, panel, f.panelRadius, s)
+}
 
 /**
  * iOS 玻璃菜单的面板玻璃：按当前面板（[frame]）的位置、大小、圆角排版（layout 阶段读，不重组），
@@ -743,6 +788,8 @@ private fun LiquidPanelGlass(
     }
     GlassSurface(
         glass,
+        corner,
+        null,
         Modifier
             .fillMaxSize()
             .layout { measurable, constraints ->
@@ -752,8 +799,6 @@ private fun LiquidPanelGlass(
                 )
                 layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(r.left.roundToInt(), r.top.roundToInt()) }
             },
-        corner,
-        null,
         alpha = alpha,
         cornerRadiusPx = { frame().panelRadius },
         merge = group?.let { g ->
@@ -778,13 +823,13 @@ private fun LiquidPanelGlass(
 internal fun BoxScope.PanelGlass(glass: GlassFill, target: Rect, frame: () -> DropdownFrame, corner: Dp, alpha: () -> Float) {
     GlassSurface(
         glass,
+        corner,
+        null,
         Modifier.matchParentSize().graphicsLayer {
             val f = frame()
             translationX = f.panel.center.x - target.center.x
             translationY = f.panel.center.y - target.center.y
         },
-        corner,
-        null,
         scaleX = { frame().panel.width / target.width.coerceAtLeast(1f) },
         scaleY = { frame().panel.height / target.height.coerceAtLeast(1f) },
         alpha = alpha,

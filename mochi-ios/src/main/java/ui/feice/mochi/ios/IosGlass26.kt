@@ -15,7 +15,7 @@ import ui.feice.mochi.theme.MochiGlassRecipe
  *   模糊随离边距离的曲线（−31pt 处 1 倍到 −1pt 处 0.5 倍）、外折射（12.4 / 7.75，−1 到 −0.67pt 内权重 0.3）、
  *   标签栏图标和选中块的颜色矩阵也都是读出来的。iOS 的黑点、白点、填充随背后亮度变；这里不跟背后变，用 [FixedLight] / [FixedDark] 的固定数值
  * - **截图实测**：模糊中心的 sigma（原生半径 1.667 换算成 sigma 的方式没闭合，按上面的曲线在条纹、棋盘上量出 2.8pt）、
- *   外阴影（形状固定，强度按背后亮度查表）
+ *   外阴影（形状固定，强度按背后亮度查表；实际用的是 Mochi 调软的数，见 ShadowWhite 那段）
  *
  * 面色按原生公式 `0.97 · [(黑点 + (白点 − 黑点) · Y + (C − Y)) · (1 − α) + 填充色 · α]`（Y 是 709 亮度），灰阶和纯色都和截图在 1/255 以内。
  * 没有黑环、暗描边，也没有模糊填充（输入里没有 blurFill 项）。
@@ -26,10 +26,12 @@ public object IosGlass26 {
     /** SDR holding tone 的白值，整块乘上去 */
     private const val SdrWhite = 0.97f
 
-    // 外阴影（截图实测）：形状各场景都一样（往下 8pt、软化 16.4pt），强度随背后亮度变。
-    // ShadowWhite 是白底上浅色玻璃的强度；固定配方按中灰背后取：浅色玻璃是它的 2.52 倍，深色玻璃在各种底色上都是 0.54 倍
+    // 外阴影：iOS 截图实测是往下 8pt、内缩 0.7pt、软化 16.4pt，浅色玻璃强度 0.068 × 2.52。
+    // 安卓上照搬时贴着玻璃下沿一圈偏实、看着硬，这里改成 Mochi 自己的数（不是 iOS 原值）：
+    // 阴影形状内缩 6dp、软化放到 22dp，贴边处几乎没有影子，只在下方散开一片；浅色强度降到 2.0 倍。
+    // ShadowWhite 是白底上浅色玻璃的强度；深色玻璃在各种底色上都是 0.54 倍
     private const val ShadowWhite = 0.068f
-    private const val LightShadow = 2.52f
+    private const val LightShadow = 2.0f
     private const val DarkShadow = 0.541f
 
     private val Base = MochiGlassRecipe(
@@ -65,8 +67,8 @@ public object IosGlass26 {
         highlightSpread = 0f,
         highlightAmount = 0.5f,
         shadowOffsetY = 8.dp,
-        shadowSpread = (-0.7).dp,
-        shadowSoftness = 16.4.dp,
+        shadowSpread = (-6).dp,
+        shadowSoftness = 22.dp,
     )
 
     // 标签栏：未选中的图标和文字、选中的、选中块（UITabSelectionView 的 colorMatrix），都作用在玻璃颜色上
@@ -142,8 +144,11 @@ public object IosGlass26 {
         refractionHeight = ClearRefractionHeight,
     )
 
-    /** 浅色固定玻璃：黑底上提到约 0.62、白底上压到约 0.92，图标是深色 */
-    public val FixedLight: FixedTone = FixedTone(lift = 0.3f, cap = 0.95f, contrast = 0.85f, saturation = 1.25f, fill = 0.45f)
+    /**
+     * 浅色固定玻璃：黑底上提到约 0.62、白底上约 0.96（和 iOS 白底上的玻璃一样接近白），图标是深色。
+     * 以前白底上压到 0.92、饱和 1.25，白页面上整条栏是一块灰、彩色背后的颜色也洗掉了；亮端只影响深色图标对比度的好的一头，最差的黑底不变
+     */
+    public val FixedLight: FixedTone = FixedTone(lift = 0.3f, cap = 1.04f, contrast = 0.85f, saturation = 1.35f, fill = 0.45f)
 
     /** 深色固定玻璃：黑底上提到约 0.09、白底上压到约 0.36，图标是白色 */
     public val FixedDark: FixedTone = FixedTone(lift = 0.12f, cap = 0.72f, contrast = 0.85f, saturation = 1.2f, fill = 0.45f)
@@ -204,4 +209,10 @@ public object IosGlass26 {
 
     /** 通透度默认值：iOS 默认的 regular 玻璃 */
     public const val DefaultTint: Float = 0.5f
+
+    /**
+     * 「实」档的通透度：滑条最右，接近不透明的毛玻璃。iOS 的选择列表（菜单、气泡）和面板比栏实，
+     * [iosMaterials] 给 menu、sheet 用它；栏、按钮、警告框是「透」档，跟滑条
+     */
+    public const val SolidTint: Float = 1f
 }

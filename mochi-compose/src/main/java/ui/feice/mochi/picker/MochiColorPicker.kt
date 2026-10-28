@@ -62,7 +62,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import ui.feice.mochi.basic.MochiBarIconButton
-import ui.feice.mochi.basic.MochiGlyphs
 import ui.feice.mochi.basic.MochiSegmentedControl
 import ui.feice.mochi.basic.MochiSheet
 import ui.feice.mochi.basic.MochiSheetContent
@@ -72,6 +71,7 @@ import ui.feice.mochi.basic.MochiSheetState
 import ui.feice.mochi.basic.MochiSlider
 import ui.feice.mochi.basic.MochiSliderDefaults
 import ui.feice.mochi.basic.Text
+import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.basic.rememberMochiSheetState
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiCounterText

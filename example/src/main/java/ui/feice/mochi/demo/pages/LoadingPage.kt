@@ -57,14 +57,13 @@ import ui.feice.mochi.theme.MochiTheme
 
 /**
  * 加载与进度：iOS 里常见的几种「在等」的样子——转圈、下拉刷新的辐条、HUD、App Store 下载按钮、
- * 环形进度、仪表、储存空间条、按钮里的加载、骨架占位。全部是库里的组件拼出来的。
+ * 环形进度、储存空间条、按钮里的加载、骨架占位。全部是库里的组件拼出来的。仪表（MochiGauge）在「徽标、头像与仪表」页。
  */
 @Composable
 fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
     var reveal by rememberSaveable { mutableFloatStateOf(0.5f) }
-    var gauge by rememberSaveable { mutableFloatStateOf(0.68f) }
     DemoPage(entry, modifier) {
         demoItem {
             DemoSection("转圈", footer = "iOS 的 UIActivityIndicatorView：8 根胶囊辐条，一道亮光顺时针平滑扫过，每根很快亮起、再慢慢暗回去。放在行尾表示只有这一行在加载。") {
@@ -153,32 +152,6 @@ fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                         Text("${(p * 100).roundToInt()}%", style = ts.footnote, color = cs.onSurface)
                     }
                     MochiProgressRing(p, size = 44.dp, strokeWidth = 4.dp, color = cs.tertiary)
-                }
-            }
-        }
-        demoItem {
-            DemoSliderSection("仪表", "${(gauge * 100).roundToInt()}", gauge, { gauge = it })
-        }
-        demoItem {
-            DemoSection(null, footer = "iOS 的 Gauge：开口朝下的一段弧，中间写数值；拖动时数值逐帧直接显示。") {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MochiProgressRing(gauge, size = 72.dp, strokeWidth = 7.dp, sweep = 270f) {
-                        Text("${(gauge * 100).roundToInt()}", style = ts.navTitle.copy(fontFeatureSettings = "tnum"), color = cs.onSurface)
-                    }
-                    MochiProgressRing(gauge, size = 72.dp, strokeWidth = 7.dp, sweep = 240f, color = cs.tertiary) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("AQI", style = ts.footnote, color = cs.onSurfaceVariant)
-                            Text(
-                                "${(gauge * 200).roundToInt()}",
-                                style = ts.subhead.copy(fontFeatureSettings = "tnum"),
-                                color = cs.onSurface,
-                            )
-                        }
-                    }
                 }
             }
         }

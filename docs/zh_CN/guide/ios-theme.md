@@ -95,7 +95,7 @@ fun HomeScaffold(content: @Composable (Modifier) -> Unit, tabBar: @Composable ()
 | `alert` | 警告框、操作确认框 | `menu` |
 | `sheet` | 面板（暂未接入：面板里的页面画不透明底色，玻璃会被整块盖住） | `bar` |
 
-iOS 26、iOS 27 两种样式下菜单和警告框都用常规玻璃（`menu`、`alert` 为空，回退到 `bar`）。
+iOS 26 样式的玻璃分「透」「实」两档，和 iOS 一样：栏、栏里的按钮、警告框、玻璃样式的按钮用「透」（`bar`，跟通透度）；选择列表（下拉菜单、长按菜单、气泡）和面板用「实」（`menu`、`sheet`，固定为通透度 `IosGlass26.SolidTint` = 1，即滑条最右，接近不透明的毛玻璃）。iOS 27 样式已搁置，菜单、面板、警告框都回退到 `bar`。
 
 开了菜单玻璃（`menu` 有值、页面有背景录制）后，下拉菜单和长按菜单换成 iOS 27 玻璃菜单的样子，数值读自 24A435 的 UIKit（`_UIContextMenuPlatformMetrics_Glass` 和单元格的约束算法），不是目测：
 
@@ -110,11 +110,13 @@ iOS 26、iOS 27 两种样式下菜单和警告框都用常规玻璃（`menu`、`
 - 自己用「懒加载列表 + `MochiTitleBar`」排页面时：`val backdrop = rememberMochiBarBackdrop()`，列表加 `Modifier.mochiBackdropSource(backdrop)`（放在 `mochiScrollEdgeBlur` 前面），`MochiTitleBar(…, backdrop = backdrop)`。主题的按钮不是玻璃时 `rememberMochiBarBackdrop()` 返回 null，不多录一层
 - 最外层的 `MochiNavHost` 把整页录给浮层（菜单、气泡、警告框）；从浮层里再打开的浮层，底下是那份录制再叠上外面那个浮层
 
-正文里的控件（列表里的搜索框、分段控件、普通按钮）不做玻璃：玻璃不能取样包含它自己的内容。
+正文里的控件（列表里的搜索框、分段控件、纯色样式的按钮）不做玻璃：玻璃不能取样包含它自己的内容。正文按钮要玻璃就写玻璃样式（`ProminentGlass` / `Glass` / `ClearGlass` / `ProminentClearGlass`），背景是一块纯色画布，见[按钮](../components/button.md)。
 
 按下时玻璃从手指处亮起 iOS 的光斑（`_UIFlexInteractionLittleGlowView`，和玻璃标签栏同一套）：93pt 圆的阴影，最高不透明度 0.2845，把下面的玻璃过一组提饱和矩阵后按光斑形状混进来，提亮的是玻璃本来的颜色，不叠白；挪出触摸阈值后跟手、放大到 2 倍亮度减半，松手放大到 4 倍淡掉。自己的玻璃用 `MochiGlassSurface(modifier, material, backdrop, cornerRadius, interactionSource) { … }`，给了 `interactionSource` 就有光斑。
 
 单独一块玻璃用 `MochiGlassCapsule(backdrop, modifier, material = MochiTheme.materials.bar) { … }`：胶囊形（连续曲率，宽高相等时是圆），画法和玻璃标签栏同一套（轮廓外的细描边、黑环、外阴影 + 玻璃本体），配方跟主题深浅取。只是外观，不处理点击。外阴影画在胶囊边界外，要淡入淡出时把透明度挂在比它大一圈（至少 24dp）的外层上，直接挂在它的 `modifier` 上会把阴影切成直角。示例的液态玻璃页用它摆了 iOS「Liquid Glass」设置页同款的圆钮 + 搜索条（录屏量的尺寸：圆钮 48pt、搜索条高 48pt、间距 11pt）。
+
+几块圆角矩形要画成一块会融在一起的表面（栏收成小胶囊、按钮被吸进胶囊、从胶囊里长出来这类形变转场）用 `MochiGlassBlobs(blobs = { listOf(MochiBlob(rect, radius), …) }, fuse = { 半径 }, alpha = { … })`。第一块是主形状，其余按顺序并进去（最多 6 块），离得越近颈越粗，间距不小于 `fuse` 时不连。主题有玻璃时 Android 13+ 画成一块玻璃，更低的系统每块单独一块；没有玻璃时画栏按钮的纯色，挨近的用融球颈连起来。它只画底，图标、文字放在上面。
 
 ## 滚动边缘效果
 
@@ -146,8 +148,11 @@ iOS 26 在「设置 › 显示与亮度 › Liquid Glass」里有一条「透明
   亮度映射是 `Y' = lift + (cap − lift)·(0.5 + 对比度·(Y − 0.5))`，色度按饱和度保留，然后和 regular 一样盖填充色、乘 SDR 白值。图标颜色按中灰背后定死
 - 可读性（WCAG 2.x，图标颜色对图标正下方的玻璃颜色，背后从纯黑到纯白，`IosGlassTintTest` 验算）：透明端约 3.3:1、默认约 6.2:1、0.75 处约 9.5:1、拉满约 12.5:1；整条不低于 3:1，往色调拖只会更清楚
 - 各段的数值是按可读性推出来的，不是 iOS 滑条两端的实测值（还没读到），是近似
+- 滑条只调「透」那档；菜单和面板的「实」固定在滑条最右，不跟它变
 
 ## iOS 27 玻璃
+
+> **已搁置**：先把 iOS 26 玻璃做完善，再接着做 iOS 27。下面是现有的近似实现，暂时不再更新。
 
 `MochiIosTheme(glassStyle = IosGlassStyle.Ios27)` / `iosMaterials(isDark, glassTint, IosGlassStyle.Ios27, …)` / `IosGlass27.regular(isDark, density, tint)` 换成 iOS 27（24A435）的 Regular 玻璃，默认仍是 iOS 26.5（`IosGlassStyle.Ios26`）。
 
@@ -223,7 +228,7 @@ iOS 的 vibrancy：文字、图标压在照片或材质上时不用固定颜色�
 | 亮边 | 主光 / 补光高光：原生主光 −45°、补光 135°（Mochi 改成竖向：主光从正上方、补光从正下方，侧边留三成），高 1pt（Mochi 保持 1dp，颜色是边外的环境色（只模糊玻璃外面的背景 8dp、取边外 4dp 处），不往里渗（在玻璃里看着是一圈光晕）；曲率 0.4、尽头软边，增益 1.5），amount 0.5，曲率 0.7，白色；范围 300×62 胶囊、360×72 卡片 90°，170×170 是 97.9°，360×180 是 117.8°（中间按 √面积插值）；按高光层的 vibrantColorMatrix 混。真机上边光会用 HDR 余量更亮，安卓上画不出这部分 | 原生（iOS 26.5 模拟器读图层树；范围插值是近似） |
 | 标签栏图标、选中块 | 未选中、选中、选中块三个颜色矩阵，浅色深色各一份 | 原生 |
 | 深浅翻转 | 浅色玻璃背后亮度 < 0.2 翻深色，深色玻璃 > 0.85 翻浅色（Mochi 不翻：用固定配方） | 原生 |
-| 外阴影 | 往下 8pt，软化 16.4pt；强度随背后亮度变：浅色玻璃白底 0.068，亮度 0.72 / 0.5 / 0.21 的底上是它的 2.2 / 2.52 / 2.67 倍；深色玻璃各底色都是 0.54 倍 | 截图 |
+| 外阴影 | iOS 截图实测：往下 8pt，软化 16.4pt；强度随背后亮度变：浅色玻璃白底 0.068，亮度 0.72 / 0.5 / 0.21 的底上是它的 2.2 / 2.52 / 2.67 倍；深色玻璃各底色都是 0.54 倍。Mochi 实际用的是自己的数：阴影形状内缩 6dp、软化 22dp、浅色 2.0 倍，贴着玻璃下沿不出一圈实影 | 截图（实际值 Mochi 自定） |
 
 和 iOS 截图比（同一张背景、同一个像素位置）：玻璃内部 0～3/255，亮边 0.7～5.1/255，轮廓外（含外阴影）0～0.3/255；标签栏玻璃、选中块和图标颜色 1～3/255；轮廓误差 0.45px 以内。iOS 26.5 的玻璃没有黑环、暗描边和模糊填充。
 

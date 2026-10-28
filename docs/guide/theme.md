@@ -17,12 +17,12 @@ MochiTheme(
 ) { … }
 ```
 
-- `glass`: tab bars (search field and accessory included) and other floating bars are glass; off means a solid capsule with a shadow
+- `glass`: tab bars (search field and accessory included) and other floating bars, plus the buttons in bars, menus, sheets and alerts, are glass; off means a solid capsule with a shadow. It never restyles page content: buttons in content are glass only with a glass style (`MochiButtonStyle.ProminentGlass` and friends), and solid styles such as `Filled` always stay solid; see [Button](../components/button.md)
 - `blur`: content scrolled under the top and bottom bars blurs progressively and dims by luminance; off means a fading background
 - `themeAccent`: keep the glass neutral and color the selected item with the theme's accent. Pass false for iOS colors (iOS derives its accent from the glass) and true for others
 - The default is `MochiMaterials()`: both off. `iosMaterials` lives in mochi-ios; see [iOS appearance and glass materials](ios-theme.md) for glass styles and transparency
 
-Components read the materials (`MochiTheme.materials`); pages never check the switches. Liquid glass re-renders what is behind it every frame and costs more power, so let users opt in and tell them the cost first.
+Components read the materials (`MochiTheme.materials`); pages never check the switches. To keep one region free of glass use `MochiMaterialsScope(MochiMaterials()) { … }`, which swaps only the materials and leaves colors and type alone. Liquid glass re-renders what is behind it every frame and costs more power, so let users opt in and tell them the cost first.
 
 Liquid glass is a **long-term beta**: its look, performance and public API may change in minor releases with no compatibility guarantee, and rendering cost varies a lot between devices. In shipping apps keep it off by default and let users turn it on. Blur (`blur`) is not part of the beta.
 
@@ -132,6 +132,27 @@ All shapes use the default G2 continuous-curvature corner from [Kyant0/Capsule](
 | extraLargeIncreased | 32.dp |
 | extraExtraLarge | 48.dp |
 | full | Capsule (`MochiCapsule`) |
+
+## Shadow levels (`MochiShadows`)
+
+Components pick a shadow level from the theme; the numbers live in one table, so the whole shadow style changes in one place.
+
+| Level | Used by |
+|---|---|
+| `contact` / `contactPressed` | switch and slider thumbs, the segmented control indicator (one soft layer hugging the part) |
+| `low` | the step slider's knob |
+| `raised` | the tab bar at rest |
+| `lifted` | the held tab bar, index bar, toasts |
+| `floating` | open menus and popovers, alerts, the sidebar (menus interpolate from `rest` while opening) |
+
+Each `MochiShadowLevel` is a wide, inset, faint ambient layer plus a very soft contact layer, with separate opacities for light and dark. Swap one level or the whole table:
+
+```kotlin
+MochiTheme(colors = scheme, shadows = MochiShadows(floating = MochiShadows().floating.copy(ambientAlpha = 0.08f))) { App() }
+MochiTheme(colors = scheme, shadows = MochiShadows.None) { App() } // flat
+```
+
+In your own components read `MochiTheme.shadows.<level>.resolve(density, dark, visibility)` and draw it with `drawMochiShadow`; `lerp(a, b, t)` blends two levels for press or expand progress.
 
 ## Concentric corners
 

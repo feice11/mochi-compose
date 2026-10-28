@@ -14,10 +14,32 @@ import ui.feice.mochi.theme.MochiTheme
 
 /**
  * 按钮样式：MD3E 的四种，加上 iOS 26 的两种 clear 玻璃。
- * 主题的控件是玻璃时，[Filled] / [Tonal] 画成 iOS 的 prominentGlass / glass，[ProminentClearGlass] / [ClearGlass]
- * 画成 prominentClearGlass / clearGlass（更通透的 .clear 玻璃）；不是玻璃时 clear 两种分别和 [Filled] / [Tonal] 一样
+ * 样式说了算（和 iOS 26 一样）：[Filled] / [Tonal] / [Outlined] / [Text] 永远是纯色，主题开不开液态玻璃都不变。
+ * 要玻璃就写玻璃样式：[ProminentGlass] / [Glass] 是 iOS 的 prominentGlass / glass，[ProminentClearGlass] / [ClearGlass]
+ * 是 prominentClearGlass / clearGlass（更通透的 .clear 玻璃）。主题的控件没有玻璃（[ui.feice.mochi.theme.MochiMaterials.controlGlass]
+ * 为 null）时，prominent 两种按 [Filled] 画、另外两种按 [Tonal] 画。玻璃是长期 Beta
  */
-public enum class MochiButtonStyle { Filled, Tonal, Outlined, Text, ClearGlass, ProminentClearGlass }
+public enum class MochiButtonStyle {
+    Filled,
+    Tonal,
+    Outlined,
+    Text,
+    ClearGlass,
+    ProminentClearGlass,
+    Glass,
+    ProminentGlass,
+    ;
+
+    /** 是四种玻璃样式之一 */
+    public val isGlass: Boolean get() = this == Glass || this == ProminentGlass || this == ClearGlass || this == ProminentClearGlass
+
+    /** 玻璃样式没有玻璃可画时退回的纯色样式；纯色样式就是自己 */
+    public val solid: MochiButtonStyle get() = when (this) {
+        ProminentGlass, ProminentClearGlass -> Filled
+        Glass, ClearGlass -> Tonal
+        else -> this
+    }
+}
 
 /**
  * 按钮配色。
@@ -91,14 +113,16 @@ public object MochiButtonDefaults {
     public fun barColors(): MochiButtonColors {
         val cs = MochiTheme.colorScheme
         return remember(cs) {
+            // 和分组样式的卡片同色（浅色下是白的）：浮在灰底上看得清，像 iOS 26 顶栏的圆按钮
+            val container = if (cs.isDark) cs.surfaceContainerHigh else cs.surfaceContainerLowest
             MochiButtonColors(
-                // 和分组样式的卡片同色（浅色下是白的）：浮在灰底上看得清，像 iOS 26 顶栏的圆按钮
-                container = if (cs.isDark) cs.surfaceContainerHigh else cs.surfaceContainerLowest,
+                container = container,
                 content = cs.onSurface,
                 outline = Color.Transparent,
                 pressedContainer = Color.Transparent,
                 glow = Color.White.copy(alpha = if (cs.isDark) 0.16f else 0.45f),
-                disabledContainer = cs.onSurface.copy(alpha = 0.08f),
+                // 禁用时底色不变、只把图标文字变淡（iOS 栏按钮的做法）：和同一排可用的按钮、搜索框还是同一种底
+                disabledContainer = container,
                 disabledContent = cs.onSurface.copy(alpha = 0.38f),
             )
         }
@@ -113,7 +137,7 @@ public object MochiButtonDefaults {
         val glowA = if (cs.isDark) 0.16f else 0.45f
         return remember(style, cs) {
             when (style) {
-                MochiButtonStyle.Filled, MochiButtonStyle.ProminentClearGlass -> MochiButtonColors(
+                MochiButtonStyle.Filled, MochiButtonStyle.ProminentGlass, MochiButtonStyle.ProminentClearGlass -> MochiButtonColors(
                     container = cs.primary,
                     content = cs.onPrimary,
                     outline = Color.Transparent,
@@ -123,7 +147,7 @@ public object MochiButtonDefaults {
                     disabledContent = cs.onSurface.copy(alpha = 0.38f),
                 )
 
-                MochiButtonStyle.Tonal, MochiButtonStyle.ClearGlass -> MochiButtonColors(
+                MochiButtonStyle.Tonal, MochiButtonStyle.Glass, MochiButtonStyle.ClearGlass -> MochiButtonColors(
                     container = cs.secondaryContainer,
                     content = cs.onSecondaryContainer,
                     outline = Color.Transparent,

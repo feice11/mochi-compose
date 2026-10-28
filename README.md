@@ -6,7 +6,7 @@
 
 软、弹、跟手的 Jetpack Compose 组件库。配色和字阶来自 MD3 Expressive，交互和动效照着 iOS 26 做，形状统一用 G2 连续圆角。
 
-[![JitPack](https://jitpack.io/v/feice11/mochi-compose.svg)](https://jitpack.io/#feice11/mochi-compose)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.feice11/mochi-compose)](https://central.sonatype.com/artifact/io.github.feice11/mochi-compose)
 [![Build](https://github.com/feice11/mochi-compose/actions/workflows/build.yml/badge.svg)](https://github.com/feice11/mochi-compose/actions/workflows/build.yml)
 ![minSdk](https://img.shields.io/badge/minSdk-23-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
@@ -75,29 +75,21 @@
 
 ## 安装
 
-通过 JitPack 发布。先在 `settings.gradle.kts` 里加仓库：
+发布在 Maven Central，不用加仓库，版本号看上面的徽章：
 
 ```kotlin
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-        maven("https://jitpack.io")
-    }
-}
+implementation("io.github.feice11:mochi-compose:<版本>")
 ```
 
-再加依赖，版本号看上面的 JitPack 徽章：
+图标、外观各自一个模块，按需加（都依赖 mochi-compose）：
 
 ```kotlin
-implementation("com.github.feice11:mochi-compose:<版本>")
+implementation("io.github.feice11:mochi-icons:<版本>")   // 全套 Ionicons，见「图标」
+implementation("io.github.feice11:mochi-ios:<版本>")     // iOS 外观与玻璃材质
+implementation("io.github.feice11:mochi-nothing:<版本>") // Nothing 外观
 ```
 
-图标单独一个模块（全套 Ionicons，见 [图标](docs/zh_CN/components/icons.md)）：
-
-```kotlin
-implementation("com.github.feice11.mochi-compose:mochi-icons:<版本>")
-```
+0.1.x 的旧版本仍在 JitPack（`com.github.feice11:mochi-compose`，需要加 `maven("https://jitpack.io")` 仓库）。
 
 需要 compileSdk 36 以上、Kotlin 2.3 以上（Capsule 依赖 Compose 1.10）。
 
@@ -129,7 +121,7 @@ setContent {
 
 ## 文档
 
-组件：[下拉菜单](docs/zh_CN/components/dropdown.md) · [标签栏](docs/zh_CN/components/tabbar.md) · [按钮](docs/zh_CN/components/button.md) · [开关](docs/zh_CN/components/switch.md) · [滑块](docs/zh_CN/components/slider.md) · [强度调整条](docs/zh_CN/components/intensity-slider.md) · [步进器](docs/zh_CN/components/stepper.md) · [列表](docs/zh_CN/components/list.md) · [底部面板](docs/zh_CN/components/sheet.md) · [分段选择器](docs/zh_CN/components/segmented.md) · [对话框](docs/zh_CN/components/dialog.md) · [文字输入](docs/zh_CN/components/textfield.md) · [提示](docs/zh_CN/components/toast.md) · [长按预览](docs/zh_CN/components/context-menu.md) · [大标题与搜索栏](docs/zh_CN/components/navbar.md) · [侧边栏](docs/zh_CN/components/sidebar.md) · [滚筒与时间日期](docs/zh_CN/components/picker.md) · [日历](docs/zh_CN/components/calendar.md) · [颜色选择](docs/zh_CN/components/color-picker.md) · [弹出层与确认](docs/zh_CN/components/popover.md) · [轮播与页面指示器](docs/zh_CN/components/pager.md) · [下拉刷新与空状态](docs/zh_CN/components/refresh.md) · [徽标、头像与仪表](docs/zh_CN/components/badge.md) · [工具栏与长按确认](docs/zh_CN/components/toolbar.md) · [选择芯片](docs/zh_CN/components/chip.md) · [图标](docs/zh_CN/components/icons.md)
+组件：[下拉菜单](docs/zh_CN/components/dropdown.md) · [标签栏](docs/zh_CN/components/tabbar.md) · [按钮](docs/zh_CN/components/button.md) · [开关](docs/zh_CN/components/switch.md) · [滑块](docs/zh_CN/components/slider.md) · [强度调整条](docs/zh_CN/components/intensity-slider.md) · [步进器](docs/zh_CN/components/stepper.md) · [列表](docs/zh_CN/components/list.md) · [底部面板](docs/zh_CN/components/sheet.md) · [分段选择器](docs/zh_CN/components/segmented.md) · [对话框](docs/zh_CN/components/dialog.md) · [文字输入](docs/zh_CN/components/textfield.md) · [提示](docs/zh_CN/components/toast.md) · [长按预览](docs/zh_CN/components/context-menu.md) · [大标题与搜索栏](docs/zh_CN/components/navbar.md) · [侧边栏](docs/zh_CN/components/sidebar.md) · [滚筒与时间日期](docs/zh_CN/components/picker.md) · [日历](docs/zh_CN/components/calendar.md) · [颜色选择](docs/zh_CN/components/color-picker.md) · [弹出层与确认](docs/zh_CN/components/popover.md) · [轮播与页面指示器](docs/zh_CN/components/pager.md) · [下拉刷新与空状态](docs/zh_CN/components/refresh.md) · [徽标、头像与仪表](docs/zh_CN/components/badge.md) · [工具栏与长按确认](docs/zh_CN/components/toolbar.md) · [选择芯片](docs/zh_CN/components/chip.md) · [选择卡片与缩小预览](docs/zh_CN/components/select-frame.md) · [图标](docs/zh_CN/components/icons.md)
 
 指南：[应用接入规范](docs/zh_CN/guide/application-integration.md) · [主题](docs/zh_CN/guide/theme.md) · [通用效果](docs/zh_CN/guide/effects.md) · [内容变换](docs/zh_CN/guide/content-transitions.md) · [导航与页面转场](docs/zh_CN/guide/navigation.md) · [越界回弹](docs/zh_CN/guide/overscroll.md) · [触感](docs/zh_CN/guide/haptics.md) · [HDR 高光（实验性）](docs/zh_CN/guide/hdr.md) · [Nothing 外观](docs/zh_CN/guide/nothing-theme.md) · [iOS 外观与玻璃材质（长期 Beta）](docs/zh_CN/guide/ios-theme.md) · [兼容性](docs/zh_CN/guide/compatibility.md)
 

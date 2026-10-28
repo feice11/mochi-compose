@@ -26,15 +26,18 @@ import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import ui.feice.mochi.effect.glass.GlassSource
-import ui.feice.mochi.effect.glass.LocalMochiBarSource
-import ui.feice.mochi.effect.glass.source
-import ui.feice.mochi.effect.glass.LocalMochiBackdrop
-import ui.feice.mochi.effect.glass.MochiBackdrop
 import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.mochiBlurReveal
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.GlassSource
+import ui.feice.mochi.effect.glass.LocalGlassSources
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
+import ui.feice.mochi.effect.glass.MochiBackdrop
+import ui.feice.mochi.effect.glass.glassOn
+import ui.feice.mochi.effect.glass.source
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 
@@ -83,7 +86,7 @@ public fun MochiTitleBar(
     val subColor = MochiScrollEdgeDefaults.textColor(tone, MochiTheme.colorScheme.onSurfaceVariant, secondary = true)
     // 栏里的玻璃（按钮、搜索框）取样「栏下面实际看到的样子」：背景来源（已经渐进模糊过）再叠上这一层渐隐底色。
     // 渐隐单独画在一层里录下来，不和按钮在同一层（玻璃不能取样到自己）
-    val under = LocalMochiBackdrop.current?.takeIf { MochiTheme.materials.controlGlass != null }?.source
+    val under = LocalMochiBackdrop.current?.takeIf { glassOn(GlassRole.Control) }?.source
     val fadeLayer = if (under != null) rememberLayerBackdrop() else null
     val barSource = if (under != null && fadeLayer != null) {
         val layer = rememberCombinedBackdrop(under.layer, fadeLayer)
@@ -92,11 +95,16 @@ public fun MochiTitleBar(
     } else {
         null
     }
-    Box(modifier.fillMaxWidth().then(if (fadeLayer == null) Modifier.mochiScrollEdgeFade(background, alpha = backgroundProgress, tone = tone) else Modifier)) {
+    val edgeFade = Modifier.mochiScrollEdgeFade(background, alpha = backgroundProgress, tone = tone)
+    Box(modifier.fillMaxWidth().then(if (fadeLayer == null) edgeFade else Modifier)) {
         if (fadeLayer != null) {
-            Box(Modifier.matchParentSize().layerBackdrop(fadeLayer).mochiScrollEdgeFade(background, alpha = backgroundProgress, tone = tone))
+            Box(Modifier.matchParentSize().layerBackdrop(fadeLayer).then(edgeFade))
         }
-        CompositionLocalProvider(LocalMochiBarSource provides (barSource ?: LocalMochiBarSource.current)) {
+        // 栏里玻璃的外阴影跟着背景渐隐走：内容停在顶部、栏后面只有纯色底时没有阴影，内容滚进栏下面时渐渐出来
+        CompositionLocalProvider(
+            LocalGlassSources provides LocalGlassSources.current.let { it.copy(bar = barSource ?: it.bar) },
+            LocalMochiGlassShadow provides backgroundProgress,
+        ) {
             TitleBarRow(title, subtitle, navigationIcon, actions, barHeight, titleProgress, textColor, subColor)
         }
     }

@@ -10,9 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.RenderVectorGroup
 import androidx.compose.ui.graphics.vector.VectorConfig
@@ -155,11 +155,7 @@ public object MochiIoniconDefaults {
  * 当前主题装了 [ui.feice.mochi.theme.MochiIconProvider]（应用自己的图标集）并且认得这个名字时，用主题的。
  */
 @Composable
-public fun rememberMochiIonicon(
-    name: String,
-    style: MochiIconStyle = MochiIconStyle.Outline,
-    optical: Boolean = true,
-): ImageVector? {
+public fun rememberMochiIonicon(name: String, style: MochiIconStyle = MochiIconStyle.Outline, optical: Boolean = true): ImageVector? {
     LocalMochiIconProvider.current?.resolve(name, style == MochiIconStyle.Filled)?.let { return it }
     val context = LocalContext.current
     val weight = LocalMochiSymbolWeight.current
@@ -189,7 +185,7 @@ public fun MochiIonicon(
     }
     val draw = LocalMochiIconDraw.current
     if (draw != null) {
-        DrawnIcon(vector, draw, tint, modifier.size(size), contentDescription)
+        DrawnIcon(vector, draw, tint, contentDescription, modifier.size(size))
         return
     }
     Image(
@@ -200,15 +196,14 @@ public fun MochiIonicon(
     )
 }
 
-private fun Context.isDebuggable(): Boolean =
-    applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+private fun Context.isDebuggable(): Boolean = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 
 /**
  * 按进度描绘一个图标：描边路径依次从起点画到终点（后一段比前一段晚一点起笔，互相接上），
  * 实心路径（圆点、填充块）在描边快画完时淡入。每帧只改各段的裁剪终点和透明度，路径本身不重建
  */
 @Composable
-private fun DrawnIcon(vector: ImageVector, progress: () -> Float, tint: Color, modifier: Modifier, contentDescription: String?) {
+private fun DrawnIcon(vector: ImageVector, progress: () -> Float, tint: Color, contentDescription: String?, modifier: Modifier = Modifier) {
     val parts = remember(vector) { DrawParts.of(vector.root) }
     val p = progress().coerceIn(0f, 1f)
     val configs = parts.configs(p)
@@ -251,7 +246,12 @@ private class DrawParts(private val strokes: List<String>, private val fills: Li
                 for (node in g) {
                     when (node) {
                         is VectorGroup -> walk(node)
-                        is VectorPath -> if (node.stroke != null) strokes += node.name else if (node.fill != null) fills += node.name
+
+                        is VectorPath -> if (node.stroke != null) {
+                            strokes += node.name
+                        } else if (node.fill != null) {
+                            fills += node.name
+                        }
                     }
                 }
             }
@@ -267,8 +267,10 @@ private class TrimConfig(private val end: Float) : VectorConfig {
     @Suppress("UNCHECKED_CAST")
     override fun <T> getOrDefault(property: VectorProperty<T>, defaultValue: T): T = when (property) {
         is VectorProperty.TrimPathEnd -> end as T
+
         // 还没起笔的一段完全不画（裁到 0 时圆线头还会留下一个点）
         is VectorProperty.StrokeAlpha -> (if (end <= 0.001f) 0f else defaultValue) as T
+
         else -> defaultValue
     }
 }

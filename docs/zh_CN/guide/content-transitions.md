@@ -111,6 +111,7 @@ MochiDrawIcon(checkIcon, drawn = done, tint = …, size = 40.dp)
 - 半径为 0 时不建任何图层，静止时没有额外开销。
 - 位移、缩放写在它外面的 graphicsLayer 里，透明度用 `mochiBlurAlpha(alpha, 半径)` 设：`Modifier.graphicsLayer { mochiBlurAlpha(a, r); scaleX = s }.mochiBlur { r }`。模糊生效时，透明度直接乘在模糊后的那张图上，不再为透明度单独开一层整块离屏。真机上这一层离屏比模糊本身还贵。
 - 裁剪放在它里面，模糊外溢的软边会留着；放在它外面，外溢会被一起裁掉。
+- 内容画出自己边界时（玻璃的外阴影）传 `overflow`：`mochiBlur(overflow = mochiGlassOverflow()) { r }`，模糊替换、出现消失用 `MochiBlurTransitions.Replace.copy(overflow = mochiGlassOverflow())`。模糊图层按这一圈往外多录，半透明时也不开按内容范围的离屏层，过渡中阴影不会被切成直角矩形。只包文字、图标时不用传，多录的那圈也要模糊。
 - 启动时在后台把每一档模糊在看不见的离屏画布上画一次，渲染线程先编好着色器，第一次出现的模糊过渡不再因为现编程序掉帧。
 - 换主题的揭开转场照旧逐帧连续变化半径，不走这里。
 

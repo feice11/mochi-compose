@@ -151,7 +151,7 @@ Spacer(
 
 `proximityFuse(a, b, restGap)` gives the "join when close" factor: 0 at distance ≥ restGap, 1 when touching. Multiply by the max fuse radius to get `fuse`.
 
-`MochiMetaballShadow.elevated(density, elevation, dark, visibility)` gives the two-layer shadow for an elevation; use `MochiMetaballShadow.None` for no shadow.
+`MochiMetaballShadow.elevated(density, elevation, dark, visibility)` gives the two-layer shadow for an elevation; use `MochiMetaballShadow.None` for no shadow. Inside a theme prefer the shadow levels, `MochiTheme.shadows.floating.resolve(density, dark)` (see [Shadow levels](theme.md#shadow-levels-mochishadows)), so an app that changes its shadow table changes yours too.
 
 Translucent fills retain their alpha across the merged surface, including overlaps and a tail contained inside the selection. The renderer composites one body over the page and keeps its own shadow outside the surface; callers should not paint the bodies again underneath. This applies to every theme, including iOS semantic fills.
 
@@ -190,18 +190,19 @@ Demo: Effects → 渐变遮罩.
 
 ## Soft shadow
 
-`DrawScope.drawMochiShadow(path, shadow, color)` (`effect/shadow`) casts a two-layer shadow under any shape, using the same parameters as the metaball: a large faint ambient layer plus a small solid contact layer, with Gaussian edges and no banding. The shadow sits under the shape: draw the shadow first, then the shape, so the shape's anti-aliased edge lands directly on the soft shadow without a hard grey line. A translucent shape lets the shadow show through.
+`DrawScope.drawMochiShadow(path, shadow, color)` (`effect/shadow`) casts a shadow under any shape, using the same parameters as the metaball (`MochiMetaballShadow` has an ambient and a contact layer, and `ambientInset` shrinks the ambient shape before blurring; the `elevated` preset is an inset, widely blurred, faint ambient layer plus a very soft, faint contact layer, so only a trace of shadow sits at the edge and there is no hard line), with Gaussian edges and no banding. The shadow sits under the shape: draw the shadow first, then the shape, so the shape's anti-aliased edge lands directly on the soft shadow without a hard grey line. A translucent shape lets the shadow show through.
 
 ```kotlin
+val shadowLevel = MochiTheme.shadows.raised // read in the composable
 drawBehind {
     val p = pathCache.get(size.toRect(), size.minDimension / 2f, 1f)
     // Capsules and rounded rectangles use the rect overload: pass the rect and corner radius
-    drawMochiShadow(size.toRect(), size.minDimension / 2f, MochiMetaballShadow.elevated(this, elevation = 0.35f, dark), MochiTheme.colorScheme.shadow)
+    drawMochiShadow(size.toRect(), size.minDimension / 2f, shadowLevel.resolve(this, dark), MochiTheme.colorScheme.shadow)
     drawPath(p, container)
 }
 ```
 
-Use it for floating surfaces instead of Material's `shadowElevation`. The tab bar, its search button and accessory, the step slider, and switch and slider thumbs already do.
+Use it for floating surfaces instead of Material's `shadowElevation`. The tab bar, its search button and accessory, the step slider, switch and slider thumbs, alerts and toasts already do.
 
 For capsules and rounded rectangles, use the rect overload `drawMochiShadow(rect, cornerRadius, shadow, color)`. On Android 13+ it computes the rounded rectangle's Gaussian shadow directly in a shader: one draw, no textures. Once blurred, a continuous-curvature corner and a circular corner look the same. The path overload goes through the system's `setShadowLayer`, which creates a blur texture for every distinct path and keeps it, so a shape that changes every frame (animation, dragging, collapsing) makes GPU memory grow without bound. On an Android 16 phone, the non-iOS tab bar collapsing while scrolling leaked one texture per frame, reaching hundreds of MB after a few dozen swipes. Use the path overload only for shapes that don't change.
 
@@ -247,6 +248,18 @@ In the demo app, Theme → Graphics and the second page of onboarding switch lev
 - The capture uses PixelCopy to copy the pixels actually on screen (Android 8.0+); with animations disabled, on older systems or if the copy fails, the change is applied directly.
 
 The same state also offers `state.crossfade { change the theme }`: an in-place content blur transition of about 0.5 s where the old frame blurs and fades while the new one sharpens out of a blur, with no spreading from the finger (both blur radii change continuously frame by frame instead of using cached steps, which would jump, and the relayout for the new theme finishes before the animation starts); `isRevealing` is true here too, so colors snap: the crossfade itself carries the color change, and interpolating on top would recompose the whole tree every frame and make the transition stutter. Where the system cannot blur, it is just a fade.
+
+Settings pages usually hold a nullable state (no host in previews or tests) and only want the reveal when light/dark actually flips. Three helpers cover that:
+
+```kotlin
+reveal.revealOrChange { controller.keyColor = it }              // reveal, or just change when the state is null
+reveal.revealIfShadeChanges(nowDark, mode.isDark(systemDark)) {  // reveal only if light/dark flips;
+    controller.colorSchemeMode = mode                           // otherwise colors interpolate in place
+}
+reveal.crossfadeOrChange { settings.style = it }                 // whole-style switch: in-place blur crossfade
+```
+
+`ColorSchemeMode.isDark(systemDark)` tells whether a mode is dark right now.
 
 Which to use: switching the whole style (Mochi ↔ Nothing) uses `crossfade`; switching light/dark uses `reveal`, but only when the brightness actually changes (e.g. switching between Light and Auto while the system is light changes nothing on screen, so apply it directly).
 

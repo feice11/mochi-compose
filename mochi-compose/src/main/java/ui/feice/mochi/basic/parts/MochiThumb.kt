@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.parts
 
 import android.os.Build
 import androidx.compose.ui.geometry.CornerRadius
@@ -23,13 +23,18 @@ import ui.feice.mochi.effect.glow.drawGlow
 import ui.feice.mochi.effect.glow.insetPath
 import ui.feice.mochi.effect.hdr.hdrLinearBrush
 import ui.feice.mochi.effect.hdr.hdrSolidBrush
-import ui.feice.mochi.effect.shadow.drawRoundRectShadow
+import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.theme.MochiHdr
+import ui.feice.mochi.theme.MochiShadows
+import ui.feice.mochi.theme.lerp
 
 /** 开关 / 滑块的 G2 平滑度（和其他组件一样的连续曲率胶囊） */
 internal const val ControlSmoothing = 1f
+
+/** 控件零件（拇指、分段选中块）默认阴影色的浓度：22% 黑，乘上 [MochiShadows.contact] 的系数 */
+internal const val ControlShadowAlpha = 0.22f
 
 /** 用 G2 连续曲率画一个胶囊（rect 的短边就是直径） */
 internal fun DrawScope.drawG2Capsule(cache: G2PathCache, rect: Rect, color: Color, alpha: Float = 1f) {
@@ -39,7 +44,7 @@ internal fun DrawScope.drawG2Capsule(cache: G2PathCache, rect: Rect, color: Colo
 
 /**
  * 开关 / 滑块的胶囊拇指（iOS 26 的样子，不做玻璃）：白色胶囊 + 柔和投影，按下时投影更深更软，叠按压高光。
- * @param lift 0..1，按下的程度（投影跟着变）
+ * @param lift 0..1，按下的程度（投影在 [MochiShadows.contact] 和 [MochiShadows.contactPressed] 之间变）
  * @param glowOrigin 这个 DrawScope 原点在 glow 坐标系里的位置
  */
 internal fun DrawScope.drawPillThumb(
@@ -47,21 +52,20 @@ internal fun DrawScope.drawPillThumb(
     color: Color,
     shadow: Color,
     lift: Float,
+    shadows: MochiShadows,
     glow: MochiGlowState?,
     path: G2PathCache,
     glowOrigin: Offset = Offset.Zero,
 ) {
     val g2 = path.get(rect, minOf(rect.width, rect.height) / 2f, ControlSmoothing)
     if (MochiGraphics.softShadows && shadow.alpha > 0f) {
-        // 阴影按圆角矩形画（拖动时拇指每帧变形，按路径画会每帧生成一张不回收的模糊遮罩），本体按连续曲率的胶囊画在上面
-        val blur = (2.5f + 5f * lift).dp.toPx()
-        val dy = (1f + 2f * lift).dp.toPx()
-        drawRoundRectShadow(
+        // 阴影按圆角矩形画（拖动时拇指每帧变形，按路径画会每帧生成一张不回收的模糊遮罩），本体按连续曲率的胶囊画在上面。
+        // 半径大、颜色淡（iOS 拇指那种散开的影子），不是紧贴边缘的一圈灰
+        drawMochiShadow(
             rect,
             minOf(rect.width, rect.height) / 2f,
-            0.57735f * blur + 0.5f,
-            dy,
-            shadow.copy(alpha = shadow.alpha * (0.6f + 0.4f * lift)),
+            lerp(shadows.contact, shadows.contactPressed, lift).resolve(this, false),
+            shadow,
         )
         drawPath(g2, color)
     } else {

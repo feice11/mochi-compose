@@ -7,6 +7,8 @@ import android.content.Context
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -14,17 +16,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalView
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import ui.feice.mochi.effect.glass.GlassSource
-import ui.feice.mochi.effect.glass.LocalMochiOverlayGlass
-import ui.feice.mochi.effect.glass.LocalMochiWindowBackdrop
-import androidx.compose.ui.platform.LocalView
+import ui.feice.mochi.effect.glass.LocalGlassSources
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.overlayBackdropSource
 import ui.feice.mochi.navigation.LocalMochiNavEntry
 
 /**
@@ -41,7 +42,7 @@ internal fun InWindowOverlay(leaving: () -> Boolean = { false }, content: @Compo
     val parent = rememberCompositionContext()
     val currentContent by rememberUpdatedState(content)
     val currentLeaving by rememberUpdatedState(leaving)
-    val below by rememberUpdatedState(LocalMochiWindowBackdrop.current)
+    val below by rememberUpdatedState(overlayBackdropSource())
     val overlay = remember(hostView) {
         OverlayFrame(hostView.context) { currentLeaving() }.apply {
             addView(
@@ -50,7 +51,8 @@ internal fun InWindowOverlay(leaving: () -> Boolean = { false }, content: @Compo
                     setContent {
                         // 浮层不属于原页面的布局树，复制的按钮 / 共享元素不能登记成页内节点。
                         // 保留导航器，浮层里的操作仍可导航；内嵌 MochiNavHost 会提供自己的页面。
-                        CompositionLocalProvider(LocalMochiNavEntry provides null) {
+                        // 页面的背景来源也不往浮层里传：浮层盖在页面上面，浮层里的按钮再取样页面就是取到被盖住的东西
+                        CompositionLocalProvider(LocalMochiNavEntry provides null, LocalMochiBackdrop provides null) {
                             val under = below
                             if (under == null) {
                                 currentContent()
@@ -62,8 +64,7 @@ internal fun InWindowOverlay(leaving: () -> Boolean = { false }, content: @Compo
                                 val chain = remember(layer, face) { GlassSource(layer, face) }
                                 Box(Modifier.fillMaxSize().layerBackdrop(own)) {
                                     CompositionLocalProvider(
-                                        LocalMochiOverlayGlass provides under,
-                                        LocalMochiWindowBackdrop provides chain,
+                                        LocalGlassSources provides LocalGlassSources.current.copy(overlay = under, window = chain),
                                     ) { currentContent() }
                                 }
                             }

@@ -293,7 +293,9 @@ private class ReorderNode(var state: MochiReorderState, var key: Any, var index:
                 val s = 1f + 0.03f * l
                 scaleX = s
                 scaleY = s
+                // 系统阴影的底边实影（spot）压到四成：拖起来的行只要一圈淡淡的浮起感，不要底下一道又硬又重的影子
                 shadowElevation = 12.dp.toPx() * l
+                spotShadowColor = LiftSpotShadow
                 shape = RowShape
                 clip = false
             }
@@ -303,3 +305,5 @@ private class ReorderNode(var state: MochiReorderState, var key: Any, var index:
 
 // 拖起来的那一行：连续曲率圆角，和库里其他形状一致
 private val RowShape = MochiRoundedRectangle(12.dp)
+
+private val LiftSpotShadow = Color.Black.copy(alpha = 0.4f)

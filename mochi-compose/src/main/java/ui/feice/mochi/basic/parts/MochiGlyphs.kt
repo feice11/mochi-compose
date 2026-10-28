@@ -1,7 +1,7 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package ui.feice.mochi.basic
+package ui.feice.mochi.basic.parts
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
@@ -73,6 +73,23 @@ internal object MochiGlyphs {
                 val s = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round)
                 drawPath(up, tint, style = s)
                 drawPath(down, tint, style = s)
+            }
+        }
+    }
+
+    /** ✓（列表选中行、菜单选中项、选择卡片的勾选点） */
+    @Composable
+    fun Check(tint: Color, modifier: Modifier = Modifier, size: Dp = 20.dp) {
+        MochiIcon("checkmark", modifier.size(size), tint = tint) { slot ->
+            Canvas(slot) {
+                val w = this.size.width
+                val h = this.size.height
+                val p = Path().apply {
+                    moveTo(w * 0.18f, h * 0.52f)
+                    lineTo(w * 0.42f, h * 0.76f)
+                    lineTo(w * 0.84f, h * 0.26f)
+                }
+                drawPath(p, tint, style = Stroke((2f * size.value / 20f).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
     }

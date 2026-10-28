@@ -5,11 +5,9 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    `maven-publish`
+    alias(libs.plugins.roborazzi)
+    alias(libs.plugins.maven.publish)
 }
-
-group = "ui.feice.mochi"
-version = (findProperty("VERSION_NAME") as String?) ?: "0.1.0"
 
 android {
     namespace = "ui.feice.mochi"
@@ -30,11 +28,8 @@ android {
     }
     testOptions {
         targetSdk = 35
-    }
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
-        }
+        // 截图测试（Robolectric + Roborazzi）要读库里的资源
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -64,16 +59,17 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.junit)
+    // 截图回归：JVM 上渲染组件和基准图逐像素比，不占模拟器。基准图在 src/test/screenshots，
+    // 改了外观先 ./gradlew :mochi-compose:recordRoborazziDebug 重录，再看 git diff 里的图确认
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// JitPack 跑 publishToMavenLocal，这里声明发布内容
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                from(components["release"])
-                artifactId = "mochi-compose"
-            }
-        }
-    }
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
 }

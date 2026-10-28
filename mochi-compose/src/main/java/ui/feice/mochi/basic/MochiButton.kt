@@ -1,6 +1,8 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
+@file:Suppress("ktlint:compose:compositionlocal-allowlist") // LocalBarControlGlass：栏按钮内部传玻璃，不出这个包
+
 package ui.feice.mochi.basic
 
 import android.os.Build
@@ -69,14 +71,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import ui.feice.mochi.effect.elastic.MochiFollowSpring
 import ui.feice.mochi.effect.glass.GlassFill
-import ui.feice.mochi.effect.glass.GlassGlowState
-import ui.feice.mochi.effect.glass.GlassMerge
-import ui.feice.mochi.effect.glass.GlassMergePartner
+import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSource
 import ui.feice.mochi.effect.glass.GlassSurface
-import ui.feice.mochi.effect.glass.glassFlexSpec
-import ui.feice.mochi.effect.glass.glassFlexTarget
-import ui.feice.mochi.effect.glass.rememberGlassGlowState
+import ui.feice.mochi.effect.glass.engine.GlassGlowState
+import ui.feice.mochi.effect.glass.engine.GlassMerge
+import ui.feice.mochi.effect.glass.engine.GlassMergePartner
+import ui.feice.mochi.effect.glass.engine.glassFlexSpec
+import ui.feice.mochi.effect.glass.engine.glassFlexTarget
+import ui.feice.mochi.effect.glass.engine.rememberGlassGlowState
+import ui.feice.mochi.effect.glass.glassFor
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.MochiGlowState
@@ -94,6 +98,7 @@ import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiGlass
 import ui.feice.mochi.theme.MochiGlassRecipe
+import ui.feice.mochi.theme.MochiMaterials
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -119,7 +124,7 @@ public fun MochiButton(
     content: @Composable RowScope.() -> Unit,
 ) {
     val spec = bodyGlassSpec(style, colors, enabled)
-    CompositionLocalProvider(LocalButtonGlass provides (bodyGlass(spec) ?: LocalButtonGlass.current)) {
+    CompositionLocalProvider(LocalBarControlGlass provides (bodyGlass(spec) ?: LocalBarControlGlass.current)) {
         ButtonCore(onClick, enabled, colors, cornerRadius, behavior, modifier.defaultMinSize(minHeight = minHeight), spec) {
             Row(
                 Modifier.padding(contentPadding),
@@ -145,7 +150,7 @@ public fun MochiIconButton(
     content: @Composable () -> Unit,
 ) {
     val spec = bodyGlassSpec(style, colors, enabled)
-    CompositionLocalProvider(LocalButtonGlass provides (bodyGlass(spec) ?: LocalButtonGlass.current)) {
+    CompositionLocalProvider(LocalBarControlGlass provides (bodyGlass(spec) ?: LocalBarControlGlass.current)) {
         ButtonCore(onClick, enabled, colors, cornerRadius, behavior, modifier.size(size), spec) {
             Box(contentAlignment = Alignment.Center) { content() }
         }
@@ -153,9 +158,11 @@ public fun MochiIconButton(
 }
 
 /**
- * 正文里的玻璃按钮：主题的控件是玻璃（[ui.feice.mochi.theme.MochiMaterials.controlGlass]）、不在栏里和按钮组里时，
- * 填充按钮画成 iOS 的 prominentGlass、色调按钮画成 glass，[MochiButtonStyle.ProminentClearGlass] / [MochiButtonStyle.ClearGlass]
- * 画成 prominentClearGlass / clearGlass；描边和文字按钮不变。
+ * 正文里的玻璃按钮：样式说了算。只有写了玻璃样式（[MochiButtonStyle.isGlass]）、主题的控件又是玻璃
+ * （[ui.feice.mochi.theme.MochiMaterials.controlGlass]）时才画玻璃：[MochiButtonStyle.ProminentGlass] / [MochiButtonStyle.Glass]
+ * 画成 iOS 的 prominentGlass / glass，[MochiButtonStyle.ProminentClearGlass] / [MochiButtonStyle.ClearGlass] 画成
+ * prominentClearGlass / clearGlass。填充、色调、描边、文字按钮永远是纯色，主题开了液态玻璃也一样（纯色的橙色按钮照样能用）；
+ * 主题没有玻璃时，玻璃样式按 [MochiButtonStyle.solid] 退回纯色。栏里的按钮另算（[barGlass]）。
  * iOS 26（24A435 UIKitCore 逆向）：glass / prominentGlass 的材质是 `_UIViewGlass` regular（variant 0），
  * clearGlass / prominentClearGlass 是 clear（variant 1）；都关掉自适应、可形变（setFlexible:YES），圆角样式 4（胶囊）；
  * prominent 两种另外把按钮的底色设成玻璃的 tintColor（禁用时换成 `_disabledColorForColor:`），文字颜色按底色取清晰的前景色。
@@ -164,23 +171,19 @@ public fun MochiIconButton(
  * （近似：tintColor 怎么混进玻璃没逆出来）；色调按钮用默认配色时用材质的 fallback 色，自定义了底色就用那个底色；
  * clearGlass 用按钮的底色（默认是色调按钮的底色）。底色全透明的配色不画玻璃；半透明的先垫一层 surface 色（近似）。
  * 纯色画布上的边缘按 iOS 纯色截图处理（[bodyEdge]）：去掉暗色细描边，边光同色相略提亮、下面比上面弱。
- * 阴影、软黑环和按压光照常；折射对纯色不起作用
+ * 不画外阴影（背后就是纯色底，阴影只会显得脏，横排芯片的渐隐图层还会把它切成方角）；软黑环和按压光照常；折射对纯色不起作用
  */
 @Composable
 private fun bodyGlassSpec(style: MochiButtonStyle, colors: MochiButtonColors, enabled: Boolean): BodyGlassSpec? {
-    val materials = MochiTheme.materials
-    val theme = materials.controlGlass ?: return null
-    if (LocalButtonGlass.current != null) return null
-    if (style == MochiButtonStyle.Outlined || style == MochiButtonStyle.Text) return null
-    val prominent = style == MochiButtonStyle.Filled || style == MochiButtonStyle.ProminentClearGlass
-    val clear = style == MochiButtonStyle.ClearGlass || style == MochiButtonStyle.ProminentClearGlass
+    if (LocalBarControlGlass.current != null) return null
+    val glass = MochiTheme.materials.bodyButtonGlass(style) ?: return null
+    val prominent = style == MochiButtonStyle.ProminentGlass || style == MochiButtonStyle.ProminentClearGlass
     val container = if (enabled) colors.container else colors.disabledContainer
     val base = when {
-        style == MochiButtonStyle.Tonal && colors == MochiButtonDefaults.colors(style) -> theme.fallback
+        style == MochiButtonStyle.Glass && colors == MochiButtonDefaults.colors(style) -> MochiTheme.materials.controlGlass!!.fallback
         else -> container
     }
     if (base.alpha <= 0f) return null
-    val glass = if (clear) materials.clearGlass ?: theme else theme
     val material = remember(glass, prominent) {
         if (prominent) {
             glass.copy(light = glass.light.untinted().bodyEdge(), dark = glass.dark.untinted().bodyEdge(), adaptive = false, byLuma = null)
@@ -189,6 +192,16 @@ private fun bodyGlassSpec(style: MochiButtonStyle, colors: MochiButtonColors, en
         }
     }
     return BodyGlassSpec(material, base)
+}
+
+/**
+ * 正文按钮用哪种玻璃（纯函数，见 [bodyGlassSpec]）：不是玻璃样式、或主题的控件不是玻璃时是 null（画纯色）；
+ * clear 两种用 [GlassRole.Clear]，另外两种用 [GlassRole.Control]
+ */
+internal fun MochiMaterials.bodyButtonGlass(style: MochiButtonStyle): MochiGlass? {
+    if (!style.isGlass || controlGlass == null) return null
+    val clear = style == MochiButtonStyle.ClearGlass || style == MochiButtonStyle.ProminentClearGlass
+    return glassFor(if (clear) GlassRole.Clear else GlassRole.Control)
 }
 
 /** 正文玻璃按钮用的材质和纯色画布的颜色（见 [bodyGlassSpec]） */
@@ -224,12 +237,14 @@ private fun MochiGlassRecipe.untinted(): MochiGlassRecipe =
  * - 边光不过 vibrant 矩阵（纯色上会把蓝推成青，下沿像一圈杂色），改成同色相略提亮 `1.2c + 0.04`、增益 1：
  *   近似，由 iOS 真机截图估出（shots26 light_capsule_blue：玻璃面 (11, 11, 188)，贴边 (24, 24, 232)，色相不变、上下对称）。
  * - 下面的补光减半，上沿是主光（近似，用户要求下面比上面弱）
+ * - 没有外阴影：正文按钮背后是纯色底，不是浮在内容上
  */
 private fun MochiGlassRecipe.bodyEdge(): MochiGlassRecipe = copy(
     highlightHeight = 0.dp,
     edgeLightMatrix = BodyEdgeMatrix,
     edgeLightGain = 1f,
     edgeLightFill = edgeLightFill * 0.5f,
+    shadowOpacity = 0f,
 )
 
 /** 正文玻璃按钮边光的颜色矩阵（3×4）：每个通道 1.2c + 0.04 */
@@ -260,9 +275,9 @@ public fun MochiButtonGroup(
         group.acrossKinds = behavior.fuseAcrossKinds
         group.glassMargin = GroupGlassMargin.toPx()
     }
-    // 玻璃层要融合形状，只在 Android 13+ 有；栏里的组（按钮已经是栏玻璃）不另画
-    group.glassOn = MochiTheme.materials.controlGlass != null && LocalButtonGlass.current == null &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    // 玻璃层要融合形状，只在 Android 13+ 有；栏里的组（按钮已经是栏玻璃）不另画。
+    // 组里哪些按钮是玻璃由各自的样式决定（[bodyGlassSpec]），纯色的照常由组画，两种可以混排
+    group.glassOn = LocalBarControlGlass.current == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     Box(modifier, propagateMinConstraints = true) {
         if (group.glassOn) {
             val materials = group.buttons.mapNotNull { it.groupGlass?.material }.distinct()
@@ -302,9 +317,18 @@ private fun BoxScope.GroupGlassLayer(group: ButtonGroupState, material: MochiGla
             drawRect(c, r.topLeft, r.size)
         }
         fill(first, Rect(Offset(-pad, -pad), Size(size.width + pad * 2f, size.height + pad * 2f)))
+        // 别的颜色往外多铺一段，按下拉出的融球颈是它自己的颜色；但最多铺到和别的颜色的按钮之间的一半，
+        // 不然铺进旁边按钮里，旁边按钮的边缘折射会透出这个颜色
         for ((b, r) in mine) {
             val c = b.groupGlass?.base ?: continue
-            if (c != first) fill(c, r.translate(o).inflate(group.reachPx / 2f))
+            if (c == first) continue
+            var grow = group.reachPx / 2f
+            for ((n, nr) in mine) {
+                if (n === b || n.groupGlass?.base == c) continue
+                val gap = maxOf(nr.left - r.right, r.left - nr.right, nr.top - r.bottom, r.top - nr.bottom)
+                grow = minOf(grow, (gap / 2f).coerceAtLeast(0f))
+            }
+            fill(c, r.translate(o).inflate(grow))
         }
     }
     val fill = remember(material, canvas) { GlassFill(material, GlassSource(canvas, canvas)) }
@@ -316,6 +340,8 @@ private fun BoxScope.GroupGlassLayer(group: ButtonGroupState, material: MochiGla
     val radius = remember { FloatArray(1) }
     GlassSurface(
         fill,
+        null,
+        glow,
         Modifier
             .matchParentSize()
             .layout { measurable, constraints ->
@@ -323,8 +349,6 @@ private fun BoxScope.GroupGlassLayer(group: ButtonGroupState, material: MochiGla
                 val placeable = measurable.measure(Constraints.fixed(constraints.maxWidth + m * 2, constraints.maxHeight + m * 2))
                 layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(-m, -m) }
             },
-        null,
-        glow,
         cornerRadiusPx = { radius[0] },
         merge = {
             group.glassMerge(material)?.let { (merge, r) ->
@@ -338,6 +362,7 @@ private fun BoxScope.GroupGlassLayer(group: ButtonGroupState, material: MochiGla
 // ───────────────────────── 实现 ─────────────────────────
 
 @Composable
+@Suppress("ktlint:compose:content-slot-reused") // 玻璃 / 纯色两个分支按样式选一个，同一个按钮不会来回切
 private fun ButtonCore(
     onClick: () -> Unit,
     enabled: Boolean,
@@ -351,7 +376,7 @@ private fun ButtonCore(
     val density = LocalDensity.current
     val group = LocalMochiButtonGroup.current
     // 栏里的按钮（MochiBarButton 等）在有玻璃材质和背景来源时画成玻璃；按钮组里的由组统一画（纯色，或组的玻璃层）
-    val glass = LocalButtonGlass.current.takeIf { group == null }
+    val glass = LocalBarControlGlass.current.takeIf { group == null }
     val glassGlow = if (glass != null) rememberGlassGlowState() else null
     val groupGlass = glassSpec.takeIf { group != null && group.glassOn }
     val visual = remember { ButtonVisual() }
@@ -477,17 +502,17 @@ private fun ButtonCore(
         if (glass != null) {
             GlassSurface(
                 glass,
+                cornerRadius,
+                glassGlow,
                 Modifier.matchParentSize().graphicsLayer {
                     translationX = visual.shift.x
                     translationY = visual.shift.y
                 },
-                cornerRadius,
-                glassGlow,
                 scaleX = { visual.flexX },
                 scaleY = { visual.flexY },
             )
             Box(Modifier.graphicsLayer { pressTransform(visual) }, contentAlignment = Alignment.Center) {
-                CompositionLocalProvider(LocalContentColor provides contentColor, LocalButtonGlass provides null) { content() }
+                CompositionLocalProvider(LocalContentColor provides contentColor, LocalBarControlGlass provides null) { content() }
             }
         } else {
             CompositionLocalProvider(LocalContentColor provides contentColor) { content() }
@@ -514,8 +539,8 @@ private fun androidx.compose.ui.graphics.GraphicsLayerScope.pressTransform(visua
     translationY = sh.y
 }
 
-/** 栏里的按钮画成玻璃时用的材质和背景（[MochiBarButton]、[MochiBarIconButton] 提供） */
-internal val LocalButtonGlass = staticCompositionLocalOf<GlassFill?> { null }
+/** 栏里的按钮（[MochiBarButton]、[MochiBarIconButton]、返回按钮）自己的那块玻璃：材质加背景。不是背景来源，只在按钮内部读 */
+internal val LocalBarControlGlass = staticCompositionLocalOf<GlassFill?> { null }
 
 /** 一个按钮此刻的样子：放大、跟手偏移，和画底色需要的信息 */
 @Stable
@@ -673,7 +698,7 @@ internal class ButtonGroupState {
     private val paths = HashMap<ButtonVisual, G2PathCache>()
     private val materialPaint = Paint()
 
-    /** 组里有玻璃层（主题的控件是玻璃、Android 13+）：带 [ButtonVisual.groupGlass] 的按钮由玻璃层画，纯色那层跳过它们 */
+    /** 组能画玻璃层（Android 13+、不在栏里）：带 [ButtonVisual.groupGlass] 的按钮由玻璃层画，纯色那层跳过它们 */
     var glassOn = false
 
     /** 玻璃层比组四周多出的宽度（px）：按下放大的按钮会长出组的范围 */
@@ -705,10 +730,7 @@ internal class ButtonGroupState {
         }
 
     /** 每个按钮此刻在组里的位置（含按下放大、被吸过去的位移），和按下的按钮连上的邻居（邻居、位置、融球颈半径） */
-    class Layout(
-        val shifted: List<Pair<ButtonVisual, Rect>>,
-        val links: Map<ButtonVisual, List<Triple<ButtonVisual, Rect, Float>>>,
-    )
+    class Layout(val shifted: List<Pair<ButtonVisual, Rect>>, val links: Map<ButtonVisual, List<Triple<ButtonVisual, Rect, Float>>>)
 
     fun layout(): Layout? {
         val g = coords?.takeIf { it.isAttached } ?: return null
@@ -756,10 +778,7 @@ internal class ButtonGroupState {
         return GlassMerge(main.second.translate(o), partners) to main.first.cornerFor(main.second)
     }
 
-    fun draw(
-        scope: DrawScope,
-        renderer: ui.feice.mochi.effect.metaball.MochiMetaballRenderer,
-    ) {
+    fun draw(scope: DrawScope, renderer: ui.feice.mochi.effect.metaball.MochiMetaballRenderer) {
         val g = coords?.takeIf { it.isAttached } ?: return
         val l = layout() ?: return
         paths.keys.retainAll(buttons.toSet())

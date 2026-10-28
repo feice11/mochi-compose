@@ -37,9 +37,9 @@ import ui.feice.mochi.basic.MochiCheckCircle
 import ui.feice.mochi.basic.MochiCheckboxColors
 import ui.feice.mochi.basic.MochiDropdown
 import ui.feice.mochi.basic.MochiDropdownDefaults
-import ui.feice.mochi.basic.MochiGlyphs
 import ui.feice.mochi.basic.MochiItem
 import ui.feice.mochi.basic.opaqueButtonColor
+import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
@@ -172,6 +172,7 @@ public fun MochiListPickerRow(
     leading: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
     colors: MochiListColors = MochiListDefaults.colors(),
+    leadingStyle: MochiListLeadingStyle = MochiListLeadingStyle.Tile,
 ) {
     var open by remember { mutableStateOf(false) }
     val items = remember(options) { options.map { MochiItem(it) }.toImmutableList() }
@@ -179,6 +180,7 @@ public fun MochiListPickerRow(
         title,
         modifier,
         leading = leading,
+        leadingStyle = leadingStyle,
         enabled = enabled,
         colors = colors,
         trailing = {

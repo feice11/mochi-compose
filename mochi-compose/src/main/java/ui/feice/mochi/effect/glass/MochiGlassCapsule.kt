@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
+import ui.feice.mochi.effect.glass.engine.GlassBody
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiGlass
 import ui.feice.mochi.theme.MochiTheme

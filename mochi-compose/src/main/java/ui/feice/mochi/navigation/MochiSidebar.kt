@@ -82,11 +82,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiIconButton
 import ui.feice.mochi.basic.MochiSearchBar
 import ui.feice.mochi.basic.MochiSearchBarDefaults
 import ui.feice.mochi.basic.Text
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiContinuity
@@ -318,6 +318,7 @@ public fun MochiSidebarLayout(
                 val radius = with(density) { (bl - insetPx).toDp() }.coerceAtLeast(top)
                 val shape = remember(radius) { ContinuousRoundedRectangle(top, top, radius, radius, MochiContinuity) }
                 val dark = MochiTheme.colorScheme.isDark
+                val shadow = MochiTheme.shadows.floating
                 val statusTop = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
                 val navBottom =
                     with(density) { (WindowInsets.navigationBarsIgnoringVisibility.getBottom(this) - insetPx).coerceAtLeast(0f).toDp() }
@@ -345,7 +346,7 @@ public fun MochiSidebarLayout(
                                 val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
                                 onDrawBehind {
                                     val p = state.anim.value.coerceIn(0f, 1f)
-                                    drawMochiShadow(path, MochiMetaballShadow.elevated(this, 1f, dark, visibility = p), Color.Black)
+                                    drawMochiShadow(path, shadow.resolve(this, dark, visibility = p), Color.Black)
                                 }
                             }
                             .clip(shape)
@@ -521,7 +522,8 @@ public fun MochiSidebarHeader(
 /** 侧边栏头部的圆形按钮，和搜索框同高 */
 @Composable
 public fun MochiSidebarHeaderButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    MochiIconButton(onClick, modifier, size = MochiSearchBarDefaults.Height, content = content)
+    // 和旁边的搜索框一样跟主题：有控件玻璃时是玻璃圆钮，没有时是色调纯色
+    MochiIconButton(onClick, modifier, style = MochiButtonStyle.Glass, size = MochiSearchBarDefaults.Height, content = content)
 }
 
 /** 日期分组这类小标题（「今天」「前 7 天」），和行内文字左对齐 */
