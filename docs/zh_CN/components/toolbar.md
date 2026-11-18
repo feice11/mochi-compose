@@ -50,8 +50,8 @@ MochiHoldButton(onConfirm = { deleteAll() }) { Text("按住删除全部") }
 
 用于删除、重置这类危险操作，必须按住 `holdMillis`（默认 1.2 秒）才执行：
 
-- **按住时**：一层颜色从左往右匀速填满，每填满一成轻震一下
-- **填满时**：重震一下并执行 `onConfirm`，随后进度退回
-- **提前松手或手指滑走**：进度用弹簧退回，什么都不执行
-- **按下时**：整颗按钮轻微形变
-- **配色**：默认是危险色，可以通过 `MochiHoldButtonDefaults.colors(container, content, progress)` 修改
+- 按住时：一层颜色从左往右匀速填满，每填满一成轻震一下
+- 填满时：重震一下并执行 `onConfirm`，随后进度退回
+- 提前松手或手指滑走：进度用弹簧退回，什么都不执行
+- 按下时：整颗按钮轻微形变
+- 配色：默认是危险色，可以通过 `MochiHoldButtonDefaults.colors(container, content, progress)` 修改

@@ -1,6 +1,6 @@
 # Sidebar
 
-The sidebar common in AI apps (ChatGPT, Claude…): the conversation list sits on the left and a right swipe anywhere on the page pulls it out. In `ui.feice.mochi.navigation`.
+The sidebar common in chat apps such as ChatGPT: the conversation list sits on the left and a right swipe anywhere on the page pulls it out. In `ui.feice.mochi.navigation`.
 
 ## What iOS 26 specifies
 
@@ -41,7 +41,7 @@ MochiSidebarLayout(
 - Swipe right anywhere on the main page to open, tracking 1:1; release past halfway or fling to open, otherwise it closes
 - While open: tapping the main page closes (nothing on the main page receives the touch; once it starts closing the main page receives taps right away); a horizontal drag anywhere follows the finger; system back closes the sidebar first (predictive back follows the gesture)
 - Only drags not consumed by children are taken: horizontal scrolling, sliders and swipe rows keep working
-- **Swipe right vs. back**: when the page can go back, swiping right goes back. `swipeToOpen` defaults to `MochiSidebarDefaults.swipeToOpen()`: false inside a child page of a `MochiNavHost`, true on a root page or outside navigation. When the sidebar wraps the app's own `MochiNavHost`, a child page's full-screen swipe back gets the touch first; only on the root page does swiping right open the sidebar
+- Swipe right vs. back: when the page can go back, swiping right goes back. `swipeToOpen` defaults to `MochiSidebarDefaults.swipeToOpen()`: false inside a child page of a `MochiNavHost`, true on a root page or outside navigation. When the sidebar wraps the app's own `MochiNavHost`, a child page's full-screen swipe back gets the touch first; only on the root page does swiping right open the sidebar
 - Pressing a sidebar row and then dragging does not trigger a tap
 
 ## Row components

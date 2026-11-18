@@ -148,11 +148,11 @@ Blur uses `RenderEffect` and needs Android 12 (API 31). Older versions get the f
 
 All components and the example follow this:
 
-1. **Icon to icon**: morph in place with `MochiMorphIcon`; if the shapes are too different, blur-replace with `MochiBlurCrossfade`. Never swap directly.
-2. **Text to text**: `MochiBlurText` (button labels, status, trailing values…); pass `MochiBlurTransitions.Subtle` where many pieces change together as the user types; use `MochiFlyInText` for text that grows piece by piece.
-3. **Appear / disappear**: small pieces (badges, hints, inline icons) use `MochiBlurVisibility`, pushing neighbours smoothly.
-4. **Numbers**: `MochiCounterText` (counts, prices, timers, percentages).
-5. **Exception**: values that change every frame while the user drags (a slider's readout) are shown directly, otherwise they lag behind the finger.
+1. Icon to icon: morph in place with `MochiMorphIcon`; if the shapes are too different, blur-replace with `MochiBlurCrossfade`. Never swap directly.
+2. Text to text: `MochiBlurText` (button labels, status, trailing values…); pass `MochiBlurTransitions.Subtle` where many pieces change together as the user types; use `MochiFlyInText` for text that grows piece by piece.
+3. Appear / disappear: small pieces (badges, hints, inline icons) use `MochiBlurVisibility`, pushing neighbours smoothly.
+4. Numbers: `MochiCounterText` (counts, prices, timers, percentages).
+5. Exception: values that change every frame while the user drags (a slider's readout) are shown directly, otherwise they lag behind the finger.
 6. With system animations off, all of these finish instantly.
 
 Already wired up:

@@ -4,9 +4,9 @@ Switch with the look and feel of iOS 26 (without glass): a 64×28 track and a 38
 
 Thumb and inactive-track defaults read `MochiDefaults.controlThumb()` / `controlTrack()`. Without `LocalMochiControlPalette`, the original white thumb and `fill()` track remain (`fill()` itself can be overridden by `MochiControlPalette.fill`). Appearance presets may override them; explicitly supplied `colors` still take precedence.
 
-- **Tap**: the thumb slides over with speed, stretching along its motion and squashing with a bounce when it arrives; the track color follows the thumb position continuously.
-- **Press**: the thumb grows past the track, with a deeper shadow and a glow.
-- **Drag**: the thumb follows the finger, is held back by a rubber band past either end, and ticks when crossing the middle; on release its position decides on or off.
+- Tap: the thumb slides over with speed, stretching along its motion and squashing with a bounce when it arrives; the track color follows the thumb position continuously.
+- Press: the thumb grows past the track, with a deeper shadow and a glow.
+- Drag: the thumb follows the finger, is held back by a rubber band past either end, and ticks when crossing the middle; on release its position decides on or off.
 - A confirm haptic plays when the state changes.
 
 ## Usage

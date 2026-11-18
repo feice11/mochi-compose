@@ -22,7 +22,7 @@ MochiDurationPicker(seconds, { seconds = it })         // 时、分、秒，单�
 - 每一项摆在圆柱上：离中间越远越扁、越淡，转到背面的不画；中间一条胶囊标出选中项（`MochiDefaults.fill()`）
 - 拖动 1:1 跟手；松手按惯性滚动，再吸附到最近一格（临界阻尼，不过冲）。首末项外拉有橡皮筋，`cyclic = true` 时无限循环
 - 每滚过一格轻震一下；点上下的项直接滚过去
-- **停稳后**才回调 `onSelectedIndexChange`；外部改了 `selectedIndex` 用动画滚过去，不瞬跳。循环滚筒走近路（59 → 0 是往下一格）
+- 停稳后才回调 `onSelectedIndexChange`；外部改了 `selectedIndex` 用动画滚过去，不瞬跳。循环滚筒走近路（59 → 0 是往下一格）
 - `disabled` 返回 true 的项变灰但仍可滚到。调用方在回调里把值改回合法项，滚筒会自己滚回去
 - `label` 是固定在选中行右边的单位，不跟着滚
 

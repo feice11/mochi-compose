@@ -36,7 +36,7 @@ See [Effects](effects.md). Rule of thumb:
 | Follow a target that keeps changing | `MochiFollowSpring` |
 | Card height changes with its content | `Modifier.mochiAnimateHeight(shape)` by default; background before it, target height and padding after it; disable only when a gesture or existing animation already owns height |
 | Two shapes fusing / growing out of a button | `rememberMochiMetaballRenderer` + `drawMochiMetaball`, `proximityFuse` to join when close |
-| Icon → icon / text → text / appear-disappear / numbers | `MochiMorphIcon` / `MochiBlurText` / `MochiBlurVisibility` / `MochiCounterText`, **never swap instantly**, see the rule in [Content transitions](content-transitions.md) |
+| Icon → icon / text → text / appear-disappear / numbers | `MochiMorphIcon` / `MochiBlurText` / `MochiBlurVisibility` / `MochiCounterText`, never swap instantly, see the rule in [Content transitions](content-transitions.md) |
 | Float above the page (not clipped by the nav bar) | `overlay/InWindowOverlay` (internal) |
 | Press and slide to select | `gesture/PressSlideGesture` (internal) |
 | Grow into a full page / shrink back on back | `navigation/`: `mochiNavSource` + `push(from = key)`; pushes use `push(route)` with registered toolbar controls, see [Navigation](navigation.md) |

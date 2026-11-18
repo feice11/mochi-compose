@@ -2,9 +2,9 @@
 
 Long-press preview (the iOS context menu, without blur or glass).
 
-- **Hold**: the content shrinks slightly, hinting that something will happen if you keep holding. Releasing or moving restores it, and taps and scrolling work as usual.
-- **After the long-press timeout**: a haptic tick, the content lifts and grows with a shadow, the background dims, and the menu grows out of the corner nearest the content. The menu goes below; if it doesn't fit, above; if neither fits, the content moves up to make room.
-- **Selecting**: without lifting, slide onto an item and release to select it; each item ticks as you pass it. Releasing elsewhere keeps the menu open; tap outside or press back to close.
+- Hold: the content shrinks slightly, hinting that something will happen if you keep holding. Releasing or moving restores it, and taps and scrolling work as usual.
+- After the long-press timeout: a haptic tick, the content lifts and grows with a shadow, the background dims, and the menu grows out of the corner nearest the content. The menu goes below; if it doesn't fit, above; if neither fits, the content moves up to make room.
+- Selecting: without lifting, slide onto an item and release to select it; each item ticks as you pass it. Releasing elsewhere keeps the menu open; tap outside or press back to close.
 
 ## Usage
 

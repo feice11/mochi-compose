@@ -2,7 +2,7 @@
 
 ## Default title policy
 
-- The criterion is an **outside-card section heading**, such as Theme's Color settings or Theme palette. When these headings organize the page, use `MochiCompactTitleScaffold` (or `MochiTitleBar` with an existing scroller) for a compact-only bar and remove a separate body large title and empty space. Keep the section headings themselves.
+- The criterion is an outside-card section heading, such as Theme's Color settings or Theme palette. When these headings organize the page, use `MochiCompactTitleScaffold` (or `MochiTitleBar` with an existing scroller) for a compact-only bar and remove a separate body large title and empty space. Keep the section headings themselves.
 - Without such section headings, the body large title may remain. Descriptive text and card presence are not the criterion; introduction headings inside cards are not standalone headings to remove.
 - Components/Effects/Navigation retain their original initially expanded title and counts, now with scroll-driven collapse. Keep title item 0 and use `rememberLazyGridState()` to start at the top. Upward scrolling hands off to the compact bar; scrolling back expands the title. Preserve per-tab state; reselect returns to the expanded top. Do not force initial collapse or add blank scroll space for it.
 

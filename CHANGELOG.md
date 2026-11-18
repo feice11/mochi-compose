@@ -1,5 +1,10 @@
 # Changelog / 更新日志
 
+## Unreleased / 未发布
+
+- Docs: the README is now English first (Chinese in README.zh-CN.md) with a star history chart; GIF recordings are removed; guides are reworded for developers.
+  文档：README 改为英文为主（中文见 README.zh-CN.md），加了 Star 趋势图；去掉 GIF 录屏；指南改成面向开发者的写法。
+
 ## 0.3.0 — 2026-11-18
 
 A new liquid glass engine (Beta), motion tiers shared by every component, the iOS 27 top bar, and many choreography fixes. Read **Breaking** first when upgrading from 0.2.0.

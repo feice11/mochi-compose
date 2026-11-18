@@ -1,6 +1,6 @@
 # 侧边栏
 
-AI 应用（ChatGPT、Claude……）常用的那种侧边栏：对话列表放在左边，整页往右划就拉出来。在 `ui.feice.mochi.navigation` 里。
+ChatGPT 这类聊天应用常用的那种侧边栏：对话列表放在左边，整页往右划就拉出来。在 `ui.feice.mochi.navigation` 里。
 
 ## iOS 26 的规范
 
@@ -41,7 +41,7 @@ MochiSidebarLayout(
 - 在主页面任意位置往右划打开，1:1 跟手；松手过半或甩得够快就打开，否则收回
 - 打开时：点主页面关闭（主页面里的东西收不到触摸；开始收起后不再拦，主页面的点击立刻生效）；任意位置横向拖动跟手开合；系统返回键先收起侧边栏（预测性返回跟手）
 - 只接子元素没消费的拖动：横向滚动、滑块、左滑行照常
-- **右划和返回谁优先**：所在页能返回时右划是返回。`swipeToOpen` 默认 `MochiSidebarDefaults.swipeToOpen()`：放在 `MochiNavHost` 的子页里时为 false，根页或不在导航里时为 true。侧边栏包着应用自己的 `MochiNavHost` 时，子页的整页右划返回先接到触摸，退到根页右划才打开侧边栏
+- 右划和返回谁优先：所在页能返回时右划是返回。`swipeToOpen` 默认 `MochiSidebarDefaults.swipeToOpen()`：放在 `MochiNavHost` 的子页里时为 false，根页或不在导航里时为 true。侧边栏包着应用自己的 `MochiNavHost` 时，子页的整页右划返回先接到触摸，退到根页右划才打开侧边栏
 - 侧边栏行上按下再拖动不会触发点按
 
 ## 行组件

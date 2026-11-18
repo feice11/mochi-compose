@@ -12,8 +12,8 @@ An intensity slider modeled on the reasoning-effort slider in the Codex desktop 
 ## Stronger to the right
 
 - Above `HighFrom` (0.5), the effects of Codex's top level fade in with the value and are strongest at 1:
-  - **Flowing blue-purple gradient**: 12 Gaussian color blobs wander at their own frequencies (a line-by-line port of the Codex shader). The result is blended with luminosity over a horizontal blue → purple gradient
-  - **Stars**: 14 white dots drift slowly inside the fill. More of them light up toward the right
+  - Flowing blue-purple gradient: 12 Gaussian color blobs wander at their own frequencies (a line-by-line port of the Codex shader). The result is blended with luminosity over a horizontal blue → purple gradient
+  - Stars: 14 white dots drift slowly inside the fill. More of them light up toward the right
   - The ticks fade out and shrink to 0.75 at the same time
 - Crossing 0.5 upward reveals the gradient from right to left (2s)
 - Reaching the right end bursts 16 purple particles from the thumb (0.62s)
@@ -32,12 +32,12 @@ An intensity slider modeled on the reasoning-effort slider in the Codex desktop 
 
 ## Interaction
 
-- **Tap**: the thumb slides to where you tap (0.3s, cubic-bezier(.23, 1, .32, 1))
-- **Drag**: stepped sliders slide 0.15s per stop change; continuous sliders follow the finger
-- **Press**: the thumb grows to 32/28 while pressed (spring stiffness 420) and springs back on release (220)
-- **Detent**: on continuous sliders, crossing `detent` (0.5 by default; pass `null` to disable) gives a light tick, and the value gently sticks within 2.5% of it. Reaching either end also ticks
-- **Steps**: stepped sliders tick on every stop change
-- **Accessibility**: exposed as a progress bar (0..1) with `setProgress`; stepped sliders report steps
+- Tap: the thumb slides to where you tap (0.3s, cubic-bezier(.23, 1, .32, 1))
+- Drag: stepped sliders slide 0.15s per stop change; continuous sliders follow the finger
+- Press: the thumb grows to 32/28 while pressed (spring stiffness 420) and springs back on release (220)
+- Detent: on continuous sliders, crossing `detent` (0.5 by default; pass `null` to disable) gives a light tick, and the value gently sticks within 2.5% of it. Reaching either end also ticks
+- Steps: stepped sliders tick on every stop change
+- Accessibility: exposed as a progress bar (0..1) with `setProgress`; stepped sliders report steps
 
 ## Usage
 

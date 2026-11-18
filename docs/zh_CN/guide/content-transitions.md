@@ -149,11 +149,11 @@ MochiDrawIcon(checkIcon, drawn = done, tint = …, size = 40.dp)
 
 库里的组件和示例都遵守：
 
-1. **图标换图标**：用 `MochiMorphIcon` 原位变形；形状差太多就用 `MochiBlurCrossfade` 模糊替换。不要直接换掉。
-2. **文字换文字**：用 `MochiBlurText`（按钮文字、状态、行尾的值……）；一屏里很多文字跟着打字一起换时传 `MochiBlurTransitions.Subtle`；一段段长出来的文字用 `MochiFlyInText`。
-3. **出现 / 消失**：小块内容（角标、提示文字、行内图标）用 `MochiBlurVisibility`，旁边的东西被平滑推开。
-4. **数字变化**：用 `MochiCounterText`（数量、价格、计时、百分比）。
-5. **例外**：用户正在拖动、一帧一变的数值（比如滑块旁边的读数）直接显示，不做过渡，不然会拖着尾巴跟不上手。
+1. 图标换图标：用 `MochiMorphIcon` 原位变形；形状差太多就用 `MochiBlurCrossfade` 模糊替换。不要直接换掉。
+2. 文字换文字：用 `MochiBlurText`（按钮文字、状态、行尾的值……）；一屏里很多文字跟着打字一起换时传 `MochiBlurTransitions.Subtle`；一段段长出来的文字用 `MochiFlyInText`。
+3. 出现 / 消失：小块内容（角标、提示文字、行内图标）用 `MochiBlurVisibility`，旁边的东西被平滑推开。
+4. 数字变化：用 `MochiCounterText`（数量、价格、计时、百分比）。
+5. 例外：用户正在拖动、一帧一变的数值（比如滑块旁边的读数）直接显示，不做过渡，不然会拖着尾巴跟不上手。
 6. 系统关了动画时，这些过渡都瞬间完成。
 
 目前已经接上的：

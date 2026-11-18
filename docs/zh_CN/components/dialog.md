@@ -48,7 +48,7 @@ MochiDialog(
 ## 关闭
 
 - 点任何一个按钮：先执行它的 `onClick`，再调 `onDismissRequest`
-- 返回键 / 返回手势关闭，支持**预见式返回**：拖动时卡片跟着缩小（最多 0.9）、朝手势那侧偏一点，后面的压暗变浅；松手关闭，取消则弹回
+- 返回键 / 返回手势关闭，支持预见式返回：拖动时卡片跟着缩小（最多 0.9）、朝手势那侧偏一点，后面的压暗变浅；松手关闭，取消则弹回
 - 默认点外面不关闭（iOS 的警告框也是这样），`dismissOnOutsideTap = true` 打开
 - `dismissOnBack = false`：返回手势只让卡片跟着缩一下、松手弹回，不关闭；配合下面的按住按钮，确保提示被看完
 - `MochiDialogAction(..., holdToConfirm = true)`：这个按钮要按住才生效（[`MochiHoldButton`](toolbar.md)），按住时一层颜色从左往右填满，填满才执行、关闭；提前松手退回。配色仍按角色

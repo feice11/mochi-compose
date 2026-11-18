@@ -2,13 +2,13 @@
 
 Bottom tab bar: the iOS 26 floating capsule with an MD3E selection indicator.
 
-- **Switching**: the indicator stretches with its speed (jelly) as it slides to the new tab. A small droplet follows closely through a short metaball neck and merges back as it catches up, including fast switches across several tabs.
-- **Press and slide**: press anywhere and the indicator grows, glows and follows your finger, and the bar glows too. It ticks as it crosses tabs and snaps to the nearest tab on release.
-- **Drag deformation**: the bar shifts slightly with your finger and swells with the indicator; past either end the indicator and the bar stretch together on a rubber band, with a small jelly bounce on release. The bar always wraps the indicator, and its corner radius is the indicator's radius plus the padding, so the two stay concentric however they deform.
-- **Color transition**: tabs change color continuously as the indicator passes over them.
-- **Collapse on scroll**: scrolling content down shrinks the bar to a small capsule showing only the current icon; scrolling up, or tapping it, expands it again.
-- **Layouts**: standard, icons only, separate search button, and an accessory above the bar (see Layouts).
-- **Shadow**: a soft two-layer shadow shared with menus, not the Material one.
+- Switching: the indicator stretches with its speed (jelly) as it slides to the new tab. A small droplet follows closely through a short metaball neck and merges back as it catches up, including fast switches across several tabs.
+- Press and slide: press anywhere and the indicator grows, glows and follows your finger, and the bar glows too. It ticks as it crosses tabs and snaps to the nearest tab on release.
+- Drag deformation: the bar shifts slightly with your finger and swells with the indicator; past either end the indicator and the bar stretch together on a rubber band, with a small jelly bounce on release. The bar always wraps the indicator, and its corner radius is the indicator's radius plus the padding, so the two stay concentric however they deform.
+- Color transition: tabs change color continuously as the indicator passes over them.
+- Collapse on scroll: scrolling content down shrinks the bar to a small capsule showing only the current icon; scrolling up, or tapping it, expands it again.
+- Layouts: standard, icons only, separate search button, and an accessory above the bar (see Layouts).
+- Shadow: a soft two-layer shadow shared with menus, not the Material one.
 
 ## Import
 

@@ -1,6 +1,6 @@
 # Effects
 
-Every component in the library is built from three shared effects: **press glow**, **elastic** (rubber band / jelly / follow spring) and **metaball** connection. They are public API, so you can use them on your own components. The "效果" (Effects) tab of the example app has an interactive demo for each.
+Every component in the library is built from three shared effects: press glow, elastic (rubber band / jelly / follow spring) and metaball connection. They are public API, so you can use them on your own components. The "效果" (Effects) tab of the example app has an interactive demo for each.
 
 | Effect | Package | Main API |
 |---|---|---|
@@ -159,7 +159,7 @@ For opaque fills, b's interior runs a cheap shader without SDFs; the expensive s
 
 ## Fade mask
 
-`effect/mask` is a general fade mask for containers: it fades out **the content the area draws itself** on the chosen edges. It erases the content rather than painting a background over it, so it stays clean on cards, colors, gradients and images, and doesn't affect shapes, corners or shadows.
+`effect/mask` is a general fade mask for containers: it fades out the content the area draws itself on the chosen edges. It erases the content rather than painting a background over it, so it stays clean on cards, colors, gradients and images, and doesn't affect shapes, corners or shadows.
 
 ```kotlin
 // Scrolling areas: an edge fades while you can still scroll toward it, and is solid at the end
@@ -176,7 +176,7 @@ Modifier.mochiFadeMask(MochiFadeEdges.vertical()) { edge -> … }
 
 - The fade follows a smoothstep S curve split into 16 stops (`MochiSmoothGradient`), so there is no kink where it meets the solid color or full transparency. Every solid-to-clear fade in the library (scroll edges, the bottom toolbar, fade masks) uses it; use it for your own fades too instead of a two- or three-stop linear gradient.
 - Scrolling variants: as long as content is clipped on that side, the edge is fully masked; it only eases off over the last quarter of the fade length before the end. Scaling over the whole fade length is wrong: content that overflows by half a line would be only half masked, leaving the clip line plainly visible.
-- The mask composites offscreen, and an offscreen buffer clips to the layer's rectangle, so it only goes offscreen while some edge is actually masked; otherwise content may draw outside the rectangle as usual. For content that moves or scales with a morph, put the transform **outside** the mask, not inside it.
+- The mask composites offscreen, and an offscreen buffer clips to the layer's rectangle, so it only goes offscreen while some edge is actually masked; otherwise content may draw outside the rectangle as usual. For content that moves or scales with a morph, put the transform outside the mask, not inside it.
 - `start` / `end` follow reading direction and swap automatically in RTL.
 - The default fade length is 24dp (`MochiFadeMaskDefaults.Extent`).
 - Already applied to the top and bottom of scrollable menus (`MochiDropdown` and friends) and the demo pages' scrolling descriptions. The old `navigation.mochiScrollFadeMask` is deprecated and forwards here.
@@ -244,7 +244,7 @@ In the demo app, Theme → Graphics switches levels with the step slider (`Mochi
 - The feathered edge sharpens as it progresses, with a faint glow; the new frame underneath scales from 0.97 back to 1, as if rising from below.
 - Covering with the capture, applying the change (the heavy relayout) and starting the clock happen on separate frames, so the heavy frame causes no visible hitch and the animation does not skip its start.
 - The center defaults to the most recent press (the host observes touches without consuming them); you can also pass `origin`.
-- Triggering again mid-reveal lets the current reveal keep running until the new capture (the on-screen half-old, half-new frame) arrives, then hands over seamlessly; the follow-up is faster (0.5 s) and only scales from 0.99. Rapid taps merge their intermediate changes into the last one.
+- Triggering again mid-reveal lets the current reveal keep running until the new capture (the on-screen half-old, half-new frame) arrives, then hands over without a visible cut; the follow-up is faster (0.5 s) and only scales from 0.99. Rapid taps merge their intermediate changes into the last one.
 - `state.isRevealing` is true while revealing; colors should snap then (`animateMochiColorScheme(…, animate = !state.isRevealing)`).
 - At graphics level Mid the edge is hard with no glow.
 - The capture uses PixelCopy to copy the pixels actually on screen (Android 8.0+); with animations disabled, on older systems or if the copy fails, the change is applied directly.

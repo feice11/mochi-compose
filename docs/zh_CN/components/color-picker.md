@@ -7,8 +7,8 @@ var color by remember { mutableStateOf(Color(0xFF0A84FF)) }
 MochiListRow("强调色", trailing = { MochiColorWell(color, { color = it }, title = "强调色") })
 ```
 
-- **色块**（`MochiColorWell`）：中间是当前颜色，半透明时能看到下面的棋盘格；外面一圈彩虹环
-- **选色面板**（`MochiColorPickerSheet`）：一个 [底部面板](sheet.md)，有半屏和全屏两档
+- 色块（`MochiColorWell`）：中间是当前颜色，半透明时能看到下面的棋盘格；外面一圈彩虹环
+- 选色面板（`MochiColorPickerSheet`）：一个 [底部面板](sheet.md)，有半屏和全屏两档
   - 顶上用分段选择器切换三种选法：
     - 网格：第一行是灰阶，下面是 12 种色相，从深到浅排列
     - 色谱：先选色彩模型（HSL、HCT、Lab、LCH），在二维平面上点选，下面一条滑条调第三个维度

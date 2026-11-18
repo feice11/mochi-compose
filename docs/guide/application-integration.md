@@ -1,8 +1,8 @@
 # Building apps with Mochi: integration requirements
 
-This guide governs **apps consuming the library**, not just library contributions. Requirements apply when the corresponding product scenario exists; otherwise record “not applicable” and explain why. Do not invent unrelated features to use every component. Explicit user/product/platform and verification requirements take precedence; explain necessary deviations. Current source and public APIs establish supported behavior.
+This guide is for people building apps with Mochi. Each requirement applies when your app has the matching scenario; skip the rest rather than adding features just to use a component. Product and platform requirements come first. When this guide and the source disagree, the source is right.
 
-AI starting from the [README](../../README.en.md) must read this guide and the [design principles](design-principles.md) before implementing screens. [Adding a component](adding-components.md) is the separate library-contribution workflow.
+Read it together with the [design principles](design-principles.md) before building screens. To change the library itself, see [Adding a component](adding-components.md).
 
 ## 1. Application baseline and scenario map
 
@@ -38,7 +38,7 @@ AI starting from the [README](../../README.en.md) must read this guide and the [
 
 ### Theme integration: once at the root, no theme branches in pages
 
-Theming is the first integration step and the easiest to get wrong. Mochi components read colors, type, shapes, control colors and materials from the theme only, so **wire the theme once at the root and every page adapts to every appearance**. Pages should never contain `if (nothing)`, `if (ios)` or `if (glass)` branches.
+Theming is the first integration step and the easiest to get wrong. Mochi components read colors, type, shapes, control colors and materials from the theme only, so wire the theme once at the root and every page adapts to every appearance. Pages should never contain `if (nothing)`, `if (ios)` or `if (glass)` branches.
 
 ```kotlin
 @Composable
@@ -110,7 +110,7 @@ Sharing is the default app integration, not an optional showcase effect. The API
 - Reuse IDs for the same semantic content across pages, unique among different contents on one page. Avoid random IDs, display labels or per-route prefixes. A group's shape and its primary content can have the same ID because they are different handle kinds.
 - Give icons stable value-based `contentKey` values such as enums/constants. Keep the key for the same icon and change it when the icon changes; do not use a temporary lambda or mutable-object identity.
 - `MochiBarButton` has no `contentKey` argument; its text is the internal content key.
-- **Shapes pair by side and position/order; content pairs by `navId`.** Equal IDs alone do not select shape geometry pairing.
+- Shapes pair by side and position/order; content pairs by `navId`. Equal IDs alone do not select shape geometry pairing.
 
 The [complete starter](../../example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt) demonstrates a group becoming an icon or text button: `starter.primary` identifies the primary role on both pages and `starter.secondary` identifies the other group action.
 
@@ -139,21 +139,20 @@ It contains imports, Activity, theme/system-bar synchronization, navigation, thr
 
 ### Dependencies and Activity
 
-Follow [README installation](../../README.en.md#install). Choose an actual published Mochi release coordinate and set the app's `mochiComposeCoordinate` Gradle property; never invent a repository owner/tag or use `latest`. Current local build configuration: compileSdk 36, minSdk 23, Kotlin 2.3.0 with the Compose compiler plugin, Java/JVM 17.
+Add the dependencies from the [README](../../README.md#installation), using a released version (see the Maven Central badge). The library is built with compileSdk 36, minSdk 23, Kotlin 2.3.0 with the Compose compiler plugin, and Java 17.
 
-Minimal application dependency additions, using versions from the current version catalog:
+The starter needs these dependencies:
 
 ```kotlin
 dependencies {
-    implementation(providers.gradleProperty("mochiComposeCoordinate").get())
-    // Add mochi-icons when the app uses icons (coordinate in the README, same version as the core library)
-    implementation(providers.gradleProperty("mochiIconsCoordinate").get())
+    implementation("io.github.feice11:mochi-compose:<version>")
+    implementation("io.github.feice11:mochi-icons:<version>") // same version as mochi-compose
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.15.0")
 }
 ```
 
-`mochiComposeCoordinate` is a required consumer-supplied Gradle configuration value, not an undefined Kotlin helper. This repository's example already uses `implementation(project(":mochi-compose"))`. Independent apps use a published dependency or their own source snapshot, never an absolute path into a developer's checkout.
+The example app in this repository depends on the module directly with `implementation(project(":mochi-compose"))`.
 
 Minimal standalone manifest; replace rather than duplicate an existing launcher:
 
@@ -181,11 +180,11 @@ The Activity calls `mochiEnableEdgeToEdge()` (instead of plain `enableEdgeToEdge
 2. Set up theme/navigation, semantic toolbar IDs and icon keys; wire back and sharing first.
 3. Use existing cards, rows and controls; assign one animation owner per changing dimension.
 4. Implement loading, errors, empty states and retries without losing navigation or input. Starter memory state is not a production data layer.
-5. Report static review, compilation, execution and physical-device acceptance separately. When the user reserves interaction verification, do not operate the UI or describe compilation as visual validation.
+5. Test on a real device. A successful build says nothing about how transitions and gestures feel.
 
-## 5. Copy and visuals: avoid the "AI look"
+## 5. Copy and visuals: avoid template defaults
 
-Screens generated in one pass by an AI are easy to spot. It is rarely a single component; it is a pile of defaults nobody decided on: "·" gluing facts together, slogans as subtitles, every feature introduced with a line that sounds good and says nothing. Users read it as a template, not a tool made for them. Check copy and layout against the lists below. Each item is a statistical tendency; one occurrence is fine, a pattern is the problem.
+Screens that feel generic rarely fail because of one component. They are a pile of defaults nobody decided on: "·" gluing facts together, slogans as subtitles, every feature introduced with a line that sounds good and says nothing. Users read it as a template, not a tool made for them. Check copy and layout against the lists below. Each item is a statistical tendency; one occurrence is fine, a pattern is the problem.
 
 ### Punctuation and formatting
 
@@ -200,17 +199,17 @@ Screens generated in one pass by an AI are easy to spot. It is rarely a single c
 
 ### Wording
 
-- **Slogan subtitles**: "Your AI price radar", "Feel the music", "A whole new experience". Say what the page does: "Compare model API prices across providers". If there is nothing to add, omit the subtitle.
-- **Empty adjectives**: immersive, ultimate, seamless, elegant, powerful, smart, all-in-one, next-level, empower, pro-grade, brand-new. Replace them with checkable facts ("under 30ms latency", "supports OpenAI and Anthropic protocols"), or delete them.
-- **"Not X, but Y" / "not only … but also"**, and correcting a misconception nobody had: just state Y.
-- **Rule of three** ("faster, safer, simpler") and feature lists padded to three: list what exists.
-- **Uplifting endings**: "at the end of the day", "start your journey", "enjoy!": delete.
-- **Disclaimers piled into subtitles**: say it once where the user decides (the confirm dialog, under the submit button), nowhere else.
-- **Explaining the UI to the user**: "Tap the button below to get started", "Here you can …". Let the button name the action ("Start check").
-- **"OK", "Submit", "Get started" buttons**: name the action and object, "Save track", "Delete 3 records".
-- **One thing, several names** (source / provider / site): pick one and use it everywhere.
-- **Loading copy** like "Working hard, please wait…": say what is happening, "Decoding audio", and show progress when known.
-- **Errors** that only say "Something went wrong" or dump the exception: say what happened and what the user can do, "Offline, showing the last offers" plus a Retry button.
+- Slogan subtitles: "Your AI price radar", "Feel the music", "A whole new experience". Say what the page does: "Compare model API prices across providers". If there is nothing to add, omit the subtitle.
+- Empty adjectives: immersive, ultimate, seamless, elegant, powerful, smart, all-in-one, next-level, empower, pro-grade, brand-new. Replace them with checkable facts ("under 30ms latency", "supports OpenAI and Anthropic protocols"), or delete them.
+- "Not X, but Y" / "not only … but also", and correcting a misconception nobody had: just state Y.
+- Rule of three ("faster, safer, simpler") and feature lists padded to three: list what exists.
+- Uplifting endings: "at the end of the day", "start your journey", "enjoy!": delete.
+- Disclaimers piled into subtitles: say it once where the user decides (the confirm dialog, under the submit button), nowhere else.
+- Explaining the UI to the user: "Tap the button below to get started", "Here you can …". Let the button name the action ("Start check").
+- "OK", "Submit", "Get started" buttons: name the action and object, "Save track", "Delete 3 records".
+- One thing, several names (source / provider / site): pick one and use it everywhere.
+- Loading copy like "Working hard, please wait…": say what is happening, "Decoding audio", and show progress when known.
+- Errors that only say "Something went wrong" or dump the exception: say what happened and what the user can do, "Offline, showing the last offers" plus a Retry button.
 
 ### Visuals
 
@@ -228,9 +227,9 @@ Screens generated in one pass by an AI are easy to spot. It is rarely a single c
 2. Search the source for `·`, `—`, emoji and the adjectives above, and justify each hit.
 3. For every visual decision: would a completely different app make the same choice? If so it is a default; decide again for this product.
 
-## 6. Required delivery checklist
+## 6. Checklist
 
-For each item report “integrated + code location” or “not applicable + reason”. Screenshots or a few Mochi buttons are insufficient evidence of app integration.
+Before shipping, go through the items that apply to your app.
 
 - [ ] The theme is wired once at the root (colors, control colors, materials); pages have no appearance or glass-switch branches and components get no per-appearance colors.
 - [ ] System bars, insets, continuous corners and concentric spacing.
@@ -243,10 +242,3 @@ For each item report “integrated + code location” or “not applicable + rea
 - [ ] Press cancellation/disabled input, large type, semantics, haptics and reduced motion.
 - [ ] Justification for optional effects; no removed HDR border or deprecated shared-element API.
 - [ ] Copy and visuals checked against section 5: no "·"-glued facts, slogan subtitles, empty adjectives, emoji icons or gradient backgrounds.
-- [ ] Verification methods and unverified items within the user's authorized scope.
-
-The starter's static mapping is above. Current execution results depend on actual build logs and acceptance; an example's existence is not evidence of a passed visual test.
-
-## 7. Limits of AI instructions
-
-README, `llms.txt`, AGENTS and this guide improve discoverability and adoption; they cannot force an external AI to comply. Dependency coordinates alone do not communicate design rules through optional parameters. Add the guide/checklist to the consuming app's development instructions; a dependency repository's AGENTS does not automatically govern the consumer project.

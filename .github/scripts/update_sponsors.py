@@ -1,4 +1,4 @@
-"""Refresh the sponsor grid in README.md and README.en.md from afdian.
+"""Refresh the sponsor grid in README.md and README.zh-CN.md from afdian.
 
 Reads AFDIAN_USER_ID and AFDIAN_TOKEN from the environment and rewrites the
 block between the sponsor markers. Only names and avatars are written; amounts,
@@ -21,7 +21,7 @@ APIS = ["https://afdian.com/api/open/query-sponsor", "https://ifdian.net/api/ope
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 START = "<!-- sponsors:start -->"
 END = "<!-- sponsors:end -->"
-READMES = ["README.md", "README.en.md"]
+READMES = ["README.md", "README.zh-CN.md"]
 PER_ROW = 6
 
 

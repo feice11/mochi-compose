@@ -50,8 +50,8 @@ MochiHoldButton(onConfirm = { deleteAll() }) { Text("Hold to delete all") }
 
 Use it for destructive actions such as delete or reset. It only acts after being held for `holdMillis` (1.2 s by default):
 
-- **While held:** a fill sweeps left to right at a constant rate, with a tick every tenth.
-- **When full:** a firm haptic, then `onConfirm` runs and the fill recedes.
-- **Released early, or the finger slides off:** the fill springs back and nothing happens.
-- **Pressed:** the button deforms slightly.
-- **Colors:** destructive by default; change them with `MochiHoldButtonDefaults.colors(container, content, progress)`.
+- While held: a fill sweeps left to right at a constant rate, with a tick every tenth.
+- When full: a firm haptic, then `onConfirm` runs and the fill recedes.
+- Released early, or the finger slides off: the fill springs back and nothing happens.
+- Pressed: the button deforms slightly.
+- Colors: destructive by default; change them with `MochiHoldButtonDefaults.colors(container, content, progress)`.

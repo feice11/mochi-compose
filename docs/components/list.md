@@ -2,18 +2,18 @@
 
 iOS Settings-style grouped cards (inset grouped). Package `ui.feice.mochi.list`.
 
-- **MochiListSection**: one rounded card with an optional header above and footer below. Hairline dividers between rows start where the text starts (after the icon, if there is one) and end at the card edge (iOS). The dividers around a pressed row hide. The card catches ambient light.
-- **MochiListRow**: one row.
+- MochiListSection: one rounded card with an optional header above and footer below. Hairline dividers between rows start where the text starts (after the icon, if there is one) and end at the card edge (iOS). The dividers around a pressed row hide. The card catches ambient light.
+- MochiListRow: one row.
   - Optional leading icon, title and subtitle. Keep the theme font size: titles truncate on one line and subtitles use up to two lines.
   - Trailing: a gray value, a spinner, a custom control (switch, …), a checkmark, a chevron.
   - Press: the whole row gets a gray highlight. It lights up after a short delay so scrolling doesn't flash it, and fades out on release.
-- **MochiListButton**: a centered text row ("Sign Out").
-- **MochiListCard**: a section with only the card, good for info cards. Put any content in it and use `Modifier.mochiListDivider(inset)` to say where its divider starts.
-- **MochiSwipeRow**: a row that swipes left to reveal actions.
+- MochiListButton: a centered text row ("Sign Out").
+- MochiListCard: a section with only the card, good for info cards. Put any content in it and use `Modifier.mochiListDivider(inset)` to say where its divider starts.
+- MochiSwipeRow: a row that swipes left to reveal actions.
   - It follows the finger and snaps open or closed by position and velocity.
   - Past 60% of the width, the rightmost action fills the row and ticks; releasing then runs it. For a delete, the row slides out and collapses, the rows below move up, and the callback runs after that.
   - Dragging right is held by a rubber band; tapping an open row closes it.
-- The `basic` package also has **MochiActivityIndicator** (the iOS 8-spoke spinner: capsule spokes with a highlight sweeping smoothly clockwise, black 60% in light / white 80% in dark by default), **MochiProgressBar** (a G2 capsule progress bar, 6dp tall by default) and **MochiProgressRing** (a ring: with a value it is the App Store download ring, `null` spins indeterminately, and a `sweep` under 360 makes a gauge open at the bottom; put a stop square or a value in the middle). The bar and ring tracks default to 30% of the progress color (`MochiProgressDefaults.TrackAlpha`). See Components → 加载 in the demo; for a gauge use `MochiGauge` (Components → 仪表).
+- The `basic` package also has MochiActivityIndicator (the iOS 8-spoke spinner: capsule spokes with a highlight sweeping smoothly clockwise, black 60% in light / white 80% in dark by default), MochiProgressBar (a G2 capsule progress bar, 6dp tall by default) and MochiProgressRing (a ring: with a value it is the App Store download ring, `null` spins indeterminately, and a `sweep` under 360 makes a gauge open at the bottom; put a stop square or a value in the middle). The bar and ring tracks default to 30% of the progress color (`MochiProgressDefaults.TrackAlpha`). See Components → 加载 in the demo; for a gauge use `MochiGauge` (Components → 仪表).
 
 ## Usage
 
@@ -57,8 +57,8 @@ MochiLazyCompactTitleScaffold(title = "Sources") {
 
 Using two kinds of card on one page makes the hierarchy clearer (as the iOS storage page does):
 
-- **Info cards** show state: dense, with an accent color, e.g. a title, a number, a progress bar and a note, then one accent-colored action.
-- **Action cards** hold only tappable rows, one action per row.
+- Info cards show state: dense, with an accent color, e.g. a title, a number, a progress bar and a note, then one accent-colored action.
+- Action cards hold only tappable rows, one action per row.
 
 ## Parameters
 
@@ -141,7 +141,7 @@ When a card holds something other than `MochiListRow`, use `MochiListSectionHead
 
 `value` (a date, say) always shares the title's measured baseline. With a `subtitle` or `status`, it uses a smaller size; otherwise it uses the body size. Controls in `trailing` stay centered on every row; compound values and buttons share that center.
 
-Actions on both sides use `MochiCapsule` with fully rounded ends, growing, glowing and following the finger when pressed. At full reveal, top, bottom and outer-side insets are all 8dp, including tall rows; action gaps are also 8dp. The boundary is the **whole visible row**, not just the body height. The capsule shape is intentional rather than the card's inset corner radius.
+Actions on both sides use `MochiCapsule` with fully rounded ends, growing, glowing and following the finger when pressed. At full reveal, top, bottom and outer-side insets are all 8dp, including tall rows; action gaps are also 8dp. The boundary is the whole visible row, not just the body height. The capsule shape is intentional rather than the card's inset corner radius.
 
 Action area height = the current row height. Foreground background, press bounds and deletion clipping share the complete visible bounds; an old body-only clip must not cut off the expanded capsules.
 

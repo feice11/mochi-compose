@@ -14,13 +14,13 @@ Box {
 }
 ```
 
-- **Pulling**: the spinner's spokes appear one by one, clockwise from the top, following the pull distance
-- **Trigger**: past 96dp it starts refreshing without waiting for release, like iOS. It ticks once, the spinner starts turning, and `onRefresh` is called
-- **While refreshing**: after release the content springs back and holds 56dp below the top, with `mochiRefreshHold` reserving that space; it springs back up when `onRefresh` returns
-- **No double trigger**: the pull has to come back within 16dp before it can trigger again, so a finger still holding when a refresh ends does not start another one
-- **Content must scroll**: since Compose 1.7 a scroll container whose content fits does not dispatch overscroll, so it cannot be pulled and refresh never triggers. iOS lets short lists bounce (alwaysBounceVertical); that is not supported yet, so the content needs to be taller than the viewport
-- **Lazy lists must pass `listState`**: a lazy list remembers its first visible item by key, so items inserted at the top by a refresh stay above the viewport and nothing seems to arrive. With `listState`, if the list is still at the top when the refresh ends it stays pinned to item 0: the new items appear at the top and the old ones move down (smoothly with `Modifier.animateItem()`). If the user scrolled away during the refresh, nothing moves. Write the new data before `onRefresh` returns
-- **Wiring**: put `MochiRefreshIndicator` on the same top edge as the scrolling content; it centers itself between that edge and the pulled-down content. `isRefreshing` reports the current state
+- Pulling: the spinner's spokes appear one by one, clockwise from the top, following the pull distance
+- Trigger: past 96dp it starts refreshing without waiting for release, like iOS. It ticks once, the spinner starts turning, and `onRefresh` is called
+- While refreshing: after release the content springs back and holds 56dp below the top, with `mochiRefreshHold` reserving that space; it springs back up when `onRefresh` returns
+- No double trigger: the pull has to come back within 16dp before it can trigger again, so a finger still holding when a refresh ends does not start another one
+- Content must scroll: since Compose 1.7 a scroll container whose content fits does not dispatch overscroll, so it cannot be pulled and refresh never triggers. iOS lets short lists bounce (alwaysBounceVertical); that is not supported yet, so the content needs to be taller than the viewport
+- Lazy lists must pass `listState`: a lazy list remembers its first visible item by key, so items inserted at the top by a refresh stay above the viewport and nothing seems to arrive. With `listState`, if the list is still at the top when the refresh ends it stays pinned to item 0: the new items appear at the top and the old ones move down (smoothly with `Modifier.animateItem()`). If the user scrolled away during the refresh, nothing moves. Write the new data before `onRefresh` returns
+- Wiring: put `MochiRefreshIndicator` on the same top edge as the scrolling content; it centers itself between that edge and the pulled-down content. `isRefreshing` reports the current state
 
 ## Empty state
 

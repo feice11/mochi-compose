@@ -80,7 +80,7 @@ Same as `MochiDropdown`, except:
 
 | Parameter | Type | Description | Default |
 |---|---|---|---|
-| colors | `MochiDropdownColors` | Button and panel share one color for a seamless morph | `MochiDropdownDefaults.iconDropdownColors()` |
+| colors | `MochiDropdownColors` | Button and panel share one color so the morph has no visible seam | `MochiDropdownDefaults.iconDropdownColors()` |
 | behavior | `MochiDropdownBehavior` | Cover mode, end-aligned | `MochiDropdownDefaults.iconBehavior()` |
 | menuWidth | `Dp` | Panel width | `MochiDropdownDefaults.IconMenuWidth` |
 | size | `Dp` | Button diameter | `MochiDropdownDefaults.IconButtonSize` |
@@ -179,18 +179,18 @@ Menu content is clipped to the current panel outline during opening, closing, ov
 
 The library started with the dropdown. This is how it matches iOS 26.
 
-| Goal | Status | How |
-|---|---|---|
-| Grows out of the button with a metaball neck | ✅ | The SDFs of the button and panel rounded rectangles are merged with smooth-min, and only the extra "neck" outside both bodies is drawn. The fuse radius fades in over the first 15% of opening and returns to 0 between 50% and 95%, so the neck thins and snaps |
-| Wrap mode (⋯ becomes the menu) | ✅ | The button shape equals the panel, so only one thing morphs: it widens first, then drops. Press scaling applies only while it is still a button, so the open panel never bulges |
-| MD3E material | ✅ | materialkolor generates tonal colors from a seed using the 2025 spec, or follows the system palette on Android 12+. Button secondaryContainer / panel white in light mode or surfaceContainerHigh in dark mode / selection tertiaryContainer |
-| G2 corners | ✅ | Body, selection, highlight and content clip all use Kyant's G2 continuous-curvature corners, becoming a capsule at half the side length. Shader shadows and the neck use a same-size superellipse SDF |
-| Shadow | ✅ | Two layers: a faint ambient shadow that is inset, widely blurred and offset downward, plus a very soft, faint contact layer. Only a trace of shadow sits at the edge and it fades out over a long distance, with no gray ring hugging the edge. Computed as the coverage of a Gaussian-blurred shape, with ±0.5/255 dithering against banding. Bigger panels cast wider, softer shadows. The shadow only appears as the menu opens: there is none while the entry is held, and the entry capsule itself never has one |
-| Color blend | ✅ | The shader also computes the body color, blending from button to panel color by distance. Body and neck share the formula, so the seam is continuous |
-| Press glow | ✅ | Soft light rising from the finger with smooth falloff and no bright rim; its spread follows the element size |
-| Press-and-slide + deformation | ✅ | The highlight's top and bottom edges are a fast and a slow spring, stretching and narrowing while sliding. Dragging out of the panel rubber-bands (iOS scroll formula plus a per-frame spring, so it follows a moving finger continuously) |
-| No clipping at the bottom | ✅ | The overlay lives on the Activity's DecorView in the same window, not a Popup sub-window, so it can draw over the navigation bar |
-| Sharpness | ✅ | AGSL works in pixel coordinates; body edges use path anti-aliasing |
+| Detail | How it works |
+|---|---|
+| Grows out of the button with a metaball neck | The SDFs of the button and panel rounded rectangles are merged with smooth-min, and only the extra "neck" outside both bodies is drawn. The fuse radius fades in over the first 15% of opening and returns to 0 between 50% and 95%, so the neck thins and snaps |
+| Wrap mode (⋯ becomes the menu) | The button shape equals the panel, so only one thing morphs: it widens first, then drops. Press scaling applies only while it is still a button, so the open panel never bulges |
+| MD3E material | materialkolor generates tonal colors from a seed using the 2025 spec, or follows the system palette on Android 12+. Button secondaryContainer / panel white in light mode or surfaceContainerHigh in dark mode / selection tertiaryContainer |
+| G2 corners | Body, selection, highlight and content clip all use Kyant's G2 continuous-curvature corners, becoming a capsule at half the side length. Shader shadows and the neck use a same-size superellipse SDF |
+| Shadow | Two layers: a faint ambient shadow that is inset, widely blurred and offset downward, plus a very soft, faint contact layer. Only a trace of shadow sits at the edge and it fades out over a long distance, with no gray ring hugging the edge. Computed as the coverage of a Gaussian-blurred shape, with ±0.5/255 dithering against banding. Bigger panels cast wider, softer shadows. The shadow only appears as the menu opens: there is none while the entry is held, and the entry capsule itself never has one |
+| Color blend | The shader also computes the body color, blending from button to panel color by distance. Body and neck share the formula, so the seam is continuous |
+| Press glow | Soft light rising from the finger with smooth falloff and no bright rim; its spread follows the element size |
+| Press-and-slide + deformation | The highlight's top and bottom edges are a fast and a slow spring, stretching and narrowing while sliding. Dragging out of the panel rubber-bands (iOS scroll formula plus a per-frame spring, so it follows a moving finger continuously) |
+| No clipping at the bottom | The overlay lives on the Activity's DecorView in the same window, not a Popup sub-window, so it can draw over the navigation bar |
+| Sharpness | AGSL works in pixel coordinates; body edges use path anti-aliasing |
 | Not yet | ⏳ | Glass refraction / lensing (deliberately replaced by MD3E), shadows adapting to the backdrop, submenus, a top row of small icons |
 
 Apple has not published the menu's spring parameters or haptic timing; both are tuned by feel.

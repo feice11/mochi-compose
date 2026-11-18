@@ -7,8 +7,8 @@ var color by remember { mutableStateOf(Color(0xFF0A84FF)) }
 MochiListRow("Accent", trailing = { MochiColorWell(color, { color = it }, title = "Accent") })
 ```
 
-- **Well** (`MochiColorWell`): the current color, with a checkerboard showing through when it is translucent, inside a rainbow ring
-- **Picker sheet** (`MochiColorPickerSheet`): a [sheet](sheet.md) with medium and large detents
+- Well (`MochiColorWell`): the current color, with a checkerboard showing through when it is translucent, inside a rainbow ring
+- Picker sheet (`MochiColorPickerSheet`): a [sheet](sheet.md) with medium and large detents
   - A segmented control at the top switches between three ways to pick:
     - Grid: a grayscale top row, then 12 hues from dark to light
     - Spectrum: pick a color model (HSL, HCT, Lab, LCH), then pick on a 2D plane, with a slider for the third axis

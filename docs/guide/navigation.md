@@ -85,7 +85,7 @@ Full-screen swipe back handles only input not consumed by children, preserving h
 - `MochiBarButton` registers `navId` and uses its text as the internal content key; it has no public contentKey argument.
 - `MochiBarGroup` registers the group's shape; each `MochiBarGroupItem` registers its own content.
 - Reuse semantic content IDs across pages, unique among different contents on one page. Do not use route prefixes, random IDs or temporary lambdas as identity.
-- **Shapes pair by side and order, content by navId.** A group shape and its primary content may use the same string because they are different handle kinds.
+- Shapes pair by side and order, content by navId. A group shape and its primary content may use the same string because they are different handle kinds.
 
 Pass these complete functions to adjacent pages' `actions`. Icon content and click handlers are explicit parameters, with no implicit icon-library dependency:
 

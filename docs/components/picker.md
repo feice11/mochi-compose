@@ -22,7 +22,7 @@ MochiDurationPicker(seconds, { seconds = it })         // h, min, s with fixed u
 - Items sit on a cylinder: further from the middle they flatten and fade, and items on the back are not drawn. A capsule (`MochiDefaults.fill()`) marks the selected row
 - Drags follow 1:1; on release the wheel flings and snaps to the nearest row (critically damped, no overshoot). Past the ends it rubber-bands; `cyclic = true` loops forever
 - A light tick on every row passed; tapping a row above or below scrolls to it
-- `onSelectedIndexChange` fires only **after the wheel settles**; an external `selectedIndex` change animates there instead of jumping. Cyclic wheels take the short way (59 → 0 is one row down)
+- `onSelectedIndexChange` fires only after the wheel settles; an external `selectedIndex` change animates there instead of jumping. Cyclic wheels take the short way (59 → 0 is one row down)
 - Rows where `disabled` returns true are greyed but still reachable; set the value back to a valid row in the callback and the wheel rolls back by itself
 - `label` is a unit fixed to the right of the selected row; it does not scroll
 

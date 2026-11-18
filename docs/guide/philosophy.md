@@ -4,14 +4,11 @@ The [design principles](design-principles.md) say *what*: the rules and numbers.
 
 The rules cannot cover every case. When something is not covered, derive the answer from these ideas. If a derived answer conflicts with the rules, the rules and their [priorities](design-principles.md#priorities-who-wins-when-rules-conflict) win, and the gap gets added to the rules.
 
-This page is written for two kinds of reader:
-
-- **Developers**: understand the trade-offs, so the code you write conforms without checking every rule.
-- **AI agents**: every idea comes with *how the library does it*, *anti-patterns* and *self-check questions*, usable directly as criteria when generating or reviewing code.
+Each idea comes with how the library applies it, counter-examples and questions to check your own code against. Once the trade-offs make sense, most rules follow without looking them up.
 
 ## In one sentence
 
-> **The interface is a believable physical object: touch it and it responds immediately, continuously and reversibly; content returns to where it came from; the library owns every detail, the app only describes its business.**
+> The interface is a believable physical object: touch it and it responds immediately, continuously and reversibly; content returns to where it came from; the library owns every detail, the app only describes its business.
 
 The base is Material 3 Expressive color, type and motion tokens. Interaction and motion follow iOS 26, shapes use Kyant's G2 continuous corners, and engineering habits follow miuix. The sections below say how to choose when these sources conflict.
 
@@ -21,16 +18,16 @@ The base is Material 3 Expressive color, type and motion tokens. Interaction and
 
 The user should never see state A jump to state B. They should see the same thing turning from A into B.
 
-- **No instant content swaps**:
+- No instant content swaps:
   - `MochiBlurText` for text replacing text.
   - `MochiMorphIcon` for icon replacing icon.
   - `MochiBlurVisibility` for appearing and disappearing.
   - `MochiCounterText` for numbers.
   - `mochiAnimateHeight` for card height changes.
-- **Return to where it came from**: menus grow out of their button and shrink back along the same path. Pages grow from a card (`mochiNavSource`) to full screen and shrink back into it.
-- **Always interruptible**: animations are driven only by spring progress. Reversing midway or tapping again continues from the current position and velocity, and never jumps back to the start.
-- **Lay out first, then animate**: new content composes, lays out, draws and lets the frame rate settle before its entrance animation starts. The library's pages, sheets, dialogs and tab switches already do this. Layout sharing a frame with the first animation frames is an instant swap.
-- **Occlusion is continuous too**: when a card under a bar opens, the bar fades behind the container with the open progress (`mochiNavOccluder`) instead of being covered at once.
+- Return to where it came from: menus grow out of their button and shrink back along the same path. Pages grow from a card (`mochiNavSource`) to full screen and shrink back into it.
+- Always interruptible: animations are driven only by spring progress. Reversing midway or tapping again continues from the current position and velocity, and never jumps back to the start.
+- Lay out first, then animate: new content composes, lays out, draws and lets the frame rate settle before its entrance animation starts. The library's pages, sheets, dialogs and tab switches already do this. Layout sharing a frame with the first animation frames is an instant swap.
+- Occlusion is continuous too: when a card under a bar opens, the bar fades behind the container with the open progress (`mochiNavOccluder`) instead of being covered at once.
 
 **Anti-patterns**:
 - Switching with `if (loading) Spinner() else Content()`.
@@ -61,11 +58,11 @@ The hand is the only physical link between the user and the interface, so tracki
 
 Beauty comes from stable geometric relationships, not from numbers tuned one at a time.
 
-- **Continuous corners**: `MochiRoundedRectangle` / `MochiCapsule`, radii from `MochiTheme.shapes`. Never `RoundedCornerShape`.
-- **Concentric**: a rounded element sitting at an inset inside a rounded container has radius = outer radius − inset (`MochiConcentric`).
-- **Equal spacing all around**: an icon in a capsule sits as far from the end as from the top and bottom.
-- **Optical balance stays inside geometry**: icons center by ink and text by line-box centers. These are fine adjustments that never override concentricity.
-- **Layout owns spacing, content is never scaled**: content that does not fit grows naturally. Text is never shrunk or hard-clipped.
+- Continuous corners: `MochiRoundedRectangle` / `MochiCapsule`, radii from `MochiTheme.shapes`. Never `RoundedCornerShape`.
+- Concentric: a rounded element sitting at an inset inside a rounded container has radius = outer radius − inset (`MochiConcentric`).
+- Equal spacing all around: an icon in a capsule sits as far from the end as from the top and bottom.
+- Optical balance stays inside geometry: icons center by ink and text by line-box centers. These are fine adjustments that never override concentricity.
+- Layout owns spacing, content is never scaled: content that does not fit grows naturally. Text is never shrunk or hard-clipped.
 
 **Anti-patterns**:
 - A lone `offset(y = 2.dp)` so one row looks centered.
@@ -99,8 +96,8 @@ Each interaction has exactly one implementation in the library. Reusing it bring
   - `MochiButton` / `MochiBarIconButton` for buttons.
   - `MochiListSection` / `MochiListRow` for settings rows.
 - Shared effects live in the `effect/` module (glow, deformation, metaball, content transitions, masks). Components and apps take them from there.
-- **One animation owner per property**: height, position and similar properties have a single animation. An outer layer never chases an inner one's intermediate values or adds a second smoothing pass.
-- **Fix at the root**: a visual problem is fixed in a library token or component and written into the rules, never patched with numbers on one page.
+- One animation owner per property: height, position and similar properties have a single animation. An outer layer never chases an inner one's intermediate values or adds a second smoothing pass.
+- Fix at the root: a visual problem is fixed in a library token or component and written into the rules, never patched with numbers on one page.
 
 **Anti-patterns**:
 - "A plain button + a hand-drawn overlay" as a menu.
@@ -130,12 +127,12 @@ On every OS version and every device class, gestures, motion rhythm and results 
 
 A component's value shows in real scenarios, not in a tuning panel.
 
-- **Demo pages**:
+- Demo pages:
   - Use real scenarios (a lock-screen notification, Control Center, an inbox, an album).
   - Keep interactions playable.
   - Keep only one or two parameters that matter most to feel.
-- **Integration**: choose components by business scenario. Mark the unused ones "not applicable + reason", and never add unrelated features to use every component.
-- **Defaults are the answer**: `XxxDefaults` holds tuned values. Apps change them only when the business needs it.
+- Integration: choose components by business scenario. Mark the unused ones "not applicable + reason", and never add unrelated features to use every component.
+- Defaults are the answer: `XxxDefaults` holds tuned values. Apps change them only when the business needs it.
 
 **Anti-patterns**:
 - A demo page with a row of stiffness, damping and offset sliders but no real content.
@@ -163,16 +160,16 @@ Examples:
 - Readings jump directly during a drag (tracking > no instant swaps).
 - Large-area HDR light only brightens slightly (no overexposure > iOS fidelity).
 
-## Decision order when writing code (developers and AI)
+## Decision order when writing code
 
-1. **Identify the task**: building an app with the library, or modifying the library? Never mix the two checklists.
-2. **Find what exists**: is there a library component or effect for this? Use it fully, never half of it plus your own drawing.
-3. **Use tokens**: color, type, corners, spacing and motion come from the theme or `XxxDefaults` whenever possible.
-4. **Check continuity**: every changing piece of content has a transition (idea 1). Every animation is interruptible, continues from the current state, and has one owner.
-5. **Check tracking**: gestures are 1:1 during a drag and hand their velocity to the release animation.
-6. **Check geometry**: corners are concentric, spacing is equal all around, and nothing is clipped.
-7. **Check occlusion and layers**: bars floating over content register as occluders, and offscreen layers sit outside deformations.
-8. **State verification clearly**: report what compiled, what was tested and what needs a device, separately.
+1. Identify the task: building an app with the library, or modifying the library? Never mix the two checklists.
+2. Find what exists: is there a library component or effect for this? Use it fully, never half of it plus your own drawing.
+3. Use tokens: color, type, corners, spacing and motion come from the theme or `XxxDefaults` whenever possible.
+4. Check continuity: every changing piece of content has a transition (idea 1). Every animation is interruptible, continues from the current state, and has one owner.
+5. Check tracking: gestures are 1:1 during a drag and hand their velocity to the release animation.
+6. Check geometry: corners are concentric, spacing is equal all around, and nothing is clipped.
+7. Check occlusion and layers: bars floating over content register as occluders, and offscreen layers sit outside deformations.
+8. State verification clearly: report what compiled, what was tested and what needs a device, separately.
 
 ## Anti-pattern quick reference
 

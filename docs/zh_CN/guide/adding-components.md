@@ -36,7 +36,7 @@ API 约定（和 miuix 一致）：
 | 目标一直在变的跟随 | `MochiFollowSpring` |
 | 卡片高度随内容变化 | 默认用 `Modifier.mochiAnimateHeight(shape)`；背景放在之前，目标高度和内边距放在之后；仅在手势或已有动画直接控制高度时关闭 |
 | 两块形状融合 / 从按钮长出来 | `rememberMochiMetaballRenderer` + `drawMochiMetaball`，靠近融合用 `proximityFuse` |
-| 图标换图标 / 文字换文字 / 出现消失 / 数字变化 | `MochiMorphIcon` / `MochiBlurText` / `MochiBlurVisibility` / `MochiCounterText`，**不瞬切**，见[内容变换](content-transitions.md)的规范 |
+| 图标换图标 / 文字换文字 / 出现消失 / 数字变化 | `MochiMorphIcon` / `MochiBlurText` / `MochiBlurVisibility` / `MochiCounterText`，不瞬切，见[内容变换](content-transitions.md)的规范 |
 | 浮在页面上（不被导航栏裁切） | `overlay/InWindowOverlay`（内部） |
 | 按住滑选 | `gesture/PressSlideGesture`（内部） |
 | 点开后长成整页 / 返回缩回 | `navigation/`：`mochiNavSource` + `push(from = key)`；侧推使用 `push(route)` 与已登记的顶栏按钮，见 [导航与页面转场](navigation.md) |

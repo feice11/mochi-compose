@@ -1,6 +1,6 @@
-# Mochi — application integration for AI agents
+# Mochi Compose
 
-Android Jetpack Compose library: MD3 Expressive theme with iOS-style interactions.
+> Android Jetpack Compose UI library: Material 3 Expressive colors and type, iOS-style interaction and motion.
 Read this file before generating an app from this repository. Public API optionality
 is not the app integration policy. Apply requirements to actual product scenarios;
 otherwise report "not applicable" with a reason. Explicit user instructions prevail.

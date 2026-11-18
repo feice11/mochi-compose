@@ -48,7 +48,7 @@ After pressing any button, the finger can slide between buttons, vertically (or 
 ## Dismissing
 
 - Tapping any button runs its `onClick`, then calls `onDismissRequest`
-- Back key / back gesture dismiss it, with **predictive back**: while dragging, the card shrinks (down to 0.9) and shifts toward the gesture side, and the dim lightens; release to dismiss, cancel to spring back
+- Back key / back gesture dismiss it, with predictive back: while dragging, the card shrinks (down to 0.9) and shifts toward the gesture side, and the dim lightens; release to dismiss, cancel to spring back
 - Tapping outside does nothing by default (like iOS alerts); turn it on with `dismissOnOutsideTap = true`
 - `dismissOnBack = false`: the back gesture only shrinks the card and springs it back on release, without dismissing; pair it with a hold button below so the notice is actually read
 - `MochiDialogAction(..., holdToConfirm = true)`: the button only fires when held ([`MochiHoldButton`](toolbar.md)); a layer fills from left to right while held, and it runs and dismisses once full; letting go early rolls it back. Colors still follow the role

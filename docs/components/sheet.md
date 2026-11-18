@@ -2,9 +2,9 @@
 
 The iOS bottom sheet. With glass in the theme it is glass at medium height and turns opaque when pulled to full screen (see "Glass" below).
 
-- **Medium**: the sheet floats 8dp from the sides and bottom, using its original single continuous rounded outline. Each top corner uses the original `max(physicalRadius, 32dp) - floatingInset` radius, capped at a fixed 48dp.
-- **Large**: edge to edge up to just below the status bar, filling through the navigation area to the window bottom. The page behind it (the one with `mochiSheetBackdrop`) shrinks from its top edge into a rounded card that peeks out above the sheet, over black.
-- **Drag**: the whole sheet drags and follows the finger. Past the highest detent it is held by a rubber band; on release it snaps to the nearest detent by projected velocity, and a hard fling down dismisses it.
+- Medium: the sheet floats 8dp from the sides and bottom, using its original single continuous rounded outline. Each top corner uses the original `max(physicalRadius, 32dp) - floatingInset` radius, capped at a fixed 48dp.
+- Large: edge to edge up to just below the status bar, filling through the navigation area to the window bottom. The page behind it (the one with `mochiSheetBackdrop`) shrinks from its top edge into a rounded card that peeks out above the sheet, over black.
+- Drag: the whole sheet drags and follows the finger. Past the highest detent it is held by a rubber band; on release it snaps to the nearest detent by projected velocity, and a hard fling down dismisses it.
 - Tapping outside dismisses it. From the moment it starts closing, taps go to the page behind it without waiting for the closing animation. With an internal navigator, Back pops the internal page first; it dismisses the sheet only at the root.
 
 ## Usage

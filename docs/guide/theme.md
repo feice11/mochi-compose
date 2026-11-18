@@ -269,9 +269,9 @@ Large bold glyphs carry built-in left spacing (about 0.04em) that makes them loo
 
 Three rules every component follows when placing things inside a rounded container:
 
-1. **Same shape**: inset the container's outline by an even margin to get a concentric inner contour, and give inner rounded shapes that contour's radius (`MochiConcentric.inner(outer, inset)`). Examples: the tab bar indicator, the demo header icon tile.
-2. **Different shape**: judge an icon or a piece of text by its visual mass (imagine it blurred), not its bounding box, and put that mass on the concentric contour. Examples: the toast icon sits in a square as tall as the content, 10dp from the capsule's end and edges; the search magnifier is as far from the capsule end as from its top and bottom; the back chevron and demo icons are centered on their ink centroid; the list `›` is centered on the real glyph ink.
-3. **Near the edges**: nothing pokes into a corner. Either push it inward (short first/last list rows get extra space) or round it concentrically.
+1. Same shape: inset the container's outline by an even margin to get a concentric inner contour, and give inner rounded shapes that contour's radius (`MochiConcentric.inner(outer, inset)`). Examples: the tab bar indicator, the demo header icon tile.
+2. Different shape: judge an icon or a piece of text by its visual mass (imagine it blurred), not its bounding box, and put that mass on the concentric contour. Examples: the toast icon sits in a square as tall as the content, 10dp from the capsule's end and edges; the search magnifier is as far from the capsule end as from its top and bottom; the back chevron and demo icons are centered on their ink centroid; the list `›` is centered on the real glyph ink.
+3. Near the edges: nothing pokes into a corner. Either push it inward (short first/last list rows get extra space) or round it concentrically.
 
 `MochiDefaults.fill()` is the iOS system fill (onSurface at 12% in light, 24% in dark) for control tracks: off switches, the unfilled part of sliders and progress bars, and the segmented control track. Being translucent, it stays visible on white cards and gray pages alike. Bar buttons (back, toolbar) use the card color, so they read as white circles on the gray page.
 
