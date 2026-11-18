@@ -16,6 +16,10 @@
   <a href="README.md">English</a> · 简体中文 · <a href="https://github.com/feice11/mochi-compose/releases/latest">示例 APK</a> · <a href="CHANGELOG.md">更新日志</a>
 </p>
 
+<p align="center">
+  <a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-zh.svg" alt="在爱发电赞助 Mochi" height="68"></a>
+</p>
+
 Mochi 是给 Jetpack Compose 应用用的界面库。配色和字阶照 Material 3 Expressive，交互和动效照 iOS 26：控件按住会跟着手指拉伸，菜单从打开它的按钮里长出来，页面侧推和返回都能中途打断。不依赖 `material3`。
 
 <table>
@@ -123,7 +127,7 @@ MochiTheme(colors = colors, materials = mochiGlassMaterials()) { /* … */ }
 
 Mochi 由我一个人业余维护。如果它帮你省了事，可以在 [爱发电](https://afdian.com/a/feice) 支持一下。赞助者名单每天自动更新。
 
-<a href="https://afdian.com/a/feice"><img src="https://img.shields.io/badge/%E8%B5%9E%E5%8A%A9-%E7%88%B1%E5%8F%91%E7%94%B5-946CE6?style=for-the-badge" alt="在爱发电赞助"></a>
+<a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-zh.svg" alt="在爱发电赞助 Mochi" height="68"></a>
 
 <!-- sponsors:start -->
 <table>

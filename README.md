@@ -16,6 +16,10 @@
   English · <a href="README.zh-CN.md">简体中文</a> · <a href="https://github.com/feice11/mochi-compose/releases/latest">Demo APK</a> · <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+<p align="center">
+  <a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-en.svg" alt="Sponsor Mochi on afdian" height="68"></a>
+</p>
+
 Mochi is a UI library for Android apps built with Jetpack Compose. Colors and type follow Material 3 Expressive; interaction and motion follow iOS 26: controls stretch under the finger, menus grow out of the button that opened them, and pages push and pop with interruptible springs. It does not depend on `material3`.
 
 <table>
@@ -123,7 +127,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before sending changes.
 
 Mochi is maintained by one person in spare time. If it saves you work, you can support it on [afdian](https://afdian.com/a/feice). Sponsors are listed below and updated daily.
 
-<a href="https://afdian.com/a/feice"><img src="https://img.shields.io/badge/Sponsor-afdian-946CE6?style=for-the-badge" alt="Sponsor on afdian"></a>
+<a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-en.svg" alt="Sponsor Mochi on afdian" height="68"></a>
 
 <!-- sponsors:start -->
 <table>
