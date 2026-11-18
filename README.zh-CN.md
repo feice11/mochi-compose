@@ -1,12 +1,8 @@
 <p align="center">
-  <img src="docs/assets/mochi-logo.svg" alt="Mochi logo" width="112">
+  <img src="docs/assets/mochi-cover.svg" alt="Mochi Compose" width="100%">
 </p>
 
-<h1 align="center">Mochi Compose</h1>
-
-<p align="center">
-  Jetpack Compose 组件库：iOS 式的交互和动效、G2 连续圆角、AGSL 液态玻璃。
-</p>
+<p align="center">Jetpack Compose 组件库：iOS 式的交互和动效、G2 连续圆角、AGSL 液态玻璃。</p>
 
 <p align="center">
   <a href="https://central.sonatype.com/artifact/io.github.feice11/mochi-compose"><img src="https://img.shields.io/maven-central/v/io.github.feice11/mochi-compose?label=Maven%20Central" alt="Maven Central"></a>
@@ -22,11 +18,14 @@
 
 Mochi 是给 Jetpack Compose 应用用的界面库。配色和字阶照 Material 3 Expressive，交互和动效照 iOS 26：控件按住会跟着手指拉伸，菜单从打开它的按钮里长出来，页面侧推和返回都能中途打断。不依赖 `material3`。
 
-<p align="center">
-  <img src="docs/assets/preview/home.png" width="240" alt="默认外观的组件目录">
-  &nbsp;&nbsp;
-  <img src="docs/assets/preview/n_home.png" width="240" alt="Nothing 外观的组件目录">
-</p>
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/assets/preview/catalog.png" alt="组件目录"><br><sub>组件目录</sub></td>
+    <td align="center" width="25%"><img src="docs/assets/preview/glass.png" alt="液态玻璃标签栏"><br><sub>液态玻璃标签栏</sub></td>
+    <td align="center" width="25%"><img src="docs/assets/preview/menu-dark.png" alt="深色模式的玻璃菜单"><br><sub>深色模式的玻璃菜单</sub></td>
+    <td align="center" width="25%"><img src="docs/assets/preview/nothing.png" alt="Nothing 外观"><br><sub>Nothing 外观</sub></td>
+  </tr>
+</table>
 
 ## 安装
 

@@ -1,12 +1,8 @@
 <p align="center">
-  <img src="docs/assets/mochi-logo.svg" alt="Mochi logo" width="112">
+  <img src="docs/assets/mochi-cover.svg" alt="Mochi Compose" width="100%">
 </p>
 
-<h1 align="center">Mochi Compose</h1>
-
-<p align="center">
-  Jetpack Compose components with iOS-style motion, G2 continuous corners and an AGSL liquid glass.
-</p>
+<p align="center">Jetpack Compose components with iOS-style motion, G2 continuous corners and an AGSL liquid glass.</p>
 
 <p align="center">
   <a href="https://central.sonatype.com/artifact/io.github.feice11/mochi-compose"><img src="https://img.shields.io/maven-central/v/io.github.feice11/mochi-compose?label=Maven%20Central" alt="Maven Central"></a>
@@ -22,11 +18,14 @@
 
 Mochi is a UI library for Android apps built with Jetpack Compose. Colors and type follow Material 3 Expressive; interaction and motion follow iOS 26: controls stretch under the finger, menus grow out of the button that opened them, and pages push and pop with interruptible springs. It does not depend on `material3`.
 
-<p align="center">
-  <img src="docs/assets/preview/home.png" width="240" alt="Component catalog in the default appearance">
-  &nbsp;&nbsp;
-  <img src="docs/assets/preview/n_home.png" width="240" alt="Component catalog in the Nothing appearance">
-</p>
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/assets/preview/catalog.png" alt="Component catalog"><br><sub>Component catalog</sub></td>
+    <td align="center" width="25%"><img src="docs/assets/preview/glass.png" alt="Liquid glass tab bar"><br><sub>Liquid glass tab bar</sub></td>
+    <td align="center" width="25%"><img src="docs/assets/preview/menu-dark.png" alt="Glass menu, dark mode"><br><sub>Glass menu, dark mode</sub></td>
+    <td align="center" width="25%"><img src="docs/assets/preview/nothing.png" alt="Nothing appearance"><br><sub>Nothing appearance</sub></td>
+  </tr>
+</table>
 
 ## Installation
 
