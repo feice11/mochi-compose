@@ -29,7 +29,7 @@ MochiDialog(
 MochiDialog(
     visible = show,
     onDismissRequest = { show = false },
-    title = "打开液态玻璃？",
+    title = "打开玻璃？",
     message = "每一帧都要额外渲染，更耗电。",
     icon = { MochiIonicon("warning", tint = MochiTheme.colorScheme.error, size = 44.dp) },
     actions = persistentListOf(
@@ -41,9 +41,9 @@ MochiDialog(
 
 需要用户确认才生效的设置（耗电、耗流量）用普通点按确认就够了；`holdToConfirm` 留给不可撤销的危险操作。
 
-## 高光和形变
+## 按下和滑选
 
-和标签栏同一套：按钮按下放大、发光、跟手，并排的两个按钮之间拉出融球颈；整张卡片（连同投影、文字、按钮）被手指带着挪动、朝手指那侧略微拉长，边缘接到按钮的环境光。卡片不裁切，按钮放大时可以探出一点，和别处的按钮手感一致。
+按住任一按钮后，手指可以在按钮之间上下（并排时左右）滑动：滑到哪个按钮哪个亮起，震动和选择列表一致：按下和每换一个按钮轻震一下，松手选中再震一下确认；滑出按钮区再松手什么都不做。按钮只有按下的轻微放大和指尖高光，不跟手拉长、挪动，并排的两个之间不拉融球颈，整张卡片也不跟手形变。按住才生效的按钮（`holdToConfirm`）不参与滑选，用它自己的按住手势。
 
 ## 关闭
 

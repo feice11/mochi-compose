@@ -13,7 +13,7 @@ iOS 设置那种分组卡片（inset grouped）。包名 `ui.feice.mochi.list`�
   - 跟手，松手按位置和速度吸附到打开或收回。
   - 滑过 60% 宽度时，最靠右的操作撑满整行并轻震；这时松手直接执行它。是删除的话，整行滑出、高度收起，下面的行顶上来，收完才回调。
   - 往右拉被橡皮筋拉住；打开时点一下这一行就收回。
-- 另有 **MochiActivityIndicator**（iOS 的 8 辐条转圈：胶囊辐条，一道亮光顺时针平滑扫过，默认浅色黑 60% / 深色白 80%）、**MochiProgressBar**（G2 胶囊进度条，默认高 6dp）和 **MochiProgressRing**（环形进度：给值是 App Store 下载圈，`null` 是一直绕着转的不确定进度，`sweep` 小于 360 是开口朝下的仪表，中间可以放停止方块或数值）。进度条和环形进度的轨道默认是进度色的 30%（`MochiProgressDefaults.TrackAlpha`）。都在 `basic` 包里。演示见「组件 → 加载与进度」；仪表直接用 `MochiGauge`（「组件 → 徽标、头像与仪表」）。
+- 另有 **MochiActivityIndicator**（iOS 的 8 辐条转圈：胶囊辐条，一道亮光顺时针平滑扫过，默认浅色黑 60% / 深色白 80%）、**MochiProgressBar**（G2 胶囊进度条，默认高 6dp）和 **MochiProgressRing**（环形进度：给值是 App Store 下载圈，`null` 是一直绕着转的不确定进度，`sweep` 小于 360 是开口朝下的仪表，中间可以放停止方块或数值）。进度条和环形进度的轨道默认是进度色的 30%（`MochiProgressDefaults.TrackAlpha`）。都在 `basic` 包里。演示见「组件 → 加载」；仪表直接用 `MochiGauge`（「组件 → 仪表」）。
 
 ## 用法
 
@@ -110,7 +110,7 @@ MochiListCard {
 | 左右边距 | 16 | `RowPadding` 16dp：行首图标、纯文字行的文字、行尾的值和控件都离卡片边 16dp |
 | 「设置」式图标块 | 28×28，到文字 15（文字起点 59） | `LeadingSize` 28dp、`LeadingCorner` 6.25dp（边长的 22.37%）、`LeadingGap` 15dp |
 | 无底块符号图标 | 预留宽 24（按 Dynamic Type 缩放）、高 = 正文行高，到文字 16（文字起点 56） | `leadingStyle = MochiListLeadingStyle.Symbol`；`SymbolWidth` 24（随字号缩放）、`SymbolGap` 16dp |
-| 标题到副标题 | 4 | `SupportingTextGap` 4dp |
+| 标题到副标题 | 4 | `SupportingTextGap` 默认 4dp，可在局部用 `CompositionLocalProvider(LocalMochiListSupportingTextGap provides 2.dp) { ... }` 缩短间距 |
 | 文字到行尾附件 | 16 | 16dp；行尾几样东西之间（值和 ›）8dp |
 | 分组卡片圆角 | 26 | `SectionCorner` 26dp |
 | 分隔线 | 从文字起点开始，右端到卡片边 | 同左 |

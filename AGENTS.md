@@ -8,11 +8,12 @@
 
 先读 [应用接入规范](docs/zh_CN/guide/application-integration.md)（[English](docs/guide/application-integration.md)）和 [设计规范](docs/zh_CN/guide/design-principles.md)；规范没写到的情况按 [设计理念](docs/zh_CN/guide/philosophy.md)（[English](docs/guide/philosophy.md)）的判断顺序推。核心要求：
 
-- 主题只在根部接一次：配色、控件配色（LocalMochiControlPalette）、材质（MochiTheme(materials = …)；液态玻璃、滚动边缘模糊是两个独立开关，任何外观都能开，非 iOS 配色用 themeAccent = true）。材质只管栏、菜单、面板、弹窗和栏里的控件；正文按钮看样式：要玻璃写 MochiButtonStyle.ProminentGlass / Glass，Filled、Tonal 永远是纯色。页面里不写按外观或玻璃开关的分支，组件不按外观手传颜色（Nothing 的标签栏红色等差异放在控件配色里）。见接入规范「主题接入」。
+- 主题只在根部接一次：配色、控件配色（LocalMochiControlPalette）、材质（MochiTheme(materials = …)；液态玻璃 MochiGlass（标准 / 厚实两种样式，选择列表和警告框默认厚实、可染色，参数随尺寸变化，不逐项调参）、滚动边缘模糊是两个独立开关，任何外观都能开，用 mochiGlassMaterials 或 iosMaterials(glass, blur)；会融合、会长出收回的一组玻璃用 MochiGlassGroup）。材质只管栏、菜单、面板、弹窗和栏里的控件；正文按钮看样式：要玻璃写 MochiButtonStyle.ProminentGlass / Glass，Filled、Tonal 永远是纯色。页面里不写按外观或玻璃开关的分支，组件不按外观手传颜色（Nothing 的标签栏红色等差异放在控件配色里）。见接入规范「主题接入」。
 - 根部接主题、Overscroll 和 MochiNavHost；已有主导航集成需说明能力边界。系统栏图标深浅由 MochiTheme 接管，不要每页手写 isAppearanceLightStatusBars；根页标签用 MochiTabScaffold（保存各标签位置、再点回顶、正文自动让出标签栏），不要手写 when(tab) 和 Spacer(112.dp)。
 - 写界面前先查应用接入规范里的「场景 → 组件对照」：展开行、选项、筛选芯片（MochiChip）、密码框、空状态、页尾说明、多条滑块（MochiListSliderRow 的 title/valueText）都有现成组件，不要用按钮、Text + padding、Column 自己拼。图标用 mochi-icons 的 MochiIonicon（全套 Ionicons），不要引 Material Icons、手画 Path 或用 emoji。
 - 文案和视觉按接入规范第 5 节去掉「AI 味」：不用「·」把标题和数量、状态和解释拼成一行（数量放行尾 value、次要信息放副标题，或写成完整的句子；同一对象的并列元数据如「歌手 · 时长」可以用），副标题不写口号，不用沉浸式、极致、丝滑、赋能这类说不出事实的词，不写「不是 X 而是 Y」和凑满三条的排比，不用 emoji 当图标，不加渐变底色和到处的进场动画。
 - 标题按卡片外分组小标题判断：正文有「配色」「主题色板」这类分组标题时默认用 MochiCompactTitleScaffold（已有滚动容器用 MochiTitleBar），删除独立大标题及空占位，分组标题本身保留；没有此类分组小标题可以保留大标题。判断条件不是说明文字或卡片有无，卡片内部介绍标题不受影响。目录首页初始展开，向上滚动折叠到顶栏、回顶部展开，各标签独立保存位置；不强制初始折叠或添加补白。详见大标题文档。
+- 挨着的两个及以上按钮做成按钮组：顶栏用 MochiBarGroup（弹菜单的一项用 MochiBarGroupDropdownItem），正文用 MochiButtonGroup；只有一个按钮才单独放。
 - 适用侧推页默认接共享顶栏：库顶栏控件 + 稳定 navId；图标给稳定 contentKey，按钮组子项也登记；MochiBackButton 自动参与。
 - 来源卡片打开用 mochiNavSource + push(from)，整页变形，不机械钉住顶栏；mochiSharedElement 已废弃且无效果。
 - 长页面（一屏放不下）用懒加载列表：MochiLazyLargeTitleScaffold / MochiLazyCompactTitleScaffold 或 LazyColumn + MochiTitleBar，每个分组一项，行很多的分组用 mochiListSection（每行一项、仍是一张卡片；不要一行一张卡片、不要把小标题单独成项），项内可改状态用 rememberSaveable；页面里嵌的滚动区域挂 mochiContainedScroll。普通 Column 长页面滚动时整棵树都要重算，主线程会卡。

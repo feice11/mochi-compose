@@ -57,6 +57,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.elastic.mochiBoundedPressDeform
@@ -137,7 +138,7 @@ public fun MochiSwipeRow(
     val slotPx = with(density) { actionWidth.toPx() }
     val openPx = slotPx * actions.size
     val leadPx = slotPx * leadingActions.size
-    val settle = MochiMotions.responseSpring(0.36f, 0.86f)
+    val settle = MochiMotionTokens.Control
 
     // 一次只开一行：开始拖这一行时，让之前打开的那行收回
     val closeRef = remember { arrayOfNulls<() -> Unit>(1) }
@@ -188,10 +189,10 @@ public fun MochiSwipeRow(
                 // 整行接着手速滑出去（第一个按钮跟着拉满），滑到大半时高度开始收起，收完才通知删除
                 launch { armT.animateTo(1f, settle) }
                 val slide = launch {
-                    offset.animateTo(side * width.toFloat(), MochiMotions.responseSpring(0.28f, 1f), initialVelocity = velocity)
+                    offset.animateTo(side * width.toFloat(), MochiMotionTokens.Settle, initialVelocity = velocity)
                 }
                 delay(140)
-                collapse.animateTo(0f, MochiMotions.responseSpring(0.32f, 1f))
+                collapse.animateTo(0f, MochiMotionTokens.Settle)
                 slide.join()
                 action.onClick()
             } finally {

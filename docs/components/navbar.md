@@ -8,7 +8,7 @@
 
 ## MochiTitleBar
 
-The compact bar is also the component used by a collapsed `MochiLargeTitleScaffold`. By default it shows the centered `navTitle` (a changed title blurs in place instead of swapping instantly), handles status-bar padding and the scroll-edge fade, and has no divider. Content reserves the status inset plus `MochiTitleBarDefaults.Height` (56dp); do not add status padding to the bar a second time.
+The compact bar is also the component used by a collapsed `MochiLargeTitleScaffold`. By default it shows the centered `navTitle` (a changed title blurs in place instead of swapping instantly), handles status-bar padding and the scroll-edge fade, and has no divider. Content reserves the status inset plus `MochiTitleBarDefaults.Height` (50dp); do not add status padding to the bar a second time.
 
 ```kotlin
 MochiTitleBar(
@@ -39,7 +39,7 @@ MochiCompactTitleScaffold(
 
 The scaffold owns body scrolling and insets; do not nest `verticalScroll` or repeat status-bar padding. With an existing LazyList/Grid use `MochiTitleBar`, reserving the status inset plus bar height yourself. Temporarily hiding section labels while searching must not switch scaffolds. Keep introduction-card headings and their existing collapse behavior: demo `DemoPage` manages these, even when Try it or Parameters sections follow.
 
-Demo mapping: [navigation/search](../../example/src/main/java/ui/feice/mochi/demo/pages/NavBarPage.kt), [push subpages](../../example/src/main/java/ui/feice/mochi/demo/pages/PushDemo.kt), [shared-toolbar subpages](../../example/src/main/java/ui/feice/mochi/demo/pages/NavigationPages.kt).
+Demo mapping: [navigation/search](../../example/src/main/java/ui/feice/mochi/demo/pages/NavBarPage.kt), [push subpages](../../example/src/main/java/ui/feice/mochi/demo/pages/PushPage.kt), [shared-toolbar subpages](../../example/src/main/java/ui/feice/mochi/demo/pages/SharedBarPage.kt).
 
 ## MochiLargeTitleScaffold
 
@@ -70,7 +70,7 @@ MochiLargeTitleScaffold(
 | navigationIcon / actions | Top left, top right |
 | searchBar | Search bar below the large title |
 | onRefresh | Optional suspend refresh operation; null disables pull to refresh. For other scroll containers use the same [pull to refresh](refresh.md) |
-| barHeight / contentSpacing | Bar height 56dp, content spacing 28dp |
+| barHeight / contentSpacing | Bar height 50dp, content spacing 28dp |
 
 For push pages, register actions with stable `navId` values, stable icon `contentKey` values and group-item IDs. Prefer the automatically registered `MochiBackButton`. Optional API parameters are not a recommendation to omit sharing in apps. See the [complete app integration](../guide/application-integration.md) and [shared-toolbar rules](../guide/navigation.md#shared-toolbar) for pairing and source-opening exceptions.
 
@@ -102,13 +102,13 @@ Use `MochiBackButton` / `MochiBarButton` / `MochiBarIconButton` in the bar (44dp
 
 ## Scroll edge effect
 
-The large title is 34sp Bold (`textStyles.largeTitle`). The collapsed title is centered and the bar has no divider: when content scrolls under it, the bar fills with the background and fades out 16dp below (the iOS 26 scroll edge effect). When the theme sets `MochiMaterials.scrollEdge` (the iOS appearance), it is drawn the iOS way instead: the content under the bar is progressively blurred, then covered by the page background or black at a level chosen from the brightness behind; see [iOS appearance](../guide/ios-theme.md#scroll-edge-effect).
+The large title is 34sp Bold (`textStyles.largeTitle`). The collapsed title is centered. Every appearance draws the top bar the iOS 27 way: once content scrolls under it, the whole bar area is evenly blurred, covered with a translucent page background, cut off hard at the bar's bottom edge, with a very faint hairline there (10% black in light, 12% white in dark, 0.5dp and at least 1 pixel). With the theme's `scrollEdge` set to null or on Android 12 and below there is no blur and the background is nearly opaque. Values in [iOS appearance](../guide/ios-theme.md#scroll-edge-effect).
 
-The bar's title follows the scroll edge level's own layers (`MochiScrollEdgeLevel.darkText`) rather than the content behind it: in the iOS appearance's light mode, when darker content makes the level drop the white page-color layer and darken instead, the title and subtitle switch to white over 0.3s; in dark mode over very bright content the black layer is thin and they switch to dark text. Levels without darkText fall back to the brightness behind the bar after all edge layers, with a hysteresis margin so it never flickers. `MochiTitleBar` is already wired; for a custom bar pass a `MochiScrollEdgeTone` to `mochiScrollEdgeFade(tone = remember { MochiScrollEdgeTone() })` and color its text with `MochiScrollEdgeDefaults.textColor(tone, defaultColor)`. Glass buttons adapt on their own.
+The bar's title and subtitle no longer change color with the content behind them and always use the theme colors: the background is always the page background, with no brightness-based dimming. `MochiScrollEdgeTone` and `mochiScrollEdgeFade(tone = …)` stay for compatibility so existing custom bars need no code changes; `darkText` is always null.
 
-Use it on your own top or bottom bars: `Modifier.mochiScrollEdgeFade(color, bottom = false, extent = 16.dp, alpha = { … })`.
+Use it on your own top or bottom bars: `Modifier.mochiScrollEdgeFade(color, bottom = false, extent = 16.dp, alpha = { … })`. A top bar (`bottom = false`) gets the hard-edged translucent background and hairline; a bottom bar (`bottom = true`) gets the page background fading out over `extent` toward the content, without blur.
 
-The fade only appears when content has actually scrolled under the bar. At rest there is nothing under the bar, and a full-strength fade would cover the first row of content with the part that extends below the bar, and the bar's own buttons too. Feed `alpha` (`backgroundProgress` on `MochiTitleBar`) from `MochiScrollEdgeDefaults.progress(state)`, where `state` is a `ScrollState`, `LazyListState` or `LazyGridState`. It is 0 at the top and reaches 1 once the content has scrolled 16dp under the bar. `MochiLargeTitleScaffold` and `MochiCompactTitleScaffold` already do this. The blur is done by the scrolling container itself: on your own pages, add `Modifier.mochiScrollEdgeBlur(distance from the container top to the bar's bottom edge, alpha)` to the scrolling container, with the same `alpha` as the bar's `backgroundProgress`. Without a theme scrollEdge it does nothing. Do not lay another fade over the whole page from outside: it ends up on top of the page's top bar buttons.
+The fade only appears when content has actually scrolled under the bar. At rest there is nothing under the bar, and a full-strength fade would cover the first row of content with the part that extends below the bar, and the bar's own buttons too. Feed `alpha` (`backgroundProgress` on `MochiTitleBar`) from `MochiScrollEdgeDefaults.progress(state)`, where `state` is a `ScrollState`, `LazyListState` or `LazyGridState`. It is 0 at the top and reaches 1 once the content has scrolled 16dp under the bar. `MochiLargeTitleScaffold` and `MochiCompactTitleScaffold` already do this. The blur is done by the scrolling container itself (an even blur above the bar's bottom edge, with a hard edge): on your own pages, add `Modifier.mochiScrollEdgeBlur(distance from the container top to the bar's bottom edge, alpha)` to the scrolling container, with the same `alpha` as the bar's `backgroundProgress`. Without a theme scrollEdge it does nothing. Do not lay another fade over the whole page from outside: it ends up on top of the page's top bar buttons.
 
 The collapsed title fades in while sliding up 6dp into place (iOS 26), in the same direction the large title scrolls away.
 

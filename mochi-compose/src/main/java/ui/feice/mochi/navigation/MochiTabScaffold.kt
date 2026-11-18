@@ -7,12 +7,9 @@ package ui.feice.mochi.navigation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -40,15 +37,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
+import ui.feice.mochi.basic.LocalTabBarLink
 import ui.feice.mochi.basic.MochiTabBar
 import ui.feice.mochi.basic.MochiTabBarBehavior
 import ui.feice.mochi.basic.MochiTabBarColors
 import ui.feice.mochi.basic.MochiTabBarDefaults
 import ui.feice.mochi.basic.MochiTabItem
+import ui.feice.mochi.basic.TabBarLink
 import ui.feice.mochi.basic.rememberMochiTabBarScrollBehavior
-import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.LocalGlassSources
-import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import ui.feice.mochi.theme.MochiDefaults
@@ -145,7 +142,6 @@ public fun MochiTabScaffold(
 ) {
     val scrollBehavior = rememberMochiTabBarScrollBehavior()
     val backdrop = rememberMochiBackdrop(background)
-    val glass = glassOn(GlassRole.Bar)
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var barPx by remember { mutableIntStateOf(0) }
@@ -158,9 +154,11 @@ public fun MochiTabScaffold(
         }
     }
     val pages = remember(items.size) { List(items.size) { it } }
+    // 页面转场和标签栏共用一个时钟：选中块等页面预热完起步再出发，拖页面时跟手、松手接页面的速度
+    val link = remember(state) { TabBarLink(state.selectedIndex) }
     Box(modifier.fillMaxSize().background(background)) {
         CompositionLocalProvider(LocalMochiBottomBarInset provides with(density) { barPx.toDp() }) {
-            MochiPeerTransition(
+            MochiTabPageTransition(
                 targetState = state.selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)),
                 modifier = Modifier
                     .fillMaxSize()
@@ -168,9 +166,9 @@ public fun MochiTabScaffold(
                     .then(if (collapseOnScroll) Modifier.nestedScroll(scrollBehavior.nestedScrollConnection) else Modifier),
                 pages = if (swipeBetweenTabs) pages else null,
                 onPageChange = select,
-                direction = { from, to -> to.compareTo(from) },
                 background = background,
-                spec = MochiPeerTransitionSpec.Depth,
+                link = link,
+                linkIndex = { it },
             ) { page ->
                 val slot = remember { TabPageSlot() }
                 DisposableEffect(state, page, slot) {
@@ -183,35 +181,27 @@ public fun MochiTabScaffold(
                 ) { content(page) }
             }
         }
-        // 纯色标签栏后面垫一层底色、朝内容那侧渐隐（iOS 26 滚动边缘效果）；玻璃标签栏直接透出内容
-        if (!glass) {
-            Spacer(
-                Modifier
+        CompositionLocalProvider(LocalTabBarLink provides link) {
+            MochiTabBar(
+                selectedIndex = state.selectedIndex,
+                onSelect = select,
+                items = items,
+                colors = colors,
+                behavior = behavior,
+                backdrop = backdrop,
+                modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 36.dp)
-                    .mochiScrollEdgeFade(background, bottom = true, extent = 56.dp),
+                    // 量的是含留白的整块高度；收起、推入新页时的位移不影响它，正文底部不跟着跳
+                    .onSizeChanged { barPx = it.height }
+                    .mochiHideWhenCovered()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                scrollBehavior = if (collapseOnScroll) scrollBehavior else null,
+                onReselect = { index ->
+                    scrollBehavior.expand()
+                    scope.launch { state.pages[index]?.action?.invoke() }
+                },
             )
         }
-        MochiTabBar(
-            selectedIndex = state.selectedIndex,
-            onSelect = select,
-            items = items,
-            colors = colors,
-            behavior = behavior,
-            backdrop = backdrop,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                // 量的是含留白的整块高度；收起、推入新页时的位移不影响它，正文底部不跟着跳
-                .onSizeChanged { barPx = it.height }
-                .mochiHideWhenCovered()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            scrollBehavior = if (collapseOnScroll) scrollBehavior else null,
-            onReselect = { index ->
-                scrollBehavior.expand()
-                scope.launch { state.pages[index]?.action?.invoke() }
-            },
-        )
     }
 }
 

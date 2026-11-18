@@ -27,7 +27,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.parts.drawG2Capsule
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiTheme
@@ -113,7 +113,7 @@ public fun MochiProgressBar(
     trackColor: Color = color.copy(alpha = color.alpha * MochiProgressDefaults.TrackAlpha),
     height: Dp = 6.dp,
 ) {
-    val p by animateFloatAsState(progress.coerceIn(0f, 1f), MochiMotions.responseSpring(0.5f, 0.9f), label = "progress")
+    val p by animateFloatAsState(progress.coerceIn(0f, 1f), MochiMotionTokens.Page, label = "progress")
     val track = remember { G2PathCache() }
     val bar = remember { G2PathCache() }
     Canvas(

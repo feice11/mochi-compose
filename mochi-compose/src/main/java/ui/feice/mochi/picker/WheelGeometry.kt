@@ -9,6 +9,7 @@ import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import ui.feice.mochi.utils.HalfPi
 
 /**
  * 滚筒的几何：滚动位置 `offset` 是「中间那格的序号 × 格高」（px），往上滚 offset 变大。
@@ -86,8 +87,6 @@ internal object WheelGeometry {
         val arc = asin(s) * radiusPx
         return (arc / itemPx).roundToInt()
     }
-
-    private const val HalfPi = (PI / 2).toFloat()
 }
 
 internal data class WheelItemTransform(val y: Float, val rotationX: Float, val scale: Float, val alpha: Float, val visible: Boolean)

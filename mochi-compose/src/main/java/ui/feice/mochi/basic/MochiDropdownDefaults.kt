@@ -194,6 +194,11 @@ public data class MochiDropdownBehavior(
     val align: MochiAlign = MochiAlign.Start,
     /** 选中后等多久再收起（让选中块滑过去） */
     val dismissDelayMillis: Long = 150,
+    /**
+     * 玻璃菜单（iOS 27 样式）时按钮是否直接变形成菜单（包裹）。默认 true：不管 [openMode] 都包裹；
+     * false：照 [openMode] 开，Detach 时玻璃面板在按钮外面长出来、按钮留在原处（选择列表用，和纯色时一致）
+     */
+    val liquidCover: Boolean = true,
 )
 
 /** 形变参数：融球、果冻、橡皮筋 */
@@ -232,19 +237,19 @@ public object MochiDropdownDefaults {
     /** 面板离屏幕边缘至少这么远 */
     public val ScreenMargin: Dp = 12.dp
 
-    /** MD3E 配色：按钮 secondaryContainer，面板 surfaceContainerHigh，选中项 tertiaryContainer */
+    /** MD3E 配色：按钮 secondaryContainer，面板浅色白色、深色 surfaceContainerHigh，选中项 tertiaryContainer */
     @Composable
     public fun dropdownColors(
         buttonColor: Color = MochiTheme.colorScheme.secondaryContainer,
         buttonContentColor: Color = MochiTheme.colorScheme.onSecondaryContainer,
-        panelColor: Color = MochiTheme.colorScheme.surfaceContainerHigh,
+        panelColor: Color = if (MochiTheme.colorScheme.isDark) MochiTheme.colorScheme.surfaceContainerHigh else Color.White,
         panelContentColor: Color = MochiTheme.colorScheme.onSurface,
         selectedColor: Color = MochiTheme.colorScheme.tertiaryContainer,
         selectedContentColor: Color = MochiTheme.colorScheme.onTertiaryContainer,
         highlightColor: Color = MochiTheme.colorScheme.onSurface.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.12f else 0.08f),
         destructiveColor: Color = MochiTheme.colorScheme.error,
         shadowColor: Color = MochiTheme.colorScheme.shadow,
-        glowColor: Color = Color.White.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.14f else 0.45f),
+        glowColor: Color = Color.White.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.14f else 0.3f),
     ): MochiDropdownColors = remember(
         buttonColor,
         buttonContentColor,
@@ -271,17 +276,21 @@ public object MochiDropdownDefaults {
         )
     }
 
-    /** 图标按钮用：按钮和面板同色（surfaceContainerHighest），包裹变形时无缝 */
+    /** 图标按钮用：按钮和面板同色（浅色白色、深色 surfaceContainerHighest），包裹变形时无缝 */
     @Composable
     public fun iconDropdownColors(
-        buttonColor: Color = MochiTheme.colorScheme.surfaceContainerHighest,
+        buttonColor: Color = iconMenuContainerColor(),
         buttonContentColor: Color = MochiTheme.colorScheme.onSurface,
-        panelColor: Color = MochiTheme.colorScheme.surfaceContainerHighest,
+        panelColor: Color = iconMenuContainerColor(),
     ): MochiDropdownColors = dropdownColors(
         buttonColor = buttonColor,
         buttonContentColor = buttonContentColor,
         panelColor = panelColor,
     )
+
+    @Composable
+    private fun iconMenuContainerColor(): Color =
+        if (MochiTheme.colorScheme.isDark) MochiTheme.colorScheme.surfaceContainerHighest else Color.White
 
     public fun behavior(
         openMode: MochiOpenMode = MochiOpenMode.Detach,
@@ -291,7 +300,9 @@ public object MochiDropdownDefaults {
         hapticProfile: MochiHapticProfile = MochiHapticProfile.IosLike,
         align: MochiAlign = MochiAlign.Start,
         dismissDelayMillis: Long = 150,
-    ): MochiDropdownBehavior = MochiDropdownBehavior(openMode, trigger, pressStyle, itemLayout, hapticProfile, align, dismissDelayMillis)
+        liquidCover: Boolean = true,
+    ): MochiDropdownBehavior =
+        MochiDropdownBehavior(openMode, trigger, pressStyle, itemLayout, hapticProfile, align, dismissDelayMillis, liquidCover)
 
     /** 图标按钮默认：包裹模式、右对齐 */
     public fun iconBehavior(openMode: MochiOpenMode = MochiOpenMode.Cover, align: MochiAlign = MochiAlign.End): MochiDropdownBehavior =

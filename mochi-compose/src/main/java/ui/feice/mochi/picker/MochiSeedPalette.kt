@@ -4,7 +4,6 @@
 package ui.feice.mochi.picker
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.MochiSheetDetent
 import ui.feice.mochi.basic.rememberMochiSheetState
 import ui.feice.mochi.effect.elastic.mochiPressDeform
@@ -158,7 +158,7 @@ public fun MochiSeedSwatch(
             ?.let { Triple(it.primary, it.secondary, it.tertiary) }
     }
     val ring = MochiTheme.colorScheme.primary
-    val sel by animateFloatAsState(if (selected) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 520f), label = "swatch")
+    val sel by animateFloatAsState(if (selected) 1f else 0f, MochiMotionTokens.Pop, label = "swatch")
     Canvas(
         modifier
             .mochiPressDeform()

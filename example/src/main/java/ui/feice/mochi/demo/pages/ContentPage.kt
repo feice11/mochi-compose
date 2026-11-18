@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,72 +33,52 @@ import ui.feice.mochi.basic.MochiButton
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiIconButton
 import ui.feice.mochi.basic.Text
-import ui.feice.mochi.demo.DemoStyle
-import ui.feice.mochi.demo.LocalDemoAppearance
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.Caption
-import ui.feice.mochi.demo.common.Code
 import ui.feice.mochi.demo.common.DemoIcon
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
-import ui.feice.mochi.demo.common.Toggles
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
+import ui.feice.mochi.effect.content.MochiBlurTransitions
 import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.MochiDrawIcon
+import ui.feice.mochi.effect.content.MochiFlyInText
 import ui.feice.mochi.effect.content.MochiMorphIcon
 import ui.feice.mochi.effect.content.mochiBounce
-import ui.feice.mochi.nothing.nothingDotTextStyle
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
 
-/**
- * 内容变换：内容换掉时不瞬切。
- * - 图标：原位变形（笔画一一对应着挪过去），或模糊替换
- * - 文字：模糊替换；出现 / 消失也是模糊淡入淡出
- * - 数字：计数器样式，变了的位滚动、带模糊
- */
+/** 内容变换：图标变形、文字模糊替换、计数器、流式文字、景深切换 */
 @Composable
 fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var morph by rememberSaveable { mutableStateOf(true) }
 
     DemoPage(entry, modifier) {
         demoItem {
-            DemoSection(
-                "图标原位变形",
-                footer = "点按钮换图标：每一笔按位置配对，沿着轮廓一一对应着挪过去，对不上的笔画从中心长出来或缩没。" +
-                    "切到「模糊替换」对比：旧图标糊掉缩小，新图标从糊里清晰起来。",
-            ) {
+            DemoSection("图标") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    IconCycle(listOf(Icons.PLUS, Icons.CLOSE, Icons.CHECK), morph)
-                    IconCycle(listOf(Icons.SUN, Icons.MOON), morph)
-                    IconCycle(listOf(Icons.VOLUME_LOW, Icons.VOLUME_HIGH), morph)
-                    IconCycle(listOf(Icons.HEART, Icons.STAR), morph)
+                    IconCycle(listOf(DemoIcons.PLUS, DemoIcons.CLOSE, DemoIcons.CHECK))
+                    IconCycle(listOf(DemoIcons.SUN, DemoIcons.MOON))
+                    IconCycle(listOf(DemoIcons.VOLUME_LOW, DemoIcons.VOLUME_HIGH))
+                    IconCycle(listOf(DemoIcons.HEART, DemoIcons.STAR))
                 }
-                Toggles("方式", listOf("变形" to true, "模糊替换" to false), morph) { morph = it }
-            }
-        }
-        demoItem {
-            DemoSection("描绘", footer = "SF Symbols 7 的 Draw On / Off：笔画沿着自己的方向一笔笔画出来，一笔比一笔晚一点；收起时原路擦掉。") {
                 var drawn by rememberSaveable { mutableStateOf(true) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    for (icon in listOf(Icons.CHECK, Icons.HEART, Icons.STAR, Icons.WIFI)) {
+                    for (icon in listOf(DemoIcons.CHECK, DemoIcons.HEART, DemoIcons.STAR, DemoIcons.WIFI)) {
                         MochiDrawIcon(icon.vector(), drawn, tint = cs.primary, size = 40.dp)
                     }
                 }
-                Toggles("图标", listOf("画出" to true, "擦掉" to false), drawn) { drawn = it }
-            }
-        }
-        demoItem {
-            DemoSection("弹一下", footer = "点一下，图标先压扁再带回弹地弹起来（SF Symbols 的 bounce）。标签栏切换时选中的图标也会弹一下。") {
+                MochiButton({ drawn = !drawn }, Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) {
+                    MochiBlurText(if (drawn) "擦掉" else "画出")
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    for (icon in listOf(Icons.BELL, Icons.HEART, Icons.MIC, Icons.CAMERA)) {
+                    for (icon in listOf(DemoIcons.BELL, DemoIcons.HEART, DemoIcons.MIC, DemoIcons.CAMERA)) {
                         var taps by rememberSaveable { mutableIntStateOf(0) }
                         MochiIconButton({ taps++ }, size = 56.dp) {
                             Glyph(icon, LocalContentColor.current, size = 28, modifier = Modifier.mochiBounce(taps.takeIf { it > 0 }))
@@ -107,17 +88,16 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSection("文字模糊替换", footer = "文字换掉时，旧的变糊淡出、新的从糊里清晰起来，宽度平滑过渡，后面的东西被平滑推开。") {
+            DemoSection("文字模糊替换") {
                 val states = remember { listOf("未连接", "正在连接…", "已连接") }
                 var i by rememberSaveable { mutableIntStateOf(0) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("状态：", style = ts.body)
+                    Text("Wi-Fi", style = ts.body)
+                    Spacer(Modifier.width(8.dp))
                     MochiBlurText(states[i], style = ts.body.copy(fontWeight = FontWeight.SemiBold))
-                    Text(" · Wi-Fi", style = ts.body, color = cs.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
                     MochiButton({ i = (i + 1) % states.size }, style = MochiButtonStyle.Tonal) { Text("下一个") }
                 }
-                // 按钮文字跟着状态走：发送 → 发送中… → 已发送
                 var phase by rememberSaveable { mutableIntStateOf(0) }
                 LaunchedEffect(phase) {
                     if (phase == 1) {
@@ -129,11 +109,10 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     }
                 }
                 MochiButton({ if (phase == 0) phase = 1 }, Modifier.fillMaxWidth()) {
-                    // 图标原位变形成下一个状态
                     val icon = when (phase) {
-                        0 -> Icons.SHARE
-                        1 -> Icons.PULSE
-                        else -> Icons.CHECK
+                        0 -> DemoIcons.SHARE
+                        1 -> DemoIcons.PULSE
+                        else -> DemoIcons.CHECK
                     }
                     MochiMorphIcon(icon.vector(), tint = LocalContentColor.current, size = 20.dp)
                     MochiBlurText(listOf("发送", "发送中…", "已发送")[phase])
@@ -141,7 +120,7 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSection("出现与消失", footer = "出现时从小、糊、透明里清晰起来，消失时原路退回；占的宽度跟着变，旁边的东西被平滑推开。") {
+            DemoSection("出现与消失") {
                 var shown by rememberSaveable { mutableStateOf(true) }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("收件箱", style = ts.body)
@@ -156,34 +135,26 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
-                    Text("  ›", style = ts.body, color = cs.onSurfaceVariant)
+                    Glyph(DemoIcons.CHEVRON_RIGHT, cs.onSurfaceVariant, Modifier.padding(start = 4.dp), size = 17)
                     Spacer(Modifier.weight(1f))
                 }
-                Toggles("新消息", listOf("显示" to true, "隐藏" to false), shown) { shown = it }
+                MochiButton({ shown = !shown }, Modifier.fillMaxWidth(), style = MochiButtonStyle.Tonal) {
+                    MochiBlurText(if (shown) "隐藏新消息" else "显示新消息")
+                }
             }
         }
         demoItem {
-            DemoSection("数字计数器", footer = "只有变了的那几位滚动：变大往上滚、变小往下滚，滚的时候带一点模糊；位数变化时新的一位从糊里长出来。") {
+            DemoSection("数字计数器") {
                 var n by rememberSaveable { mutableLongStateOf(128L) }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     val counterStyle = ts.largeTitle.copy(fontSize = 56.sp, lineHeight = 64.sp)
-                    MochiCounterText(
-                        n,
-                        style = if (LocalDemoAppearance.current?.style ==
-                            DemoStyle.Nothing
-                        ) {
-                            nothingDotTextStyle(counterStyle)
-                        } else {
-                            counterStyle
-                        },
-                    )
+                    MochiCounterText(n, style = counterStyle)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     MochiButton({ n = (n - 1).coerceAtLeast(0) }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("−1") }
                     MochiButton({ n += 1 }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("+1") }
                     MochiButton({ n = Random.nextLong(0, 100_000) }, Modifier.weight(1f)) { Text("随机") }
                 }
-                // 自己格式化的数字：千分位价格、跑起来的计时器
                 val price = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
                 var cents by rememberSaveable { mutableLongStateOf(129_900L) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -222,29 +193,82 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSection("用法") {
-                Code(
-                    "// 图标原位变形\nMochiMorphIcon(if (on) sunIcon else moonIcon)\n\n" +
-                        "// 文字模糊替换 / 出现消失\nMochiBlurText(status)\nMochiBlurVisibility(shown) { Badge() }\n\n" +
-                        "// 计数器\nMochiCounterText(count)\nMochiCounterText(price, format = { \"¥\$it\" })\n\n" +
-                        "// 任意内容\nMochiBlurCrossfade(state) { Content(it) }",
-                )
-                Caption("模糊需要 Android 12 以上，更低的系统只有淡入淡出、缩放和位移。")
+            DemoSection("流式文字", footer = "点播放，播完再点改写结尾。") {
+                val script = remember { listOf("今天", "今天天", "今天天气", "今天天气真", "今天天气真不错", "今天天气真不错，我们去公园走走吧") }
+                var step by rememberSaveable { mutableIntStateOf(-1) }
+                var corrected by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(step) {
+                    if (step in 0 until script.size - 1) {
+                        delay(420)
+                        step++
+                    }
+                }
+                val line = when {
+                    step < 0 -> ""
+                    corrected -> script[step].replace("公园走走", "河边散步")
+                    else -> script[step]
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(cs.surfaceVariant, MochiTheme.shapes.medium)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    MochiFlyInText(line, style = ts.body)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MochiButton({
+                        corrected = false
+                        step = 0
+                    }, Modifier.weight(1f)) { Text("播放") }
+                    MochiButton({ corrected = !corrected }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("改写结尾") }
+                    MochiButton({ step = -1 }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("清空") }
+                }
+            }
+        }
+        demoItem {
+            DemoSection("景深切换") {
+                val steps = remember {
+                    listOf(
+                        listOf("你", "呢", "那", "年"),
+                        listOf("你", "尼", "泥", "逆"),
+                        listOf("你会", "你还", "你好", "你和"),
+                        listOf("你哈", "你还", "你好", "尼哈"),
+                        listOf("你好", "拟好", "你号", "泥好"),
+                    )
+                }
+                var k by rememberSaveable { mutableIntStateOf(0) }
+                val firstDepth = remember { MochiBlurTransitions.Depth.copy(blur = 4.dp) }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(cs.surfaceVariant, MochiTheme.shapes.medium)
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    steps[k].forEachIndexed { i, word ->
+                        MochiBlurCrossfade(
+                            word,
+                            Modifier.padding(horizontal = 10.dp),
+                            transition = if (i == 0) firstDepth else MochiBlurTransitions.Depth,
+                        ) { Text(it, style = ts.body) }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MochiButton({ k = (k + 1) % steps.size }, Modifier.weight(1f)) { Text("打下一个字母") }
+                    MochiButton({ k = 0 }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("重来") }
+                }
             }
         }
     }
 }
 
-/** 点一下换到下一个图标 */
+/** 点一下变形到下一个图标 */
 @Composable
-private fun IconCycle(icons: List<DemoIcon>, morph: Boolean) {
+private fun IconCycle(icons: List<DemoIcon>) {
     var i by rememberSaveable { mutableIntStateOf(0) }
     MochiIconButton({ i = (i + 1) % icons.size }, size = 56.dp) {
-        val tint = LocalContentColor.current
-        if (morph) {
-            MochiMorphIcon(icons[i].vector(), tint = tint, size = 28.dp)
-        } else {
-            MochiBlurCrossfade(i) { MochiMorphIcon(icons[it].vector(), tint = tint, size = 28.dp) }
-        }
+        MochiMorphIcon(icons[i].vector(), tint = LocalContentColor.current, size = 28.dp)
     }
 }

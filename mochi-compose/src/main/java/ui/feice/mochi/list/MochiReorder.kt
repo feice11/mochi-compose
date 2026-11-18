@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.utils.MochiHapticProfile
 import ui.feice.mochi.utils.MochiHaptics
@@ -151,9 +151,9 @@ public class MochiReorderState internal constructor() {
         hover = -1
         dragDy = 0f
         val s = settle
-        val spring = MochiMotions.responseSpring(0.36f, 0.86f)
+        val spring = MochiMotionTokens.Control
         kotlinx.coroutines.coroutineScope {
-            launch { lift.animateTo(0f, MochiMotions.responseSpring(0.3f, 1f)) }
+            launch { lift.animateTo(0f, MochiMotionTokens.Settle) }
             s.animateTo(0f, spring)
         }
         if (settleKey == key && draggingKey == null) settleKey = null
@@ -217,7 +217,7 @@ private class ReorderNode(var state: MochiReorderState, var key: Any, var index:
                     shiftEpoch = ep
                     shift.snapTo(0f)
                 } else {
-                    launch { shift.animateTo(target, MochiMotions.responseSpring(0.3f, 0.9f)) }
+                    launch { shift.animateTo(target, MochiMotionTokens.Control) }
                 }
             }
         }
@@ -260,7 +260,7 @@ private class ReorderNode(var state: MochiReorderState, var key: Any, var index:
                     if (cancelled != null) return@awaitEachGesture
                     state.start(key)
                     haptics?.longPress()
-                    coroutineScope.launch { state.lift.animateTo(1f, MochiMotions.responseSpring(0.3f, 0.8f)) }
+                    coroutineScope.launch { state.lift.animateTo(1f, MochiMotionTokens.Control) }
                     while (true) {
                         // 拖起来以后整个手势归排序：先于行自己的点按 / 高亮拿到事件并消费掉
                         val ev = awaitPointerEvent(PointerEventPass.Initial)

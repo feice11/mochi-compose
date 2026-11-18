@@ -64,9 +64,9 @@ import kotlinx.coroutines.withContext
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiSegmentedControl
 import ui.feice.mochi.basic.MochiSheet
-import ui.feice.mochi.basic.MochiSheetContent
 import ui.feice.mochi.basic.MochiSheetDetent
 import ui.feice.mochi.basic.MochiSheetHeader
+import ui.feice.mochi.basic.MochiSheetScaffold
 import ui.feice.mochi.basic.MochiSheetState
 import ui.feice.mochi.basic.MochiSlider
 import ui.feice.mochi.basic.MochiSliderDefaults
@@ -164,15 +164,18 @@ public fun MochiColorPickerSheet(
     val change by rememberUpdatedState(onColorChange)
     val alpha = color.alpha
     MochiSheet(state, modifier, onDismiss = onDismiss) {
-        MochiSheetHeader(
-            title,
-            actions = {
-                MochiBarIconButton(onClick = { state.hide() }, modifier = Modifier.semantics { contentDescription = "关闭" }) {
-                    MochiGlyphs.Close(MochiTheme.colorScheme.onSurface, size = 14.dp)
-                }
+        MochiSheetScaffold(
+            header = {
+                MochiSheetHeader(
+                    title,
+                    actions = {
+                        MochiBarIconButton(onClick = { state.hide() }, modifier = Modifier.semantics { contentDescription = "关闭" }) {
+                            MochiGlyphs.Close(MochiTheme.colorScheme.onSurface, size = 14.dp)
+                        }
+                    },
+                )
             },
-        )
-        MochiSheetContent {
+        ) {
             MochiSegmentedControl(mode, { mode = it }, persistentListOf("网格", "色谱", "滑块"), Modifier.fillMaxWidth())
             MochiBlurCrossfade(mode, Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) { m ->
                 when (m) {

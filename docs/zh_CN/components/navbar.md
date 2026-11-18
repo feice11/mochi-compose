@@ -8,7 +8,7 @@
 
 ## MochiTitleBar
 
-固定紧凑顶栏，也是 `MochiLargeTitleScaffold` 折叠后复用的同一个组件。默认显示居中的 `navTitle`（标题换了原地模糊替换，不瞬切），包含状态栏安全区和滚动边缘渐隐，不画分隔线。正文预留状态栏和 `MochiTitleBarDefaults.Height`（56dp）；不要再给顶栏重复加状态栏 padding。
+固定紧凑顶栏，也是 `MochiLargeTitleScaffold` 折叠后复用的同一个组件。默认显示居中的 `navTitle`（标题换了原地模糊替换，不瞬切），包含状态栏安全区和滚动边缘渐隐，不画分隔线。正文预留状态栏和 `MochiTitleBarDefaults.Height`（50dp）；不要再给顶栏重复加状态栏 padding。
 
 ```kotlin
 MochiTitleBar(
@@ -39,7 +39,7 @@ MochiCompactTitleScaffold(
 
 骨架已经拥有正文滚动与安全区，不再套 `verticalScroll` 或重复加状态栏 padding。自带 LazyList/Grid 的页面改用 `MochiTitleBar`，自行预留状态栏 + 顶栏高度。搜索时暂时隐藏分组标题不应切换页面骨架。介绍卡片内部的标题保留原样；演示中由 `DemoPage` 负责原有滚动折叠，不因下方「试一试」「调参」等分组标题而删除。
 
-演示对应：[导航与搜索](../../../example/src/main/java/ui/feice/mochi/demo/pages/NavBarPage.kt)、[侧推内页](../../../example/src/main/java/ui/feice/mochi/demo/pages/PushDemo.kt)、[共享顶栏内页](../../../example/src/main/java/ui/feice/mochi/demo/pages/NavigationPages.kt)。
+演示对应：[导航与搜索](../../../example/src/main/java/ui/feice/mochi/demo/pages/NavBarPage.kt)、[侧推内页](../../../example/src/main/java/ui/feice/mochi/demo/pages/PushPage.kt)、[共享顶栏内页](../../../example/src/main/java/ui/feice/mochi/demo/pages/SharedBarPage.kt)。
 
 ## MochiLargeTitleScaffold
 
@@ -70,7 +70,7 @@ MochiLargeTitleScaffold(
 | navigationIcon / actions | 左上角、右上角 |
 | searchBar | 大标题下面的搜索栏 |
 | onRefresh | 可选 suspend 刷新操作；null 不启用下拉刷新。其他滚动容器也想要同一套，用 [下拉刷新](refresh.md) |
-| barHeight / contentSpacing | 顶栏高度 56dp、内容间距 28dp |
+| barHeight / contentSpacing | 顶栏高度 50dp、内容间距 28dp |
 
 侧推页面的 `actions` 默认使用稳定 `navId`，图标按钮还要提供稳定 `contentKey`，组内子项也登记；返回使用自动参与共享的 `MochiBackButton`。源码里的可选参数不是应用里省略共享顶栏的建议。完整可编译应用见 [应用接入规范](../guide/application-integration.md)，配对与来源转场例外见 [导航](../guide/navigation.md#共享顶栏)。
 
@@ -102,13 +102,13 @@ MochiSearchBar(query = q, onQueryChange = { q = it }, placeholder = "搜索", on
 
 ## 滚动边缘效果
 
-大标题是 34sp Bold（`textStyles.largeTitle`）。收起后的小标题居中，顶栏不画分隔线：内容滚到顶栏下面时，顶栏铺上底色并往下渐隐 16dp（iOS 26 的滚动边缘效果）。主题给了 `MochiMaterials.scrollEdge`（iOS 外观）时改按 iOS 的做法画：栏下面的内容渐进模糊，再按背后亮度分档盖一层页面底色或黑色，见 [iOS 外观](../guide/ios-theme.md#滚动边缘效果)。
+大标题是 34sp Bold（`textStyles.largeTitle`）。收起后的小标题居中。所有外观的顶栏都按 iOS 27 的样子画：内容滚进顶栏下面后，栏的整块区域均匀模糊，上面盖半透明的页面底色，到栏下沿硬截断，下沿一条很淡的细线（浅色 10% 黑、深色 12% 白，0.5dp 至少 1 像素）。主题的 `scrollEdge` 为 null 或 Android 12 及以下时不模糊，底色几乎不透明。数值见 [iOS 外观](../guide/ios-theme.md#滚动边缘效果)。
 
-栏上的标题跟着滚动边缘那一档的遮罩换色（`MochiScrollEdgeLevel.darkText`），不另看背后内容：iOS 外观浅色模式下内容偏暗时这一档撤掉白色底色、改成压暗，标题、副标题在 0.3s 内换成白字；深色模式下内容很亮时黑色底色只盖薄薄一层，换成深色字。没给 darkText 的档按栏后面叠完之后的亮度判断，回来要越过回差，不会来回闪。`MochiTitleBar` 已经接好；自己画的栏给 `mochiScrollEdgeFade(tone = remember { MochiScrollEdgeTone() })` 传一个 `MochiScrollEdgeTone`，文字颜色用 `MochiScrollEdgeDefaults.textColor(tone, 默认色)`。玻璃按钮自己按背后亮度变色，不需要接。
+栏上的标题、副标题不再跟着背后内容换色，一直用主题的颜色：底色固定是页面底色，不按亮度分档压暗。`MochiScrollEdgeTone` 和 `mochiScrollEdgeFade(tone = …)` 保留兼容，已有的自定义栏不用改代码，`darkText` 恒为 null。
 
-自己的顶栏或底栏也可以用：`Modifier.mochiScrollEdgeFade(color, bottom = false, extent = 16.dp, alpha = { … })`。
+自己的顶栏或底栏也可以用：`Modifier.mochiScrollEdgeFade(color, bottom = false, extent = 16.dp, alpha = { … })`。顶栏（`bottom = false`）是硬边的半透明底色加细线；底栏（`bottom = true`）是页面底色往内容一侧渐隐 `extent`，不模糊。
 
-渐隐只在内容真的滚到栏下面时出现。内容停在顶部时栏下面没有东西，渐隐要是全浓，往下延的那一段会压住第一行内容，也会压住栏上的按钮。`alpha`（`MochiTitleBar` 的 `backgroundProgress`）接 `MochiScrollEdgeDefaults.progress(state)`，`state` 可以是 `ScrollState`、`LazyListState` 或 `LazyGridState`：停在顶部是 0，往上滚进 16dp 到 1。`MochiLargeTitleScaffold`、`MochiCompactTitleScaffold` 已经接好。模糊由滚动容器自己做：自己的页面在滚动容器上加 `Modifier.mochiScrollEdgeBlur(顶栏下沿离容器顶边的距离, alpha)`，`alpha` 和顶栏的 `backgroundProgress` 用同一个；主题没有 scrollEdge 时它什么都不做。不要在页面外再整体盖一层渐隐：它会叠在页面顶栏的按钮上面。
+渐隐只在内容真的滚到栏下面时出现。内容停在顶部时栏下面没有东西，渐隐要是全浓，往下延的那一段会压住第一行内容，也会压住栏上的按钮。`alpha`（`MochiTitleBar` 的 `backgroundProgress`）接 `MochiScrollEdgeDefaults.progress(state)`，`state` 可以是 `ScrollState`、`LazyListState` 或 `LazyGridState`：停在顶部是 0，往上滚进 16dp 到 1。`MochiLargeTitleScaffold`、`MochiCompactTitleScaffold` 已经接好。模糊由滚动容器自己做（顶栏下沿以上均匀模糊、硬边）：自己的页面在滚动容器上加 `Modifier.mochiScrollEdgeBlur(顶栏下沿离容器顶边的距离, alpha)`，`alpha` 和顶栏的 `backgroundProgress` 用同一个；主题没有 scrollEdge 时它什么都不做。不要在页面外再整体盖一层渐隐：它会叠在页面顶栏的按钮上面。
 
 收起后的小标题淡入的同时从下方 6dp 滑到位（iOS 26），方向和大标题往上滚走一致。
 

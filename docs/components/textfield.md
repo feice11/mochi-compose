@@ -68,6 +68,8 @@ MochiListSection(header = "Contact") {
 
 ## MochiDialogTextField: text field in an alert
 
+The caret pauses while the dialog opens, closes, deforms or moves with the keyboard, then resumes blinking when the dialog settles. Focus, selection and the keyboard session stay active.
+
 Put it in `MochiDialog`'s `content`:
 
 ```kotlin

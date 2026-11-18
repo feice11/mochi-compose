@@ -21,8 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,7 +33,6 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -43,66 +40,37 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
-import ui.feice.mochi.demo.common.DemoSettingsSection
-import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.demoItem
+import ui.feice.mochi.list.MochiListSection
+import ui.feice.mochi.list.MochiListSliderRow
 import ui.feice.mochi.shape.MochiConcentric
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.shape.MochiSuperellipse
 import ui.feice.mochi.theme.MochiTheme
 
-/**
- * 连续圆角与同心：用「曲率梳」看圆角——沿着轮廓每一点往外画一根线，长短 = 那一点弯得多厉害。
- * 普通圆角在直边接圆弧的地方曲率一下跳上去（梳子突然竖起来，看起来有一道「折痕」）；
- * 连续圆角的曲率从 0 平滑地升上去再落下，所以看着更圆润。下面再看超椭圆图标和同心的嵌套。
- */
+/** 连续圆角与同心：曲率梳、超椭圆图标、同心嵌套 */
 @Composable
 fun CornersPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var radius by rememberSaveable { mutableFloatStateOf(44f) }
-    var comb by rememberSaveable { mutableStateOf(true) }
-    var compare by rememberSaveable { mutableStateOf(true) }
-    var exponent by rememberSaveable { mutableFloatStateOf(5f) }
+    val radius = 44f
     var padding by rememberSaveable { mutableFloatStateOf(14f) }
     DemoPage(entry, modifier) {
         demoItem {
-            DemoSection(
-                "曲率梳",
-                footer = "蓝色是库里的连续圆角，红线是同样半径的普通圆角。打开曲率梳：普通圆角的梳子在圆弧开始处突然竖起来，连续圆角平滑地升起、落下。",
-            ) {
+            DemoSection("曲率梳") {
                 val g2 = MochiRoundedRectangle(radius.dp)
-                val plain = RoundedCornerShape(radius.dp)
                 Box(Modifier.fillMaxWidth().aspectRatio(1.35f).padding(28.dp)) {
                     Box(Modifier.fillMaxSize().background(cs.primaryContainer, g2))
-                    Canvas(Modifier.fillMaxSize()) {
-                        if (compare) drawOutline(plain, cs.error, 1.5.dp.toPx())
-                        if (comb) {
-                            drawComb(outlinePath(g2), cs.primary)
-                            if (compare) drawComb(outlinePath(plain), cs.error)
-                        }
-                    }
+                    Canvas(Modifier.fillMaxSize()) { drawComb(outlinePath(g2), cs.primary) }
                 }
             }
         }
         demoItem {
-            DemoSliderSection("圆角半径", "${radius.toInt()} dp", radius, { radius = it }, valueRange = 0f..120f)
-        }
-        demoItem {
-            DemoSettingsSection(null) {
-                Toggles("曲率梳", listOf("开" to true, "关" to false), comb) { comb = it }
-                Toggles("对比普通圆角", listOf("开" to true, "关" to false), compare) { compare = it }
-            }
-        }
-        demoItem {
-            DemoSection(
-                "并排看",
-                footer = "同样的半径：左边普通圆角，直边和圆弧的接缝处曲率断开；右边连续圆角，曲率是一条连续的曲线。",
-            ) {
+            DemoSection("并排看") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     ComparePane("普通圆角", RoundedCornerShape(36.dp), cs.error, Modifier.weight(1f))
                     ComparePane("连续圆角", MochiRoundedRectangle(36.dp), cs.primary, Modifier.weight(1f))
@@ -110,20 +78,17 @@ fun CornersPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSection(
-                "超椭圆图标",
-                footer = "app 图标那样的方块用超椭圆：整条边都在微微弯，没有直边和圆弧的分界，n 越大越方。",
-            ) {
-                val shape = MochiSuperellipse(exponent)
+            DemoSection("超椭圆图标") {
+                val shape = MochiSuperellipse(5f)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     listOf(
-                        Icons.CAMERA to cs.tertiaryContainer,
-                        Icons.HEART to cs.primaryContainer,
-                        Icons.NOTE to cs.secondaryContainer,
+                        DemoIcons.CAMERA to cs.tertiaryContainer,
+                        DemoIcons.HEART to cs.primaryContainer,
+                        DemoIcons.NOTE to cs.secondaryContainer,
                     ).forEach { (g, c) ->
                         Box(Modifier.size(64.dp).background(c, shape), contentAlignment = Alignment.Center) {
                             Glyph(g, cs.onSurface, size = 30)
@@ -137,13 +102,7 @@ fun CornersPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSliderSection("超椭圆指数 n", "%.1f".format(exponent), exponent, { exponent = it }, valueRange = 2f..10f)
-        }
-        demoItem {
-            DemoSection(
-                "同心",
-                footer = "圆角容器里贴着内边距放圆角元素：内圆角 = 外圆角 − 内边距，两条轮廓处处等距。左边内外同半径，角上的缝明显变宽。",
-            ) {
+            DemoSection("同心") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     NestedPane("同半径", padding.dp, concentric = false, Modifier.weight(1f))
                     NestedPane("同心", padding.dp, concentric = true, Modifier.weight(1f))
@@ -151,10 +110,12 @@ fun CornersPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSliderSection("内边距", "${padding.toInt()} dp", padding, { padding = it }, valueRange = 4f..28f)
+            MochiListSection {
+                MochiListSliderRow(padding, { padding = it }, valueRange = 4f..28f, title = "内边距", valueText = "${padding.toInt()} dp")
+            }
         }
         demoItem {
-            DemoSection("三层嵌套", footer = "每一层都按同一个规则往里收，再多层也处处等距。") {
+            DemoSection("三层嵌套") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     val outer = 40.dp
                     val p = padding.dp
@@ -193,7 +154,7 @@ private fun ComparePane(label: String, shape: Shape, color: Color, modifier: Mod
     }
 }
 
-/** 外框 28dp 圆角 + 内边距 p 的内块：同心时内圆角 = 28 − p，否则也是 28 */
+/** 同心时内圆角 = 外圆角 − p，否则与外圆角相同 */
 @Composable
 private fun NestedPane(label: String, p: Dp, concentric: Boolean, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
@@ -225,14 +186,7 @@ private fun DrawScope.outlinePath(shape: Shape): Path = when (val o = shape.crea
     is Outline.Rectangle -> Path().apply { addRect(o.rect) }
 }
 
-private fun DrawScope.drawOutline(shape: Shape, color: Color, width: Float) {
-    drawPath(outlinePath(shape), color, style = Stroke(width))
-}
-
-/**
- * 曲率梳：沿轮廓等距取点，每点往外画一根线，长度 ∝ 曲率（转角 / 弧长）；梳齿的尖连成一条包络线。
- * 直边曲率 0（没有齿），圆弧曲率 1/r（齿一样长）；普通圆角在接缝处齿长一下跳变，连续圆角是平滑升降
- */
+/** 曲率梳：沿轮廓等距取点往外画线，长度 ∝ 曲率，齿尖连成包络线 */
 private fun DrawScope.drawComb(path: Path, color: Color, scale: Float = 1f) {
     val pm = PathMeasure()
     pm.setPath(path, true)
@@ -241,11 +195,11 @@ private fun DrawScope.drawComb(path: Path, color: Color, scale: Float = 1f) {
     val n = 360
     val step = len / n
     val center = Offset(size.width / 2f, size.height / 2f)
-    // 齿长 = 曲率 × k：曲率是 1/半径（px⁻¹），所以 k 是面积量纲；整体控制在短边的 1/8 以内，不画出卡片
+    // 齿长 = 曲率 × k，上限取短边的 1/8，不画出卡片
     val k = size.minDimension * size.minDimension * 0.012f * scale
     val maxTooth = size.minDimension * 0.12f
     val pts = Array(n) { pm.getPosition(it * step) }
-    // 三点外接圆算曲率（比切线差分稳），再做一次 5 点中值滤波：轮廓是一段段曲线拼的，接缝处极小的折角会算出孤立的尖刺
+    // 三点外接圆算曲率（比切线差分稳）；5 点中值滤波去掉曲线拼接处极小折角造成的尖刺
     val raw = FloatArray(n) { i ->
         val p0 = pts[(i - 2 + n) % n]
         val p1 = pts[i]
@@ -262,7 +216,7 @@ private fun DrawScope.drawComb(path: Path, color: Color, scale: Float = 1f) {
     for (i in 0..n) {
         val idx = i % n
         val p = pts[idx]
-        // 往外的法线：切线的两条法线里朝外的那条
+        // 取朝外的那条法线
         val t = pm.getTangent(idx * step)
         var nx = -t.y
         var ny = t.x

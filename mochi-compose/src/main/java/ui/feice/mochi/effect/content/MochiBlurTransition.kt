@@ -5,7 +5,14 @@ package ui.feice.mochi.effect.content
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.AnimationVector
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.TwoWayConverter
+import androidx.compose.animation.core.VectorizedFiniteAnimationSpec
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -36,21 +44,25 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.MochiSprings
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.theme.LocalTextStyle
 import ui.feice.mochi.theme.MochiGraphics
+import ui.feice.mochi.utils.smoothstep
 
 /**
  * 内容换掉时的「模糊替换」参数（iOS 的 blur replace / numericText 那一类内容过渡）：
  * 旧内容一边变糊、缩小、淡出，新内容从糊、小、透明里清晰起来，两者叠在原位交叉进行。
  *
  * @param blur 完全隐去时的模糊半径。模糊要 Android 12（API 31）以上，更低的系统只有淡入淡出和缩放
- * @param scale 完全隐去时的缩放
+ * @param scale 完全隐去时的缩放（新内容从这个大小长到原大）
  * @param slide 完全隐去时沿 direction 方向的位移，按内容自己的高度算（计数器的数字滚动用它）
  * @param enter 新内容出现的动画（不该过冲，不然透明度和模糊会冲过头）
  * @param exit 旧内容消失的动画，比出现快一点：旧的先让开，新的再清晰起来
  * @param overflow 内容画出自己边界的距离。包着玻璃（外阴影画在玻璃外面）时传 [ui.feice.mochi.effect.glass.mochiGlassOverflow]：
  *   模糊和半透明的图层按这一圈往外留边，过渡中阴影不会被切成直角矩形。默认 0（文字、图标）
+ * @param exitScale 旧内容消失时缩到多大，默认和 [scale] 一样。分开设就是「景深切换」：
+ *   新内容从略大（例如 1.03）缩回原大，旧内容缩小（例如 0.96）退到后面，见 [MochiBlurTransitions.Depth]
  */
 @Immutable
 public data class MochiBlurTransition(
@@ -60,6 +72,7 @@ public data class MochiBlurTransition(
     val enter: AnimationSpec<Float> = ContentSpring,
     val exit: AnimationSpec<Float> = ContentSpring,
     val overflow: Dp = 0.dp,
+    val exitScale: Float = scale,
 )
 
 /** 内容变换统一的弹簧：SwiftUI 的 snappy，300ms、回弹 0.15（利落，收尾带一点点弹，不拖） */
@@ -80,6 +93,32 @@ public object MochiBlurTransitions {
     public val Appear: MochiBlurTransition = MochiBlurTransition(blur = 10.dp, scale = 0.8f)
 
     /**
+     * 一屏里很多文字跟着打字一起换（输入法候选、搜索联想、筛选结果）：只有一点点模糊、几乎不缩放，
+     * 旧的很快让开（约 160ms）、新的约 220ms 清楚。换得勤的地方用 [Replace] 太抢眼，同时开的模糊图层也多。
+     */
+    public val Subtle: MochiBlurTransition = MochiBlurTransition(
+        blur = 3.dp,
+        scale = 0.97f,
+        enter = MochiSprings.snappy(220, visibilityThreshold = 0.001f),
+        exit = MochiSprings.snappy(160, visibilityThreshold = 0.001f),
+    )
+
+    /**
+     * 景深切换（键盘在按键区和 emoji 面板之间切换的那种）：旧内容缩小退到后面、很快淡掉，
+     * 新内容稍等一下从略大缩回原大、淡入，两份不会同时清楚。不模糊；要模糊用 copy(blur = …)。
+     */
+    public val Depth: MochiBlurTransition = MochiBlurTransition(
+        blur = 0.dp,
+        scale = 1.03f,
+        exitScale = 0.96f,
+        enter = DelayedFloatSpec(
+            DepthEnterDelayMs,
+            spring(dampingRatio = 0.88f, stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 0.001f),
+        ),
+        exit = tween(DepthExitMs, easing = FastOutLinearInEasing),
+    )
+
+    /**
      * 计数器的一位数字：沿变化方向滚过去（变大往上、变小往下），带一点模糊，不缩放。
      * 新数字滚到位时冲过头一点再回来（iOS numericText 的回弹），旧数字利落地走掉不回弹。
      */
@@ -98,12 +137,53 @@ private class BlurSlot<T>(val key: T, initial: Float) {
 
     /** 隐去时往哪边偏：+1 往下、−1 往上（乘上内容高度和 slide） */
     var sign by mutableFloatStateOf(0f)
+
+    /** 正在退场（缩放按 [MochiBlurTransition.exitScale] 算）。 */
+    var leaving by mutableStateOf(false)
     var job: Job? = null
 }
+
+/** 先等 [delayMs] 毫秒（停在起点）再按 [inner] 走：景深切换里新内容等旧的先让开。 */
+internal class DelayedFloatSpec(private val delayMs: Int, private val inner: FiniteAnimationSpec<Float>) : FiniteAnimationSpec<Float> {
+    override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<Float, V>): VectorizedFiniteAnimationSpec<V> =
+        DelayedVectorized(delayMs * 1_000_000L, inner.vectorize(converter))
+
+    override fun equals(other: Any?): Boolean = other is DelayedFloatSpec && other.delayMs == delayMs && other.inner == inner
+
+    override fun hashCode(): Int = delayMs * 31 + inner.hashCode()
+}
+
+private class DelayedVectorized<V : AnimationVector>(private val delayNanos: Long, private val inner: VectorizedFiniteAnimationSpec<V>) :
+    VectorizedFiniteAnimationSpec<V> {
+    override fun getValueFromNanos(playTimeNanos: Long, initialValue: V, targetValue: V, initialVelocity: V): V = if (playTimeNanos <
+        delayNanos
+    ) {
+        initialValue
+    } else {
+        inner.getValueFromNanos(playTimeNanos - delayNanos, initialValue, targetValue, initialVelocity)
+    }
+
+    override fun getVelocityFromNanos(playTimeNanos: Long, initialValue: V, targetValue: V, initialVelocity: V): V = if (playTimeNanos <
+        delayNanos
+    ) {
+        initialVelocity
+    } else {
+        inner.getVelocityFromNanos(playTimeNanos - delayNanos, initialValue, targetValue, initialVelocity)
+    }
+
+    override fun getDurationNanos(initialValue: V, targetValue: V, initialVelocity: V): Long =
+        delayNanos + inner.getDurationNanos(initialValue, targetValue, initialVelocity)
+}
+
+/** 景深切换：新内容等多久再出来、旧内容多快淡掉（毫秒）。 */
+private const val DepthEnterDelayMs = 60
+private const val DepthExitMs = 140
 
 /**
  * 内容换掉时做模糊替换：[targetState] 一变，旧内容变糊淡出、新内容从糊里清晰起来，叠在原位交叉进行；
  * 途中又换回来时，那份内容从当前的样子接着变清晰，不重新开始。
+ *
+ * 减弱动态效果（[ui.feice.mochi.anim.LocalMochiReduceMotion]，或系统关了动画）时直接换，不做过渡。
  *
  * 占的大小在新旧内容之间按进度平滑过渡（文字变长变短时，后面的东西被平滑推开，不跳）。
  * 内容是空的（什么都不画）时大小为 0，所以出现 / 消失也是它：见 [MochiBlurVisibility]。
@@ -125,12 +205,23 @@ public fun <T> MochiBlurCrossfade(
     val scope = rememberCoroutineScope()
     val dir by rememberUpdatedState(direction)
     val spec by rememberUpdatedState(transition)
+    val reduce by rememberUpdatedState(mochiReduceMotion())
     LaunchedEffect(targetState) {
+        if (reduce) {
+            // 减弱动态效果：直接换成新内容
+            slots.toList().forEach { it.job?.cancel() }
+            slots.removeAll { it.key != targetState }
+            val s = slots.firstOrNull() ?: BlurSlot(targetState, 1f).also { slots.add(it) }
+            s.leaving = false
+            s.p.snapTo(1f)
+            return@LaunchedEffect
+        }
         val d = dir.coerceIn(-1, 1).toFloat()
         for (s in slots.toList()) {
             if (s.key == targetState) continue
             // 旧内容往 direction 那边走掉（往上 = 负的 y）
             s.sign = -d
+            s.leaving = true
             s.job?.cancel()
             s.job = scope.launch {
                 // 淡到看不见就拿掉（不等弹簧那段很长的尾巴）：少一个图层、少一次离屏模糊
@@ -143,6 +234,7 @@ public fun <T> MochiBlurCrossfade(
             it.sign = d
             slots.add(it)
         }
+        s.leaving = false
         s.job?.cancel()
         s.job = scope.launch { s.p.animateTo(1f, spec.enter) }
     }
@@ -233,7 +325,7 @@ internal fun mochiCachedBlurRadius(e: BlurEffect): Float {
 private fun <T> layerBlur(s: BlurSlot<T>, transition: MochiBlurTransition): Dp {
     val p = s.p.value.coerceIn(0f, 1f)
     val hidden = 1f - p
-    return if (p * p * (3f - 2f * p) < 0.02f) 0.dp else transition.blur * hidden
+    return if (smoothstep(0f, 1f, p) < 0.02f) 0.dp else transition.blur * hidden
 }
 
 @Composable
@@ -244,13 +336,14 @@ private fun <T> BlurLayer(s: BlurSlot<T>, transition: MochiBlurTransition, conte
             val p = s.p.value.coerceIn(0f, 1f)
             val hidden = 1f - p
             // 透明度走 smoothstep：淡到一半时已经糊开了，不会看到两份清楚的字叠在一起
-            val a = p * p * (3f - 2f * p)
+            val a = smoothstep(0f, 1f, p)
             mochiBlurAlpha(a, layerBlur(s, transition))
             // 内容画出边界（玻璃阴影）时，半透明也不开按自身范围的离屏层：那一层会把阴影切成直角，透明度直接乘到每一笔上
             if (transition.overflow > 0.dp && a < 1f) compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
             // 缩放和位移用没截断的进度：snappy 弹簧收尾那一点点回弹在这里看得到（透明度、模糊照样截断）
             val raw = s.p.value
-            val k = transition.scale + (1f - transition.scale) * raw
+            val hiddenScale = if (s.leaving) transition.exitScale else transition.scale
+            val k = hiddenScale + (1f - hiddenScale) * raw
             scaleX = k
             scaleY = k
             translationY = s.sign * (1f - raw) * transition.slide * size.height

@@ -8,6 +8,15 @@ captures/
 *.jks
 *.keystore
 .kotlin/
-.claude/
 artifacts/
 hs_err_pid*.log
+
+# 还没公开的部分：键盘、独立输入法和它们的 Rust 引擎，宣传片素材，示例里的键盘演示（只在本地）
+/mochi-keyboard/
+/mochi-ime/
+/rust/
+/promo/
+/example/src/keyboard/
+/docs/components/keyboard.md
+/docs/zh_CN/components/keyboard.md
+*.zip

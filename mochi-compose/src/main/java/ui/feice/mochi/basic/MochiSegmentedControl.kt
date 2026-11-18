@@ -47,7 +47,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.parts.ControlShadowAlpha
 import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
@@ -236,7 +236,7 @@ public fun MochiSegmentedControl(
                         state.drag = Offset.Zero
                         state.held = true
                         scope.launch { glow.press(down.position, MochiGlowDefaults.radius(Size(dims.seg, hPx), this@pointerInput)) }
-                        scope.launch { lift.animateTo(behavior.pressScale, MochiMotions.responseSpring(0.3f, 0.6f)) }
+                        scope.launch { lift.animateTo(behavior.pressScale, MochiMotionTokens.PressDown) }
                     } else {
                         dims.pressed = at.roundToInt().coerceIn(0, n - 1)
                     }
@@ -266,7 +266,7 @@ public fun MochiSegmentedControl(
                         state.release(if (released) target else null)
                         glow.markReleased()
                         scope.launch { glow.release() }
-                        scope.launch { lift.animateTo(1f, MochiMotions.responseSpring(0.38f, 0.62f)) }
+                        scope.launch { lift.animateTo(1f, MochiMotionTokens.PressRelease) }
                         if (released && target != current) currentOnSelect(target)
                     } else if (released) {
                         // 手指还在轨道上才算点中（滑出去取消）

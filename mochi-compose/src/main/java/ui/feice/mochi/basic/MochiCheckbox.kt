@@ -4,7 +4,6 @@
 package ui.feice.mochi.basic
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
@@ -23,6 +22,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.rememberMochiHaptics
@@ -65,7 +65,7 @@ public fun MochiCheckbox(
     colors: MochiCheckboxColors = MochiCheckboxDefaults.colors(),
 ) {
     val haptics = rememberMochiHaptics()
-    val progress by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = 1f, stiffness = 700f), label = "check")
+    val progress by animateFloatAsState(if (checked) 1f else 0f, MochiMotionTokens.Settle, label = "check")
     MochiCheckCircle(
         progress,
         colors,

@@ -8,6 +8,7 @@ plugins {
 }
 
 // release 签名：优先读环境变量（CI 里来自仓库 Secrets，或工作流临时生成的 keystore），都没有就退回 debug 签名
+val withKeyboard = findProject(":mochi-keyboard") != null
 val signingStore = System.getenv("GOO_STORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
 
 android {
@@ -52,6 +53,12 @@ android {
         }
     }
 
+    // mochi-keyboard 的内置词库不压缩，运行时直接映射 APK 里的文件
+    androidResources { noCompress += "dict" }
+
+    // 键盘演示只在本地检出里有 mochi-keyboard 时编进来（公开仓库和 CI 没有这个模块）
+    sourceSets["main"].java.srcDir(if (withKeyboard) "src/keyboard/java" else "src/nokeyboard/java")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -71,11 +78,10 @@ dependencies {
     implementation(project(":mochi-nothing"))
     implementation(project(":mochi-ios"))
     implementation(project(":mochi-icons"))
+    if (withKeyboard) implementation(project(":mochi-keyboard"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
-    // 只有示例用 material3（Slider / Snackbar），组件库本身不依赖它
-    implementation(libs.androidx.compose.material3)
 
     // 转场截图测试（androidTest，只在本地跑）
     androidTestImplementation(libs.androidx.test.runner)

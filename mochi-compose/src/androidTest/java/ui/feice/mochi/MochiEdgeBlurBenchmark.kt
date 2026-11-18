@@ -25,6 +25,7 @@ import kotlin.math.min
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import ui.feice.mochi.effect.mask.BlurBoost
 import ui.feice.mochi.effect.mask.maskedBlur
 
 /**
@@ -202,7 +203,7 @@ class MochiEdgeBlurBenchmark {
             RenderNode("band").apply {
                 setPosition(0, 0, er - el, eb - et)
                 setRenderEffect(
-                    maskedBlur(s.sigma, ew, eh, s.cw.toFloat(), s.ch.toFloat()) {
+                    maskedBlur(s.sigma, BlurBoost, ew, eh, s.cw.toFloat(), s.ch.toFloat()) {
                         setFloatUniform("uMode", s.mode)
                         setFloatUniform("uLen", s.len)
                         setFloatUniform("uAmt", s.amt)

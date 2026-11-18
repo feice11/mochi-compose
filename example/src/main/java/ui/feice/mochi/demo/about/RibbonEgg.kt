@@ -48,20 +48,15 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 import ui.feice.mochi.basic.MochiBarIconButton
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.theme.MochiHdr
 import ui.feice.mochi.theme.MochiTheme
 
 /**
- * 关于页彩蛋「麻薯的余韵」：不另画一个场景，而是让关于页本身被一层流动的玻璃看着——
- * 从团子处荡开一圈折射波纹，之后整页像隔着缓慢流动的液态玻璃；三条半透明的玻璃飘带从团子里抽出来，
- * 一边飘一边扭转，扭过来的地方折射底下的页面，边缘泛虹彩；所有折射都带色散（红蓝分开一点）。
- * 手指按住处是一枚带色散的放大镜，附近的飘带被吸过去。
- *
- * 连贯：进度为 0 时效果是恒等变换，页面原样；进入、退出都只是这一个进度在走，不需要藏团子、做交接。
- * Android 13+ 用 AGSL 的 RenderEffect 作用在页面图层上；更老的系统只画三条飘带（效果降级，功能不降级）。
+ * 关于页彩蛋：页面图层上的折射波纹、液态玻璃与三条玻璃飘带，按住处是放大镜。
+ * 进度为 0 时效果是恒等变换，进出只走这一个进度；Android 13+ 用 AGSL RenderEffect，更老的系统只画飘带。
  */
 @Stable
 internal class RibbonEggState(val origin: Offset) {
@@ -77,7 +72,7 @@ internal class TouchSlot {
     val strength = Animatable(0f)
 }
 
-/** 挂在被折射的页面图层上（关于页的整个滚动页面） */
+/** 挂在被折射的页面图层上。 */
 internal fun Modifier.ribbonEggEffect(state: RibbonEggState?): Modifier = if (state == null) {
     this
 } else {
@@ -90,9 +85,7 @@ internal fun Modifier.ribbonEggEffect(state: RibbonEggState?): Modifier = if (st
     }
 }
 
-/**
- * 彩蛋的交互层：盖在页面上，接手指（放大镜）、返回手势和关闭按钮；旧系统在这里画飘带。
- */
+/** 彩蛋交互层：接触摸、返回和关闭；旧系统在这里画飘带。 */
 @Composable
 internal fun RibbonEggOverlay(state: RibbonEggState, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
@@ -145,7 +138,6 @@ internal fun RibbonEggOverlay(state: RibbonEggState, onClose: () -> Unit, modifi
 
                                 !change.pressed && slot != null -> {
                                     slot.id = null
-                                    // 松手：放大镜像水滴一样弹回去（欠阻尼）
                                     scope.launch { slot.strength.animateTo(0f, spring(0.4f, 220f)) }
                                 }
                             }
@@ -163,7 +155,7 @@ internal fun RibbonEggOverlay(state: RibbonEggState, onClose: () -> Unit, modifi
                 .statusBarsPadding()
                 .padding(16.dp)
                 .graphicsLayer { alpha = ((state.open.value - 0.5f) / 0.5f).coerceIn(0f, 1f) },
-        ) { Glyph(Icons.CLOSE, MochiTheme.colorScheme.onSurface, size = 20) }
+        ) { Glyph(DemoIcons.CLOSE, MochiTheme.colorScheme.onSurface, size = 20) }
     }
 }
 
@@ -188,7 +180,7 @@ internal class RibbonShader private constructor(private val shader: RuntimeShade
     }
 }
 
-// —— 降级（Android 12 及以下）：只画三条从团子里抽出来的飘带 ——
+// 降级画法（Android 12 及以下）
 
 private fun DrawScope.drawRibbonsFallback(s: RibbonEggState) {
     val o = s.open.value.coerceIn(0f, 1f)
@@ -263,7 +255,6 @@ float ribbonAngle(int k) {
     return ${RibbonAngles[2]};
 }
 
-// 柔和的虹彩：低饱和，不是彩虹条
 half3 iris(float c) {
     return half3(0.5 + 0.5 * cos(6.2832 * (c + float3(0.0, 0.33, 0.67))));
 }
@@ -272,14 +263,13 @@ half4 sampleAt(float2 q) {
     return content.eval(clamp(q, float2(0.5), uSize - 0.5));
 }
 
-// 手指下的放大镜：往中心取样（放大），边缘的折射最强
 float2 lens(float2 p, float3 t, float m) {
     float2 d = p - t.xy;
     float l = m * 0.2;
     return -d * t.z * 0.38 * exp(-dot(d, d) / (l * l));
 }
 
-// 第 k 条飘带的中线（飘带自己的坐标系，原点在团子）：舒缓的长波，慢慢飘；手指附近被吸过去
+// 第 k 条飘带的中线，坐标系原点在团子
 float ribbonY(int k, float x, float m, float t, float3 touch, float ang) {
     float fk = float(k);
     float base = (uSize.y * 0.45 - uOrigin.y) + (fk - 1.0) * m * 0.32;
@@ -295,8 +285,8 @@ float ribbonWidth(int k, float m) {
     return m * 0.04;
 }
 
-// 第 k 条飘带在 p 处的覆盖率；u 是宽度方向坐标（-1..1），phi 是扭转角，nrm 是屏幕上的法线，edgePx 是到边缘的像素距离。
-// 扭转时投影宽度按 sqrt(cos² + 余量) 变窄，最窄也留四分之一，不会捏成尖角
+// 第 k 条飘带在 p 处的覆盖率；u 为宽度方向坐标（-1..1），phi 为扭转角，edgePx 为到边缘的像素距离。
+// 投影宽度最窄留四分之一，避免捏成尖角
 float ribbon(int k, float2 p, float m, float t, float reach, float3 touch,
              out float u, out float phi, out float2 nrm, out float edgePx) {
     float ang = ribbonAngle(k);
@@ -311,7 +301,6 @@ float ribbon(int k, float2 p, float m, float t, float reach, float3 touch,
     u = clamp(dist / max(hw, 1.0), -1.0, 1.0);
     nrm = rot(normalize(float2(-slope, 1.0)), ang);
     edgePx = max(hw - abs(dist), 0.0);
-    // 从团子处沿飘带往两头抽出来，前沿是一段长长的渐隐，不是硬边
     float grow = 1.0 - smoothstep(reach - m * 0.6, reach, length(p - uOrigin));
     return clamp(hw - abs(dist) + 0.75, 0.0, 1.0) * grow;
 }
@@ -329,18 +318,14 @@ half4 main(float2 p) {
     float inside = 1.0 - smoothstep(reach - m * 0.3, reach, r);
     float3 touch = uTouch0.z >= uTouch1.z ? uTouch0 : uTouch1;
 
-    // —— 折射位移 ——
-    // 1. 从团子荡开的一圈波纹（展开过程中才有）
+    // 折射位移：展开波纹、液态玻璃、放大镜、飘带
     float2 dir = r > 0.5 ? (p - org) / r : float2(0.0);
     float band = (r - reach) / (m * 0.09);
     float2 disp = -dir * exp(-band * band) * m * 0.05 * sin(o * 3.14159);
-    // 2. 缓慢流动的液态玻璃
     float2 q = p / m * 1.6;
     float2 warp = float2(fbm(q + float2(0.0, t * 0.07)), fbm(q + float2(5.2, -t * 0.06))) - 0.5;
     disp += warp * m * 0.045 * inside * smoothstep(0.15, 1.0, o);
-    // 3. 手指放大镜
     disp += lens(p, uTouch0, m) + lens(p, uTouch1, m);
-    // 4. 飘带是薄薄的玻璃：正对着时像一条柱面透镜，侧过去几乎不折射
     for (int k = 0; k < 3; k++) {
         float u;
         float phi;
@@ -350,14 +335,14 @@ half4 main(float2 p) {
         if (a > 0.0) disp += nrm * u * abs(cos(phi)) * m * 0.022 * a;
     }
 
-    // —— 色散取样：红多偏一点、蓝少偏一点 ——
+    // 色散取样
     half4 c0 = sampleAt(p + disp);
     half rr = sampleAt(p + disp * 1.25).r;
     half bb = sampleAt(p + disp * 0.75).b;
     half3 col = half3(rr, c0.g, bb);
     col *= 1.0 - 0.06 * inside * o;
 
-    // —— 飘带的材质：一层很淡的有色玻璃 + 随扭转滑过的丝光 + 发丝般的亮边 ——
+    // 飘带材质
     for (int k = 0; k < 3; k++) {
         float u;
         float phi;
@@ -367,11 +352,9 @@ half4 main(float2 p) {
         if (a > 0.0) {
         float c = cos(phi);
         float sn = sin(phi);
-        // 正面是本色，背面偏浅；翻面是连续过渡，没有明暗跳变
         float facing = smoothstep(-0.35, 0.35, c);
         half3 body = mix(mix(tint(k), half3(1.0), 0.45), tint(k), facing);
         col = mix(col, body, a * (0.12 + 0.08 * facing));
-        // 丝光：横截面微微拱起，高光带随扭转在宽度上滑过去
         float nt = sn * 0.9 + u * 0.3 * c;
         float sb = (nt + 0.25) / 0.2;
         float spec = exp(-sb * sb);

@@ -3,9 +3,7 @@
 
 package ui.feice.mochi.demo.pages
 
-import androidx.compose.foundation.OverscrollEffect
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,33 +17,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberPlatformOverscrollFactory
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
-import ui.feice.mochi.demo.common.Code
 import ui.feice.mochi.demo.common.DemoIcon
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
-import ui.feice.mochi.demo.common.DemoSettingsSection
-import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
-import ui.feice.mochi.effect.overscroll.MochiOverscrollEffect
-import ui.feice.mochi.effect.overscroll.MochiOverscrollSpec
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.mochiContainedScroll
 import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
@@ -54,28 +42,20 @@ import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.emphasized
 
-/**
- * 越界回弹：一个收件箱（竖向）和一排相簿（横向），都能拖出边缘、甩到边缘试回弹。
- * 可以和系统的拉伸效果对比；只留一个最影响手感的参数（阻力系数）。
- */
+/** 越界回弹：竖向收件箱和横向相簿。 */
 @Composable
 fun OverscrollPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var ios by rememberSaveable { mutableStateOf(true) }
-    val defaults = remember { MochiOverscrollSpec() }
-    var band by rememberSaveable { mutableFloatStateOf(defaults.rubberBand) }
-    val spec = remember(band) { MochiOverscrollSpec(rubberBand = band) }
-
     DemoPage(entry, modifier) {
         demoItem {
-            DemoSection("收件箱", footer = "拖出顶部或底部，或者用力甩到头：内容被橡皮筋拉住，松手弹回；越界时往回甩，会先收回越界再继续滚。", padding = 0.dp) {
-                val effect = if (ios) rememberMochiOverscrollEffect(spec) else systemOverscroll()
-                val fling = if (ios) MochiScrollDefaults.flingBehavior() else ScrollableDefaults.flingBehavior()
+            DemoSection("收件箱", footer = "拖出顶部或底部，或者用力甩到头。", padding = 0.dp) {
+                val effect = rememberMochiOverscrollEffect()
+                val fling = MochiScrollDefaults.flingBehavior()
                 LazyColumn(
                     Modifier
                         .fillMaxWidth()
                         .height(360.dp)
-                        // 收件箱滚到头只在自己里面回弹，不带动外面的页面
-                        .then(if (effect is MochiOverscrollEffect) Modifier.mochiContainedScroll(effect) else Modifier),
+                        // 只在自己里面回弹，不带动外面的页面
+                        .mochiContainedScroll(effect),
                     contentPadding = PaddingValues(vertical = 6.dp),
                     flingBehavior = fling,
                     overscrollEffect = effect,
@@ -85,9 +65,9 @@ fun OverscrollPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSection("相簿", footer = "横着拖出两端一样回弹。", padding = 0.dp) {
-                val effect = if (ios) rememberMochiOverscrollEffect(spec) else systemOverscroll()
-                val fling = if (ios) MochiScrollDefaults.flingBehavior() else ScrollableDefaults.flingBehavior()
+            DemoSection("相簿", footer = "横着拖出两端。", padding = 0.dp) {
+                val effect = rememberMochiOverscrollEffect()
+                val fling = MochiScrollDefaults.flingBehavior()
                 LazyRow(
                     Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(16.dp),
@@ -97,28 +77,6 @@ fun OverscrollPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 ) {
                     itemsIndexed(Albums) { _, album -> AlbumCover(album) }
                 }
-            }
-        }
-        demoItem {
-            DemoSettingsSection("调参", footer = "Kyant & Nevoit 的 Cresto 实现，和系统的拉伸效果对比。") {
-                Toggles("效果", listOf("Cresto 回弹" to true, "系统拉伸" to false), ios) { ios = it }
-            }
-        }
-        demoItem {
-            DemoSliderSection(
-                "阻力系数",
-                "%.2f".format(band),
-                band,
-                { band = it },
-                valueRange = 0.3f..0.8f,
-                footer = "越小越拉不动；iOS 大约是 0.55。",
-            )
-        }
-        demoItem {
-            DemoSection("用法") {
-                Code(
-                    "// 整个子树都用 Cresto 回弹\nProvideMochiOverscroll {\n    App()\n}\n\n// 配合 iOS 的惯性减速\nLazyColumn(\n    flingBehavior = MochiScrollDefaults.flingBehavior(),\n) { … }",
-                )
             }
         }
     }
@@ -131,7 +89,7 @@ private val Mails = listOf(
     Mail("小明", "周末去爬山吗？天气不错", "09:12", Tone.Tertiary, true),
     Mail("Mochi 商店", "你的订单已发货", "昨天", Tone.Secondary, false),
     Mail("妈妈", "到家了吗", "昨天", Tone.Tertiary, false),
-    Mail("日历", "提醒：牙医预约 周三 10:00", "周一", Tone.Neutral, false),
+    Mail("日历", "牙医预约，周三 10:00", "周一", Tone.Neutral, false),
     Mail("读书会", "本月书单：《看不见的城市》", "周一", Tone.Primary, false),
     Mail("银行", "10 月账单已出", "周日", Tone.Secondary, false),
     Mail("旅行社", "行程单：杭州 3 日", "周六", Tone.Tertiary, false),
@@ -152,7 +110,6 @@ private fun MailRow(mail: Mail, divider: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // 头像：首字 + 主题容器色圆
             Box(Modifier.size(40.dp).background(colors.container, CircleShape), contentAlignment = Alignment.Center) {
                 Text(mail.from.take(1), style = ts.subhead.emphasized(), color = colors.content)
             }
@@ -163,7 +120,6 @@ private fun MailRow(mail: Mail, divider: Boolean) {
                 }
                 Text(mail.subject, style = ts.subhead, color = cs.onSurfaceVariant, maxLines = 1)
             }
-            // 未读：小圆点
             Box(Modifier.size(8.dp).background(if (mail.unread) cs.primary else cs.primary.copy(alpha = 0f), CircleShape))
         }
         if (divider) {
@@ -181,14 +137,14 @@ private fun MailRow(mail: Mail, divider: Boolean) {
 private class Album(val title: String, val count: Int, val icon: DemoIcon, val tone: Tone)
 
 private val Albums = listOf(
-    Album("最近项目", 1284, Icons.CAMERA, Tone.Primary),
-    Album("个人收藏", 96, Icons.HEART, Tone.Tertiary),
-    Album("旅行", 312, Icons.PLANE, Tone.Secondary),
-    Album("截屏", 57, Icons.PHONE, Tone.Neutral),
-    Album("家人", 208, Icons.HOME, Tone.Primary),
-    Album("美食", 143, Icons.STAR, Tone.Tertiary),
-    Album("夜景", 41, Icons.MOON, Tone.Secondary),
-    Album("文稿", 23, Icons.NOTE, Tone.Neutral),
+    Album("最近项目", 1284, DemoIcons.CAMERA, Tone.Primary),
+    Album("个人收藏", 96, DemoIcons.HEART, Tone.Tertiary),
+    Album("旅行", 312, DemoIcons.PLANE, Tone.Secondary),
+    Album("截屏", 57, DemoIcons.PHONE, Tone.Neutral),
+    Album("家人", 208, DemoIcons.HOME, Tone.Primary),
+    Album("美食", 143, DemoIcons.STAR, Tone.Tertiary),
+    Album("夜景", 41, DemoIcons.MOON, Tone.Secondary),
+    Album("文稿", 23, DemoIcons.NOTE, Tone.Neutral),
 )
 
 @Composable
@@ -201,11 +157,4 @@ private fun AlbumCover(album: Album) {
         Text(album.title, style = MochiTheme.textStyles.subhead.emphasized(), color = MochiTheme.colorScheme.onSurface, maxLines = 1)
         Text("${album.count}", style = MochiTheme.textStyles.footnote, color = MochiTheme.colorScheme.onSurfaceVariant)
     }
-}
-
-/** 系统自带的越界效果（Android 12+ 是拉伸），对比用 */
-@Composable
-private fun systemOverscroll(): OverscrollEffect {
-    val factory = rememberPlatformOverscrollFactory()
-    return remember(factory) { factory.createOverscrollEffect() }
 }

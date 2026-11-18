@@ -1,6 +1,6 @@
 # MochiSheet
 
-iOS 的底部面板。主题开了液态玻璃时，半屏是玻璃、拉到全屏变成不透明（见下面「液态玻璃」）。
+iOS 的底部面板。主题开了玻璃时，半屏是玻璃、拉到全屏变成不透明（见下面「玻璃」）。
 
 - **半屏**：面板悬浮，左右和底部留 8dp，沿用原来的单层连续圆角轮廓；顶部沿用 `max(物理圆角, 32dp) - 悬浮边距`，只将最大值限制在固定 48dp。
 - **全屏**：贴边铺到状态栏下面，并覆盖导航区直到窗口底部。后面的页面（加了 `mochiSheetBackdrop` 的）以顶边为原点缩小、变成圆角卡片，顶上露出一条，后面是黑底。
@@ -16,6 +16,7 @@ MochiSheet(sheet, onDismiss = { … }) {
     MochiSheetHeader("标题")
     MochiSheetContent { … }                    // 放不下时自己能滚，不要再套滚动容器
 }
+// 头部固定、正文从下面滚过：MochiSheetScaffold(header = { MochiSheetHeader("标题") }) { … }
 Button(onClick = { sheet.show() })
 ```
 
@@ -78,6 +79,32 @@ MochiSheet(sheet) {
 
 拖动松手换到另一档（半屏 ↔ 全屏）时轻震一下。
 
+## 头部浮在正文上（MochiSheetScaffold）
+
+正文较长、要从头部下面滚过去时用 `MochiSheetScaffold`：头部（一般是 `MochiSheetHeader`）固定浮在正文上面，正文从它下面滚过。
+
+```kotlin
+MochiSheet(sheet) {
+    MochiSheetScaffold(
+        header = {
+            MochiSheetHeader(
+                "颜色",
+                navigationIcon = { MochiBarIconButton(onClick = { sheet.hide() }) { Icon(close) } },
+            )
+        },
+    ) {
+        MochiListSection { … }
+        MochiListSection { … }
+    }
+}
+```
+
+- 停在顶部时和「`MochiSheetHeader` + `MochiSheetContent`」看起来一样
+- 正文滚进头部下面后，头部区域和页面顶栏是同一套：均匀模糊，上面盖半透明的面板底色，硬边加一条很淡的细线；分界在头部按钮下沿往下 8dp。玻璃面板也用纯色面板的底色盖这一层
+- 正文左右按同心内缩，和 `MochiSheetContent` 一样；给了 `contentPadding` 时改用它的左右和下边距
+- 参数：`header`、`modifier`、`scrollState`（默认 `rememberScrollState()`）、`contentPadding`（默认 null）、`verticalArrangement`（默认 `spacedBy(16.dp)`）、`content`
+- 放不下时的滚动和面板拖动与 `MochiSheetContent` 相同，不要再套滚动容器。`MochiColorPicker` 已经改用它；旧的 `MochiSheetHeader` + `MochiSheetContent` 写法仍可用
+
 ## 导航栏、预测性返回、关闭
 
 - 面板存在期间将窗口导航栏背景与分隔线设为透明，并在 Android 10+ 关闭系统强制导航栏对比度遮罩；全屏仍显示导航图标，面板底色延伸到其后。此规则与 `hideNavigationBar` 分开：设为 false 也保持透明。最后一个面板卸载时恢复窗口原颜色、分隔线及对比度策略；多个面板共享同一窗口时不会提前恢复。内容仍保留 `navigationBarsIgnoringVisibility` 安全区。
@@ -89,9 +116,13 @@ MochiSheet(sheet) {
 
 - 保留后面的完整页面（`mochiSheetBackdrop`），不能用矩形裁掉下半屏。半屏刚开始展开时，轮廓与屏幕物理圆弧一致；半径和贝塞尔控制点随展开进度连续插值，到全屏才达到面板顶部左/右侧的连续圆角形状（物理圆角为 58dp 的真机上为 48dp）。底部左右角也采用对应顶部的目标值，所有半径抵掉图层缩放；不得在普通圆弧和连续圆角之间突然换类型。退回半屏时复位后页缩放和裁切。
 
-## 液态玻璃
+## 键盘
 
-主题有玻璃材质（`MochiTheme.materials.sheetGlass`）时，面板的底按 iOS 26 画（UIKitCore 逆向，`SheetLayoutInfo`）：非全屏档是 `_UIViewGlass` regular（subvariant "sheet"），全屏档是不透明的系统底色。玻璃取样面板底下的页面，连同压暗层一起。
+面板里的输入框弹出键盘时，面板逐帧跟着键盘动画抬起，最高抬到全屏那一档的顶边；抬到顶还挡着的部分由正文底部让出，输入框和键盘同时起步滚到键盘上方。让出的高度扣掉导航栏，不和底部补白叠加。键盘开着时关闭面板会先放掉焦点，键盘和面板一起往下收。往下甩关闭时，收起动画接着手指的速度走。
+
+## 玻璃
+
+主题有玻璃材质（`MochiTheme.materials.sheetGlass`）时，面板的底按 iOS 26 画（UIKitCore 逆向，`SheetLayoutInfo`）：非全屏档是 `_UIViewGlass` regular（subvariant "sheet"），全屏档是不透明的系统底色。玻璃取样面板底下没压暗的页面，压暗只盖在玻璃外面（取压暗后的页面再过配方偏白的面色会发灰）；面板玻璃不按背后亮度翻明暗，跟主题走。
 
 - 页面照常用 `MochiDefaults.sheetBackground()` / `groupedBackground()` 当底色。在玻璃面板里面读，它们是透明的，底色由面板自己画，页面里不用按玻璃开关分支。注意要在面板里面读（`MochiSheet { … }` 的内容里），在面板外面读到的是不透明的颜色。
 - 原生在两种底之间是直接切换；这里按往全屏拉的进度把不透明底色淡上来（近似）。

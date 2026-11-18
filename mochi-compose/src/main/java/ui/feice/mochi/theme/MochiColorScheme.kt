@@ -16,6 +16,7 @@ import com.materialkolor.scheme.SchemeFidelity
 import com.materialkolor.scheme.SchemeNeutral
 import com.materialkolor.scheme.SchemeTonalSpot
 import com.materialkolor.scheme.SchemeVibrant
+import kotlin.math.roundToInt
 
 /**
  * MD3 的全套颜色角色。组件只读这里的颜色，不写死色值。
@@ -93,9 +94,25 @@ private val schemeCache = HashMap<SchemeKey, MochiColorScheme>()
 internal fun generateColorScheme(keyColor: Color, isDark: Boolean, style: PaletteStyle, contrastLevel: Double): MochiColorScheme {
     val key = SchemeKey(keyColor.toArgb(), isDark, style, contrastLevel)
     return synchronized(schemeCache) {
-        schemeCache.getOrPut(key) { buildScheme(key).toMochiColorScheme() }
+        schemeCache.getOrPut(key) { buildScheme(key).let { it.toMochiColorScheme().mochiAdjusted(it) } }
     }
 }
+
+/**
+ * Mochi 配色在生成的方案上做的两处调整：
+ * - 浅色模式的分组底色提亮：2025 版规范的 surfaceContainer 色调偏低（接近 90），整页灰底压得很重，白卡片和底之间对比也过头。
+ *   照 iOS 的分组底色（F2F2F7，色调约 95）取中性色板的 95，surfaceContainerLow 跟着提到 97，层级顺序不变
+ * - 副标题、说明文字（onSurfaceVariant）更灰更暗：改从中性色板取（色相淡得多），色调再降 4
+ */
+private fun MochiColorScheme.mochiAdjusted(scheme: DynamicScheme): MochiColorScheme {
+    val neutral = scheme.neutralPalette
+    val variantTone = Hct.fromInt(onSurfaceVariant.toArgb()).tone - VariantToneDrop
+    val adjusted = copy(onSurfaceVariant = Color(neutral.tone(variantTone.roundToInt().coerceIn(0, 100))))
+    if (isDark) return adjusted
+    return adjusted.copy(surfaceContainerLow = Color(neutral.tone(97)), surfaceContainer = Color(neutral.tone(95)))
+}
+
+private const val VariantToneDrop = 4.0
 
 private fun buildScheme(k: SchemeKey): DynamicScheme {
     val hct = Hct.fromInt(k.argb)

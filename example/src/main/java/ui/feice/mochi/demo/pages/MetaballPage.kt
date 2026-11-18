@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,11 +44,10 @@ import ui.feice.mochi.anim.mochiSpring
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.Code
 import ui.feice.mochi.demo.common.DemoIcon
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
-import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
@@ -66,36 +64,20 @@ import ui.feice.mochi.theme.emphasized
 import ui.feice.mochi.utils.MochiHapticProfile
 import ui.feice.mochi.utils.rememberMochiHaptics
 
-/**
- * 融球连接：把照片拖进相簿。照片靠近下面的「相簿」胶囊时，颈部按距离长出来、连在一起，拉开又断开；
- * 连上时松手，照片顺着颈部被吸进胶囊，相簿张数加一，下一张从原处弹出来；没连上松手，照片弹回原位。
- * 按住照片会从手指处发光，颈部和本体用同一条光的曲线，接缝看不出来。
- * 标签栏的选中块、从按钮长出来的菜单 / 弹出层都是这一套。
- */
+/** 融球连接：把照片拖进相簿。标签栏选中块、从按钮长出的菜单用的是同一套。 */
 @Composable
 fun MetaballPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
-    var fuse by rememberSaveable { mutableFloatStateOf(28f) }
     DemoPage(entry, modifier) {
         demoItem {
             DemoSection(
                 "把照片拖进相簿",
-                footer = "拖着照片靠近相簿，两块像水滴一样连上；连上时松手，照片被吸进去，张数加一。没连上松手，照片弹回原位。",
+                footer = "把照片拖到相簿附近，连上后松手。",
             ) {
-                AlbumStage(fuse)
+                AlbumStage()
             }
         }
         demoItem {
-            DemoSliderSection(
-                "融合半径",
-                "${fuse.roundToInt()} dp",
-                fuse,
-                { fuse = it },
-                valueRange = 0f..60f,
-                footer = "颈部最粗能到多少；0 就是两块各自独立，碰到也不连。",
-            )
-        }
-        demoItem {
-            DemoSection("用法", footer = "用 proximityFuse 乘最大半径，靠近才连上。") {
+            DemoSection("用法") {
                 Code(
                     "val renderer = rememberMochiMetaballRenderer()\ndrawMochiMetaball(\n    renderer,\n    MochiMetaballFrame(a, b, fuse),\n    colors, shadow, glow = glow,\n)",
                 )
@@ -107,14 +89,16 @@ fun MetaballPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 private class Shot(val name: String, val icon: DemoIcon)
 
 private val Shots = listOf(
-    Shot("IMG_2048", Icons.SUN),
-    Shot("IMG_2049", Icons.STAR),
-    Shot("IMG_2050", Icons.MOON),
-    Shot("IMG_2051", Icons.HEART),
+    Shot("IMG_2048", DemoIcons.SUN),
+    Shot("IMG_2049", DemoIcons.STAR),
+    Shot("IMG_2050", DemoIcons.MOON),
+    Shot("IMG_2051", DemoIcons.HEART),
 )
 
 @Composable
-private fun AlbumStage(fuse: Float) {
+private fun AlbumStage() {
+    // 颈部最粗能到多少
+    val fuse = 28f
     val cs = MochiTheme.colorScheme
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -140,7 +124,7 @@ private fun AlbumStage(fuse: Float) {
         val px = { v: Float -> with(density) { v.dp.toPx() } }
         val a = Rect(Offset((w - px(200f)) / 2f, h - px(80f)), Size(px(200f), px(56f)))
         val b0 = Rect(Offset((w - px(150f)) / 2f, px(36f)), Size(px(150f), px(150f)))
-        // 照片当前的矩形：拖动位移 → 被吸进去时往胶囊中心收成一个圆 → 新的一张从原处按比例弹出
+        // 照片当前矩形：拖动位移，吸入时收向胶囊中心成圆，新照片按比例弹出
         val k = absorb.value
         val dragged = b0.translate(drag.value)
         val sinkSide = a.height
@@ -184,7 +168,6 @@ private fun AlbumStage(fuse: Float) {
                         }
                         scope.launch { glow.release() }
                         if (latestNear > 0.5f) {
-                            // 连上了：顺着颈部吸进相簿，张数加一，下一张从原处弹出来
                             scope.launch {
                                 absorb.animateTo(1f, MochiMotions.responseSpring(0.32f, 1f))
                                 haptics.confirm()
@@ -196,7 +179,6 @@ private fun AlbumStage(fuse: Float) {
                                 appear.animateTo(1f, MochiMotions.responseSpring(0.4f, 0.62f))
                             }
                         } else {
-                            // 没连上：弹回原位
                             scope.launch { drag.animateTo(Offset.Zero, mochiSpring(400, bounce = 0.25)) }
                         }
                     }
@@ -204,7 +186,6 @@ private fun AlbumStage(fuse: Float) {
                 .drawBehind { drawMochiMetaball(renderer, frame, colors, shadow, smoothing = 1f, glow = glow) },
         )
         val toDp = { v: Float -> with(density) { v.toDp() } }
-        // 相簿胶囊：图标 + 张数（计数器滚动）
         Box(
             Modifier
                 .offset { IntOffset(a.left.roundToInt(), a.top.roundToInt()) }
@@ -212,7 +193,7 @@ private fun AlbumStage(fuse: Float) {
             contentAlignment = Alignment.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Glyph(Icons.GRID, cs.onSecondaryContainer, size = 20, filled = true)
+                Glyph(DemoIcons.GRID, cs.onSecondaryContainer, size = 20, filled = true)
                 MochiCounterText(
                     count.toLong(),
                     style = MochiTheme.textStyles.labelLarge,
@@ -221,7 +202,6 @@ private fun AlbumStage(fuse: Float) {
                 )
             }
         }
-        // 照片：内容按照片当前的矩形摆放，被吸进去时先淡掉、弹出时跟着长出来
         Column(
             Modifier
                 .offset { IntOffset(b0.left.roundToInt(), b0.top.roundToInt()) }

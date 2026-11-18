@@ -32,7 +32,7 @@ import androidx.compose.ui.text.TextStyle
  * 最外层的 MochiTheme 还会让状态栏、导航栏图标跟着明暗走（浅色主题深色图标），应用不用自己写
  * `WindowCompat.getInsetsController(…).isAppearanceLightStatusBars`。页面要自己控制时传 [systemBarAppearance] = false。
  *
- * [materials] 决定浮在内容上的栏用纯色还是液态玻璃、滚动边缘要不要渐进模糊，和配色无关：任何主题都能打开。
+ * [materials] 决定浮在内容上的栏用纯色还是液态玻璃（MochiGlass）、顶栏下面要不要模糊，和配色无关：任何主题都能打开。
  * 玻璃、模糊的配方在 mochi-ios 里（`iosMaterials(isDark, glass = …, blur = …)`），默认纯色（[MochiMaterials] 的默认值）。
  * [shadows] 是阴影档位表（[MochiShadows]），组件只选档位，换一套就整体换阴影风格。
  * 组件都从主题读这些，应用里不需要按主题、按开关分别写组件。

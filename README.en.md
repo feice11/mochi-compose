@@ -4,7 +4,7 @@
 
 # Mochi Compose
 
-A soft, springy Jetpack Compose component library that follows your finger. Color and type come from MD3 Expressive, interaction and motion are modeled on iOS 26, and every shape uses G2 continuous corners.
+A soft, bouncy, finger-following component library for Jetpack Compose. Colors and type come from MD3 Expressive, interaction and motion follow iOS 26, and every shape uses G2 continuous corners.
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.feice11/mochi-compose)](https://central.sonatype.com/artifact/io.github.feice11/mochi-compose)
 [![Build](https://github.com/feice11/mochi-compose/actions/workflows/build.yml/badge.svg)](https://github.com/feice11/mochi-compose/actions/workflows/build.yml)
@@ -12,7 +12,7 @@ A soft, springy Jetpack Compose component library that follows your finger. Colo
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-[简体中文](README.md) · English · [Download the demo APK](https://github.com/feice11/mochi-compose/releases/latest)
+[简体中文](README.md) · English · [Download the demo APK](https://github.com/feice11/mochi-compose/releases/latest) · [Changelog](CHANGELOG.md)
 
 <a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-en.svg" alt="Sponsor Mochi on afdian" height="56"></a>
 
@@ -20,7 +20,7 @@ A soft, springy Jetpack Compose component library that follows your finger. Colo
 
 ## What it looks like
 
-These are screen recordings of the demo app on an emulator. Close-ups play at half speed.
+Screen recordings of the demo app on an emulator. Close-ups play at half speed.
 
 ### MD3 matcha green
 
@@ -32,7 +32,7 @@ These are screen recordings of the demo app on an emulator. Close-ups play at ha
   </tr>
   <tr>
     <td align="center"><img src="docs/assets/preview/menu.gif" width="260"><br><sub>Menu grows out of its button (0.5×)</sub></td>
-    <td align="center"><img src="docs/assets/preview/theme.gif" width="260"><br><sub>Mochi / Nothing appearances: colors blend, fonts swap through blur (0.5×)</sub></td>
+    <td align="center"><img src="docs/assets/preview/theme.gif" width="260"><br><sub>Mochi / Nothing appearance switching (0.5×)</sub></td>
     <td align="center"><img src="docs/assets/preview/switch.gif" width="200"><br><sub>Switch thumb grows and follows a drag (0.5×)</sub></td>
   </tr>
   <tr>
@@ -49,7 +49,7 @@ These are screen recordings of the demo app on an emulator. Close-ups play at ha
 
 ### Nothing appearance
 
-The Nothing appearance keeps the layout, icons and motion but changes colors and fonts: dot-matrix digits, red accents and serif titles. Liquid glass (a long-term beta) and blur are separate switches available in all three appearances.
+Red accents and a control palette of its own. All three appearances share the default font families and weights; liquid glass and top-bar blur can be turned on separately in any of them.
 
 <table>
   <tr>
@@ -69,35 +69,38 @@ The Nothing appearance keeps the layout, icons and motion but changes colors and
   </tr>
 </table>
 
-There are 20-odd components:
+## What's inside
 
-- **Menus and overlays:** dropdown, sheet, dialog, toast, context menu, popover.
-- **Controls:** button, switch, slider, stepper, segmented control, text input, wheel and date pickers, calendar, color picker.
-- **Layout and navigation:** tab bar, grouped list, large title and search, sidebar, carousel, pull to refresh, badges, toolbar.
+| Area | Contents |
+|---|---|
+| Controls | [Buttons and button groups](docs/components/button.md) · [Chips](docs/components/chip.md) · [Segmented control](docs/components/segmented.md) · [Switch](docs/components/switch.md) · [Slider](docs/components/slider.md) · [Intensity slider](docs/components/intensity-slider.md) · [Stepper](docs/components/stepper.md) · [Text input](docs/components/textfield.md) |
+| Menus and overlays | [Dropdown](docs/components/dropdown.md) · [Context menu](docs/components/context-menu.md) · [Popover and confirmation](docs/components/popover.md) · [Dialog](docs/components/dialog.md) · [Toast](docs/components/toast.md) · [Sheet](docs/components/sheet.md) |
+| Lists | [Grouped list, editing, index bar](docs/components/list.md) · [Pull to refresh and empty state](docs/components/refresh.md) · [Toolbars and hold to confirm](docs/components/toolbar.md) |
+| Pickers | [Wheels, time and date](docs/components/picker.md) · [Calendar](docs/components/calendar.md) · [Color picker](docs/components/color-picker.md) · [Selection cards and miniatures](docs/components/select-frame.md) |
+| Display | [Carousel and page control](docs/components/pager.md) · [Badges, avatars and gauges](docs/components/badge.md) · [Icons (all of Ionicons)](docs/components/icons.md) |
+| Navigation | [Large title and search](docs/components/navbar.md) · [Tab bar](docs/components/tabbar.md) · [Sidebar](docs/components/sidebar.md) · [Navigation and page transitions](docs/guide/navigation.md) (push, one-shot transitions, shared toolbar, predictive back) |
+| Effects | [Press glow, deformation, metaballs](docs/guide/effects.md) · [Content transitions and streaming text](docs/guide/content-transitions.md) · [Overscroll](docs/guide/overscroll.md) · [Haptics](docs/guide/haptics.md) · [HDR highlights (experimental)](docs/guide/hdr.md) |
+| Theme and materials | [Theme, shadows, motion tiers](docs/guide/theme.md) · [Liquid glass and scroll-edge blur](docs/guide/theme.md#materials-liquid-glass-and-blur) · [iOS appearance](docs/guide/ios-theme.md) · [Nothing appearance](docs/guide/nothing-theme.md) |
 
-There is also page navigation (push, card expansion, shared toolbar buttons, predictive back). The press glow, rubber banding and metaball effects can be reused in your own components.
+No dependency on material3. All the effects can be reused in your own components.
 
-The library does not depend on material3. See [Nothing appearance](docs/guide/nothing-theme.md) for how to use that look.
+## Installation
 
-## Install
-
-Published on Maven Central, no extra repository needed (see the badge for the version):
+Published on Maven Central, so no extra repository is needed. See the badge above for the version:
 
 ```kotlin
 implementation("io.github.feice11:mochi-compose:<version>")
 ```
 
-Icons and appearances are separate modules; add what you use (they all depend on mochi-compose):
+Icons and appearances are separate modules; add what you need (they all depend on mochi-compose):
 
 ```kotlin
-implementation("io.github.feice11:mochi-icons:<version>")   // full Ionicons set, see Icons
+implementation("io.github.feice11:mochi-icons:<version>")   // all of Ionicons
 implementation("io.github.feice11:mochi-ios:<version>")     // iOS appearance and glass materials
 implementation("io.github.feice11:mochi-nothing:<version>") // Nothing appearance
 ```
 
-Old 0.1.x versions remain on JitPack (`com.github.feice11:mochi-compose`, with the `maven("https://jitpack.io")` repository).
-
-Requires compileSdk 36+ and Kotlin 2.3+ (Capsule depends on Compose 1.10).
+Requires compileSdk 36+ and Kotlin 2.3+ (Capsule depends on Compose 1.10). Old 0.1.x versions remain on JitPack (`com.github.feice11:mochi-compose`, with `maven("https://jitpack.io")`).
 
 ## Usage
 
@@ -121,35 +124,36 @@ setContent {
 }
 ```
 
-For a whole app, the quickest start is to copy [MochiAppStarter.kt](example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt). It is a runnable three-page skeleton (home cards, list, detail) with theme, navigation and the shared toolbar already wired up. See the [integration guide](docs/guide/application-integration.md#3-copy-the-complete-starter) to register it.
+Liquid glass is a material swap at the root; components read it themselves, so pages need no branches:
 
-Before building an app with the library (including with an AI), read the [application integration requirements](docs/guide/application-integration.md) and the [design principles](docs/guide/design-principles.md). Several effects only work when wired up as described. For example, toolbar buttons on push pages need a `navId` to be shared across the transition. AI agents can start from [llms.txt](llms.txt).
+```kotlin
+MochiTheme(colors = colors, materials = mochiGlassMaterials()) { … }
+```
 
-## Docs
+For a whole app, the quickest start is to copy [MochiAppStarter.kt](example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt): a runnable three-page skeleton (home cards, list, detail) with theme, navigation and the shared toolbar already wired up. The [integration guide](docs/guide/application-integration.md#3-copy-the-complete-starter) shows how to register it.
 
-**Components**
-[Dropdown](docs/components/dropdown.md) · [Tab bar](docs/components/tabbar.md) · [Button](docs/components/button.md) · [Switch](docs/components/switch.md) · [Slider](docs/components/slider.md) · [Intensity slider](docs/components/intensity-slider.md) · [Stepper](docs/components/stepper.md) · [List](docs/components/list.md) · [Sheet](docs/components/sheet.md) · [Segmented control](docs/components/segmented.md) · [Dialog](docs/components/dialog.md) · [Text input](docs/components/textfield.md) · [Toast](docs/components/toast.md) · [Context menu](docs/components/context-menu.md) · [Large title and search](docs/components/navbar.md) · [Sidebar](docs/components/sidebar.md) · [Wheels, time and date](docs/components/picker.md) · [Calendar](docs/components/calendar.md) · [Color picker](docs/components/color-picker.md) · [Popover and confirmation](docs/components/popover.md) · [Carousel and page control](docs/components/pager.md) · [Pull to refresh and empty state](docs/components/refresh.md) · [Badges, avatars and gauges](docs/components/badge.md) · [Toolbars and hold to confirm](docs/components/toolbar.md) · [Chips](docs/components/chip.md) · [Selection cards and miniatures](docs/components/select-frame.md) · [Icons](docs/components/icons.md)
+Before building an app with the library (including with an AI), read the [application integration requirements](docs/guide/application-integration.md) and the [design principles](docs/guide/design-principles.md). Several effects only work when wired up as described; for example, toolbar buttons on push pages need a `navId` to be shared across the transition. AI agents can start from [llms.txt](llms.txt).
 
-**Guides**
-[App integration](docs/guide/application-integration.md) · [Theme](docs/guide/theme.md) · [Effects](docs/guide/effects.md) · [Content transitions](docs/guide/content-transitions.md) · [Navigation](docs/guide/navigation.md) · [Overscroll](docs/guide/overscroll.md) · [Haptics](docs/guide/haptics.md) · [HDR highlights (experimental)](docs/guide/hdr.md) · [Nothing appearance](docs/guide/nothing-theme.md) · [iOS appearance and glass materials (long-term beta)](docs/guide/ios-theme.md) · [Compatibility](docs/guide/compatibility.md)
+## Stability
 
-**Working on the library**
-[Design philosophy](docs/guide/philosophy.md) · [Design principles](docs/guide/design-principles.md) · [Adding a component](docs/guide/adding-components.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+- Still 0.x: minor releases may break compatibility. Every such change is marked **Breaking** in the [changelog](CHANGELOG.md) with what to change.
+- Liquid glass (`MochiGlass` and the glass materials) is Beta: its look, performance and API may change in minor releases. Blur is not affected.
+- The public API of each library module is recorded in `<module>/api/*.api` and checked by CI, so signature changes never ship unnoticed.
 
 ## Compatibility
 
-Android only, minSdk 23. On older versions, features degrade instead of breaking:
+Android only, minSdk 23. On older versions features degrade instead of breaking:
 
-- **Metaball, shadows and color blending** need API 33 (`RuntimeShader`). Below that they draw as two solid rounded shapes; gestures and other animations stay the same.
-- **Blur** needs Android 12. Below that you get fades and scaling only.
-- **System colors** need Android 12. Older systems generate the palette from your seed color.
-- **With animations turned off** in developer options, jelly, metaball and rubber-band effects turn off too.
+- **Liquid glass** needs Android 13 for the full effect. Android 12 gets the system blur with the face matrix; older versions draw a solid color.
+- **Metaballs, shadows and color blending** need API 33 (`RuntimeShader`). Below that they draw as two solid rounded shapes; gestures and other animations stay the same.
+- **Blur and system colors** need Android 12. Below that you get fades and scaling, and the palette is generated from your seed color.
+- **With animations turned off** in developer options, jelly, metaball and rubber-band effects turn off too; apps can also turn them off with `LocalMochiReduceMotion`.
 
 See [Compatibility](docs/guide/compatibility.md) for details.
 
 ## Building
 
-You need JDK 17 and Android SDK 36.
+You need JDK 17 and Android SDK 36; the screenshot tests need JDK 21 (Robolectric's SDK 35 runtime requires it).
 
 ```bash
 ./gradlew :mochi-compose:assembleRelease
@@ -159,14 +163,17 @@ You need JDK 17 and Android SDK 36.
 ./gradlew :example:assembleRelease
 ```
 
-Run `./gradlew spotlessApply` before committing; CI checks formatting. Without signing configured, the demo app is signed with the debug key and installs directly.
+```bash
+./gradlew spotlessApply apiCheck :mochi-compose:verifyRoborazziDebug
+```
+
+The last one is what to pass before committing (formatting, public API, screenshot comparison); CI runs the same checks. Without signing configured, the demo app is signed with the debug key and installs directly. Please read [Contributing](CONTRIBUTING.md) before changing the library.
 
 ## Sponsors
 
 Mochi is a one-person side project. If it helps you, you can support it on [afdian](https://afdian.com/a/feice); the money goes into test devices and more polish. These people have sponsored it (updated daily):
 
 <a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-en.svg" alt="Sponsor Mochi on afdian" height="56"></a>
-
 
 <!-- sponsors:start -->
 <table>
@@ -189,6 +196,7 @@ Mochi is a one-person side project. If it helps you, you can support it on [afdi
 ## Credits
 
 - Shapes: [Kyant0/Capsule](https://github.com/Kyant0/Capsule)
+- The liquid glass render pipeline is ported from [liquid.refract.im](https://liquid.refract.im/launch/)
 - The counter's rolling-wheel animation: [Bear](https://github.com/mif9499)
 - Engineering conventions: [miuix](https://github.com/compose-miuix-ui/miuix)
 - Icons in `mochi-icons` and the demo app: [Ionicons](https://ionic.io/ionicons) (MIT)

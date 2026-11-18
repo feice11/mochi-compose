@@ -23,12 +23,11 @@ import ui.feice.mochi.basic.MochiContextMenu
 import ui.feice.mochi.basic.MochiItem
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
-import ui.feice.mochi.demo.common.Code
 import ui.feice.mochi.demo.common.DemoIcon
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
@@ -37,24 +36,22 @@ import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.emphasized
 
-/**
- * 长按预览：长按卡片，卡片浮起、背景变暗，下面弹出操作菜单；不松手直接滑到菜单项上松手也能选。
- */
+/** 长按预览：长按卡片弹出操作菜单 */
 @Composable
 fun ContextMenuPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     var last by remember { mutableStateOf<String?>(null) }
     val items = remember {
         listOf(
-            MochiItem("拷贝", icon = { Glyph(Icons.NOTE, it) }),
-            MochiItem("分享", icon = { Glyph(Icons.SHARE, it) }),
-            MochiItem("收藏", icon = { Glyph(Icons.HEART, it) }),
-            MochiItem("删除", destructive = true, icon = { Glyph(Icons.TRASH, it) }),
+            MochiItem("拷贝", icon = { Glyph(DemoIcons.NOTE, it) }),
+            MochiItem("分享", icon = { Glyph(DemoIcons.SHARE, it) }),
+            MochiItem("收藏", icon = { Glyph(DemoIcons.HEART, it) }),
+            MochiItem("删除", destructive = true, icon = { Glyph(DemoIcons.TRASH, it) }),
         )
     }
     val shape = MochiRoundedRectangle(20.dp)
     DemoPage(entry, modifier) {
         demoItem {
-            DemoSection("试一试", footer = last ?: "长按一张卡片。按住时卡片先缩一点，按满时长才弹出菜单。", container = false) {
+            DemoSection("试一试", footer = last ?: "长按一张卡片，不松手也能滑到菜单项上选。", container = false) {
                 Photos.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         row.forEach { photo ->
@@ -69,22 +66,16 @@ fun ContextMenuPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 }
             }
         }
-        demoItem {
-            DemoSection("用法") {
-                Code("MochiContextMenu(\n    items = items,\n    onItemClick = { … },\n) {\n    Card(…)\n}")
-            }
-        }
     }
 }
 
 private class Photo(val title: String, val tone: Tone, val icon: DemoIcon)
 
-// 纯色卡片：颜色取主题的几种容器色，不用和主题打架的渐变
 private val Photos = listOf(
-    Photo("海边", Tone.Primary, Icons.SUN),
-    Photo("日落", Tone.Tertiary, Icons.STAR),
-    Photo("森林", Tone.Secondary, Icons.PIN),
-    Photo("夜空", Tone.Neutral, Icons.MOON),
+    Photo("海边", Tone.Primary, DemoIcons.SUN),
+    Photo("日落", Tone.Tertiary, DemoIcons.STAR),
+    Photo("森林", Tone.Secondary, DemoIcons.PIN),
+    Photo("夜空", Tone.Neutral, DemoIcons.MOON),
 )
 
 @Composable

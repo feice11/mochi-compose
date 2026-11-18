@@ -66,16 +66,16 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
      *   不给就是 iOS 的侧推转场（新页从右边推进来，下层页往左退一点）
      */
     public fun push(route: String, from: String? = null) {
+        pendingPops = 0
         // 正在退出的页、又要进同一页（同一个来源）：直接让它掉头，从当前位置和速度连续地回来，不新开一页
-        val leaving = entries.lastOrNull()?.takeIf { it.closing }
-        if (leaving != null && leaving.source == from && leaving.route == route) {
+        val leaving = entries.asReversed().takeWhile { it.closing }.firstOrNull { it.source == from && it.route == route }
+        if (leaving != null) {
             leaving.closing = false
             return
         }
         // 侧推的页正在退出、又推入别的页：两个转场同时进行（退出的那页接着滑走，新页从右边进来），不瞬间删掉；
         // 涉及「从来源打开」的页没法同时变形，正在关闭的页直接结束
         if (from != null || entries.any { it.closing && it.source != null }) entries.removeAll { it.closing }
-        pendingPops = 0
         entries += MochiNavEntry(nextId++, route, from, opened = false)
     }
 
@@ -114,11 +114,25 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
     internal fun coverOf(entry: MochiNavEntry): Float {
         val above = above(entry) ?: return 0f
         return if (above.source == null) {
-            slideProgress(above).coerceIn(0f, 1f)
+            slideCoverOf(entry)
         } else {
             // 拖动返回时一边拖一边露出来（松手就回到这一页）
             (above.progress.value.coerceIn(0f, 1f) * (1f - CoverBackReveal * above.back.value)).coerceIn(0f, 1f)
         }
+    }
+
+    /** Keep the exposed page's offset continuous when an outgoing slide is removed. */
+    internal fun slideCoverOf(entry: MochiNavEntry): Float {
+        val index = entries.indexOf(entry)
+        if (index < 0) return 0f
+        var cover = 0f
+        for (i in index + 1 until entries.size) {
+            val page = entries[i]
+            if (page.source != null) break
+            cover = maxOf(cover, slideProgress(page))
+            if (cover >= 1f) return 1f
+        }
+        return cover
     }
 
     /** 栈里这一页上面那一页 */
@@ -128,12 +142,19 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
     }
 
     /**
-     * 返回到栈里第 [index] 页（0 = 根，按 [backStack] 的顺序）。中间的页直接移出，只有最上面那页带转场退出。
+     * 返回到栈里第 [index] 页（0 = 根，按 [backStack] 的顺序）。侧推页面从各自当前位置一起退出。
      * 返回 false：index 不在栈里，或者已经在那一页
      */
     public fun popTo(index: Int): Boolean {
+        val open = entries.filter { !it.closing }
+        if (index < 0 || index >= open.lastIndex) return false
+        pendingPops = 0
+        val exiting = entries.subList(entries.indexOf(open[index]) + 1, entries.size)
+        if (exiting.all { it.source == null }) {
+            exiting.forEach { it.closing = true }
+            return true
+        }
         entries.removeAll { it.closing }
-        if (index < 0 || index >= entries.size - 1) return false
         val top = entries.last()
         // 中间的页移走；下面那页换成目标页时，它的状态由 SaveableStateHolder 恢复
         while (entries.size > index + 2) entries.removeAt(index + 1)
@@ -150,10 +171,9 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
         return if (i > 0) entries[i - 1] else null
     }
 
-    // —— 来源与共享元素登记（布局 / 绘制时读，不需要触发重组）——
+    // —— 来源登记（布局 / 绘制时读，不需要触发重组）——
 
     private val sources = HashMap<String, SourceHandle>()
-    private val elements = HashMap<String, MutableList<SharedElementHandle>>()
 
     internal fun registerSource(h: SourceHandle) {
         sources[h.key] = h
@@ -171,21 +191,39 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
      */
     internal fun isSourceActive(key: String): Boolean = entries.any { it.source == key }
 
-    internal fun registerElement(h: SharedElementHandle) {
-        elements.getOrPut(h.key) { ArrayList(2) } += h
+    // —— 共享元素（mochiNavSharedElement）：从来源打开的转场里，来源页和目标页同 key 的元素由宿主画成一个飞过去的元素 ——
+
+    private val shared = ArrayList<SharedHandle>()
+
+    internal fun registerShared(h: SharedHandle) {
+        shared += h
     }
 
-    internal fun unregisterElement(h: SharedElementHandle) {
-        val list = elements[h.key] ?: return
-        list.remove(h)
-        if (list.isEmpty()) elements.remove(h.key)
+    internal fun unregisterShared(h: SharedHandle) {
+        shared -= h
     }
 
-    internal fun element(key: String, entry: MochiNavEntry?): SharedElementHandle? =
-        if (entry == null) null else elements[key]?.firstOrNull { it.entry === entry && it.shown() }
+    /** [entry] 这一页里登记的共享元素 */
+    internal fun sharedOf(entry: MochiNavEntry): List<SharedHandle> = shared.filter { it.entry === entry }
 
-    internal fun elementsOf(entry: MochiNavEntry): List<SharedElementHandle> =
-        elements.values.flatMap { list -> list.filter { it.entry === entry && it.shown() } }
+    /** [entry] 这一页里 key 为 [key] 的共享元素 */
+    internal fun sharedFor(key: String, entry: MochiNavEntry): SharedHandle? = shared.firstOrNull { it.key == key && it.entry === entry }
+
+    /**
+     * 这个共享元素此刻在飞（原地的要藏起来）：栈顶页是从来源打开的、正在转场，元素在栈顶页或它下面那页，
+     * 另一页也有同 key 的元素。读栈和 inTransition（都是可观察状态），转场开始 / 结束时读者会重画
+     */
+    internal fun isSharedActive(h: SharedHandle): Boolean {
+        val top = entries.lastOrNull() ?: return false
+        if (top.source == null || !top.inTransition) return false
+        val under = under(top) ?: return false
+        val other = when (h.entry) {
+            top -> under
+            under -> top
+            else -> return false
+        }
+        return shared.any { it !== h && it.key == h.key && it.entry === other }
+    }
 
     // —— 遮挡物（顶栏、底栏、滚动边缘渐隐，见 mochiNavOccluder）：从来源打开时先盖在变形的容器上再淡掉 ——
 
@@ -297,13 +335,6 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
         return slideChain().any { it === e }
     }
 
-    /** 页面里的共享元素在卡片那边有没有同 key 的另一半（有才由转场接管绘制） */
-    internal fun hasCounterpart(h: SharedElementHandle): Boolean {
-        val e = h.entry ?: return false
-        if (e.source == null) return false
-        return element(h.key, under(e)) != null
-    }
-
     public companion object {
         /** 当前所在 [MochiNavHost] 的导航器，不在里面时是 null。页面里返回：`MochiNavigator.current?.pop()` */
         public val current: MochiNavigator?
@@ -370,8 +401,42 @@ internal class MochiNavEntry(val id: Int, val route: String, val source: String?
     /** 返回手势进行中（从第一个事件起，进度还是 0 时下层页就要露出来） */
     var backActive by mutableStateOf(false)
 
-    /** 已提交返回，正在缩回去 */
-    var closing by mutableStateOf(false)
+    /**
+     * 已提交返回，正在缩回去。
+     * 换方向那一刻把 [progress] / [move] 的速度记下来：MochiNavHost 换方向靠重启 LaunchedEffect，
+     * 旧协程被取消时 Animatable 会清零速度（endAnimation），新动画读不到当前速度，要用这里记下的接着走
+     */
+    var closing: Boolean
+        get() = closingState
+        set(value) {
+            if (value != closingState) {
+                turnVelocity = progress.velocity
+                turnMoveVelocity = move.velocity
+            }
+            closingState = value
+        }
+    private var closingState by mutableStateOf(false)
+
+    /** [closing] 变化那一刻 [progress] 的速度（进度 / 秒），掉头的动画从这里接着走，用完清零 */
+    var turnVelocity = 0f
+
+    /** [closing] 变化那一刻 [move] 的速度 */
+    var turnMoveVelocity = 0f
+
+    /**
+     * 从来源打开的页：交叉淡化的时钟（0 → 1，按时间走，[ui.feice.mochi.anim.MochiMotionTokens.Fade]）。
+     * 透明度不跟弹簧进度：关闭方向的弹簧后半段很慢，跟进度的话淡化会拖到几何几乎不动的尾巴里。
+     * 刚打开时停在 1，透明度照旧只看进度；关闭、关闭途中掉头时从 0 走到 1，见 NavGeometry.fadeOf
+     */
+    val fade = Animatable(1f)
+
+    /** 淡化处在关闭方向（页面被来源底色盖住、卡片画面淡回来）；false = 打开方向（跟进度） */
+    var fadeClosing = false
+
+    /** 换方向那一刻画着的卡片画面 / 来源底色 / 下层栏副本的透明度，新方向从这里接，不跳 */
+    var fadeFromCard = 0f
+    var fadeFromCover = 0f
+    var fadeFromOccluder = 0f
 
     /** 打开动画已经开始过（第一次打开前要先等页面画完第一帧） */
     var started = false
@@ -389,6 +454,7 @@ internal class MochiNavEntry(val id: Int, val route: String, val source: String?
     var contentCoords: LayoutCoordinates? = null
 
     /** 这一页变换后的整页画面（屏幕坐标系）和它的坐标：下层页的玻璃在转场中透过它看到这一页（见 rememberMochiNavCoverBackdrop） */
+    var coverReaderCount by mutableIntStateOf(0)
     var coverLayer: GraphicsLayer? = null
     var coverCoords: LayoutCoordinates? = null
 
@@ -430,15 +496,6 @@ internal class OccluderHandle {
     var shown: () -> Boolean = AlwaysShown
     var coords: LayoutCoordinates? = null
     var layer: GraphicsLayer? = null
-}
-
-/** 共享元素的登记信息：位置 + 录下来的画面（转场时由 MochiNavHost 画到飞行中的位置） */
-internal class SharedElementHandle(var key: String) {
-    var entry: MochiNavEntry? = null
-    var shown: () -> Boolean = AlwaysShown
-    var coords: LayoutCoordinates? = null
-    var layer: GraphicsLayer? = null
-    var size: Size = Size.Zero
 }
 
 /**

@@ -58,9 +58,11 @@ otherwise report "not applicable" with a reason. Explicit user instructions prev
 
 - Theme once at the root: colors, LocalMochiControlPalette and materials. Pages contain no
   appearance or glass branches and pass no per-appearance colors to components.
-- Liquid glass and scroll-edge blur are two independent switches available in every appearance:
-  MochiTheme(materials = iosMaterials(dark, glass = …, blur = …, themeAccent = true)) (mochi-ios;
-  themeAccent = false only for iOS colors). Glass tab bars support every layout (icon only,
+- Liquid glass (MochiGlass: style Regular / Thick (menus and alerts default to Thick), optional tint, adaptive light/dark; parameters
+  follow the glass size, ported from the liquid.refract.im WebGL glass) and scroll-edge blur are two
+  independent switches available in every appearance: MochiTheme(materials = mochiGlassMaterials(…))
+  or iosMaterials(glass = …, blur = …) (mochi-ios). MochiGlassGroup draws pieces that merge, grow out
+  of each other (bloom) and press with a glow. Glass tab bars support every layout (icon only,
   selected label, collapse, search, accessory). Ask before turning glass on: it costs power.
 - Optional iOS appearance (mochi-ios) adds system colors and glass bars. Glass needs a
   backdrop source: content gets Modifier.mochiBackdropSource, the bar is a sibling drawn

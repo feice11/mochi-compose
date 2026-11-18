@@ -1,6 +1,8 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
+@file:Suppress("ktlint:compose:compositionlocal-allowlist") // Dialog motion is shared with fields in the content slot.
+
 package ui.feice.mochi.basic
 
 import androidx.activity.BackEventCompat
@@ -16,10 +18,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -28,6 +35,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,16 +44,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Dp
@@ -54,13 +68,14 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
-import ui.feice.mochi.effect.content.mochiAnimateHeight
-import ui.feice.mochi.effect.elastic.mochiPressDeform
+import ui.feice.mochi.effect.content.mochiTrackAnimatedHeight
+import ui.feice.mochi.effect.glass.GlassMotionWhile
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.MochiGlassContent
 import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.overlay.InWindowOverlay
@@ -70,6 +85,8 @@ import ui.feice.mochi.theme.LocalMochiIconDraw
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.lerp
+import ui.feice.mochi.utils.rememberMochiHaptics
+import ui.feice.mochi.utils.smoothstep
 
 /** 对话框按钮的角色（决定配色） */
 public enum class MochiDialogActionRole {
@@ -147,8 +164,8 @@ public object MochiDialogDefaults {
  * - 出现时从稍大一点缩放到位、淡入，后面的页面压暗；消失时淡出、略微缩小
  * - 圆角卡片，标题和说明靠左；按钮是胶囊：两个时并排，其余竖排；按钮离卡片边 [MochiDialogDefaults.ButtonInset]，
  *   卡片圆角 = 按钮半高 + 它，按钮和卡片同心
- * - 和标签栏一样的高光 / 形变：按钮按下放大、发光、跟手，并排的两个按钮之间拉出融球颈；
- *   整张卡片被手指带着轻微挪动，边缘接到按钮的环境光
+ * - 底部按钮滑选：按住任一按钮后手指在按钮间滑动，滑到哪个亮哪个（每换一个轻震），松手就是选它；滑出按钮区松手不选。
+ *   按钮只有按下的轻微放大和指尖高光，卡片和按钮都不跟手形变
  * - 预见式返回：返回手势拖动时卡片跟着缩小、朝手势那侧偏一点，后面的压暗变浅；松手关闭，取消则弹回
  *
  * 默认点外面不关闭（iOS 的警告框也是这样），返回键 / 返回手势关闭；[dismissOnBack] 为 false 时返回手势只让卡片
@@ -159,6 +176,7 @@ public object MochiDialogDefaults {
  * （通过 [LocalMochiIconDraw]），所有带图标的对话框出场一致，调用方不用自己写动画。警告类提示用 "warning" 之类的描边图标。
  */
 @Suppress("ktlint:compose:modifier-not-used-at-root")
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 public fun MochiDialog(
     visible: Boolean,
@@ -204,12 +222,12 @@ public fun MochiDialog(
                 delay(IconDrawDelayMillis)
                 iconDraw.animateTo(1f, tween(IconDrawMillis, easing = LinearEasing))
             }
-            presence.animateTo(1f, MochiMotions.responseSpring(0.36f, 0.78f))
+            presence.animateTo(1f, MochiMotionTokens.Pop)
         } else if (composed) {
             // 对话框里有输入框时，关掉的同时收起键盘（iOS）
             keyboard?.hide()
             closing = true
-            presence.animateTo(0f, MochiMotions.responseSpring(0.22f, 1f))
+            presence.animateTo(0f, MochiMotionTokens.Settle)
             composed = false
             back.snapTo(0f)
         }
@@ -218,7 +236,21 @@ public fun MochiDialog(
 
     InWindowOverlay(leaving = { closing || !currentVisible }) {
         val scope = rememberCoroutineScope()
+        var backActive by remember { mutableStateOf(false) }
+        var resizing by remember { mutableStateOf(false) }
+        val setResizing: (Boolean) -> Unit = remember { { resizing = it } }
+        val density = LocalDensity.current
+        val ime = WindowInsets.ime
+        val imeTarget = WindowInsets.imeAnimationTarget
+        val caretVisible = remember(density, ime, imeTarget) {
+            derivedStateOf {
+                currentVisible && presence.value == 1f && !presence.isRunning &&
+                    !backActive && back.value == 0f && !resizing &&
+                    ime.getBottom(density) == imeTarget.getBottom(density)
+            }
+        }
         PredictiveBackHandler(enabled = visible) { events ->
+            backActive = true
             try {
                 events.collect { e ->
                     edge = e.swipeEdge
@@ -227,11 +259,13 @@ public fun MochiDialog(
                 if (dismissOnBack) {
                     currentOnDismiss()
                 } else {
-                    scope.launch { back.animateTo(0f, MochiMotions.responseSpring(0.3f, 0.8f)) }
+                    scope.launch { back.animateTo(0f, MochiMotionTokens.Control) }
                 }
             } catch (c: CancellationException) {
-                scope.launch { back.animateTo(0f, MochiMotions.responseSpring(0.3f, 0.8f)) }
+                scope.launch { back.animateTo(0f, MochiMotionTokens.Control) }
                 throw c
+            } finally {
+                backActive = false
             }
         }
 
@@ -269,6 +303,24 @@ public fun MochiDialog(
             MochiConcentricContainer(corner, inset) {
                 // 主题有警告框玻璃（alertGlass）且浮层底下有页面录制时，卡片画成玻璃；否则纯色
                 val glass = rememberGlassFill(GlassRole.Alert)
+                // 弹出 / 收起途中按运动档画玻璃（同菜单开合、页面转场），停住后全分辨率重画一次
+                if (glass != null) GlassMotionWhile(presence.isRunning)
+                // 玻璃卡片上的字照网页的 label 色（浅玻璃黑 86%、深玻璃白 94%）；调用方自己给了配色就不动
+                val defaults = MochiDialogDefaults.colors()
+                val colors = if (glass != null && colors == defaults) {
+                    val label = MochiGlassContent.label(dark)
+                    remember(colors, label, dark) {
+                        // 普通按钮在玻璃卡片上用纯色半透明（不叠第二层玻璃）；强调按钮仍是染色玻璃
+                        colors.copy(
+                            title = label,
+                            message = label,
+                            buttonContent = label,
+                            button = label.copy(alpha = if (dark) 0.14f else 0.08f),
+                        )
+                    }
+                } else {
+                    colors
+                }
                 Box(
                     modifier
                         .padding(horizontal = 36.dp)
@@ -281,8 +333,7 @@ public fun MochiDialog(
                             card[2] = b.right
                             card[3] = b.bottom
                         }
-                        // 跟手形变放在最外层：卡片连同投影、文字、按钮整个一起被手指带着挪动、朝手指那侧略微拉长
-                        .mochiPressDeform(scale = 1f, follow = 6.dp)
+                        // 卡片不跟手形变：底部按钮是滑选，手指在按钮间滑动时卡片保持不动
                         .graphicsLayer {
                             val p = presence.value
                             val b = back.value
@@ -291,7 +342,9 @@ public fun MochiDialog(
                             val s = enter * (1f - 0.1f * b)
                             scaleX = s
                             scaleY = s
-                            alpha = p.coerceIn(0f, 1f)
+                            // 透明度只取进度的一段，不跟弹簧走：出现时前 35% 就显出来，消失时前段就退掉
+                            // （编排规则：透明度独立且短）
+                            alpha = if (closing) smoothstep(0.3f, 1f, p) else smoothstep(0f, 0.35f, p)
                             val dir = if (edge == BackEventCompat.EDGE_RIGHT) -1f else 1f
                             translationX = dir * 12.dp.toPx() * b
                             transformOrigin = TransformOrigin.Center
@@ -315,7 +368,7 @@ public fun MochiDialog(
                             },
                         )
                         .then(if (glass == null) Modifier.background(colors.container, shape) else Modifier)
-                        .mochiAnimateHeight(shape),
+                        .mochiTrackAnimatedHeight(shape, setResizing),
                     // 边缘接按钮的环境光
                 ) {
                     if (glass != null) GlassSurface(glass, corner, null, Modifier.matchParentSize())
@@ -347,7 +400,14 @@ public fun MochiDialog(
                                     color = colors.message,
                                 )
                             }
-                            content?.invoke(this)
+                            if (content != null) {
+                                // 调用方的内容单独一层：弹出 / 收起途中卡片的玻璃、缩放每帧都在变，内容和它们同一层的话
+                                // 每帧整段重录（长更新日志几千字、每一行都重画，主线程一帧十几毫秒，对话框开合明显卡）。
+                                // 单独一层后内容自己不变就只回放
+                                Column(Modifier.graphicsLayer(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    CompositionLocalProvider(LocalMochiDialogCaretVisible provides caretVisible) { content() }
+                                }
+                            }
                         }
                         DialogButtons(actions, colors, inset) { a ->
                             a.onClick()
@@ -360,10 +420,18 @@ public fun MochiDialog(
     }
 }
 
+/** Dialog fields observe the settled flag without restarting focus or the IME session. */
+internal val LocalMochiDialogCaretVisible = staticCompositionLocalOf<State<Boolean>?> { null }
+
 /** 图标描绘出场：弹出后多久起笔、整个描绘多长 */
 private const val IconDrawDelayMillis = 90L
 private const val IconDrawMillis = 720
 
+/**
+ * 底部按钮：按住任一按钮后手指可以在按钮之间滑动，滑到哪个亮哪个（每换一个轻震一下），松手就是选它；
+ * 滑出按钮区松手什么都不做。按钮只有按下的放大和高光，不跟手拉长、挪动，并排的两个之间也不拉融球颈。
+ * 按住才生效的按钮（holdToConfirm）不参与滑选，用它自己的按住手势。
+ */
 @Composable
 private fun DialogButtons(
     actions: ImmutableList<MochiDialogAction>,
@@ -371,24 +439,123 @@ private fun DialogButtons(
     inset: Dp,
     onAction: (MochiDialogAction) -> Unit,
 ) {
-    val m = Modifier.padding(start = inset, end = inset, bottom = inset, top = 20.dp)
     // iOS 警告框的规矩：并排两个时「取消」在左边；竖排时「取消」在最下面（不管传进来的顺序）
-    val cancelFirst = actions.sortedBy { if (it.role == MochiDialogActionRole.Cancel) 0 else 1 }
-    val cancelLast = actions.sortedBy { if (it.role == MochiDialogActionRole.Cancel) 1 else 0 }
-    if (actions.size == 2) {
-        // 并排：按住一个，它和旁边那个之间拉出融球颈
-        MochiButtonGroup(m.fillMaxWidth(), spacing = 8.dp) {
-            cancelFirst.forEach { a -> DialogButton(a, colors, onClick = { onAction(a) }, modifier = Modifier.weight(1f)) }
+    val row = actions.size == 2
+    val ordered = remember(actions, row) {
+        if (row) {
+            actions.sortedBy { if (it.role == MochiDialogActionRole.Cancel) 0 else 1 }
+        } else {
+            actions.sortedBy { if (it.role == MochiDialogActionRole.Cancel) 1 else 0 }
+        }
+    }
+    val handles = remember(ordered) { List(ordered.size) { ButtonSlideHandle() } }
+    val slots = remember(ordered) { arrayOfNulls<LayoutCoordinates>(ordered.size) }
+    val currentOrdered by rememberUpdatedState(ordered)
+    val currentOnAction by rememberUpdatedState(onAction)
+    val haptics = rememberMochiHaptics()
+    var area by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    val gap = DialogButtonGap
+    val slide = Modifier
+        .onPlaced { area = it }
+        .pointerInput(handles) {
+            val reach = gap.toPx() / 2f
+
+            // 手指在按钮区坐标里落在哪个可滑选的按钮上（按钮之间的空隙各分一半，不会在缝里闪灭）；-1 = 不在任何按钮上
+            fun hit(p: Offset): Int {
+                val a = area?.takeIf { it.isAttached } ?: return -1
+                for (i in slots.indices) {
+                    val act = currentOrdered.getOrNull(i) ?: continue
+                    if (!act.enabled || act.holdToConfirm) continue
+                    val c = slots[i]?.takeIf { it.isAttached } ?: continue
+                    val r = a.localBoundingBoxOf(c, clipBounds = false)
+                    if (p.x >= r.left - reach && p.x <= r.right + reach && p.y >= r.top - reach && p.y <= r.bottom + reach) return i
+                }
+                return -1
+            }
+            fun light(i: Int, p: Offset) {
+                handles.forEachIndexed { j, h ->
+                    val on = j == i
+                    if (on) {
+                        val a = area?.takeIf { it.isAttached }
+                        val c = slots[j]?.takeIf { it.isAttached }
+                        h.finger = if (a != null && c != null) c.localPositionOf(a, p) else p
+                    }
+                    if (h.held != on) h.held = on
+                }
+            }
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                var current = hit(down.position)
+                if (current < 0) return@awaitEachGesture
+                down.consume()
+                // 震动和选择列表一致：落到一个按钮上（按下、滑到新的一个）轻 tick，松手选中再一下 confirm
+                haptics.tick()
+                light(current, down.position)
+                var released = false
+                try {
+                    while (true) {
+                        val e = awaitPointerEvent()
+                        val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!c.pressed) {
+                            c.consume()
+                            released = true
+                            break
+                        }
+                        // 整个手势归按钮区：外层的点外面关闭、返回手势都不接手
+                        c.consume()
+                        val next = hit(c.position)
+                        if (next != current) {
+                            if (next >= 0) haptics.tick()
+                            current = next
+                        }
+                        light(current, c.position)
+                    }
+                } finally {
+                    light(-1, Offset.Zero)
+                }
+                if (released) {
+                    currentOrdered.getOrNull(current)?.let {
+                        haptics.confirm()
+                        currentOnAction(it)
+                    }
+                }
+            }
+        }
+
+    val m = Modifier.padding(start = inset, end = inset, bottom = inset, top = 20.dp).fillMaxWidth().then(slide)
+    val content: @Composable (Int, Modifier) -> Unit = { i, mod ->
+        val a = ordered[i]
+        DialogButton(
+            a,
+            colors,
+            slide = handles[i],
+            onClick = { onAction(a) },
+            modifier = mod.onPlaced { slots[i] = it },
+        )
+    }
+    if (row) {
+        Row(m, horizontalArrangement = Arrangement.spacedBy(gap)) {
+            ordered.indices.forEach { i -> content(i, Modifier.weight(1f)) }
         }
     } else {
-        Column(m.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            cancelLast.forEach { a -> DialogButton(a, colors, onClick = { onAction(a) }, modifier = Modifier.fillMaxWidth()) }
+        Column(m, verticalArrangement = Arrangement.spacedBy(gap)) {
+            ordered.indices.forEach { i -> content(i, Modifier.fillMaxWidth()) }
         }
     }
 }
 
+/** 底部按钮之间的间距 */
+private val DialogButtonGap = 8.dp
+
 @Composable
-private fun DialogButton(action: MochiDialogAction, colors: MochiDialogColors, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun DialogButton(
+    action: MochiDialogAction,
+    colors: MochiDialogColors,
+    slide: ButtonSlideHandle,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val primary = action.role == MochiDialogActionRole.Primary
     val base = MochiButtonDefaults.colors(if (primary) MochiButtonStyle.Filled else MochiButtonStyle.Tonal)
     val c = base.copy(
@@ -414,24 +581,35 @@ private fun DialogButton(action: MochiDialogAction, colors: MochiDialogColors, o
         }
         return
     }
-    MochiButton(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = action.enabled,
-        // iOS 26 警告框的按钮是玻璃（主题有控件玻璃时）；没有玻璃时退回填充 / 色调的纯色
-        style = if (primary) MochiButtonStyle.ProminentGlass else MochiButtonStyle.Glass,
-        colors = c,
-        minHeight = MochiDialogDefaults.ButtonHeight,
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        // 警告框的按钮又宽又挨着：按下每边最多长 3dp，不然放大得很突兀、还会顶到对话框边
-        behavior = MochiButtonDefaults.behavior(maxGrow = DialogButtonMaxGrow),
-    ) {
-        Text(
-            action.label,
-            // iOS 26 alert 按钮：17 Semibold
-            style = MochiTheme.textStyles.navTitle,
-            maxLines = 1,
-        )
+    // iOS 26 警告框的按钮是玻璃（主题有控件玻璃时）；没有玻璃时退回填充 / 色调的纯色。
+    // 和 MochiButton 同一套画法，只是按下由外层的滑选手势驱动
+    // 只有带色的强调按钮画玻璃；其余按钮用纯色半透明（玻璃卡片上是 label 色低透明度，见 colors.button）
+    val spec = if (primary) bodyGlassSpec(MochiButtonStyle.ProminentGlass, c, action.enabled) else null
+    CompositionLocalProvider(LocalBarControlGlass provides (bodyGlass(spec) ?: LocalBarControlGlass.current)) {
+        ButtonCore(
+            onClick = onClick,
+            enabled = action.enabled,
+            colors = c,
+            cornerRadius = null,
+            // 警告框的按钮又宽又挨着：按下每边最多长 3dp，不跟手挪动
+            behavior = MochiButtonDefaults.behavior(follow = 0.dp, maxGrow = DialogButtonMaxGrow),
+            modifier = modifier.defaultMinSize(minHeight = MochiDialogDefaults.ButtonHeight),
+            glassSpec = spec,
+            slide = slide,
+        ) {
+            Row(
+                Modifier.padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    action.label,
+                    // iOS 26 alert 按钮：17 Semibold
+                    style = MochiTheme.textStyles.navTitle,
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }
 

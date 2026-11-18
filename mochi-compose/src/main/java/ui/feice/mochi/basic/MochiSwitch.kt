@@ -24,7 +24,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -116,6 +118,17 @@ public fun MochiSwitch(
             modifier
                 .mochiConcentricOutline()
                 .size(64.dp, 28.dp)
+                // 不可用：整个开关作为一层淡掉（iOS 的做法）。只给轨道、拇指各自乘透明度时，轨道颜色会透过拇指，拇指发灰发蓝
+                .then(
+                    if (enabled) {
+                        Modifier
+                    } else {
+                        Modifier.graphicsLayer {
+                            alpha = MochiDefaults.DisabledAlpha
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                    },
+                )
                 .semantics {
                     role = Role.Switch
                     toggleableState = ToggleableState(checked)
@@ -176,7 +189,7 @@ public fun MochiSwitch(
                     }
                 }
                 .drawBehind {
-                    val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
+                    val alpha = 1f
                     val p = state.pos
                     val pc = p.coerceIn(0f, 1f)
                     val track = lerp(colors.uncheckedTrack, colors.checkedTrack, pc)

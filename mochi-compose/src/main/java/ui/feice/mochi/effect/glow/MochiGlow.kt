@@ -87,7 +87,7 @@ public data class MochiGlowSpec(
 public object MochiGlowDefaults {
     /** 默认白光（取色的 plus 高光，见 drawGlowBody）：浅色主题亮一些，深色主题收着 */
     @Composable
-    public fun spec(color: Color = Color.White.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.22f else 0.45f)): MochiGlowSpec =
+    public fun spec(color: Color = Color.White.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.22f else 0.3f)): MochiGlowSpec =
         remember(color) { MochiGlowSpec(color) }
 
     /**
@@ -223,7 +223,7 @@ public fun rememberMochiGlowState(spec: MochiGlowSpec = MochiGlowDefaults.spec()
 }
 
 /**
- * 在 shape 上画按压高光（柔光 + 内侧亮边，滤色叠加）。只负责画，按压由使用方驱动 [MochiGlowState]。
+ * 在 shape 上画按压高光（从手指处扩散的柔光，滤色叠加，不画贴边的亮边）。只负责画，按压由使用方驱动 [MochiGlowState]。
  * origin：这个元素左上角在 state 坐标系里的位置（state 用局部坐标时保持默认）。
  */
 public fun Modifier.mochiGlow(state: MochiGlowState, shape: Shape, origin: () -> Offset = { Offset.Zero }): Modifier = this
@@ -234,7 +234,8 @@ public fun Modifier.mochiGlow(state: MochiGlowState, shape: Shape, origin: () ->
 
 /**
  * 按压高光 + 自带手势：按下亮、拖动光跟着走、松手淡出。不消费触摸事件，可以和 clickable 等叠用。
- * 光半径默认是元素长边 × [MochiGlowDefaults.ElementRadiusFactor]。
+ * 光半径默认按元素大小算（[MochiGlowDefaults.radius]：主要看短边，限制在 [MochiGlowDefaults.MinRadius]..[MochiGlowDefaults.MaxRadius]），
+ * 传 [radius] 则固定用它。
  */
 public fun Modifier.mochiPressGlow(state: MochiGlowState, shape: Shape, radius: Dp? = null): Modifier = this
     .then(PressGlowElement(state, radius))

@@ -13,30 +13,27 @@ import androidx.compose.ui.unit.dp
 import ui.feice.mochi.theme.MochiTheme
 
 /**
- * 按钮样式：MD3E 的四种，加上 iOS 26 的两种 clear 玻璃。
- * 样式说了算（和 iOS 26 一样）：[Filled] / [Tonal] / [Outlined] / [Text] 永远是纯色，主题开不开液态玻璃都不变。
- * 要玻璃就写玻璃样式：[ProminentGlass] / [Glass] 是 iOS 的 prominentGlass / glass，[ProminentClearGlass] / [ClearGlass]
- * 是 prominentClearGlass / clearGlass（更通透的 .clear 玻璃）。主题的控件没有玻璃（[ui.feice.mochi.theme.MochiMaterials.controlGlass]
- * 为 null）时，prominent 两种按 [Filled] 画、另外两种按 [Tonal] 画。玻璃是长期 Beta
+ * 按钮样式：MD3E 的四种，加上 iOS 26 的两种玻璃。
+ * 样式说了算（和 iOS 26 一样）：[Filled] / [Tonal] / [Outlined] / [Text] 永远是纯色，主题开不开玻璃都不变。
+ * 要玻璃就写玻璃样式：[ProminentGlass] / [Glass] 是 iOS 的 prominentGlass / glass。
+ * 主题的控件没有玻璃（[ui.feice.mochi.theme.MochiMaterials.controlGlass] 为 null）时，[ProminentGlass] 按 [Filled] 画、[Glass] 按 [Tonal] 画
  */
 public enum class MochiButtonStyle {
     Filled,
     Tonal,
     Outlined,
     Text,
-    ClearGlass,
-    ProminentClearGlass,
     Glass,
     ProminentGlass,
     ;
 
-    /** 是四种玻璃样式之一 */
-    public val isGlass: Boolean get() = this == Glass || this == ProminentGlass || this == ClearGlass || this == ProminentClearGlass
+    /** 是玻璃样式之一 */
+    public val isGlass: Boolean get() = this == Glass || this == ProminentGlass
 
     /** 玻璃样式没有玻璃可画时退回的纯色样式；纯色样式就是自己 */
     public val solid: MochiButtonStyle get() = when (this) {
-        ProminentGlass, ProminentClearGlass -> Filled
-        Glass, ClearGlass -> Tonal
+        ProminentGlass -> Filled
+        Glass -> Tonal
         else -> this
     }
 }
@@ -75,6 +72,11 @@ public data class MochiButtonBehavior(
      * 一样的才算同一种（「取消」和「删除」、色调和填充这种意思相反 / 样式不同的按钮不融）
      */
     val fuseGroup: Any? = null,
+    /**
+     * 按钮放在可滚动的容器里（横向按键条、芯片行）时设 true：手指移过触摸阈值就把这一下让给外层滚动，
+     * 按钮收回形变、不算点击。默认 false，按在按钮上的整下都归按钮（跟手形变、拖出再拖回仍算点击）
+     */
+    val yieldToScroll: Boolean = false,
 )
 
 /**
@@ -112,15 +114,19 @@ public object MochiButtonDefaults {
     @Composable
     public fun barColors(): MochiButtonColors {
         val cs = MochiTheme.colorScheme
-        return remember(cs) {
+        val m = MochiTheme.materials
+        // 开了背景模糊、没开玻璃：顶栏按钮 75% 不透明，透出一点身后的模糊
+        val blurBar = m.scrollEdge != null && m.controlGlass == null
+        return remember(cs, blurBar) {
             // 和分组样式的卡片同色（浅色下是白的）：浮在灰底上看得清，像 iOS 26 顶栏的圆按钮
-            val container = if (cs.isDark) cs.surfaceContainerHigh else cs.surfaceContainerLowest
+            val solid = if (cs.isDark) cs.surfaceContainerHigh else cs.surfaceContainerLowest
+            val container = if (blurBar) solid.copy(alpha = BlurBarContainerAlpha) else solid
             MochiButtonColors(
                 container = container,
                 content = cs.onSurface,
                 outline = Color.Transparent,
                 pressedContainer = Color.Transparent,
-                glow = Color.White.copy(alpha = if (cs.isDark) 0.16f else 0.45f),
+                glow = Color.White.copy(alpha = if (cs.isDark) 0.16f else 0.3f),
                 // 禁用时底色不变、只把图标文字变淡（iOS 栏按钮的做法）：和同一排可用的按钮、搜索框还是同一种底
                 disabledContainer = container,
                 disabledContent = cs.onSurface.copy(alpha = 0.38f),
@@ -134,21 +140,23 @@ public object MochiButtonDefaults {
     @Composable
     public fun colors(style: MochiButtonStyle = MochiButtonStyle.Filled): MochiButtonColors {
         val cs = MochiTheme.colorScheme
-        val glowA = if (cs.isDark) 0.16f else 0.45f
-        return remember(style, cs) {
+        val glowA = if (cs.isDark) 0.16f else 0.3f
+        // 玻璃面板里的色调按钮底色半透明，透出面板的玻璃（实色块压在玻璃上很突兀）
+        val sheetGlass = ui.feice.mochi.theme.LocalMochiSheetGlass.current
+        return remember(style, cs, sheetGlass) {
             when (style) {
-                MochiButtonStyle.Filled, MochiButtonStyle.ProminentGlass, MochiButtonStyle.ProminentClearGlass -> MochiButtonColors(
+                MochiButtonStyle.Filled, MochiButtonStyle.ProminentGlass -> MochiButtonColors(
                     container = cs.primary,
                     content = cs.onPrimary,
                     outline = Color.Transparent,
                     pressedContainer = Color.Transparent,
-                    glow = Color.White.copy(alpha = if (cs.isDark) 0.22f else 0.35f),
+                    glow = Color.White.copy(alpha = if (cs.isDark) 0.22f else 0.24f),
                     disabledContainer = cs.onSurface.copy(alpha = 0.12f),
                     disabledContent = cs.onSurface.copy(alpha = 0.38f),
                 )
 
-                MochiButtonStyle.Tonal, MochiButtonStyle.Glass, MochiButtonStyle.ClearGlass -> MochiButtonColors(
-                    container = cs.secondaryContainer,
+                MochiButtonStyle.Tonal, MochiButtonStyle.Glass -> MochiButtonColors(
+                    container = if (sheetGlass) cs.secondaryContainer.copy(alpha = SheetGlassContainerAlpha) else cs.secondaryContainer,
                     content = cs.onSecondaryContainer,
                     outline = Color.Transparent,
                     pressedContainer = Color.Transparent,
@@ -186,7 +194,8 @@ public object MochiButtonDefaults {
         cancelSlop: Dp = 48.dp,
         maxGrow: Dp = 6.dp,
         fuseGroup: Any? = null,
-    ): MochiButtonBehavior = MochiButtonBehavior(pressScale, follow, cancelSlop, maxGrow, fuseGroup)
+        yieldToScroll: Boolean = false,
+    ): MochiButtonBehavior = MochiButtonBehavior(pressScale, follow, cancelSlop, maxGrow, fuseGroup, yieldToScroll)
 
     public fun groupBehavior(
         fuseRadius: Dp = 20.dp,
@@ -195,3 +204,9 @@ public object MochiButtonDefaults {
         fuseAcrossKinds: Boolean = false,
     ): MochiButtonGroupBehavior = MochiButtonGroupBehavior(fuseRadius, reach, attraction, fuseAcrossKinds)
 }
+
+/** 玻璃面板里色调按钮、卡片底色的不透明度 */
+internal const val SheetGlassContainerAlpha: Float = 0.5f
+
+/** 背景模糊（无玻璃）时顶栏按钮底色的不透明度 */
+internal const val BlurBarContainerAlpha: Float = 0.75f

@@ -1,6 +1,7 @@
 name: Publish
 
-# 推一个 v 开头的 tag（比如 v0.2.0）就把 mochi-compose、mochi-icons、mochi-ios、mochi-nothing 发到 Maven Central，
+# 推一个 v 开头的 tag（比如 v0.3.0）就把 mochi-compose、mochi-icons、mochi-ios、mochi-nothing 发到 Maven Central，
+# 再建同名 GitHub Release（附示例 APK，说明取 CHANGELOG 对应段落）。
 # 版本号取 tag 去掉 v。也可以在 Actions 页面手动运行，填版本号。
 # 需要仓库 Secrets：MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD（central.sonatype.com 生成的 User Token），
 # SIGNING_KEY（ASCII 格式的 GPG 私钥全文）/ SIGNING_KEY_PASSWORD
@@ -13,6 +14,10 @@ on:
       version:
         description: "版本号，比如 0.2.0"
         required: true
+
+# 发 GitHub Release 要写权限
+permissions:
+  contents: write
 
 jobs:
   publish:
@@ -37,9 +42,17 @@ jobs:
           fi
           echo "VERSION=$V" >> "$GITHUB_ENV"
 
+      # CHANGELOG 里没有这个版本的段落（## 0.2.0 — 日期）就不发，避免版本号和更新日志对不上
+      - name: Check CHANGELOG
+        run: |
+          if ! grep -qE "^## ${VERSION//./\\.}( |$)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md 里没有 \"## $VERSION\" 段落，先把 Unreleased 改成这个版本再打 tag"
+            exit 1
+          fi
+
       # 发之前先过一遍测试，没过就不发
       - name: Test
-        run: ./gradlew --no-daemon :mochi-compose:verifyRoborazziDebug :mochi-ios:testReleaseUnitTest :mochi-nothing:testReleaseUnitTest :mochi-icons:testReleaseUnitTest
+        run: ./gradlew --no-daemon apiCheck :mochi-compose:verifyRoborazziDebug :mochi-ios:testReleaseUnitTest :mochi-nothing:testReleaseUnitTest :mochi-icons:testReleaseUnitTest
 
       - name: Publish to Maven Central
         env:
@@ -51,3 +64,34 @@ jobs:
           ./gradlew --no-daemon -PVERSION_NAME=$VERSION
           :mochi-compose:publishToMavenCentral :mochi-icons:publishToMavenCentral
           :mochi-ios:publishToMavenCentral :mochi-nothing:publishToMavenCentral
+
+      # 示例 APK 附到 GitHub Release，README 的「下载示例 APK」指向最新一个 Release（只在推 tag 时做，手动运行只发 Maven）。
+      # 签名同 build.yml：配了 GOO_KEYSTORE_BASE64 等 Secrets 就用自己的 key，没配就临时生成一把
+      - name: Build example app
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_B64: ${{ secrets.GOO_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.GOO_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.GOO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.GOO_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export GOO_STORE_PASSWORD="$STORE_PASSWORD" GOO_KEY_ALIAS="$KEY_ALIAS" GOO_KEY_PASSWORD="$KEY_PASSWORD"
+          else
+            PASS=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.jks" -storepass "$PASS" -keypass "$PASS" -alias mochi -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mochi"
+            export GOO_STORE_PASSWORD="$PASS" GOO_KEY_ALIAS=mochi GOO_KEY_PASSWORD="$PASS"
+          fi
+          export GOO_STORE_FILE="$RUNNER_TEMP/release.jks"  # 版本号用 gradle.properties 的 EXAMPLE_VERSION_CODE，和本地构建一致
+          ./gradlew --no-daemon -PVERSION_NAME=$VERSION :example:assembleRelease
+          cp example/build/outputs/apk/release/*.apk "$RUNNER_TEMP/mochi-compose-example-$VERSION.apk"
+
+      # 发布说明取 CHANGELOG 里这个版本的段落（到下一个 ## 为止）
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk -v v="## $VERSION" 'index($0, v) == 1 { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          gh release create "v$VERSION" "$RUNNER_TEMP/mochi-compose-example-$VERSION.apk" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag

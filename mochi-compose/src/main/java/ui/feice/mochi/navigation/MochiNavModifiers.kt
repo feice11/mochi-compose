@@ -77,7 +77,7 @@ private class NavSourceNode(key: String, private var radius: Dp, private var col
     override fun onAttach() {
         nav = currentValueOf(LocalMochiNavigator)
         handle.entry = currentValueOf(LocalMochiNavEntry)
-        handle.shown = currentValueOf(LocalMochiPeerPageShown)
+        handle.shown = currentValueOf(LocalMochiTabPageShown)
         handle.layer = requireGraphicsContext().createGraphicsLayer()
         sync()
         nav?.registerSource(handle)
@@ -165,7 +165,7 @@ private class OccluderNode :
     override fun onAttach() {
         val n = currentValueOf(LocalMochiNavigator) ?: return
         handle.entry = currentValueOf(LocalMochiNavEntry) ?: return
-        handle.shown = currentValueOf(LocalMochiPeerPageShown)
+        handle.shown = currentValueOf(LocalMochiTabPageShown)
         nav = n
         handle.layer = requireGraphicsContext().createGraphicsLayer()
         n.registerOccluder(handle)
@@ -189,75 +189,11 @@ private class OccluderNode :
             drawContent()
             return
         }
-        // During a source morph the host owns this exact layer. Drawing it here
-        // too doubles translucent surfaces and the shadow, including carried bars.
+        // 栏一直画在自己页里（和页面其他部分一样，转场前后不断档）。从来源打开 / 缩回时 MochiNavHost 另外把同一张图层
+        // 画在变形的容器上面，只画在容器轮廓里（见 NavGeometry.drawOccluders），容器外面只有这一份，不会叠两层。
+        // 不能在这里跳过：没有任何父节点画它的那一帧，渲染线程会丢掉它的显示列表，之后宿主再画它就是空白，
+        // 要等这里下次重录（转场完全结束）才一下冒出来
         layer.record { this@draw.drawContent() }
-        val entry = handle.entry
-        if (entry == null || nav?.isCarriedUnderSource(entry) != true) drawLayer(layer)
-    }
-}
-
-private data class SharedElementElement(val key: String) : ModifierNodeElement<SharedElementNode>() {
-    override fun create(): SharedElementNode = SharedElementNode(key)
-
-    override fun update(node: SharedElementNode) {
-        node.update(key)
-    }
-
-    override fun InspectorInfo.inspectableProperties() {
-        name = "mochiSharedElement"
-        properties["key"] = key
-    }
-}
-
-private class SharedElementNode(key: String) :
-    Modifier.Node(),
-    CompositionLocalConsumerModifierNode,
-    LayoutAwareModifierNode,
-    DrawModifierNode {
-    private val handle = SharedElementHandle(key)
-    private var nav: MochiNavigator? = null
-
-    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够
-    @SuppressLint("SuspiciousCompositionLocalModifierRead")
-    override fun onAttach() {
-        val n = currentValueOf(LocalMochiNavigator) ?: return
-        nav = n
-        handle.entry = currentValueOf(LocalMochiNavEntry)
-        handle.shown = currentValueOf(LocalMochiPeerPageShown)
-        handle.layer = requireGraphicsContext().createGraphicsLayer()
-        n.registerElement(handle)
-    }
-
-    override fun onDetach() {
-        nav?.unregisterElement(handle)
-        nav = null
-        handle.layer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
-        handle.layer = null
-        handle.coords = null
-    }
-
-    fun update(key: String) {
-        if (key == handle.key) return
-        nav?.unregisterElement(handle)
-        handle.key = key
-        nav?.registerElement(handle)
-    }
-
-    override fun onPlaced(coordinates: LayoutCoordinates) {
-        handle.coords = coordinates
-    }
-
-    override fun ContentDrawScope.draw() {
-        val layer = handle.layer
-        val n = nav
-        if (layer == null || n == null) {
-            drawContent()
-            return
-        }
-        // 先录下来（转场时 MochiNavHost 拿它画到飞行中的位置），不在转场中就原地画
-        layer.record { this@draw.drawContent() }
-        handle.size = size
         drawLayer(layer)
     }
 }
@@ -298,7 +234,7 @@ private class HideWhenCoveredNode :
     override fun onAttach() {
         nav = currentValueOf(LocalMochiNavigator)
         handle.entry = currentValueOf(LocalMochiNavEntry)
-        handle.shown = currentValueOf(LocalMochiPeerPageShown)
+        handle.shown = currentValueOf(LocalMochiTabPageShown)
         handle.layer = requireGraphicsContext().createGraphicsLayer()
         nav?.registerHidden(handle)
     }

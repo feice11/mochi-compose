@@ -1,5 +1,14 @@
 # Third-party notices
 
+## Liquid Glass (liquid.refract.im)
+
+The liquid glass shaders, recipe constants, press feedback values and morph trajectories in
+`mochi-compose/src/main/java/ui/feice/mochi/effect/glass/engine/` (`LiquidShaders.kt`, `LiquidRecipe.kt`,
+`LiquidPress.kt`, `LiquidTracks.kt`) and the bloom choreography in `effect/glass/MochiGlassGroup.kt` are ported
+from the publicly deployed page https://liquid.refract.im/launch/ (GLASS_FS, DOWN_FS, recipe(), tintMatrix(),
+cornerK(), PRESS, PGLOW, TRACKS, MORPH_BLUR). That page's author derived the values from macOS 27 QuartzCore.
+The page carries no open-source license; this port is used and published with the author's permission.
+
 ## Kyant Backdrop inverse layer transform
 
 `GlassInverseLayerScope.kt` adapts `InverseLayerScope.kt` from
@@ -37,20 +46,3 @@ License: MIT, Copyright (c) 2015-present Ionic (see `mochi-icons/src/main/assets
 arc flags are re-spaced, inherited fill/stroke attributes are resolved, and the one 16×16 icon is
 scaled to the 512 grid. The artwork itself is unchanged. Chinese search keywords
 (`ionicons-zh.txt`, from `tools/zh_keywords.py`) are original to mochi-compose.
-
-## Example media (demo app only)
-
-Used only by the example app's "效果 › 混合字" page; not part of the library artifacts.
-
-- `example/src/main/res/raw/vibrancy_ink.mp4` (and `drawable-nodpi/vibrancy_ink_poster.webp`):
-  "Vibrant colored inks interacting with a black liquid" from Mixkit,
-  https://mixkit.co/free-stock-video/vibrant-colored-inks-interacting-with-a-black-liquid-creating-flowing-99927/
-  — Mixkit Stock Video Free License. Trimmed, cropped, looped and with a blurred material baked in
-  (`example/tools/bake_material.py`).
-- `example/src/main/res/drawable-nodpi/portrait_*.webp`: photos from Unsplash under the Unsplash License, cropped and re-encoded:
-  - yosemite: https://unsplash.com/photos/deer-in-yosemite-valley-meadow-UCd78vfC8vU
-  - seceda: https://unsplash.com/photos/seceda-mountains-in-ortisei-italy-hOhlYhAiizc
-  - clouds: https://unsplash.com/photos/clouds-during-golden-hour-hgGplX3PFBg
-  - nighttrees: https://unsplash.com/photos/mountain-near-green-trees-at-night-LSFuPFE9vKE
-  - starfield: https://unsplash.com/photos/a-field-with-grass-and-trees-under-a-night-sky-filled-with-stars-NAV4nIjgwPk
-  - nightlake: https://unsplash.com/photos/lake-near-mountain-during-night-R_1-2OnjkDY

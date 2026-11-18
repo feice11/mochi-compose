@@ -36,6 +36,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import ui.feice.mochi.anim.MochiMotion
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.menu.AnchorTracker
 import ui.feice.mochi.basic.menu.Overlay
@@ -83,14 +84,16 @@ public fun MochiContextMenu(
     // 卡片在屏幕右半边就让菜单靠右对齐
     val alignEnd = screenW > 0f && anchor.observed().center.x > screenW / 2f
     val liquid = liquidMenu()
-    val style = remember(colors, behavior, physics, menuWidth, alignEnd, cornerRadius, liquid) {
+    val dark = MochiTheme.colorScheme.isDark
+    val onSurface = MochiTheme.colorScheme.onSurface
+    val style = remember(colors, behavior, physics, menuWidth, alignEnd, cornerRadius, liquid, dark, onSurface) {
         mochiStyle(
             // 卡片就是「按钮」：它自己画内容，按钮底色透明；投影、融球颈按卡片的圆角算
             colors.copy(buttonColor = Color.Transparent),
             behavior.copy(openMode = MochiOpenMode.Detach, align = if (alignEnd) MochiAlign.End else MochiAlign.Start),
             physics,
             menuWidth,
-        ).copy(buttonCornerRadius = cornerRadius).let { if (liquid) it.liquid(cover = false) else it }
+        ).copy(buttonCornerRadius = cornerRadius).let { if (liquid) it.liquid(cover = false, dark, onSurface) else it }
     }
     val menuMotion = liquidMotion(liquid, motion)
     val engine = rememberMochiEngine(
@@ -102,6 +105,7 @@ public fun MochiContextMenu(
         motion = menuMotion,
         dismissDelayMillis = behavior.dismissDelayMillis,
         anchorSize = { anchor.rect.size },
+        morph = false,
     )
     val scope = rememberCoroutineScope()
     val hold = remember { Animatable(1f) }
@@ -154,7 +158,7 @@ public fun MochiContextMenu(
                             scope.launch {
                                 engine.press.snapTo(hold.value)
                                 hold.snapTo(1f)
-                                engine.press.animateTo(1f, MochiMotions.responseSpring(0.38f, 0.62f))
+                                engine.press.animateTo(1f, MochiMotionTokens.PressRelease)
                             }
                             engine.callbacks.open(true)
                             val origin = anchor.rect.topLeft

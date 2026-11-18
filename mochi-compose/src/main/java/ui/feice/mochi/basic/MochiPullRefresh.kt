@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.overscroll.MochiOverscrollEffect
 import ui.feice.mochi.utils.MochiHapticProfile
 import ui.feice.mochi.utils.rememberMochiHaptics
@@ -133,7 +133,7 @@ public fun rememberMochiRefreshState(
                             }
                         }
                     } finally {
-                        state.holding.animateTo(0f, MochiMotions.responseSpring(0.4f, 1f))
+                        state.holding.animateTo(0f, MochiMotionTokens.Page)
                         state.isRefreshing = false
                     }
                 }

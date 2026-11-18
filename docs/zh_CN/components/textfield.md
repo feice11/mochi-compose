@@ -68,6 +68,8 @@ MochiListSection(header = "联系人") {
 
 ## MochiDialogTextField：对话框里的输入框
 
+弹窗开合、跟手形变、改变高度或随键盘移动时暂停绘制光标，稳定后恢复闪烁。输入焦点、选区和键盘会话保持连续。
+
 放进 `MochiDialog` 的 `content`：
 
 ```kotlin

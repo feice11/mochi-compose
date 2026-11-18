@@ -47,8 +47,8 @@ import ui.feice.mochi.basic.MochiSheetState
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.basic.mochiSheetBackdrop
 import ui.feice.mochi.basic.rememberMochiSheetState
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.navigation.rememberMochiScreenCorners
@@ -129,7 +129,7 @@ class SheetLayoutRegression {
                                                                 it.boundsInWindow()
                                                         },
                                                     ) {
-                                                        Glyph(Icons.CLOSE, cs.onSurface, size = 22)
+                                                        Glyph(DemoIcons.CLOSE, cs.onSurface, size = 22)
                                                     }
                                                 },
                                                 actions = {
@@ -137,12 +137,12 @@ class SheetLayoutRegression {
                                                         { state.hide() },
                                                         Modifier.onGloballyPositioned { done = it.boundsInWindow() },
                                                         colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled),
-                                                    ) { Glyph(Icons.CHECK, cs.onPrimary, size = 22) }
+                                                    ) { Glyph(DemoIcons.CHECK, cs.onPrimary, size = 22) }
                                                 },
                                             )
                                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                                                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                                    Glyph(Icons.WIFI, cs.primary, size = 64, filled = true)
+                                                    Glyph(DemoIcons.WIFI, cs.primary, size = 64, filled = true)
                                                 }
                                                 MochiListCard(Modifier.onGloballyPositioned { card = it.boundsInWindow() }) {
                                                     MochiListRow("名称", value = "HONOR-1059")

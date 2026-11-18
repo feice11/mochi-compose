@@ -3,12 +3,7 @@
 
 package ui.feice.mochi.demo.pages
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,10 +29,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
-import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.MochiActivityIndicator
 import ui.feice.mochi.basic.MochiButton
 import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.basic.MochiDownloadButton
+import ui.feice.mochi.basic.MochiDownloadState
 import ui.feice.mochi.basic.MochiProgressBar
 import ui.feice.mochi.basic.MochiProgressRing
 import ui.feice.mochi.basic.MochiSkeleton
@@ -45,28 +41,20 @@ import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
-import ui.feice.mochi.demo.common.DemoSliderSection
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
-import ui.feice.mochi.effect.elastic.mochiPressDeform
-import ui.feice.mochi.effect.glow.mochiPressGlow
-import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
 
-/**
- * 加载与进度：iOS 里常见的几种「在等」的样子——转圈、下拉刷新的辐条、HUD、App Store 下载按钮、
- * 环形进度、储存空间条、按钮里的加载、骨架占位。全部是库里的组件拼出来的。仪表（MochiGauge）在「徽标、头像与仪表」页。
- */
+/** 加载与进度：转圈、进度环、进度条、骨架占位等。 */
 @Composable
 fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    var reveal by rememberSaveable { mutableFloatStateOf(0.5f) }
     DemoPage(entry, modifier) {
         demoItem {
-            DemoSection("转圈", footer = "iOS 的 UIActivityIndicatorView：8 根胶囊辐条，一道亮光顺时针平滑扫过，每根很快亮起、再慢慢暗回去。放在行尾表示只有这一行在加载。") {
+            DemoSection("转圈") {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -82,10 +70,6 @@ fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     }
                     MochiActivityIndicator(size = 28.dp, color = cs.primary)
                 }
-            }
-        }
-        demoItem {
-            DemoSection("HUD", footer = "需要用户等一下、又不能点别的时候：页面压暗，中间一块圆角卡片转圈。") {
                 Box(
                     Modifier.fillMaxWidth().height(180.dp).background(cs.scrim.copy(alpha = 0.12f), MochiRoundedRectangle(20.dp)),
                     contentAlignment = Alignment.Center,
@@ -105,23 +89,7 @@ fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            DemoSliderSection(
-                "下拉刷新：辐条一根根显出来",
-                "${(reveal * 8).toInt()} / 8",
-                reveal,
-                { reveal = it },
-                footer = "还没松手时不转，按下拉的距离从顶上一根根把辐条显出来；拉够了松手才开始转。",
-            )
-        }
-        demoItem {
-            DemoSection(null) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    MochiActivityIndicator(size = 32.dp, reveal = { reveal })
-                }
-            }
-        }
-        demoItem {
-            DemoSection("App Store 下载按钮", footer = "点「获取」：按钮缩成一个圆，先转圈等待，再变成一圈进度，中间的方块可以停止；下完变成「打开」。") {
+            DemoSection("按钮里的加载", footer = "点「获取」；下载中点中间的方块停止。") {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(56.dp).background(cs.tertiaryContainer, MochiRoundedRectangle(14.dp)))
                     Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
@@ -130,10 +98,11 @@ fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     }
                     DownloadButton()
                 }
+                LoadingButton()
             }
         }
         demoItem {
-            DemoSection("环形进度", footer = "确定进度：弧从顶上顺时针长出来；不确定进度：一段弧一直绕着转。") {
+            DemoSection("进度") {
                 var p by rememberSaveable { mutableFloatStateOf(0f) }
                 LaunchedEffect(Unit) {
                     while (true) {
@@ -153,29 +122,20 @@ fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     }
                     MochiProgressRing(p, size = 44.dp, strokeWidth = 4.dp, color = cs.tertiary)
                 }
-            }
-        }
-        demoItem {
-            DemoSection("进度条", footer = "细条是 iOS 的 UIProgressView（4dp）；粗条放在信息卡片里；储存空间条按类别分段。") {
-                var p by rememberSaveable { mutableFloatStateOf(0.35f) }
+                var bar by rememberSaveable { mutableFloatStateOf(0.35f) }
                 LaunchedEffect(Unit) {
                     while (true) {
                         delay(1200)
-                        p = if (p > 0.9f) 0.1f else p + 0.2f
+                        bar = if (bar > 0.9f) 0.1f else bar + 0.2f
                     }
                 }
-                MochiProgressBar(p, height = 4.dp)
-                MochiProgressBar(p, height = 8.dp, color = cs.tertiary)
+                MochiProgressBar(bar, height = 4.dp)
+                MochiProgressBar(bar, height = 8.dp, color = cs.tertiary)
                 StorageBar()
             }
         }
         demoItem {
-            DemoSection("按钮里的加载", footer = "点一下：文字换成转圈和「提交中」，完成后换成「已提交」，再恢复。按钮宽度不跳，内容原位模糊替换。") {
-                LoadingButton()
-            }
-        }
-        demoItem {
-            DemoSection("骨架占位", footer = "加载中用骨架占位，加载完原地淡入，布局不跳。点按钮重新加载。") {
+            DemoSection("骨架占位") {
                 var loading by rememberSaveable { mutableStateOf(true) }
                 var round by rememberSaveable { mutableIntStateOf(0) }
                 LaunchedEffect(round) {
@@ -209,7 +169,7 @@ fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 
 private enum class Download { Get, Waiting, Loading, Open }
 
-/** App Store 的「获取」按钮：获取 → 等待（转圈）→ 下载（进度圈 + 停止方块）→ 打开 */
+/** App Store 的「获取」按钮：获取 → 等待 → 下载 → 打开 */
 @Composable
 private fun DownloadButton() {
     val cs = MochiTheme.colorScheme
@@ -235,50 +195,26 @@ private fun DownloadButton() {
             else -> Unit
         }
     }
-    val ring = state == Download.Waiting || state == Download.Loading
-    // 胶囊宽度连续变：获取 / 打开是 76dp 的胶囊，转圈时收成 30dp 的圆
-    val width by animateDpAsState(
-        if (ring) 30.dp else 76.dp,
-        spring(dampingRatio = 0.82f, stiffness = MochiMotions.stiffnessFor(0.4f)),
-        label = "w",
-    )
-    val plate by animateFloatAsState(if (ring) 0f else 1f, MochiMotions.responseSpring(0.3f, 1f), label = "plate")
-    val glow = rememberMochiGlowState()
-    Box(
-        Modifier
-            .width(width)
-            .height(30.dp)
-            .mochiPressDeform()
-            .clip(MochiCapsule)
-            .background(cs.secondaryContainer.copy(alpha = cs.secondaryContainer.alpha * plate))
-            .mochiPressGlow(glow, MochiCapsule)
-            .clickable(remember { MutableInteractionSource() }, indication = null) {
-                state = when (state) {
-                    Download.Get -> Download.Waiting
-                    Download.Waiting, Download.Loading -> Download.Get
-                    Download.Open -> Download.Get
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        MochiBlurCrossfade(state) { s ->
-            when (s) {
-                Download.Get -> Text("获取", style = MochiTheme.textStyles.subhead, color = cs.primary)
-
-                Download.Open -> Text("打开", style = MochiTheme.textStyles.subhead, color = cs.primary)
-
-                Download.Waiting -> MochiProgressRing(null, size = 28.dp, strokeWidth = 2.5.dp)
-
-                Download.Loading -> MochiProgressRing(progress, size = 28.dp, strokeWidth = 2.5.dp) {
-                    // 停止方块
-                    Box(Modifier.size(9.dp).background(cs.primary, MochiRoundedRectangle(2.dp)))
-                }
+    MochiDownloadButton(
+        state = when (state) {
+            Download.Get -> MochiDownloadState.Idle
+            Download.Waiting -> MochiDownloadState.Waiting
+            Download.Loading -> MochiDownloadState.Loading(progress)
+            Download.Open -> MochiDownloadState.Done
+        },
+        label = "获取",
+        doneLabel = "打开",
+        onClick = {
+            state = when (state) {
+                Download.Get -> Download.Waiting
+                Download.Waiting, Download.Loading -> Download.Get
+                Download.Open -> Download.Get
             }
-        }
-    }
+        },
+    )
 }
 
-/** iOS 储存空间条：按类别分段，后面是剩余空间的底槽，下面一排图例 */
+/** iOS 储存空间条 */
 @Composable
 private fun StorageBar() {
     val cs = MochiTheme.colorScheme
@@ -298,7 +234,6 @@ private fun StorageBar() {
         ) {
             parts.forEach { (_, w, c) ->
                 Box(Modifier.weight(w).height(12.dp).background(c))
-                // 段与段之间一条细缝（卡片底色）
                 Box(Modifier.width(1.5.dp).height(12.dp).background(MochiTheme.colorScheme.surfaceContainerLowest))
             }
             Spacer(Modifier.weight(1f - parts.sumOf { it.second.toDouble() }.toFloat()))
@@ -317,7 +252,7 @@ private fun StorageBar() {
 
 private enum class Submit { Idle, Busy, Done }
 
-/** 按钮里的加载：提交 → 转圈 → 对勾 → 恢复；宽度固定，内容原位模糊替换 */
+/** 按钮里的加载：提交 → 转圈 → 已提交 → 恢复 */
 @Composable
 private fun LoadingButton() {
     var state by remember { mutableStateOf(Submit.Idle) }

@@ -48,6 +48,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.utils.HalfPi
 import ui.feice.mochi.utils.smoothstep
 
 /*
@@ -63,7 +64,6 @@ import ui.feice.mochi.utils.smoothstep
 /** 弯曲滚轮：纵向 1 格对应 45° 圆弧，只是绘制时的映射 */
 private val WheelRadiansPerCell: Float = (PI / 4).toFloat()
 private val WheelRadiusCells: Float = 1f / WheelRadiansPerCell
-private val HalfPi: Float = (PI / 2).toFloat()
 
 /** 格距相对数字墨迹高度：小于 1，轮盘上相邻的数字在纵向互相压住一点 */
 private const val WheelPitchPerInk = 0.8f

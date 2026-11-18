@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
@@ -49,7 +48,8 @@ internal fun Modifier.tabSemantics(label: String, selected: Boolean, onClick: ()
 
 /**
  * 横排标签的一格：图标在左、标签在右，整体在 [width] 给的格宽里居中。
- * 标签占的宽度 = [extra] × 选中程度，没选中时图标正好在格子中间；标签跟着选中程度淡入，超出格子的部分裁掉
+ * 标签占的宽度 = [extra] × 选中程度，没选中时图标正好在格子中间。标签不裁切（硬裁会把文字和它的模糊切出一条直边），
+ * 改成只在选中程度过半、格子差不多够宽时才淡入，过渡途中伸出格子的那一段几乎看不见
  */
 @Composable
 internal fun InlineTabCell(
@@ -64,11 +64,11 @@ internal fun InlineTabCell(
         contents = listOf(icon, {
             Box(
                 Modifier.graphicsLayer {
-                    mochiBlurAlpha(labelAlpha(selectedness()), labelBlur(selectedness()))
+                    mochiBlurAlpha(inlineLabelAlpha(selectedness()), labelBlur(selectedness()))
                 }.mochiBlur { labelBlur(selectedness()) },
             ) { label() }
         }),
-        modifier = modifier.fillMaxHeight().clipToBounds(),
+        modifier = modifier.fillMaxHeight(),
     ) { (iconM, labelM), c ->
         val w = width().roundToInt()
         val h = c.maxHeight
@@ -88,6 +88,9 @@ internal fun InlineTabCell(
  * 和隐去程度成正比、分档复用模糊效果）。位移由调用方照常给，这里只管透明度和模糊
  */
 internal fun labelAlpha(t: Float): Float = smoothstep(0.35f, 1f, t)
+
+/** 横排标签的透明度：比竖排的晚一点出现，选中程度过半前伸出格子的部分不可见 */
+internal fun inlineLabelAlpha(t: Float): Float = smoothstep(0.55f, 1f, t)
 
 internal fun labelBlur(t: Float): Dp {
     if (labelAlpha(t) < 0.02f) return 0.dp

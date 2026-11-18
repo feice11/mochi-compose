@@ -90,4 +90,3 @@ The low-value fill is the theme primary by default. The high blue `#339CFF` and 
 - Components → Slider:
   - "Intensity slider" (continuous);
   - "Intensity slider · stepped" (5 stops, top is Ultra).
-- Theme → Liquid glass, and page 2 of onboarding, use it for glass transparency: clear on the left, tinted on the right, default on the middle tick.

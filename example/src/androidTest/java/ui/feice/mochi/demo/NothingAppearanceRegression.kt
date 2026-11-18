@@ -47,7 +47,7 @@ import org.junit.runner.RunWith
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.demo.catalog.CatalogGroup
 import ui.feice.mochi.demo.catalog.catalog
-import ui.feice.mochi.demo.pages.SharedBarScreen
+import ui.feice.mochi.demo.pages.SharedBarStepPage
 import ui.feice.mochi.navigation.MochiNavHost
 import ui.feice.mochi.navigation.MochiNavigator
 import ui.feice.mochi.navigation.rememberMochiNavigator
@@ -137,7 +137,7 @@ class NothingAppearanceRegression {
                 activeNavigator = null
                 rule.scenario.onActivity { activity ->
                     activity.setContent {
-                        key("catalog-$style") { DemoTheme(appearance) { M3Bridge { DemoApp(appearance.controller) } } }
+                        key("catalog-$style") { DemoTheme(appearance) { DemoApp(appearance.controller) } }
                     }
                 }
                 inst.waitForIdleSync()
@@ -174,14 +174,14 @@ class NothingAppearanceRegression {
                 // from scrolling, so an outgoing page cannot supply the scroll target.
                 rule.scenario.onActivity { activity ->
                     activity.setContent {
-                        key("introduction-$style") { DemoTheme(appearance) { M3Bridge { DemoApp(appearance.controller) } } }
+                        key("introduction-$style") { DemoTheme(appearance) { DemoApp(appearance.controller) } }
                     }
                 }
                 inst.waitForIdleSync()
                 SystemClock.sleep(150)
                 tap(components.first().title)
                 SystemClock.sleep(350)
-                requireText(components.first().summary)
+                requireText(components.first().title)
                 assertFalse("Introduction still contains effect labels", containsTextPrefix("用到："))
                 shot("catalog-$style-introduction")
             }
@@ -243,7 +243,7 @@ class NothingAppearanceRegression {
                     val density = LocalDensity.current
                     CompositionLocalProvider(LocalDensity provides Density(density.density, font)) {
                         MochiNothingTheme(isDark = dark) {
-                            M3Bridge { Scene(route) }
+                            Scene(route)
                         }
                     }
                 }
@@ -298,9 +298,9 @@ class NothingAppearanceRegression {
             SideEffect { activeNavigator = nav }
             MochiNavHost(nav) { page ->
                 if (page.startsWith("bar/")) {
-                    SharedBarScreen(page.substringAfter('/').toInt())
+                    SharedBarStepPage(page.substringAfter('/').toInt())
                 } else {
-                    catalog.first { it.id == page }.page!!.invoke(
+                    catalog.first { it.id == page }.page.invoke(
                         catalog.first {
                             it.id ==
                                 page

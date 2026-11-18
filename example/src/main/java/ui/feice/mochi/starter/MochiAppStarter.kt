@@ -100,9 +100,9 @@ fun MochiAppStarter(modifier: Modifier = Modifier) {
                                     MochiDefaults.groupedContainer(),
                                 ),
                             ) {
+                                // 从卡片整页展开，返回时缩回原位
                                 MochiListRow(
                                     "示例列表",
-                                    subtitle = "从这张卡片打开，返回时缩回原位",
                                     chevron = true,
                                     onClick = { nav.push(ListRoute, from = ListSource) },
                                 )
@@ -112,7 +112,6 @@ fun MochiAppStarter(modifier: Modifier = Modifier) {
 
                     ListRoute -> MochiLazyLargeTitleScaffold(
                         title = "列表",
-                        subtitle = "从卡片打开；详情页使用侧推",
                         navigationIcon = back,
                         actions = {
                             MochiBarGroup(navId = PrimaryAction) {
@@ -145,9 +144,9 @@ fun MochiAppStarter(modifier: Modifier = Modifier) {
                         }
                         item {
                             MochiListCard {
+                                // 侧推到详情，返回按钮和右侧操作在共享顶栏里变形
                                 MochiListRow(
                                     "示例项目",
-                                    subtitle = "侧推到详情，共享返回按钮与右侧操作",
                                     chevron = true,
                                     status = { MochiListStatusChip("示例") },
                                     onClick = {

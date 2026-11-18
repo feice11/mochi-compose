@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,9 +57,9 @@ import ui.feice.mochi.basic.MochiEmptyState
 import ui.feice.mochi.basic.MochiSearchBar
 import ui.feice.mochi.basic.MochiSegmentedControl
 import ui.feice.mochi.basic.MochiSheet
-import ui.feice.mochi.basic.MochiSheetContent
 import ui.feice.mochi.basic.MochiSheetDetent
 import ui.feice.mochi.basic.MochiSheetHeader
+import ui.feice.mochi.basic.MochiSheetScaffold
 import ui.feice.mochi.basic.MochiSheetState
 import ui.feice.mochi.basic.MochiToastHost
 import ui.feice.mochi.basic.Text
@@ -69,10 +67,10 @@ import ui.feice.mochi.basic.rememberMochiSheetState
 import ui.feice.mochi.basic.rememberMochiToastState
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.Code
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiBlurVisibility
@@ -88,17 +86,13 @@ import ui.feice.mochi.list.LocalMochiListItemSpacing
 import ui.feice.mochi.list.MochiIndexBar
 import ui.feice.mochi.list.MochiIndexBarDefaults
 import ui.feice.mochi.list.MochiListCard
-import ui.feice.mochi.list.MochiListSectionFooter
 import ui.feice.mochi.list.MochiListSectionHeader
 import ui.feice.mochi.list.MochiListSliderRow
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 
-/**
- * 内置图标：mochi-icons 带的全套 Ionicons。上面一块试变形（换画法原位变形、粗细跟字重、一笔笔画出来、弹一下），
- * 下面按字母分组列出全部图标，可以搜（中英文都行）、按分类筛、按住右边的字母快速跳；点一个看详情、复制代码。
- */
+/** 内置图标：mochi-icons 的全套 Ionicons，可搜索、按分类筛选、按字母跳转。 */
 @Composable
 fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
@@ -122,7 +116,7 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         val all = catalog.orEmpty().filter { Categories[category].matches(it.name) }
         MochiIonicons.search(all, query)
     }
-    // 没在搜索时按首字母分组（品牌图标都以 logo- 开头，单独成组放最后）；搜索时按相关度排成一组
+    // 品牌图标都以 logo- 开头，单独成组放最后
     val sections = remember(results, query) {
         if (query.isNotBlank()) {
             listOf("结果" to results)
@@ -138,7 +132,7 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         var i = gridStart
         sections.map { (_, icons) -> i.also { i += 1 + (icons.size + columns - 1) / columns } }
     }
-    val letters = remember(sections) { sections.map { if (it.first == "品牌") "★" else it.first }.toImmutableList() }
+    val letters = remember(sections) { sections.map { if (it.first == "品牌") "#" else it.first }.toImmutableList() }
     val showIndex by remember(query) { derivedStateOf { query.isBlank() && list.firstVisibleItemIndex >= gridStart - 1 } }
 
     DemoPage(
@@ -155,7 +149,6 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         demoItem(key = "filter") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 MochiSearchBar(query, { query = it }, placeholder = "搜索 ${catalog?.size ?: ""} 个图标，中英文都行")
-                // 横向滑动的单选芯片：滑动区域伸到屏幕边，第一个芯片和搜索框对齐
                 MochiChipGroup(contentPadding = PaddingValues(0.dp), bleed = 16.dp) {
                     Categories.forEachIndexed { i, c -> MochiChip(c.title, selected = category == i, onClick = { category = i }) }
                 }
@@ -181,7 +174,7 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem(key = "usage") {
-            DemoSection("用法", footer = "默认描边、22dp、当前内容色；跟着文字走的箭头、对勾传 optical = false。换图标时套 MochiMorphIcon 原位变形。放在对话框的图标位里时自动一笔一笔描出来。") {
+            DemoSection("用法") {
                 Code(
                     "MochiIonicon(\"heart\")\n" +
                         "MochiIonicon(\"heart\", style = Filled)\n" +
@@ -200,7 +193,7 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     MochiToastHost(toast)
 }
 
-/** 试一试：大图标在三种画法、九档粗细之间原位变形；描绘一笔笔画出来；弹一下；换一个图标 */
+/** 试一试：变形、描绘、弹一下 */
 @Composable
 private fun TryIt(name: String, onNext: () -> Unit) {
     val cs = MochiTheme.colorScheme
@@ -213,7 +206,6 @@ private fun TryIt(name: String, onNext: () -> Unit) {
     var bounce by remember { mutableIntStateOf(0) }
     val fontWeight = FontWeight((weight + 1) * 100)
     val vector = remember(name, style, weight) { MochiIonicons.vector(context, name, StyleValues[style], fontWeight) }
-    // 换图标 / 画法 / 粗细时回到变形模式
     LaunchedEffect(name, style, weight) { drawPass = 0 }
 
     DemoSection("试一试") {
@@ -270,10 +262,9 @@ private fun TryIt(name: String, onNext: () -> Unit) {
                 steps = 7,
                 title = "粗细",
                 valueText = WeightNames[weight],
-                supportingText = "描边跟着字重变粗变细，列表行里自动取标题的字重",
+                supportingText = "列表行里自动取标题的字重",
             )
         }
-        MochiListSectionFooter("换画法、拖粗细、换一个都是原位变形：每一笔沿轮廓取点配对，从旧形状挪到新形状。描绘按笔画顺序一笔笔画出来。")
     }
 }
 
@@ -288,9 +279,7 @@ private fun LazyListScope.iconRows(
     val rows = icons.chunked(columns)
     rows.forEachIndexed { r, row ->
         item(key = "$section-$r-${row.first().name}", contentType = "icons") {
-            // 组内各行之间只留 8dp，最后一行和下一组之间保持分组间距。
-            // 首列图标块贴内容左边（和上面的卡片、搜索框对齐），末列贴右边（右边让出索引条），中间等距；
-            // 按格子等分再居中的话，两边各空出半个格子的余量，和卡片对不齐
+            // 首末列贴两边、中间等距：按格子等分居中会两边各空半格，和卡片对不齐
             Layout(
                 content = { row.forEach { info -> IconCell(info.name, style, onPick) } },
                 modifier = Modifier
@@ -311,10 +300,7 @@ private fun LazyListScope.iconRows(
     }
 }
 
-/**
- * 列表项之间是分组间距；这一项只想和下一项隔 [gap]：报告给列表的高度少掉多出来的那段，内容照常向下画
- * （和 mochiListSection 让各行连成一张卡片是同一个做法）
- */
+/** 让这一项和下一项只隔 [gap]：报告高度少掉多余的分组间距，内容照常画 */
 @Composable
 private fun Modifier.keepBelow(gap: Dp): Modifier {
     val spacing = LocalMochiListItemSpacing.current
@@ -360,7 +346,7 @@ private fun IconCell(name: String, style: MochiIconStyle, onPick: (String) -> Un
     }
 }
 
-/** 详情面板：大图标在三种画法之间变形，中文关键词，复制代码 */
+/** 图标详情面板 */
 @Composable
 private fun IconSheet(state: MochiSheetState, name: String, onCopy: (String) -> Unit) {
     val cs = MochiTheme.colorScheme
@@ -371,13 +357,18 @@ private fun IconSheet(state: MochiSheetState, name: String, onCopy: (String) -> 
     val vector = remember(name, style) { MochiIonicons.vector(context, name, StyleValues[style]) }
     val code = if (style == 0) "MochiIonicon(\"$name\")" else "MochiIonicon(\"$name\", style = MochiIconStyle.${StyleValues[style].name})"
     MochiSheet(state) {
-        MochiSheetHeader(
-            name,
-            actions = {
-                MochiBarIconButton({ state.hide() }, Modifier.semantics { contentDescription = "关闭" }) { Glyph(Icons.CLOSE, cs.onSurface) }
+        MochiSheetScaffold(
+            header = {
+                MochiSheetHeader(
+                    name,
+                    actions = {
+                        MochiBarIconButton({
+                            state.hide()
+                        }, Modifier.semantics { contentDescription = "关闭" }) { Glyph(DemoIcons.CLOSE, cs.onSurface) }
+                    },
+                )
             },
-        )
-        MochiSheetContent {
+        ) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier

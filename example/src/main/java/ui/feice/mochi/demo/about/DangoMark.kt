@@ -19,10 +19,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 
-/**
- * 品牌团子的颜色和几何：和启动图标、docs/assets 里的 Logo 是同一份（100 单位的设计稿）。
- * 竹签斜 -35°，团子是略扁的椭圆，彼此轻挤；改这里要同步改图标的生成脚本。
- */
+/** 品牌团子的颜色和几何（100 单位设计稿），与启动图标、docs/assets 的 Logo 同源；改这里要同步改图标生成脚本。 */
 internal object Dango {
     val Top = Color(0xFFD97757)
     val Mid = Color(0xFFFFF8F0)
@@ -45,11 +42,9 @@ internal object Dango {
 
 /**
  * 团子记号。
- * @param count 颗数（赞助档位用 1~3 颗）
- * @param poke 「戳一下」：正值中间那颗被压扁、上下两颗被挤开，负值是回弹时的拉长；由弹簧驱动
- * @param swell 长按蓄力：整串鼓起
- * @param tremble 蓄力时的轻颤角度（度）
- * @param tint 给了就画成单色（顶栏图标这类小尺寸）：团子和竹签都是这个实色，团子之间镂空一道细缝分开，没有高光
+ * @param poke 正值中间那颗压扁、两边挤开，负值为回弹拉长
+ * @param tremble 轻颤角度（度）
+ * @param tint 给了就画成单色、团子间镂空细缝，用于顶栏等小尺寸
  */
 @Composable
 internal fun DangoMark(
@@ -68,7 +63,6 @@ internal fun DangoMark(
 internal fun DrawScope.drawDango(count: Int = 3, poke: Float = 0f, swell: Float = 0f, tremble: Float = 0f, tint: Color? = null) {
     val k = size.minDimension / 100f
     val n = count.coerceIn(1, 3)
-    // 只剩一两颗时竹签变短，整串依然居中
     val top = Dango.ballY(0, n) - Dango.Ry - 6f
     val bottom = Dango.ballY(n - 1, n) + Dango.Ry + 9f
     translate((size.width - 100f * k) / 2f, (size.height - 100f * k) / 2f) {
@@ -79,7 +73,6 @@ internal fun DrawScope.drawDango(count: Int = 3, poke: Float = 0f, swell: Float 
                     drawLine(tint ?: Dango.Stick, Offset(50f, top), Offset(50f, bottom), strokeWidth = 4f, cap = StrokeCap.Round)
                     for (i in 0 until n) {
                         val middle = n == 3 && i == 1
-                        // 被戳的那颗横向鼓、纵向扁；它两边的沿竹签被挤开
                         val push = when {
                             n < 3 -> 0f
                             i == 0 -> -4f * poke
@@ -91,7 +84,7 @@ internal fun DrawScope.drawDango(count: Int = 3, poke: Float = 0f, swell: Float 
                         val cy = Dango.ballY(i, n) + push
                         val color = tint ?: Dango.Balls[if (n == 1) 0 else i]
                         if (tint != null) {
-                            // 先在这颗外面镂空一圈，把上一颗和竹签压在它下面的部分挖掉，留出一道缝
+                            // 外圈挖空上一颗和竹签，留出缝
                             val g = 3.2f
                             drawOval(
                                 Color.Black,
@@ -109,7 +102,6 @@ internal fun DrawScope.drawDango(count: Int = 3, poke: Float = 0f, swell: Float 
                         if (tint == null && color == Dango.Mid) {
                             drawOval(Dango.Ink.copy(alpha = 0.08f), Offset(50f - rx, cy - ry), Size(rx * 2f, ry * 2f), style = Stroke(1f))
                         }
-                        // 左上角一点高光：奶白那颗更亮（单色时不画）
                         if (tint != null) continue
                         val hx = 50f - rx * 0.42f
                         val hy = cy - ry * 0.42f

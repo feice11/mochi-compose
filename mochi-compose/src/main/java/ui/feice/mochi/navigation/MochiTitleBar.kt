@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
@@ -19,12 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.Text
@@ -37,6 +37,8 @@ import ui.feice.mochi.effect.glass.LocalMochiBackdrop
 import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
 import ui.feice.mochi.effect.glass.MochiBackdrop
 import ui.feice.mochi.effect.glass.glassOn
+import ui.feice.mochi.effect.glass.mochiLayerBackdrop
+import ui.feice.mochi.effect.glass.rememberMochiCombinedBackdrop
 import ui.feice.mochi.effect.glass.source
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
@@ -44,7 +46,16 @@ import ui.feice.mochi.theme.MochiTheme
 /** Shared defaults for compact titles and the collapsed state of large-title pages. */
 public object MochiTitleBarDefaults {
     /** Title-bar height excluding the status-bar inset. */
-    public val Height: Dp = 56.dp
+    public val Height: Dp = 50.dp
+
+    /**
+     * 按钮和标题比栏的几何中心往上挪多少：状态栏 + [Height] 这块背景高度不变，内容偏上一点，
+     * 和状态栏的距离更紧凑（iOS 的导航栏内容也不在栏的正中）。所有顶栏共用，自己画浮动按钮时也照这个摆
+     *
+     * 按钮和标题的中心落在状态栏下方 Height / 2 − ContentLift = 22dp 处（44dp 的按钮贴着状态栏底边）；改 [Height] 时
+     * 同步改它，保持这个位置不变
+     */
+    public val ContentLift: Dp = 3.dp
 }
 
 /**
@@ -79,18 +90,17 @@ public fun MochiTitleBar(
         }
         return
     }
-    // 文字跟着栏后面的亮度换深 / 浅（iOS 栏上的文字也是按背后亮度取色）：深色主题里滚到大片亮色内容下面时，
-    // 渐进模糊偏白，白字会看不清
+    // 栏的底色固定是页面底色，文字一直用主题色（tone 留着兼容，不再换色）
     val tone = remember { MochiScrollEdgeTone() }
     val textColor = MochiScrollEdgeDefaults.textColor(tone, MochiTheme.colorScheme.onSurface)
     val subColor = MochiScrollEdgeDefaults.textColor(tone, MochiTheme.colorScheme.onSurfaceVariant, secondary = true)
-    // 栏里的玻璃（按钮、搜索框）取样「栏下面实际看到的样子」：背景来源（已经渐进模糊过）再叠上这一层渐隐底色。
+    // 栏里的玻璃（按钮、搜索框）取样「栏下面实际看到的样子」：背景来源（已经模糊过）再叠上这一层底色。
     // 渐隐单独画在一层里录下来，不和按钮在同一层（玻璃不能取样到自己）
     val under = LocalMochiBackdrop.current?.takeIf { glassOn(GlassRole.Control) }?.source
     val fadeLayer = if (under != null) rememberLayerBackdrop() else null
     val barSource = if (under != null && fadeLayer != null) {
-        val layer = rememberCombinedBackdrop(under.layer, fadeLayer)
-        val face = rememberCombinedBackdrop(under.face, fadeLayer)
+        val layer = rememberMochiCombinedBackdrop(under.layer, fadeLayer)
+        val face = rememberMochiCombinedBackdrop(under.face, fadeLayer)
         remember(layer, face) { GlassSource(layer, face) }
     } else {
         null
@@ -98,7 +108,7 @@ public fun MochiTitleBar(
     val edgeFade = Modifier.mochiScrollEdgeFade(background, alpha = backgroundProgress, tone = tone)
     Box(modifier.fillMaxWidth().then(if (fadeLayer == null) edgeFade else Modifier)) {
         if (fadeLayer != null) {
-            Box(Modifier.matchParentSize().layerBackdrop(fadeLayer).then(edgeFade))
+            Box(Modifier.matchParentSize().mochiLayerBackdrop(fadeLayer).then(edgeFade))
         }
         // 栏里玻璃的外阴影跟着背景渐隐走：内容停在顶部、栏后面只有纯色底时没有阴影，内容滚进栏下面时渐渐出来
         CompositionLocalProvider(
@@ -126,6 +136,8 @@ private fun TitleBarRow(
             .fillMaxWidth()
             .statusBarsPadding()
             .height(barHeight)
+            // 只挪绘制位置，不改占位：栏的背景高度、正文的顶部留白都不变
+            .offset(y = -MochiTitleBarDefaults.ContentLift)
             .padding(horizontal = MochiButtonDefaults.BarHorizontalPadding),
     ) {
         Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) { navigationIcon?.invoke() }
@@ -137,8 +149,11 @@ private fun TitleBarRow(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 标题换了（切换对话、改名）原地模糊替换，不瞬切
+            // 页面登记了标题共享 key 时，从来源卡片打开的转场里卡片上的名字飞成这个标题
+            val sharedKey = LocalMochiNavTitleSharedKey.current
             MochiBlurText(
                 title,
+                modifier = if (sharedKey != null) Modifier.mochiNavSharedElement(sharedKey, contentScale = ContentScale.Fit) else Modifier,
                 style = MochiTheme.textStyles.navTitle,
                 color = textColor,
                 maxLines = 1,

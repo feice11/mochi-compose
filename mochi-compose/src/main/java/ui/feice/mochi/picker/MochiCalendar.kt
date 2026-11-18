@@ -57,6 +57,8 @@ import java.util.Calendar
 import java.util.Locale
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiIconButton
 import ui.feice.mochi.basic.Text
@@ -177,7 +179,7 @@ public fun MochiCalendar(
     Column(modifier) {
         // 顶栏：年月（点了切滚筒） + 翻页箭头
         Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-            val chevron by animateFloatAsState(if (wheels) 90f else 0f, spring(dampingRatio = 0.8f, stiffness = 500f), label = "chevron")
+            val chevron by animateFloatAsState(if (wheels) 90f else 0f, MochiMotionTokens.Settle, label = "chevron")
             Row(
                 Modifier
                     .padding(start = 4.dp)
@@ -318,12 +320,13 @@ private fun MonthGrid(
         val presence = remember { Animatable(if (target != null) 1f else 0f) }
         LaunchedEffect(target) {
             if (target == null) {
-                presence.animateTo(0f, spring(dampingRatio = 1f, stiffness = 900f))
+                presence.animateTo(0f, MochiMotionTokens.Settle)
             } else if (presence.value < 0.05f) {
                 pos.snapTo(target)
-                presence.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 500f))
+                presence.animateTo(1f, MochiMotionTokens.Pop)
             } else {
-                pos.animateTo(target, spring(dampingRatio = 0.78f, stiffness = 420f))
+                // 同 MochiMotionTokens.Control，这里是 Offset
+                pos.animateTo(target, spring(dampingRatio = 0.86f, stiffness = MochiMotions.stiffnessFor(0.34f)))
             }
         }
         val endTarget = if (inMonth(end)) centerOf(end!!) else null

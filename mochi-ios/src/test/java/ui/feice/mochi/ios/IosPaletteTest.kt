@@ -19,16 +19,9 @@ class IosPaletteTest {
 
     @Test
     fun barsAreGlassInBothModes() {
-        for (dark in listOf(false, true)) {
-            val glass = iosMaterials(dark).bar
-            assertNotNull(glass)
-            assertTrue("Fallback must be opaque", glass!!.fallback.alpha == 1f)
-            for (r in listOf(glass.light, glass.dark)) {
-                // 安卓上 blur fill 用缩放后相加拼出来，权重必须都在 0..1
-                assertTrue(r.fillDarken in 0f..1f && r.fillLighten in 0f..1f && r.fillNormal in 0f..1f)
-                assertTrue(r.fillDarken + r.fillLighten <= 1f)
-            }
-        }
+        val glass = iosMaterials().bar
+        assertNotNull(glass)
+        for (dark in listOf(false, true)) assertTrue("Fallback must be visible", glass!!.fallbackColor(dark).alpha > 0.5f)
     }
 
     @Test

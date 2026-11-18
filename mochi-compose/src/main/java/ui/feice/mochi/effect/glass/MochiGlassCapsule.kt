@@ -21,8 +21,7 @@ import ui.feice.mochi.theme.MochiTheme
 
 /**
  * 一块胶囊形的玻璃（连续曲率，宽高相等时就是圆），里面放 [content]：iOS 浮在内容上的圆钮、搜索条这类。
- * 画法和玻璃标签栏同一套：轮廓外面一圈（细描边、黑环、外阴影）画在玻璃下面，玻璃本体按 [material] 的配方取样 [backdrop]。
- * 配方跟主题的深浅取 [MochiGlass.light] / [MochiGlass.dark]；[backdrop] 为 null 时画成 [MochiGlass.fallback] 纯色。
+ * 液态玻璃按 [material] 取样 [backdrop]；[backdrop] 为 null 时画成 [MochiGlass.fallback] 纯色。
  * 只是外观，不处理点击和按压形变。
  */
 @Composable
@@ -33,17 +32,19 @@ public fun MochiGlassCapsule(
     contentAlignment: Alignment = Alignment.Center,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    if (material == null || backdrop == null) {
+    val glass = material.resolved()
+    if (glass == null || backdrop == null) {
         Box(
-            modifier.background(material?.fallback ?: MochiTheme.colorScheme.surfaceContainer, MochiCapsule),
+            modifier.background(
+                glass?.fallbackColor(MochiTheme.colorScheme.isDark) ?: MochiTheme.colorScheme.surfaceContainer,
+                MochiCapsule,
+            ),
             contentAlignment,
             content = content,
         )
         return
     }
-    val recipe = if (MochiTheme.colorScheme.isDark) material.dark else material.light
-    Box(modifier, contentAlignment) {
-        GlassBody(backdrop.layer, { recipe }, Modifier.matchParentSize(), faceBackdrop = backdrop.face)
-        content()
+    GlassBody(backdrop.layer, glass, modifier, faceBackdrop = backdrop.face) {
+        Box(Modifier.matchParentSize(), contentAlignment, content = content)
     }
 }

@@ -52,13 +52,19 @@ internal class MenuLens {
 
     /**
      * 按开合走一遍时间线；再开 / 再关时打断上一遍，从当前值接着走。
-     * [speed] 是 LiquidMorphAnimation settings 里的 speed：所有弹簧的 response 和延迟都除以它（默认 1；settings 里是 0.7，但实机放慢后拖沓，没用上）
+     * [speed] 是 LiquidMorphAnimation settings 里的 speed：所有弹簧的 response 和延迟都除以它，各阶段比例和曲线形状不变
+     * （默认 [LensTimelineSpeed]；settings 里是 0.7，但实机放慢后拖沓，没用上）
      */
-    suspend fun run(open: Boolean, speed: Float = 1f) = coroutineScope {
+    suspend fun run(open: Boolean, distortContent: Boolean, speed: Float = LensTimelineSpeed) = coroutineScope {
         fun spring(s: LensSpring) = MochiMotions.responseSpring(s.response / speed, s.damping)
         fun wait(ms: Long) = (ms / speed).toLong()
-        launch { lens.animateTo(1f, spring(LensOn)) }
-        launch { blur.animateTo(1f, spring(BlurInSpring)) }
+        if (distortContent) {
+            launch { lens.animateTo(1f, spring(LensOn)) }
+            launch { blur.animateTo(1f, spring(BlurInSpring)) }
+        } else {
+            lens.snapTo(0f)
+            blur.snapTo(0f)
+        }
         launch { kick.animateTo(1f, spring(KickOn)) }
         launch { source.animateTo(1f, spring(KickOn)) }
         launch { smooth.animateTo(1f, spring(SmoothOn)) }
@@ -69,6 +75,7 @@ internal class MenuLens {
         delay(wait(100L))
         launch { kick.animateTo(0f, spring(KickOff)) }
         launch { smooth.animateTo(0f, spring(SmoothOff)) }
+        if (!distortContent) return@coroutineScope
         if (open) delay(wait(20L))
         launch { lens.animateTo(0f, spring(if (open) LensOffGrow else LensOffShrink)) }
         launch { blur.animateTo(0f, spring(BlurOutSpring)) }
@@ -133,6 +140,12 @@ internal class MenuLens {
 
 /** response / dampingRatio，按 speed 换算后才变成弹簧（见 [MenuLens.run]） */
 private class LensSpring(val response: Float, val damping: Float)
+
+/**
+ * 透镜时间线整体加速倍数：下面的原生 response 和延迟都除以它。原生值（1）实机偏长，
+ * 按用户要求整体缩到 0.8 倍（1.25），不改单个阶段，免得比例和曲线走样。
+ */
+private const val LensTimelineSpeed = 1.25f
 
 private val LensOn = LensSpring(0.2f, 1f)
 private val LensOffGrow = LensSpring(0.6f, 1f)

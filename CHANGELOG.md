@@ -1,6 +1,89 @@
 # Changelog / 更新日志
 
-## Unreleased / 未发布
+## 0.3.0 — 2026-11-18
+
+A new liquid glass engine (Beta), motion tiers shared by every component, the iOS 27 top bar, and many choreography fixes. Read **Breaking** first when upgrading from 0.2.0.
+新的液态玻璃引擎（Beta）、所有组件共用的动效档位、iOS 27 顶栏，以及一批组件配合的修正。从 0.2.0 升级请先看「不兼容」。
+
+### Breaking / 不兼容
+
+- The glass engine is replaced. Mochi glass (`MochiGlassLook`, the per-field parameters) and the shelved iOS 26 / 27 liquid glass (`MochiLiquidGlass`, `MochiLiquidGlassRecipe`, `@ShelvedLiquidGlassApi`, mochi-ios `IosGlass`, `IosGlass26`, `IosGlass27`, `IosGlassStyle`, `iosLiquidMaterials(…)`) are removed. `MochiGlassMaterial` is gone: `MochiMaterials` fields, `MochiTabBar(material)`, `MochiGlassSurface`, `MochiGlassCapsule` and `MochiGlassBlobs` take `MochiGlass?`. Migrate with `mochiGlassMaterials()` or `iosMaterials(glass, blur)`.
+  玻璃引擎整体替换。麻薯玻璃（`MochiGlassLook`、逐项参数）和已搁置的 iOS 26 / 27 液态玻璃（`MochiLiquidGlass`、`MochiLiquidGlassRecipe`、`@ShelvedLiquidGlassApi`、mochi-ios 的 `IosGlass`、`IosGlass26`、`IosGlass27`、`IosGlassStyle`、`iosLiquidMaterials(…)`）都删除了。`MochiGlassMaterial` 不再存在：`MochiMaterials` 的字段、`MochiTabBar(material)`、`MochiGlassSurface`、`MochiGlassCapsule`、`MochiGlassBlobs` 改为接受 `MochiGlass?`。迁移用 `mochiGlassMaterials()` 或 `iosMaterials(glass, blur)`。
+- `iosMaterials(isDark, glass, blur, themeAccent)` is now `iosMaterials(glass, blur, glassMaterial)`; the shade follows the theme and the accent no longer needs a flag.
+  `iosMaterials(isDark, glass, blur, themeAccent)` 改为 `iosMaterials(glass, blur, glassMaterial)`：明暗跟主题走，强调色不再需要开关。
+- The top bar's scroll edge follows iOS 27 in every appearance: once content scrolls under the bar, the whole bar area is evenly blurred (no longer a progressive blur), covered with a translucent page background, cut off hard at the bar's bottom edge, with a very faint hairline (10% black in light, 12% white in dark, 0.5dp and at least 1 pixel). The bar's text no longer changes color (`MochiScrollEdgeTone` stays; `darkText` is always null). The values are estimated from iOS 27 screenshots. `MochiScrollEdge` is now `MochiScrollEdge(blur = 16.dp, fill = 0.78f, fillDark = 0.72f)` with `MochiScrollEdge.Default`; `MochiScrollEdgeSide`, `MochiScrollEdgeLevel` and mochi-ios `IosScrollEdge` are removed.
+  顶栏滚动边缘在所有外观下改成 iOS 27 的样子：内容滚进栏下面后，栏的整块区域均匀模糊（不再是渐进模糊），上面盖半透明的页面底色，到栏下沿硬截断，下沿一条很淡的细线（浅色 10% 黑、深色 12% 白，0.5dp 至少 1 像素）。栏上文字不再换色（`MochiScrollEdgeTone` 保留，`darkText` 恒为 null）。数值是对着 iOS 27 截图估的。`MochiScrollEdge` 改为 `MochiScrollEdge(blur = 16.dp, fill = 0.78f, fillDark = 0.72f)`，有 `MochiScrollEdge.Default`；`MochiScrollEdgeSide`、`MochiScrollEdgeLevel`、mochi-ios 的 `IosScrollEdge` 已删除。
+- `MochiMaterials.scrollEdge` and `mochiGlassMaterials(scrollEdge)` default to `MochiScrollEdge.Default` (previously null). With null or on Android 12 and below there is no blur and the bar background is nearly opaque (0.94), with the same hard edge and hairline. Bottom bars (`mochiScrollEdgeFade(bottom = true)`) are only a page-background gradient.
+  `MochiMaterials.scrollEdge`、`mochiGlassMaterials(scrollEdge)` 默认改为 `MochiScrollEdge.Default`（以前是 null）。null 或 Android 12 及以下栏下不模糊，底色 0.94 几乎不透明，同样硬边加细线。底栏（`mochiScrollEdgeFade(bottom = true)`）只是页面底色的渐变遮罩。
+- `mochiFadeMask` / `mochiScrollFadeMask` only fade and no longer blur progressively in the iOS appearance; use the new `Modifier.mochiProgressiveBlur` where you want that.
+  `mochiFadeMask` / `mochiScrollFadeMask` 只渐隐，不再在 iOS 外观下自动渐进模糊；需要时改用新增的 `Modifier.mochiProgressiveBlur`。
+- Removed `MochiPeerTransition`, `MochiPeerTransitionSpec` and `MochiPeerTransitionStyle`. `MochiTabScaffold` still provides depth transitions and swipe between tabs.
+  移除 `MochiPeerTransition`、`MochiPeerTransitionSpec` 和 `MochiPeerTransitionStyle`。`MochiTabScaffold` 继续提供标签页景深切换与左右滑动切换。
+
+### Liquid glass (Beta) / 液态玻璃（Beta）
+
+- New `MochiGlass(style, tint, adaptive, spacing, fallback)`: an AGSL port of the liquid.refract.im WebGL liquid glass (supercircle SDF with smooth union, 13-tap blur pyramid, inner and outer refraction, backdrop filter, face matrix, edge bleed, drop and ring shadows, key/fill and diffuse highlights, tint, press matrix and glow, adaptive light/dark). Parameters follow the glass size; styles `MochiGlassStyle.Regular` / `Thick`, presets `MochiGlassDefaults.Regular`, `Thick`, `TintedBlue`. `LocalMochiGlassDark` gives the shade on the glass. Full effect on Android 13+, system blur with the face matrix on Android 12, a solid color below. See [Theme › Materials](docs/guide/theme.md).
+  新增 `MochiGlass(style, tint, adaptive, spacing, fallback)`：liquid.refract.im 的 WebGL 液态玻璃的 AGSL 移植（超圆距离场和光滑并集、13 点模糊金字塔、内外折射、背景滤镜、面色矩阵、边缘渗色、投影和环形阴影、key/fill 和漫反射高光、染色、按压矩阵和光晕、自适应明暗）。参数随尺寸变化；样式 `MochiGlassStyle.Regular` / `Thick`，预设 `MochiGlassDefaults.Regular`、`Thick`、`TintedBlue`。`LocalMochiGlassDark` 给出玻璃上的明暗。Android 13+ 完整效果，Android 12 是系统模糊加面色矩阵，更低画纯色。见 [主题 › 材质](docs/zh_CN/guide/theme.md)。
+- `mochiGlassMaterials(glass, menu, scrollEdge)`: bars, controls and sheets use `glass`, menus and alerts the denser `menu` (`Thick` by default).
+  `mochiGlassMaterials(glass, menu, scrollEdge)`：栏、控件、面板用 `glass`，选择列表和警告框用更实的 `menu`（默认 `Thick`）。
+- New `MochiGlassGroup` / `rememberMochiGlassGroupState` / `Modifier.mochiGlassItem`: a glass container with sprung pieces, `bloom` (recorded SwiftUI glassEffectID trajectories with content blur), `pop`, `appear` / `hide` and `press`; `MochiGlassSpring` replaces the default springs per item.
+  新增 `MochiGlassGroup` / `rememberMochiGlassGroupState` / `Modifier.mochiGlassItem`：玻璃容器，块的位置尺寸有弹簧，`bloom`（录下的 SwiftUI glassEffectID 轨迹，带内容模糊）、`pop`、`appear` / `hide`、`press`；`MochiGlassSpring` 可以逐块换弹簧。
+- `MochiGlassContent.label / secondary / separator(dark)`: text colors on glass (black 86% / 50% / 10% on light glass, white 94% / 58% / 14% on dark glass). Untinted glass provides `label` as `LocalContentColor`. Menus, alerts and sheets follow the theme shade instead of flipping with the backdrop; glass menus drop the extra metaball shadow.
+  `MochiGlassContent.label / secondary / separator(dark)`：玻璃上的字色（浅玻璃黑 86% / 50% / 10%，深玻璃白 94% / 58% / 14%）。没染色的玻璃把 `label` 作为 `LocalContentColor`。菜单、警告框、面板跟主题明暗，不再按背后亮度翻转；玻璃菜单去掉多叠的融球阴影。
+- Liquid glass is labeled Beta: its look, performance and API may change in minor releases. Blur is not affected.
+  液态玻璃标为 Beta：外观、性能和 API 可能在小版本里调整。模糊不受影响。
+
+### New / 新增
+
+- `MochiMotionTokens` (Page, Present, Pop, Control, Settle, Bounce, PressDown / PressRelease, Fade / FadeOut) and `MochiTransition` / `ProvideMochiTransition`. Library components pick springs from these tiers instead of hard-coding parameters. The design principles add a Choreography section.
+  编排档位 `MochiMotionTokens`（Page、Present、Pop、Control、Settle、Bounce、PressDown / PressRelease、Fade / FadeOut）和 `MochiTransition` / `ProvideMochiTransition`。库内组件从档位取弹簧，不再手写参数。设计规范新增「编排」一节。
+- `LocalMochiReduceMotion` / `mochiReduceMotion()`: content transitions, streaming text, menus and popovers settle at once when the app asks for reduced motion.
+  `LocalMochiReduceMotion` / `mochiReduceMotion()`：应用要求减弱动态效果时，内容变换、流式文字、菜单和弹出框直接到位。
+- `MochiFlyInText` for streaming text (speech transcripts, streamed answers): new characters fly in like a soft paper strip and land with a small jelly bounce, replaced ones back away and fade; optional `motionBlur`.
+  `MochiFlyInText`，给流式文字用（语音转写、逐字吐出的回答）：新字像软纸带一样飞进来、落定时带一点果冻回弹，被换掉的字退开淡出；可选 `motionBlur`。
+- `MochiBlurTransitions.Depth` and `Subtle` (many pieces of text changing together as the user types); `MochiBlurTransition` gains `exitScale`.
+  `MochiBlurTransitions.Depth` 和 `Subtle`（一屏里很多文字跟着打字一起换）；`MochiBlurTransition` 新增 `exitScale`。
+- `MochiSheetScaffold(header, …)`: the header floats over the content, which scrolls underneath with the same even blur, translucent sheet background and hairline as the top bar. `MochiColorPicker` uses it. See [Sheet](docs/components/sheet.md).
+  `MochiSheetScaffold(header, …)`：头部浮在正文上，正文从下面滚过，滚动后头部是和顶栏同一套的均匀模糊、半透明底色和细线。`MochiColorPicker` 已改用它。见 [底部面板](docs/zh_CN/components/sheet.md)。
+- `Modifier.mochiProgressiveBlur(edges, blur, amount)` (Android 13+): a blur that grows toward the edge; no library bar uses it.
+  `Modifier.mochiProgressiveBlur(edges, blur, amount)`（Android 13+）：越靠边越糊的模糊；库里的栏不用它。
+- `MochiRadialMenu`, `MochiDownloadButton` (App Store style), and `MochiNavSpec.sourceScrim` for one-shot transitions (black 36% light / 60% dark).
+  新增 `MochiRadialMenu`、`MochiDownloadButton`（App Store 式），一镜到底的背景压暗 `MochiNavSpec.sourceScrim`（浅色 36%、深色 60% 黑）。
+- `MochiDropdown(buttonCornerRadius)` (capsule by default) so the button can match neighbouring rounded rectangles; `MochiDropdownBehavior.liquidCover` (default true): set false to keep the detached menu style on glass, as `MochiListPickerRow` does.
+  `MochiDropdown(buttonCornerRadius)`（默认胶囊），按钮可以和旁边的圆角方块同形；`MochiDropdownBehavior.liquidCover`（默认 true）：设为 false 时玻璃主题下也保持分离式菜单，`MochiListPickerRow` 就是这样。
+
+### Changes / 改动
+
+- `MochiDialog` buttons: press any button and slide between them to select, release to confirm; sliding out cancels. Buttons and the card no longer deform with the finger.
+  `MochiDialog` 底部按钮改为滑选：按住任一按钮后在按钮间滑动选择，松手确认，滑出按钮区松手取消。按钮和卡片不再跟手形变。
+- `MochiTitleBarDefaults.Height` is 50dp (was 56dp) and `ContentLift` 3dp (was 6dp): the bar is 6dp shorter while buttons and title stay at the same place below the status bar.
+  `MochiTitleBarDefaults.Height` 改为 50dp（原 56dp），`ContentLift` 改为 3dp（原 6dp）：顶栏矮 6dp，按钮和标题离状态栏的位置不变。
+- `MochiShadows.floating` is darker and shared by menus, popovers, alerts and the sidebar; dropdown, context menu and popover shadows only appear as they open, never on the held entry. Solid selection menus use a white background in light mode.
+  `MochiShadows.floating` 加深，菜单、气泡、弹窗、侧边栏共用；下拉菜单、上下文菜单、气泡的阴影只跟着展开出现，按住的入口不带影子。浅色模式下纯色选择列表用白底。
+- The iOS and Nothing appearances default to Mochi typography.
+  iOS 和 Nothing 外观默认使用 Mochi 的字体与字重。
+
+### Fixes / 修复
+
+- Choreography: `MochiSheet` follows the keyboard and fling-to-close keeps the finger's velocity; focused fields scroll together with the keyboard; tab switches move the lens and the page together; one-shot transitions cross-fade on a short clock when closing; large titles snap during the fling; reversing a page transition keeps its velocity; dialog cards, menu dimming and the search bar's cancel button fade on short slices; menus and popovers wait for the first frame; flinging a toast away keeps its velocity.
+  组件配合：`MochiSheet` 跟随键盘，甩动关闭接手指速度；输入框聚焦时和键盘同时滚动；切标签时透镜和页面同时起步；一镜到底关闭时交叉淡化改用独立短时钟；大标题在惯性阶段吸附；页面转场中途掉头保留速度；对话框卡片、菜单压暗、搜索栏取消按钮改用短时淡入淡出；菜单和弹出框等首帧排好再动；Toast 甩走接手指速度。
+- Selection menus: the entry capsule keeps its rounded corners through the whole open / close morph instead of squaring off and looking clipped (most visible with solid menus).
+  选择列表：展开、收起变形全程入口保持胶囊圆角，不再变方、看起来像被裁切（纯色最明显）。
+- Lazy list sections (`mochiListSection`) no longer show missing rows for a few frames when their data arrives during a page transition.
+  懒加载分组（`mochiListSection`）在页面转场途中数据到达时，不再有几帧行是空的。
+- Menu overlays no longer stretch a wrap-content window (such as an input method window) to full screen.
+  菜单浮层不再把按内容收高的窗口（比如输入法窗口）撑成整屏。
+- Dialog input pauses caret drawing while the dialog moves. Side pushes keep a page-local G2 clip; one-shot transitions record the moving page only while a visible glass bar samples it.
+  弹窗形变期间暂停绘制输入光标。侧推保留页面坐标里的 G2 裁切；一镜到底只在可见的玻璃栏需要取样时录制变形中的页面。
+
+### Demo and build / 演示与构建
+
+- Demo: new pages for avatars, calendar, carousel, color picker, gauges, index bar, list editing, pull to refresh and toolbars; Theme › Materials switches liquid glass (with a Beta warning), picks a preset and opens a showcase of glass scenes; the Vibrancy page is a side-by-side comparison on one photo (the stock video and portrait photos are removed); onboarding can be reopened from the Theme tab.
+  演示：新增头像、日历、轮播、颜色选择、仪表、字母索引、列表编辑、下拉刷新、工具栏页面；主题 › 材质里开关液态玻璃（开启前有 Beta 提示）、选预设、进入玻璃场景展示；混合字页改为同一张照片上的左右对照（去掉素材视频和竖版照片）；引导可从「主题」页重新打开。
+- Build: public API snapshots (`<module>/api/*.api`, binary-compatibility-validator) checked by CI; the publish workflow requires a changelog section for the version and attaches the demo APK to a GitHub release.
+  构建：公开 API 快照（`<模块>/api/*.api`，binary-compatibility-validator），CI 检查；发布工作流要求更新日志里有对应版本的段落，并把演示 APK 附到 GitHub Release。
+
+## 0.2.0 — 2026-10-27
 
 ### Maven Central, shadow levels, selection cards / Maven Central、阴影档位、选择卡片
 

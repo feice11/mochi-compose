@@ -29,17 +29,14 @@ import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
 
-/**
- * iMessage 式输入栏：＋ 按钮 + 胶囊输入框（随内容长高，最多 5 行），有字时麦克风模糊替换成发送键。
- * 文字输入页和侧边栏的聊天页共用；[onSend] 收到去掉首尾空白的文字，输入框随后清空
- */
+/** iMessage 式输入栏，文字输入页和侧边栏聊天页共用；[onSend] 收到去掉首尾空白的文字。 */
 @Composable
 internal fun DemoComposerRow(placeholder: String, onSend: (String) -> Unit, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     var msg by rememberSaveable { mutableStateOf("") }
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 默认尺寸就是输入框的高度（MochiTextFieldDefaults.Height = MochiButtonDefaults.Height），两者同高、同一条中线
-        MochiIconButton(onClick = {}) { Glyph(Icons.PLUS, cs.onSurface, size = 22) }
+        // 默认尺寸等于输入框高度，两者同一条中线
+        MochiIconButton(onClick = {}) { Glyph(DemoIcons.PLUS, cs.onSurface, size = 22) }
         MochiTextField(
             msg,
             { msg = it },
@@ -59,10 +56,10 @@ internal fun DemoComposerRow(placeholder: String, onSend: (String) -> Unit, modi
                             size = MochiTextFieldDefaults.TrailingButtonSize,
                             style = MochiButtonStyle.Filled,
                             colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled),
-                        ) { Glyph(Icons.ARROW_UP, cs.onPrimary, size = 18) }
+                        ) { Glyph(DemoIcons.ARROW_UP, cs.onPrimary, size = 18) }
                     } else {
                         Box(Modifier.size(MochiTextFieldDefaults.TrailingButtonSize), contentAlignment = Alignment.Center) {
-                            Glyph(Icons.MIC, cs.onSurfaceVariant, size = 22)
+                            Glyph(DemoIcons.MIC, cs.onSurfaceVariant, size = 22)
                         }
                     }
                 }
@@ -71,7 +68,7 @@ internal fun DemoComposerRow(placeholder: String, onSend: (String) -> Unit, modi
     }
 }
 
-/** 聊天气泡：自己发的靠右、主题色胶囊；对方（AI 回答）不加气泡，像 ChatGPT / Claude 那样直接铺在页面上 */
+/** 聊天气泡：自己发的靠右加气泡，对方直接铺在页面上 */
 @Composable
 internal fun DemoChatBubble(mine: Boolean, text: String) {
     val cs = MochiTheme.colorScheme

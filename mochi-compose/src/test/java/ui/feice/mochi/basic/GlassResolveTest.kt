@@ -13,16 +13,14 @@ import org.junit.Test
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.glassFor
 import ui.feice.mochi.theme.MochiGlass
-import ui.feice.mochi.theme.MochiGlassRecipe
 import ui.feice.mochi.theme.MochiMaterials
 
 class GlassResolveTest {
-    private fun glass(c: Color) = MochiGlass(fallback = c, light = MochiGlassRecipe())
+    private fun glass(c: Color) = MochiGlass(tint = c)
 
     private val bar = glass(Color.Red)
-    private val clear = glass(Color.Blue)
     private val menu = glass(Color.Green)
-    private val glassTheme = MochiMaterials(bar = bar, clear = clear, menu = menu)
+    private val glassTheme = MochiMaterials(bar = bar, menu = menu)
 
     @Test
     fun solidStylesNeverGlassEvenInGlassTheme() {
@@ -33,23 +31,19 @@ class GlassResolveTest {
     }
 
     @Test
-    fun glassStylesUseControlOrClearGlass() {
+    fun glassStylesUseControlGlass() {
         assertSame(bar, glassTheme.bodyButtonGlass(MochiButtonStyle.ProminentGlass))
         assertSame(bar, glassTheme.bodyButtonGlass(MochiButtonStyle.Glass))
-        assertSame(clear, glassTheme.bodyButtonGlass(MochiButtonStyle.ClearGlass))
-        assertSame(clear, glassTheme.bodyButtonGlass(MochiButtonStyle.ProminentClearGlass))
     }
 
     @Test
     fun glassStylesFallBackToSolidWithoutGlass() {
         val solid = MochiMaterials()
         for (style in MochiButtonStyle.entries) assertNull(solid.bodyButtonGlass(style))
-        // 只给了 clear、没有控件玻璃：也不画玻璃
-        assertNull(MochiMaterials(clear = clear).bodyButtonGlass(MochiButtonStyle.ClearGlass))
+        // 只给了菜单玻璃、没有控件玻璃：正文按钮也不画玻璃
+        assertNull(MochiMaterials(menu = menu).bodyButtonGlass(MochiButtonStyle.Glass))
         assertEquals(MochiButtonStyle.Filled, MochiButtonStyle.ProminentGlass.solid)
-        assertEquals(MochiButtonStyle.Filled, MochiButtonStyle.ProminentClearGlass.solid)
         assertEquals(MochiButtonStyle.Tonal, MochiButtonStyle.Glass.solid)
-        assertEquals(MochiButtonStyle.Tonal, MochiButtonStyle.ClearGlass.solid)
         assertEquals(MochiButtonStyle.Outlined, MochiButtonStyle.Outlined.solid)
         assertTrue(MochiButtonStyle.ProminentGlass.isGlass)
     }
@@ -58,11 +52,11 @@ class GlassResolveTest {
     fun rolesFollowMaterialFallbackOrder() {
         assertSame(bar, glassTheme.glassFor(GlassRole.Bar))
         assertSame(bar, glassTheme.glassFor(GlassRole.Control))
-        assertSame(clear, glassTheme.glassFor(GlassRole.Clear))
-        assertSame(menu, glassTheme.glassFor(GlassRole.Menu))
+        // 菜单、警告框、面板不按背后亮度翻明暗，其余照原样
+        assertEquals(menu.copy(adaptive = false), glassTheme.glassFor(GlassRole.Menu))
         // 警告框没给就用菜单的，面板没给就用栏的
-        assertSame(menu, glassTheme.glassFor(GlassRole.Alert))
-        assertSame(bar, glassTheme.glassFor(GlassRole.Sheet))
+        assertEquals(menu.copy(adaptive = false), glassTheme.glassFor(GlassRole.Alert))
+        assertEquals(bar.copy(adaptive = false), glassTheme.glassFor(GlassRole.Sheet))
         for (role in GlassRole.entries) assertNull(MochiMaterials().glassFor(role))
     }
 }

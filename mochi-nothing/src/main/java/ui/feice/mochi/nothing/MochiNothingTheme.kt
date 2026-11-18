@@ -14,16 +14,17 @@ import ui.feice.mochi.theme.MochiTextStyles
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.defaultMotionScheme
 import ui.feice.mochi.theme.defaultShapes
+import ui.feice.mochi.theme.defaultTextStyles
 
 /**
- * Optional appearance only: colors, fonts and control palette. Geometry, motion, navigation, interaction and icons remain Mochi's.
- * [materials] works like in every other theme: pass `iosMaterials(isDark, glass = …, blur = …, themeAccent = true)` from mochi-ios
+ * Optional colors and control palette. Typography defaults to Mochi, with [nothingTextStyles] available as an opt-in.
+ * [materials] works like in every other theme: pass `mochiGlassMaterials()` or `iosMaterials(glass = …, blur = …)` from mochi-ios
  * to turn on liquid glass bars or scroll-edge blur; the default is solid bars.
  */
 @Composable
 public fun MochiNothingTheme(
     isDark: Boolean = isSystemInDarkTheme(),
-    textStyles: MochiTextStyles = nothingTextStyles(),
+    textStyles: MochiTextStyles = defaultTextStyles(),
     shapes: MochiShapes = defaultShapes(),
     motionScheme: MochiMotionScheme = defaultMotionScheme(),
     materials: MochiMaterials = MochiMaterials(),

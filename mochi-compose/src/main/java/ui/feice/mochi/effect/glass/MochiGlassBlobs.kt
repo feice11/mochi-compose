@@ -35,8 +35,8 @@ import ui.feice.mochi.theme.MochiTheme
 /**
  * 几块圆角矩形画成一块会融在一起的表面，用在形变转场里（栏收成小胶囊、按钮被吸进胶囊、从胶囊里长出来）。
  * 按主题材质画，和 [MochiGlassSurface] 同一种：
- * - 玻璃（液态玻璃、只模糊的毛玻璃）：Android 13+ 是一块玻璃，几块做光滑并集（主形状加最多 6 块）；更低的系统每块单独一块玻璃，不连
- * - 没有玻璃：栏按钮的纯色（[MochiGlass.fallback]），挨近的用融球颈连起来，半透明的颜色整体只叠一次
+ * - 液态玻璃：Android 13+ 是一块玻璃，几块做光滑并集（主形状加最多 11 块）；更低的系统每块单独一块玻璃，不连
+ * - 没有玻璃：栏按钮的纯色（玻璃的 fallback），挨近的用融球颈连起来，半透明的颜色整体只叠一次
  *
  * [blobs] 每帧读（这个组件里的 px），第一块是主形状，其余按顺序并进主形状；宽或高不到 1px 的跳过。
  * 某一块离主形状越近颈越粗：间距 ≥ [fuse] 时不连，贴上时光滑并集半径是 [fuse]（px，每帧读；一块被吸收到另一块里面后要把它收到 0，
@@ -52,9 +52,10 @@ public fun MochiGlassBlobs(
     material: MochiGlass? = MochiTheme.materials.controlGlass,
     backdrop: MochiBackdrop? = LocalMochiBackdrop.current,
 ) {
-    val fill = rememberGlassFill(material, backdrop?.source)
+    val engine = material.resolved()
+    val fill = rememberGlassFill(engine, backdrop?.source)
     if (fill == null) {
-        SolidBlobs(blobs, fuse, alpha, material, modifier)
+        SolidBlobs(blobs, fuse, alpha, engine, modifier)
         return
     }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
@@ -111,7 +112,7 @@ private fun SolidBlobs(
     material: MochiGlass?,
     modifier: Modifier = Modifier,
 ) {
-    val color = material?.fallback ?: MochiButtonDefaults.barColors().container
+    val color = material?.fallbackColor(MochiTheme.colorScheme.isDark) ?: MochiButtonDefaults.barColors().container
     val renderer = rememberMochiMetaballRenderer()
     val path = androidx.compose.runtime.remember { G2PathCache() }
     val opaque = color.copy(alpha = 1f)

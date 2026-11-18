@@ -1,10 +1,11 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
+@file:Suppress("ktlint:compose:compositionlocal-allowlist") // 包内部传递，不对外公开
+
 package ui.feice.mochi.list
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,12 +13,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +35,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.MochiTransition
 import ui.feice.mochi.basic.MochiAlign
 import ui.feice.mochi.basic.MochiCheckCircle
 import ui.feice.mochi.basic.MochiCheckboxColors
@@ -64,7 +69,7 @@ public fun MochiListDisclosure(
     colors: MochiListColors = MochiListDefaults.colors(),
     content: @Composable () -> Unit,
 ) {
-    val angle by animateFloatAsState(if (expanded) 90f else 0f, spring(dampingRatio = 0.8f, stiffness = 500f), label = "disclosure")
+    val angle by animateFloatAsState(if (expanded) 90f else 0f, MochiTransition.current.spatial, label = "disclosure")
     MochiListRow(
         title,
         modifier,
@@ -75,8 +80,21 @@ public fun MochiListDisclosure(
         trailing = { MochiGlyphs.Chevron(colors.chevron, size = 14.dp, rotation = { angle }) },
         colors = colors,
     )
-    if (expanded) content()
+    // 子行展开时淡入；收起时先淡出（FadeOut，120ms）再移除，卡片高度随后用同一档收起，不露出一块空白卡片面
+    val fade = animateFloatAsState(
+        if (expanded) 1f else 0f,
+        if (expanded) MochiMotionTokens.Fade else MochiMotionTokens.FadeOut,
+        label = "disclosureFade",
+    )
+    if (expanded || fade.value > 0f) {
+        // 只在绘制阶段读透明度，淡入淡出不让子行重组
+        val read: () -> Float = remember(fade) { { fade.value } }
+        CompositionLocalProvider(LocalListDisclosureFade provides read) { content() }
+    }
 }
+
+/** 展开行子行的透明度（绘制阶段读）；null = 不在展开行里 */
+internal val LocalListDisclosureFade = staticCompositionLocalOf<(() -> Float)?> { null }
 
 /** 列表编辑状态：是否在编辑、选中了哪些行（按 key） */
 @Stable
@@ -126,9 +144,9 @@ public fun MochiSelectableRow(
     colors: MochiListColors = MochiListDefaults.colors(),
 ) {
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
-    val edit by animateFloatAsState(if (state.editing) 1f else 0f, spring(dampingRatio = 0.86f, stiffness = 500f), label = "edit")
+    val edit by animateFloatAsState(if (state.editing) 1f else 0f, MochiMotionTokens.Control, label = "edit")
     val checked = state.isSelected(key)
-    val check by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = 1f, stiffness = 700f), label = "check")
+    val check by animateFloatAsState(if (checked) 1f else 0f, MochiMotionTokens.Settle, label = "check")
     ListRowImpl(
         title,
         modifier,
@@ -173,6 +191,7 @@ public fun MochiListPickerRow(
     enabled: Boolean = true,
     colors: MochiListColors = MochiListDefaults.colors(),
     leadingStyle: MochiListLeadingStyle = MochiListLeadingStyle.Tile,
+    titleTrailing: (@Composable () -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     val items = remember(options) { options.map { MochiItem(it) }.toImmutableList() }
@@ -180,6 +199,7 @@ public fun MochiListPickerRow(
         title,
         modifier,
         leading = leading,
+        titleTrailing = titleTrailing,
         leadingStyle = leadingStyle,
         enabled = enabled,
         colors = colors,
@@ -196,7 +216,8 @@ public fun MochiListPickerRow(
                     buttonColor = opaqueButtonColor(MochiDefaults.fill(), MochiDefaults.groupedContainer()),
                     buttonContentColor = colors.content,
                 ),
-                behavior = MochiDropdownDefaults.behavior(align = MochiAlign.End),
+                // 玻璃时也不包裹：列表在胶囊下面长出来，胶囊留在原处（和纯色一致）
+                behavior = MochiDropdownDefaults.behavior(align = MochiAlign.End, liquidCover = false),
                 buttonMinHeight = PickerChipHeight,
                 buttonPadding = PaddingValues(start = 12.dp, end = 10.dp),
             ) {

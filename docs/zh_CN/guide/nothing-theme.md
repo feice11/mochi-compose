@@ -1,6 +1,6 @@
 # Nothing 外观
 
-`mochi-nothing` 是独立、可选的本地资源模块。只换配色、字体和控件配色；图标、行高、边距、圆角、导航、手势和动效都沿用 Mochi。演示应用的「主题 → 外观」可以切换 Mochi / Nothing / iOS，选择会保存；各外观分别保存配色模式，切回 Mochi 会恢复系统取色与算法设置。
+`mochi-nothing` 是独立、可选的本地资源模块。默认提供 Nothing 的配色与控件配色，字体、字重、布局和交互沿用 Mochi。演示应用的「主题 → 外观」可以切换 Mochi / Nothing / iOS，选择会保存。各外观分别保存配色模式，切回 Mochi 会恢复系统取色与算法设置。
 
 ## 接入
 
@@ -21,7 +21,7 @@ fun ApplicationTheme(content: @Composable () -> Unit) {
 ## 配色与字体
 
 - `nothingColorScheme(isDark)` 提供完整颜色角色：浅灰底白卡片、黑底炭灰卡片，少量红色主操作与选中标记，黑白中性表面和图标底色。错误色独立保留，不依赖壁纸取色。这是一套基于提取证据的外观预设，不宣称逐像素复刻 Nothing 系统。
-- `nothingTextStyles(base)` 保留输入字号、字重、行高、字距和系统字号适配；Display／Headline、`largeTitle` 和 `navTitle` 统一使用 `FontFamily.Serif`，中英文展示标题由设备系统衬线字体及其缺字回退解析。`navTitle` 是大标题折叠到顶栏后的样子，所以跟大标题用同一种衬线字体。正文、列表标签和按钮仍使用 Inter 加系统中文回退。**不使用中文点阵**；具体衬线字形取决于设备的系统字体，不额外打包中文字体。
+- 演示的 Mochi、iOS 和 Nothing 共用「衬线体标题」开关。应用可显式传入 `textStyles = nothingTextStyles()` 选用其他字体。该函数保留输入字号、字重、行高和字距，标题使用系统衬线体，正文使用 Inter 和系统回退字体。
 - `nothingDotTextStyle(base)` 只在独立数字、短拉丁展示标签上显式使用，不自动替换列表数值、按钮或段落；保留字体原始的圆点轮廓，禁用会粘连圆点的合成粗体。
 - 列表尺寸和其他主题一样照 iOS 26（最小 52dp、图标块 28dp）。字体改变后按实际排版重新测量；大字号、换行自然增高，不缩字或硬裁。
 
@@ -29,17 +29,17 @@ fun ApplicationTheme(content: @Composable () -> Unit) {
 
 ## 液态玻璃与模糊
 
-材质和配色无关，Nothing 外观同样可以打开液态玻璃标签栏和滚动边缘渐进模糊，两项各自开关：
+材质和配色无关，Nothing 外观同样可以打开液态玻璃标签栏和滚动边缘模糊（顶栏下面均匀模糊，默认开），两项各自开关：
 
 ```kotlin
 MochiNothingTheme(
     isDark = dark,
-    materials = iosMaterials(dark, glass = glassOn, blur = blurOn, themeAccent = true),
+    materials = iosMaterials(glass = glassOn, blur = blurOn),
     content = content,
 )
 ```
 
-`iosMaterials` 在 mochi-ios 里。`themeAccent = true` 让玻璃保持中性、选中的标签用 Nothing 红（`nothingControlPalette` 的 `tabSelected`），不用 iOS 按玻璃颜色推出来的蓝色。组件从主题读材质，页面里不需要按主题或开关分支。
+`iosMaterials` 在 mochi-ios 里（不用 mochi-ios 时写 `mochiGlassMaterials()`）。玻璃本身是中性的，选中的标签用 Nothing 红（`nothingControlPalette` 的 `tabSelected`）。组件从主题读材质，页面里不需要按主题或开关分支。
 
 ## 运行时切换
 

@@ -57,7 +57,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.elastic.mochiPressDeform
@@ -163,7 +163,7 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
             coroutineScope {
                 launch { drag.animateTo(0f, spring(dampingRatio = 1f, stiffness = 500f, visibilityThreshold = 0.5f)) }
                 launch { departure.animateTo(0f, tween(160)) }
-                launch { presence.animateTo(1f, MochiMotions.responseSpring(0.4f, 0.9f)) }
+                launch { presence.animateTo(1f, MochiMotionTokens.Present) }
             }
             // 停留：按住时不计时
             var left = t.durationMillis
@@ -292,12 +292,15 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
                             held = false
                             val v = tracker.calculateVelocity().y
                             if (moved && (dy < -dismissPx || v < -600f)) {
+                                // 往上甩走：接着手指的速度继续往上飞，和收起的淡出、缩小同时进行，不在原地停一下再收
+                                val away = drag.value - size.height * 1.5f
+                                scope.launch { drag.animateTo(away, MochiMotionTokens.Settle, initialVelocity = v.coerceAtMost(0f)) }
                                 state.dismiss()
                             } else if (!moved) {
                                 toast.onClick?.invoke()
                                 state.dismiss()
                             } else {
-                                scope.launch { drag.animateTo(0f, MochiMotions.responseSpring(0.36f, 0.62f), initialVelocity = v) }
+                                scope.launch { drag.animateTo(0f, MochiMotionTokens.Control, initialVelocity = v) }
                             }
                         }
                     },

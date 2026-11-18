@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.sign
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -99,7 +100,7 @@ internal class OffsetOverscrollEffect(
         flingToScrollOffset = Offset.Zero
 
         if (offset != Offset.Zero) {
-            unconsumed -= consumeOffset(unconsumed)
+            unconsumed -= if (isUserInput) consumeOffsetByHand(unconsumed) else consumeOffset(unconsumed)
             if (unconsumed == Offset.Zero) return delta
         }
 
@@ -190,6 +191,35 @@ internal class OffsetOverscrollEffect(
     private fun computeOffset(overscrollDistance: Float, maxDistance: Float): Float {
         val progress = (1f - exp(-abs(overscrollDistance / maxDistance * maxFraction()))) * overscrollDistance.sign
         return progress * maxDistance
+    }
+
+    /**
+     * 手指往回拖时按「看到的位移」一比一收回，再换算回原始位移。原始位移没有上限而看到的位移是饱和的：
+     * 在边上多拖一段，原始位移会攒得很大，照原始位移收回的话手指要先把这一截还完内容才动，看起来卡在边上划不动
+     * （自绘菜单、普通列表都会）。往外拖仍按原始位移累加（指数阻尼不变）
+     */
+    private fun consumeOffsetByHand(delta: Offset): Offset {
+        val old = offset.toFloat()
+        val d = delta.toFloat()
+        val distance = when (axis) {
+            Axis.Horizontal -> viewport.width
+            Axis.Vertical -> viewport.height
+            Axis.None -> 0f
+        }
+        val fraction = maxFraction()
+        if (old == 0f || d == 0f || d.sign == old.sign || distance <= 0f || !distance.isFinite() || fraction <= 0f) {
+            return consumeOffset(delta)
+        }
+        val shown = computeOffset(old, distance)
+        val next = shown + d
+        if (next == 0f || next.sign != shown.sign) {
+            updateOffset(offset.copyWith(0f))
+            return (-shown).toOffset()
+        }
+        // computeOffset 的反函数：|v| = D·(1 − e^(−|r|·f/D)) → |r| = −D/f · ln(1 − |v|/D)
+        val raw = -distance / fraction * ln(1f - (abs(next) / distance).coerceAtMost(0.999f)) * next.sign
+        updateOffset(offset.copyWith(raw))
+        return d.toOffset()
     }
 
     private fun consumeOffset(delta: Offset): Offset {

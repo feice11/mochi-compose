@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -44,7 +45,9 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
+import ui.feice.mochi.anim.MochiTransition
 import ui.feice.mochi.basic.Text
+import ui.feice.mochi.effect.content.forPixels
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.shape.ConcentricBottom
 import ui.feice.mochi.shape.ConcentricTop
@@ -53,6 +56,10 @@ import ui.feice.mochi.theme.LocalMochiControlPalette
 import ui.feice.mochi.theme.LocalMochiSymbolWeight
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
+
+/** Override the title-to-subtitle gap for a group of list rows. */
+public val LocalMochiListSupportingTextGap: ProvidableCompositionLocal<Dp> =
+    staticCompositionLocalOf { MochiListDefaults.SupportingTextGap }
 
 /** 列表的配色 */
 @Immutable
@@ -147,7 +154,9 @@ public object MochiListDefaults {
  */
 @Stable
 internal class ListCardClip {
-    var infos: List<ListItemInfo?> = emptyList()
+    // 状态而非普通字段：行信息对象换了（行重建、行数变化）时，卡片图层块要重新读到新行的按下状态，
+    // 否则按下高亮会画出卡片圆角（图层块只观察上一次读到的那批行）
+    var infos: List<ListItemInfo?> by mutableStateOf(emptyList())
 
     /** 子行已有逐帧高度动画时，当前卡片直接跟随；其他卡片不受影响。 */
     var heightAnimations by mutableIntStateOf(0)
@@ -179,6 +188,10 @@ internal class ListItemInfo(val inset: Dp, val leading: Boolean = false, var end
     /** 卡片在这一项上方 / 下方额外留的白（首末行离圆角远一点），按下高亮要一起盖住（px） */
     var extraTop by mutableFloatStateOf(0f)
     var extraBottom by mutableFloatStateOf(0f)
+
+    /** 这一项贴着卡片的上 / 下圆角：按下高亮自己按圆角画，不靠卡片裁切（卡片裁切只在左滑等场景兜底） */
+    var roundTop by mutableStateOf(false)
+    var roundBottom by mutableStateOf(false)
 
     // The visible option includes shell whitespace. Move its entire content together,
     // never an individual control; read during placement after the card resolves its edges.
@@ -318,6 +331,7 @@ internal fun ListCardImpl(
     val padPx = with(LocalDensity.current) { MochiListDefaults.RowPadding.toPx() }
     val leadPx = with(LocalDensity.current) { MochiListDefaults.LeadingSize.toPx() }
     val clip = remember { ListCardClip() }
+    val heightSpec = MochiTransition.current.spatial.let { remember(it) { it.forPixels() } }
     Layout(
         content = { CompositionLocalProvider(LocalListCardClip provides clip, LocalListRowGeometry provides null, content = content) },
         modifier = modifier
@@ -328,7 +342,8 @@ internal fun ListCardImpl(
                 this.clip = clip.needed()
             }
             .background(colors.container, shape)
-            .mochiAnimateHeight(shape, enabled = animateHeight && clip.heightAnimations == 0)
+            // 高度用这一层的转场（默认 Settle），和展开箭头等同一次变化的参与者同起同停
+            .mochiAnimateHeight(shape, enabled = animateHeight && clip.heightAnimations == 0, animationSpec = heightSpec)
             // 分隔线画在内容上面：左滑行之类自带不透明底色的行不会把线盖住
             .drawWithContent {
                 drawContent()
@@ -360,7 +375,7 @@ internal fun ListCardImpl(
         val c = constraints.copy(minHeight = 0)
         val placeables = measurables.map { it.measure(c) }
         val infos = measurables.map { it.layoutId as? ListItemInfo }
-        clip.infos = infos
+        if (clip.infos != infos) clip.infos = infos
         val width = constraints.maxWidth
 
         // A multiline text block has two optical anchors; a centered switch and a leading tile
@@ -437,6 +452,8 @@ internal fun ListCardImpl(
         infos.forEachIndexed { i, info ->
             info ?: return@forEachIndexed
             info.extraTop = if (i == first) top.toFloat() else 0f
+            info.roundTop = topEdge && i == first
+            info.roundBottom = bottomEdge && i == last
             info.extraBottom = if (i == last) bottom.toFloat() else 0f
             info.resolvedControlEnd = if (info.controlBaseEnd >= 0) controlEnd else -1
         }

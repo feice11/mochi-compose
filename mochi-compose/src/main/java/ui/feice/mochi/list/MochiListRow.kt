@@ -33,12 +33,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalDensity
@@ -56,6 +59,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.capsule.ContinuousRoundedRectangle
 import kotlin.math.max
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -64,6 +68,7 @@ import ui.feice.mochi.basic.MochiActivityIndicator
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.shape.ConcentricTop
+import ui.feice.mochi.shape.MochiContinuity
 import ui.feice.mochi.shape.mochiConcentricPoint
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.LocalMochiSymbolWeight
@@ -91,6 +96,7 @@ import ui.feice.mochi.theme.rememberCapBand
  * @param titleTrailing 标题右侧的紧凑状态标记，与标题垂直居中；日期等行尾值仍靠右
  * @param status 右下角的具名状态 chip，与副标题底部对齐；无副标题时独占标题下方一行
  * @param leadingStyle [leading] 是图标块还是符号图标，决定它占的位置和到文字的距离
+ * @param leadingSize 图标块（[MochiListLeadingStyle.Tile]）的边长，默认 28；应用列表这类需要认图标的行可以放大
  */
 @Composable
 public fun MochiListRow(
@@ -110,10 +116,11 @@ public fun MochiListRow(
     titleTrailing: (@Composable () -> Unit)? = null,
     status: (@Composable () -> Unit)? = null,
     leadingStyle: MochiListLeadingStyle = MochiListLeadingStyle.Tile,
+    leadingSize: Dp = MochiListDefaults.LeadingSize,
 ) {
     ListRowImpl(
         title, modifier, onClick, subtitle, value, leading, trailing, chevron, checked, loading, enabled, destructive, colors,
-        titleTrailing, status, leadingStyle,
+        titleTrailing, status, leadingStyle, leadingSize = leadingSize,
     )
 }
 
@@ -139,6 +146,7 @@ internal fun ListRowImpl(
     titleTrailing: (@Composable () -> Unit)? = null,
     status: (@Composable () -> Unit)? = null,
     leadingStyle: MochiListLeadingStyle = MochiListLeadingStyle.Tile,
+    leadingSize: Dp = MochiListDefaults.LeadingSize,
     prefixWidth: Dp = 0.dp,
     prefix: (@Composable () -> Unit)? = null,
 ) {
@@ -151,7 +159,7 @@ internal fun ListRowImpl(
     val leadWidth = when {
         leading == null -> 0.dp
         symbol -> symbolWidth + MochiListDefaults.SymbolGap
-        else -> MochiListDefaults.LeadingSize + MochiListDefaults.LeadingGap
+        else -> leadingSize + MochiListDefaults.LeadingGap
     }
     // 分隔线从文字起点开始，右端到卡片边
     val inset = prefixWidth + MochiListDefaults.RowPadding + leadWidth
@@ -170,18 +178,27 @@ internal fun ListRowImpl(
     val glyphModifier = Modifier.mochiConcentricPoint()
     // 最小高度 = 正文行高 + 上下留白（字号变大时一起变高）
     val minHeight = maxOf(MochiListDefaults.RowMinHeight, symbolHeight + MochiListDefaults.RowVerticalPadding * 2)
+    // 展开行里的子行：跟着展开 / 收起淡入淡出（见 MochiListDisclosure）
+    val disclosureFade = LocalListDisclosureFade.current
     Layout(
         modifier = modifier
             .layoutId(info)
             .fillMaxWidth()
+            .then(if (disclosureFade != null) Modifier.graphicsLayer { this.alpha = disclosureFade() } else Modifier)
             .drawBehind {
                 if (highlight.value > 0f) {
-                    drawRect(
-                        colors.highlight,
-                        Offset(0f, -info.extraTop),
-                        Size(size.width, size.height + info.extraTop + info.extraBottom),
-                        alpha = highlight.value,
-                    )
+                    val h = size.height + info.extraTop + info.extraBottom
+                    if (info.roundTop || info.roundBottom) {
+                        // 首末行的高亮按卡片圆角画：不依赖卡片的按需裁切，任何情况下都不会露出直角
+                        val r = MochiListDefaults.SectionCorner
+                        val t = if (info.roundTop) r else 0.dp
+                        val b = if (info.roundBottom) r else 0.dp
+                        val outline = ContinuousRoundedRectangle(t, t, b, b, MochiContinuity)
+                            .createOutline(Size(size.width, h), layoutDirection, this)
+                        translate(0f, -info.extraTop) { drawOutline(outline, colors.highlight, alpha = highlight.value) }
+                    } else {
+                        drawRect(colors.highlight, Offset(0f, -info.extraTop), Size(size.width, h), alpha = highlight.value)
+                    }
                 }
             }
             .then(
@@ -244,7 +261,7 @@ internal fun ListRowImpl(
                         // 禁用时图标块和文字一起变淡（iOS）
                         Box(
                             Modifier
-                                .size(MochiListDefaults.LeadingSize)
+                                .size(leadingSize)
                                 .graphicsLayer { this.alpha = alpha },
                             contentAlignment = Alignment.Center,
                         ) { leading() }
@@ -252,7 +269,7 @@ internal fun ListRowImpl(
                     }
                 }
                 // 右侧文字和标题共用基线；有副标题或状态时，值缩小并放进标题行
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SupportingTextGap)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(LocalMochiListSupportingTextGap.current)) {
                     Row {
                         Row(
                             Modifier.weight(1f).alignByBaseline(),
@@ -275,7 +292,7 @@ internal fun ListRowImpl(
                         if (inlineValue) {
                             // 值换掉时模糊替换（全局规范：内容变化不瞬切）
                             ListBlurText(
-                                value!!,
+                                value,
                                 style = supportingStyle,
                                 color = colors.secondary.copy(alpha = alpha),
                                 modifier = Modifier
@@ -352,26 +369,32 @@ internal fun ListRowImpl(
         val tallestTail = tail.maxOfOrNull { it.second.height } ?: 0
         val height = constraints.constrainHeight(maxOf(minHeight.roundToPx(), main.height + vertical * 2, tallestTail + vertical))
         val mainY = (height - main.height) / 2f
-        val baseline = main[FirstBaseline].takeIf { it != AlignmentLine.Unspecified }?.let { mainY + it }
-        val positionedTail = tail.map { (slot, p) ->
-            val centered = (height - p.height) / 2f
-            // 值和标题共用基线；导航 / 选中 / 加载这些符号按墨迹中心在整行居中
-            val y = when (slot) {
-                ListRowSlot.Value -> {
-                    val valueBaseline = p[FirstBaseline]
-                    if (baseline != null && valueBaseline != AlignmentLine.Unspecified) baseline - valueBaseline else centered
-                }
 
-                ListRowSlot.Indicator, ListRowSlot.Check, ListRowSlot.Chevron -> {
-                    val inkCenter = p[ConcentricTop]
-                    if (inkCenter != AlignmentLine.Unspecified) height / 2f - inkCenter else centered
-                }
+        // 基线 / 墨迹中心这些对齐线只在摆放时读，测量时不读：懒加载列表预取时只测量不摆放，
+        // 这时读一个有子节点的 placeable 的对齐线会把还没挂上的子树提前摆放，Compose 1.10+ 会崩（LayoutNode not found in RectList）
+        fun positionTail(): List<Pair<Placeable, Float>> {
+            val baseline = main[FirstBaseline].takeIf { it != AlignmentLine.Unspecified }?.let { mainY + it }
+            return tail.map { (slot, p) ->
+                val centered = (height - p.height) / 2f
+                // 值和标题共用基线；导航 / 选中 / 加载这些符号按墨迹中心在整行居中
+                val y = when (slot) {
+                    ListRowSlot.Value -> {
+                        val valueBaseline = p[FirstBaseline]
+                        if (baseline != null && valueBaseline != AlignmentLine.Unspecified) baseline - valueBaseline else centered
+                    }
 
-                else -> centered
+                    ListRowSlot.Indicator, ListRowSlot.Check, ListRowSlot.Chevron -> {
+                        val inkCenter = p[ConcentricTop]
+                        if (inkCenter != AlignmentLine.Unspecified) height / 2f - inkCenter else centered
+                    }
+
+                    else -> centered
+                }
+                p to y
             }
-            p to y
         }
         layout(width, height) {
+            val positionedTail = positionTail()
             val contentY = info.contentCenterOffset()
             main.placeRelativeWithLayer(start, 0) { translationY = mainY + contentY }
             var x = width - end - tailWidth

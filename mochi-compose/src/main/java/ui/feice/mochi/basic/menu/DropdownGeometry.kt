@@ -150,7 +150,7 @@ import ui.feice.mochi.utils.windowOriginOnScreen
 internal class MochiPx(s: MochiStyle, d: Density) {
     val buttonRadius = with(d) { s.buttonCornerRadius.toPx() }
     val panelRadius = with(d) { s.panelCornerRadius.toPx() }
-    val goo = with(d) { s.fuseRadius.toPx() }
+    val fuse = with(d) { s.fuseRadius.toPx() }
     val gap = with(d) { s.gap.toPx() }
     val menuWidth = with(d) { s.menuWidth.toPx() }
     val itemHeight = with(d) { s.itemHeight.toPx() }
@@ -186,18 +186,19 @@ internal class DropdownFrame(
     val buttonRadius: Float,
     val panel: Rect,
     val panelRadius: Float,
-    val goo: Float,
+    val fuse: Float,
     val blend: Float,
     val scale: Float,
     /** 包裹模式下 0→1，按钮颜色被面板色吞掉 */
     val cover: Float,
 ) {
-    val metaball: MochiMetaballFrame = MochiMetaballFrame(MochiBlob(button, buttonRadius), MochiBlob(panel, panelRadius), goo, blend, cover)
+    val metaball: MochiMetaballFrame =
+        MochiMetaballFrame(MochiBlob(button, buttonRadius), MochiBlob(panel, panelRadius), fuse, blend, cover)
 
     /** 面板竖着平移 [dy]（iOS 菜单的 kick）；包裹模式按钮就是面板，一起走 */
     fun panelShifted(dx: Float, dy: Float, cover: Boolean): DropdownFrame {
         val p = panel.translate(dx, dy)
-        return DropdownFrame(if (cover) p else button, buttonRadius, p, panelRadius, goo, blend, scale, this.cover)
+        return DropdownFrame(if (cover) p else button, buttonRadius, p, panelRadius, fuse, blend, scale, this.cover)
     }
 }
 
@@ -247,7 +248,7 @@ internal fun computeTarget(
  * - pull：手指拖出面板时被橡皮筋拉住（effect.elastic 的 rubberStretched）
  * - 融球颈：展开途中长出再掐断；展开后被拉回按钮附近时按距离重新连上（effect.metaball 的 proximityFuse）
  * - elastic = 0（系统关动画）时，上面这些弹性效果全关
- * - liquid（开了液态玻璃的菜单，照 iOS 的液态形变）：位置、宽高按同一个进度直接插值
+ * - liquid（开了玻璃的菜单，照 iOS 的液态形变）：位置、宽高按同一个进度直接插值
  *   （iOS 这几条通道是同一组弹簧），没有果冻；包裹模式不先横后纵；圆角从胶囊过渡到面板圆角
  */
 internal fun computeFrame(
@@ -275,8 +276,8 @@ internal fun computeFrame(
 
     // 包裹：横向先走、纵向后走。按钮先横着撑成胶囊，再顺势往下「流」成面板，
     // 角点走的是一条弧线而不是直线；过冲反过来主要落在纵向（横向收、纵向多弹一点）
-    val hp = if (cover && !liquid) pg + 0.6f * pg * (1f - pg) else pg
-    val vp = if (cover && !liquid) pg - 0.45f * pg * (1f - pg) * (1f - 0.5f * pg) else pg
+    val hp = if (cover && !liquid) pg + CoverLead * pg * (1f - pg) else pg
+    val vp = if (cover && !liquid) pg - CoverLag * pg * (1f - pg) * (1f - 0.5f * pg) else pg
     var l = min(lerp(button.left, target.left, hp), lerp(button.right, target.right, hp))
     var r = max(lerp(button.left, target.left, hp), lerp(button.right, target.right, hp))
     var t = min(lerp(button.top, target.top, vp), lerp(button.bottom, target.bottom, vp))
@@ -292,7 +293,8 @@ internal fun computeFrame(
     }
 
     // 果冻形变（包裹模式弱一些，不然圆按钮会先被拉成竖条）
-    val s = if (liquid) 0f else jellyStretch(velocity) * px.gel * elastic * (if (cover) 0.55f else 1f)
+    // 只在展开方向拉长：收起的弹簧第一帧速度就从 0 跳到最大，负向拉伸会让面板瞬间横向变宽一截（看起来先闪大再收）
+    val s = if (liquid) 0f else jellyStretch(velocity).coerceAtLeast(0f) * px.gel * elastic * (if (cover) CoverGel else 1f)
     val h = (b - t) * (1f + s)
     val w = (r - l) / (1f + s * 0.6f)
     if (upward) t = b - h else b = t + h
@@ -323,14 +325,20 @@ internal fun computeFrame(
     // 颈部再按距离长出来，像两滴水靠近时连上，拉开又断开
     val opening = smoothstep(0f, 0.15f, pg) * (1f - smoothstep(0.5f, 0.95f, pg))
     val near = proximityFuse(btn, panel, px.gap) * smoothstep(0.85f, 1f, pg)
-    val goo = if (cover) 0f else px.goo * max(opening, near) * elastic
+    val fuse = if (cover) 0f else px.fuse * max(opening, near) * elastic
     val blend = smoothstep(0f, 0.35f, pg)
     val coverAmt = if (cover) smoothstep(0.05f, 0.4f, pg) else 0f
     // 包裹模式里按钮和面板是同一块东西：按钮形状直接等于面板，并集就只剩面板
     if (cover) btn = panel
-    return DropdownFrame(btn, if (cover) panR else btnR * sc, panel, panR, goo, blend, sc, coverAmt)
+    return DropdownFrame(btn, if (cover) panR else btnR * sc, panel, panR, fuse, blend, sc, coverAmt)
 }
 
 // ───────────────────────── 杂项 ─────────────────────────
 
 internal fun Offset.round() = IntOffset(x.roundToInt(), y.roundToInt())
+
+// 包裹模式（按钮直接变成菜单）的编排强度：横向比进度超前多少、纵向滞后多少（角点走的弧线越弯），
+// 果冻拉伸是普通模式的几成。比最初的 0.6 / 0.45 / 0.55 加强了一截，先横后纵和落地回弹更看得出
+private const val CoverLead = 0.9f
+private const val CoverLag = 0.6f
+private const val CoverGel = 0.8f

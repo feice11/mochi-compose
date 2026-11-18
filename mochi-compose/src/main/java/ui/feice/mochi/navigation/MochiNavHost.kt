@@ -23,6 +23,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -41,10 +43,12 @@ import kotlin.math.max
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.MochiSprings
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
+import ui.feice.mochi.effect.glass.GlassMotionWhile
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.LocalGlassSources
 import ui.feice.mochi.effect.glass.mochiBackdropSource
@@ -63,7 +67,8 @@ import ui.feice.mochi.utils.lerp
  * @param push 侧推（没有来源的 push / pop）的弹簧：iOS 是临界阻尼，不回弹。打开和关闭用同一条，中途掉头时速度连续
  * @param underScale 来源转场的背景比例，默认 1 保持原位；显式小于 1 可启用旧的景深缩放
  * @param backScale 预测性返回拖到底时页面缩到多少
- * @param scrim 下层页面被压住时盖上的暗色（alpha 是最深时的）
+ * @param scrim 侧推时下层页面被压住盖上的暗色（alpha 是最深时的）
+ * @param sourceScrim 一镜到底（从来源打开）时下层页面盖上的暗色，比侧推深
  * @param backdrop 从来源打开的转场最底下的底色（下层页缩小后露出的四周和圆角外侧），像从桌面打开应用一样是黑的
  * @param pushBackdrop 侧推转场最底下的底色：任何一帧露出来的地方都用页面底色填上，不会闪黑。
  *   [Color.Unspecified] = iOS 分组样式的页面底色（MochiDefaults.groupedBackground）
@@ -77,10 +82,11 @@ public data class MochiNavSpec(
     val backScale: Float = 0.86f,
     val scrim: Color = Color.Black.copy(alpha = 0.18f),
     val backdrop: Color = Color.Black,
-    val push: AnimationSpec<Float> = MochiMotions.responseSpring(0.42f, 1f),
+    val push: AnimationSpec<Float> = MochiMotionTokens.Page,
     val pushBackdrop: Color = Color.Unspecified,
     val openMove: AnimationSpec<Float> = MochiSprings.snappy(300, visibilityThreshold = 0.0005f),
     val closeMove: AnimationSpec<Float> = MochiSprings.snappy(300, visibilityThreshold = 0.0005f),
+    val sourceScrim: Color = Color.Black.copy(alpha = 0.36f),
 )
 
 public object MochiNavDefaults {
@@ -95,13 +101,17 @@ public object MochiNavDefaults {
         backScale: Float = 0.86f,
         scrim: Color = Color.Black.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.4f else 0.18f),
         backdrop: Color = Color.Black,
-        push: AnimationSpec<Float> = MochiMotions.responseSpring(0.42f, 1f),
+        push: AnimationSpec<Float> = MochiMotionTokens.Page,
         pushBackdrop: Color = MochiDefaults.groupedBackground(),
         // 位移和放大分开：位置用 iOS 的 snappy 300ms（回弹 0.15），到位时轻轻冲过一点再落回；大小、圆角仍用上面的 smooth
         openMove: AnimationSpec<Float> = MochiSprings.snappy(300, visibilityThreshold = 0.0005f),
         closeMove: AnimationSpec<Float> = MochiSprings.snappy(300, visibilityThreshold = 0.0005f),
-    ): MochiNavSpec = remember(open, close, cancel, underScale, backScale, scrim, backdrop, push, pushBackdrop, openMove, closeMove) {
-        MochiNavSpec(open, close, cancel, underScale, backScale, scrim, backdrop, push, pushBackdrop, openMove, closeMove)
+        // 一镜到底的背景压暗：浅色 36%、深色 60%，约是侧推的两倍
+        sourceScrim: Color = Color.Black.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.6f else 0.36f),
+    ): MochiNavSpec = remember(
+        open, close, cancel, underScale, backScale, scrim, backdrop, push, pushBackdrop, openMove, closeMove, sourceScrim,
+    ) {
+        MochiNavSpec(open, close, cancel, underScale, backScale, scrim, backdrop, push, pushBackdrop, openMove, closeMove, sourceScrim)
     }
 }
 
@@ -110,8 +120,9 @@ public object MochiNavDefaults {
  *
  * - 有来源（`push(route, from = key)`）时是「容器变形」：卡片本身变成页面。变形中的容器里同时画着卡片
  *   （录下来的画面，按容器宽度缩放）和页面（按容器宽度缩放），两者都贴着容器一起长大，卡片渐隐、页面渐显；
- *   关闭时原路缩回，落地时容器里的卡片画面正好和原卡片重合。所有过渡只由弹簧进度决定，
- *   途中返回或再点一次都从当前位置和速度连续掉头。下层页面默认保持原位，只随进度压暗。
+ *   关闭时原路缩回，落地时容器里的卡片画面正好和原卡片重合。位置、大小只由弹簧进度决定；
+ *   打开时的淡化跟进度，关闭时的淡化走独立的短时长（页面先被盖住、卡片再显出来），
+ *   途中返回或再点一次都从当前位置、速度和透明度连续掉头。下层页面默认保持原位，只随进度压暗。
  * - 没有来源时是 iOS 的侧推：新页从右边推进来，下层页往左退 30% 并压暗，新页左边缘带一道投影；
  *   打开和关闭是同一条弹簧，途中随时 pop / 再 push 同一页都会从当前位置连续掉头（转场中不拦触摸）。
  *   应用的侧推页操作使用带稳定 navId 的库顶栏控件，图标配置稳定 contentKey；布局容器本身不自动登记操作。
@@ -242,35 +253,48 @@ public fun MochiNavHost(
                 // 至少保留栈顶下面那一页（滚动位置、来源元素的位置都还在，返回手势一开始就能露出来）
                 var first = (n - 2).coerceAtLeast(0)
                 while (first > 0 && entries[first + 1].inTransition) first--
-                for (i in first until n) {
+                for (i in 0 until n) {
                     val e = entries[i]
                     key(e.id) {
-                        // 侧推阴影：画在这一页下面、单独一层，不被任何页面的圆角裁切截断
-                        Spacer(
-                            Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {}
-                                .drawBehind { geo.drawSlideShadow(e, this) },
-                        )
-                        EntryLayer(e, geo, surface) {
-                            holder.SaveableStateProvider(e.id) {
-                                CompositionLocalProvider(LocalMochiNavEntry provides e) { content(e.route) }
+                        // 侧推的前景页不带投影：下层页只压暗（见 NavGeometry.drawOver）
+                        if (i >= first) {
+                            EntryLayer(e, geo, surface) {
+                                holder.SaveableStateProvider(e.id) {
+                                    CompositionLocalProvider(LocalMochiNavEntry provides e) { content(e.route) }
+                                }
                             }
                         }
+                        // Keep transitions alive even when a newer page fully covers an exiting entry.
                         LaunchedEffect(e, e.closing) {
                             val slide = e.source == null
+                            // 换方向时上一个协程被取消，Animatable 取消时会把速度清零（endAnimation）：
+                            // 用 closing 变化那一刻记下的速度接着走，掉头时速度连续（见 MochiNavEntry.closing）
+                            val turnV = e.turnVelocity
+                            val turnMoveV = e.turnMoveVelocity
+                            e.turnVelocity = 0f
+                            e.turnMoveVelocity = 0f
                             if (!e.closing) {
                                 // 新打开的页：先等它组合、排版、绘制完、帧率回稳（第一次打开时类加载、首屏子组合可能要几百毫秒）
                                 // 再开始动，不然动画的开头几帧被这几帧吞掉，看起来是从卡片一下跳到半屏。等待期间画面还停在起点
                                 if (e.progress.value == 0f && !e.started) awaitFrameSettle(framePeriod)
+                                if (e.closing) return@LaunchedEffect
                                 e.started = true
-                                // 打开；关闭途中又被 push 回来时也走这里，从当前位置和速度掉头（Animatable 换目标时保留速度）
+                                // 打开；关闭途中又被 push 回来时也走这里，从当前位置和速度掉头
                                 if (slide) {
-                                    if (e.progress.value < 1f) e.progress.animateTo(1f, geo.spec.push)
+                                    if (e.progress.value != 1f) e.progress.animateTo(1f, geo.spec.push, initialVelocity = turnV)
                                 } else {
                                     coroutineScope {
-                                        launch { if (e.move.value < 1f || e.move.isRunning) e.move.animateTo(1f, geo.spec.openMove) }
-                                        if (e.progress.value < 1f) e.progress.animateTo(1f, geo.spec.open)
+                                        // 关闭途中掉头：透明度从此刻的值按淡化时钟过渡回「跟进度」，不跳
+                                        if (e.fadeClosing) {
+                                            geo.turnFade(e, closing = false)
+                                            e.fade.snapTo(0f)
+                                            launch { e.fade.animateTo(1f, MochiMotionTokens.Fade) }
+                                        }
+                                        // 位置弹簧会过冲：取消后停在 1 以上时也要落回 1（取消后 isRunning 已是 false）
+                                        launch {
+                                            if (e.move.value != 1f) e.move.animateTo(1f, geo.spec.openMove, initialVelocity = turnMoveV)
+                                        }
+                                        if (e.progress.value != 1f) e.progress.animateTo(1f, geo.spec.open, initialVelocity = turnV)
                                     }
                                 }
                                 return@LaunchedEffect
@@ -279,19 +303,25 @@ public fun MochiNavHost(
                                 // 侧推：同一条弹簧直接往 0 走，打开途中返回也是从当前位置连续掉头
                                 val v = e.releaseVelocity
                                 e.releaseVelocity = 0f
-                                e.progress.animateTo(0f, geo.spec.push, initialVelocity = if (v != 0f) v else e.progress.velocity)
+                                e.progress.animateTo(0f, geo.spec.push, initialVelocity = if (v != 0f) v else turnV)
+                                if (!e.closing) return@LaunchedEffect
                                 navigator.remove(e)
                                 holder.removeState(e.id)
                                 navigator.onClosed()
                                 return@LaunchedEffect
                             }
                             // 有来源：同一条弹簧从当前位置往 0 走（不重新起算，所以能随时掉头）；
-                            // 返回手势的缩小量一起弹回 0，落地时正好是来源的矩形
+                            // 返回手势的缩小量一起弹回 0，落地时正好是来源的矩形。
+                            // 透明度走自己的短时长（淡化时钟），在容器还明显缩小的前 150ms 里交接完
+                            geo.turnFade(e, closing = true)
+                            e.fade.snapTo(0f)
                             coroutineScope {
+                                launch { e.fade.animateTo(1f, MochiMotionTokens.Fade) }
                                 launch { e.back.animateTo(0f, geo.spec.close) }
-                                launch { e.move.animateTo(0f, geo.spec.closeMove) }
-                                e.progress.animateTo(0f, geo.spec.close)
+                                launch { e.move.animateTo(0f, geo.spec.closeMove, initialVelocity = turnMoveV) }
+                                e.progress.animateTo(0f, geo.spec.close, initialVelocity = turnV)
                             }
+                            if (!e.closing) return@LaunchedEffect
                             navigator.remove(e)
                             holder.removeState(e.id)
                             navigator.onClosed()
@@ -303,11 +333,15 @@ public fun MochiNavHost(
             // 玻璃按钮的形状画成玻璃（取样整页录制），其余形状和所有图标画在 Spacer 里
             // 不录整页时（windowGlass = false）玻璃按钮取样各自页面的背景，见 SharedBarGlass
             val barGlass = rememberGlassFill(GlassRole.Control, windowBackdrop?.source)
+            // 转场期间玻璃走运动档（只降真在重画的那几块）、暂停亮度回读，见 GlassMotion
+            GlassMotionWhile(navigator.isTransitioning)
             if (navigator.isTransitioning) SharedBarGlass(navigator, barGlass)
             val barPaths = remember { BarPathCache() }
             Spacer(
                 Modifier.fillMaxSize().drawBehind {
                     // 从来源打开时，下层页的顶栏 / 底栏（mochiNavOccluder）先盖在变形中的容器上、再随进度淡掉，不会被一下盖住
+                    // 共享元素飞在所有页面上面、下层页的栏副本下面
+                    geo.drawShared(this)
                     geo.drawOccluders(this)
                     drawSharedBarItems(navigator, barPaths, glass = true)
                 },
@@ -318,33 +352,42 @@ public fun MochiNavHost(
 
 @Composable
 private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurface?, content: @Composable () -> Unit) {
-    val cover = rememberGraphicsLayer()
-    val pageMask = remember { NavPageMask() }
+    val cover = if (e.source != null) rememberGraphicsLayer() else null
+    val sourceClip = remember { NavPageClip() }
+    val slideClip = remember { NavPageClip() }
     DisposableEffect(e, cover) {
-        e.coverLayer = cover
-        onDispose { if (e.coverLayer === cover) e.coverLayer = null }
+        onDispose {
+            e.coverLayer = null
+            e.coverCoords = null
+        }
     }
     Box(
         Modifier
             .fillMaxSize()
             .onPlaced { e.coverCoords = it }
-            // 变换后的整页再录一份：下层页的玻璃在转场中读它（rememberMochiNavCoverBackdrop），原地照常画
+            // 来源容器在主机坐标裁切。只有下层页有玻璃取样方、且遮挡栏还可见时才录制。
             .drawWithContent {
-                val outline = geo.outline(e)
-                // Reuse the captured page, rather than installing a path clip on
-                // every descendant. Clear only the exterior of the G2 contour.
-                cover.compositingStrategy = if (outline != null) {
-                    androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                val outline = geo.sourceOutline(e)
+                if (cover != null && outline != null && geo.needsCover(e)) {
+                    val path = sourceClip.pathFor(outline)
+                    cover.record {
+                        clipPath(path) { this@drawWithContent.drawContent() }
+                    }
+                    e.coverLayer = cover
+                    drawLayer(cover)
                 } else {
-                    androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
+                    e.coverLayer = null
+                    if (outline != null || geo.clipsSlide(e)) {
+                        clipRect { sourceClip.draw(this@drawWithContent, outline) }
+                    } else {
+                        drawContent()
+                    }
                 }
-                cover.record {
-                    this@drawWithContent.drawContent()
-                    if (outline != null) pageMask.clearOutside(this, outline)
-                }
-                drawLayer(cover)
             }
             .graphicsLayer { geo.applyLayer(e, this) }
+            .drawWithContent {
+                slideClip.draw(this, geo.slideOutline(e))
+            }
             .drawWithContent {
                 // 完全被盖住的下层页不画。不用 alpha = 0：那样露出来时只改了图层属性，
                 // 内容可能没重新录制（真机上会画成空白）；在这里跳过，露出来时这块会重新执行、整页重画。
@@ -369,7 +412,9 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
                 // 每帧变的盖色 / 压暗在旁边自己那一层，不会让这张图作废
                 .graphicsLayer {
                     // 被「从来源打开」的页盖着的下层页也一样：它这段时间只缩放（页里收起的栏由下面那层代画）
-                    val cached = e.inTransition || geo.nav.isCarriedUnderSource(e)
+                    // 侧推也缓存（动的页、露出来的下层页都只平移）：页里的玻璃 / 模糊不用每帧重跑着色器，开液态玻璃时转场不卡
+                    val nav = geo.nav
+                    val cached = e.inTransition || nav.above(e)?.inTransition == true || nav.isCarriedUnderSource(e)
                     compositingStrategy = if (cached) CompositingStrategy.Offscreen else CompositingStrategy.Auto
                 }
                 .then(

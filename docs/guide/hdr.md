@@ -2,7 +2,7 @@
 
 When on, the highlight while pressing, switch and slider thumbs and the screen edge glow are drawn brighter than SDR white, so they actually glow like Apple Intelligence effects on iOS. Requires **Android 14 (API 34)+ and an HDR-capable display**; everywhere else everything is drawn in SDR.
 
-Try each one under Effects → HDR 高光（实验性） in the example app; the Theme tab has the global switch.
+Try each one under Effects → HDR 高光 in the example app; the Theme tab has the global switch.
 
 ## How it works
 

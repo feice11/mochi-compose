@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
@@ -123,6 +124,7 @@ import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
 import ui.feice.mochi.effect.elastic.rubberStretched
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.MochiGlassContent
 import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.effect.glass.overlayBackdropSource
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
@@ -188,12 +190,14 @@ internal data class MochiStyle(
 )
 
 /**
- * 开了液态玻璃（主题有 [ui.feice.mochi.theme.MochiMaterials.menuGlass]，页面有背景录制）时菜单换成 iOS 27 玻璃菜单的样子：
+ * 开了玻璃（主题有 [ui.feice.mochi.theme.MochiMaterials.menuGlass]，页面有背景录制）时菜单换成 iOS 27 玻璃菜单的样子：
  * 面板圆角、上下留白、行高照 [LiquidMenu]；[cover] 时按钮直接变形成菜单（iOS 的菜单从按钮长出来）。
  * 宽度是库默认值时换成 iOS 的默认宽度，调用方自己给的宽度不动
  */
-internal fun MochiStyle.liquid(cover: Boolean): MochiStyle = copy(
+internal fun MochiStyle.liquid(cover: Boolean, dark: Boolean, defaultContent: Color): MochiStyle = copy(
     liquid = true,
+    // 玻璃上的字照网页的 label 色；调用方自己给了内容色就不动
+    onPanelColor = if (onPanelColor == defaultContent) MochiGlassContent.label(dark) else onPanelColor,
     openMode = if (cover) MochiOpenMode.Cover else openMode,
     // iOS 菜单的形变不经过中间形状（morph 的 usingIntermediateShapes 传的 false），面板和来源之间不连融球颈
     fuseRadius = 0.dp,
@@ -298,6 +302,7 @@ internal fun mochiStyle(c: MochiDropdownColors, b: MochiDropdownBehavior, p: Moc
  * - API 33+ 用 AGSL 画融球；33 以下自动降级成两个独立 G2 形状
  * - 系统关了动画（开发者选项动画时长 0）时，果冻 / 融球 / 橡皮筋这些弹性效果全关，对应 iOS 的「减弱动态效果」
  * - [onClick]：给了并且 trigger = LongPress 时，轻点执行它、长按才打开菜单（比如返回按钮：点了返回，长按看历史）
+ * - [buttonCornerRadius]：按钮的圆角，默认胶囊；按钮要和旁边的方块（比如键盘按键）同形时给它们的圆角
  */
 @Composable
 public fun MochiDropdown(
@@ -316,6 +321,7 @@ public fun MochiDropdown(
     buttonPadding: PaddingValues = MochiDropdownDefaults.ButtonPadding,
     buttonMinWidth: Dp = 0.dp,
     buttonMinHeight: Dp = MochiDropdownDefaults.ButtonMinHeight,
+    buttonCornerRadius: Dp = MochiDropdownDefaults.ButtonCornerRadius,
     onClick: (() -> Unit)? = null,
     buttonContent: @Composable RowScope.() -> Unit,
 ) {
@@ -336,6 +342,7 @@ public fun MochiDropdown(
         buttonMinHeight = buttonMinHeight,
         onClick = onClick,
         modifier = modifier,
+        buttonCornerRadius = buttonCornerRadius,
         buttonContent = buttonContent,
     )
 }
@@ -373,12 +380,15 @@ internal fun DropdownCore(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     panelCornerRadius: Dp? = null,
     group: BarGroupHandle? = null,
+    buttonCornerRadius: Dp = MochiDropdownDefaults.ButtonCornerRadius,
     buttonContent: @Composable RowScope.() -> Unit,
 ) {
     // 弹出层（content）不是选项列表，不换玻璃菜单的排版
     val liquid = content == null && liquidMenu()
-    val style = remember(colors, behavior, physics, menuWidth, panelCornerRadius, liquid) {
-        mochiStyle(colors, behavior, physics, menuWidth).let {
+    val dark = MochiTheme.colorScheme.isDark
+    val onSurface = MochiTheme.colorScheme.onSurface
+    val style = remember(colors, behavior, physics, menuWidth, panelCornerRadius, liquid, dark, onSurface, buttonCornerRadius) {
+        mochiStyle(colors, behavior, physics, menuWidth).copy(buttonCornerRadius = buttonCornerRadius).let {
             if (panelCornerRadius !=
                 null
             ) {
@@ -386,7 +396,7 @@ internal fun DropdownCore(
             } else {
                 it
             }
-        }.let { if (liquid) it.liquid(cover = true) else it }
+        }.let { if (liquid) it.liquid(cover = behavior.liquidCover || behavior.openMode == MochiOpenMode.Cover, dark, onSurface) else it }
     }
     val menuMotion = liquidMotion(liquid, motion)
     val trigger = behavior.trigger
@@ -419,12 +429,28 @@ internal fun DropdownCore(
 
     // 栏里的按钮（返回按钮的历史菜单等）在有玻璃材质和背景来源时按钮本身画成玻璃；按钮组里的一格由组画
     val buttonGlass = if (group == null) LocalBarControlGlass.current else null
+    // 玻璃按钮跟单个玻璃栏按钮一样能拖着形变（朝手指拉伸、挪动）；按下的放大还是按钮自己的 press
+    val flex = remember {
+        ButtonVisual().apply {
+            flex = true
+            lift = false
+        }
+    }
+    flex.unit = LocalDensity.current.density
+    val flexScope = rememberCoroutineScope()
     // 布局里的真按钮。菜单打开期间隐藏，由浮层里的克隆 + shader 接管
     Box(
         modifier = modifier
             .onGloballyPositioned {
                 anchor.update(Rect(it.positionInWindow() + view.windowOriginOnScreen(), it.size.toSize()))
             }
+            .then(
+                if (enabled && buttonGlass != null) {
+                    Modifier.onPlaced { flex.coords = it }.glassFlexGesture(flex, flexScope)
+                } else {
+                    Modifier
+                },
+            )
             .then(if (enabled) Modifier.mochiButtonGesture(trigger, controller, { anchor.rect.topLeft }, callbacks) else Modifier)
             .semantics {
                 role = Role.Button
@@ -446,7 +472,9 @@ internal fun DropdownCore(
             }
             .graphicsLayer {
                 // 浮层接手画整个按钮组时，组自己不画，这一格照常录进组的内容里（浮层按组画它）
-                alpha = if (engine.overlayReady && group?.hidden != true) {
+                // 按钮组里的一格自己从不藏：组藏不藏由浮层管（group.hidden，整组一起），
+                // 不然浮层就绪、动画还没开始的那一帧这一格先没了，组里少一个图标
+                alpha = if (engine.overlayReady && group == null) {
                     0f
                 } else if (!enabled) {
                     0.38f
@@ -457,8 +485,12 @@ internal fun DropdownCore(
                     1f
                 }
                 val s = if (group != null) 1f else press.value
-                scaleX = s
-                scaleY = s
+                // 菜单打开后按钮由浮层接手，形变不再叠上去
+                val stretch = buttonGlass != null && !engine.overlayReady
+                scaleX = s * (if (stretch) flex.flexX else 1f)
+                scaleY = s * (if (stretch) flex.flexY else 1f)
+                translationX = if (stretch) flex.shift.x else 0f
+                translationY = if (stretch) flex.shift.y else 0f
             }
             // 不用 clip：Android 的 clipPath 不抗锯齿，G2 曲线边缘会有锯齿；直接按形状画（有 AA）
             .drawWithCache {

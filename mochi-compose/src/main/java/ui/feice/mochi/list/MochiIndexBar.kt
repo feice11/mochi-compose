@@ -4,7 +4,6 @@
 package ui.feice.mochi.list
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -44,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.shadow.drawMochiShadow
@@ -103,7 +103,7 @@ public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit,
                                 select(i)
                             }
                         }
-                        scope.launch { bubble.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 600f)) }
+                        scope.launch { bubble.animateTo(1f, MochiMotionTokens.Pop) }
                         track(down.position.y)
                         while (true) {
                             val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
@@ -112,7 +112,7 @@ public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit,
                             track(c.position.y)
                         }
                         current = -1
-                        scope.launch { bubble.animateTo(0f, spring(dampingRatio = 1f, stiffness = 700f)) }
+                        scope.launch { bubble.animateTo(0f, MochiMotionTokens.Settle) }
                     }
                 }
                 .padding(vertical = 4.dp),

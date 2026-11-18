@@ -3,7 +3,6 @@
 
 package ui.feice.mochi.basic
 
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -50,7 +49,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
@@ -61,6 +59,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
+import ui.feice.mochi.anim.awaitFrameSettle
+import ui.feice.mochi.anim.mochiReduceMotion
+import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.basic.menu.MochiPx
 import ui.feice.mochi.basic.menu.PanelGlass
 import ui.feice.mochi.basic.menu.computeFrame
@@ -203,15 +204,12 @@ public fun MochiPopoverBox(
     anchor: @Composable () -> Unit,
 ) {
     val view = LocalView.current
-    val context = LocalContext.current
     var anchorRect by remember { mutableStateOf(Rect.Zero) }
     val progress = remember { Animatable(0f) }
     val effects = remember { Animatable(0f) }
     var visible by remember { mutableStateOf(false) }
     var measured by remember { mutableStateOf(false) }
-    val reduceMotion = remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
+    val reduceMotion = mochiReduceMotion()
     val dismiss by rememberUpdatedState { onExpandedChange(false) }
     val currentExpanded by rememberUpdatedState(expanded)
 
@@ -219,10 +217,14 @@ public fun MochiPopoverBox(
         anchor()
     }
 
+    val framePeriod = rememberFramePeriodNanos()
     LaunchedEffect(expanded, motion) {
         if (expanded) {
+            val fresh = !visible
             visible = true
             snapshotFlow { measured }.first { it }
+            // 新弹出的先等它画完、帧率回稳再动（收起途中又打开不等）
+            if (fresh) awaitFrameSettle(framePeriod)
             coroutineScope {
                 launch { progress.animateTo(1f, motion.openSpatial) }
                 launch {
@@ -355,11 +357,14 @@ private fun PopoverOverlay(
         Spacer(
             Modifier
                 .fillMaxSize()
+                // 锚点不归弹出层管（单团、不融色）：面板从锚点大小长出时若一开始就不透明，
+                // 会先盖出一块锚点形状的实色块；开头一小段淡入，收起时同样淡出
+                .graphicsLayer { if (singleBlob) alpha = smoothstep(0f, 0.3f, progress.value) }
                 .drawBehind {
                     val f = frame()
                     val cl = progress.value.coerceIn(0f, 1f)
                     val dark = colors.panel.luminance() < 0.5f
-                    val shadow = lerp(shadows.rest, shadows.floating, cl).resolve(this, dark, (progress.value * 3f).coerceIn(0f, 1f))
+                    val shadow = lerp(shadows.rest, shadows.floating, cl).resolve(this, dark, smoothstep(0f, 0.35f, progress.value))
                     val mf = if (singleBlob) {
                         val blob = MochiBlob(f.panel, f.panelRadius)
                         MochiMetaballFrame(blob, blob, 0f)

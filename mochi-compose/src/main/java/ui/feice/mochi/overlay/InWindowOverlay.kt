@@ -6,6 +6,7 @@ package ui.feice.mochi.overlay
 import android.content.Context
 import android.view.MotionEvent
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,15 +18,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalView
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import ui.feice.mochi.effect.glass.GlassSource
 import ui.feice.mochi.effect.glass.LocalGlassSources
 import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.overlayBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
+import ui.feice.mochi.effect.glass.rememberMochiCombinedBackdrop
 import ui.feice.mochi.navigation.LocalMochiNavEntry
 
 /**
@@ -58,11 +60,14 @@ internal fun InWindowOverlay(leaving: () -> Boolean = { false }, content: @Compo
                                 currentContent()
                             } else {
                                 // 浮层的玻璃取样它底下的内容；从浮层里再打开的浮层，底下是那份内容再叠上这个浮层自己
-                                val own = rememberLayerBackdrop()
-                                val layer = rememberCombinedBackdrop(under.layer, own)
-                                val face = rememberCombinedBackdrop(under.face, own)
+                                // 只录一遍：普通的图层来源每帧先把浮层画上屏、再为取样整个重画一遍，浮层里的玻璃整条离屏链每帧跑两次
+                                // （所有菜单、警告框、面板开合都卡的主因）。RecordOnce 上屏时录一次，取样那遍只回放
+                                val ownBackdrop = rememberMochiBackdrop(Color.Transparent)
+                                val own = ownBackdrop.layer
+                                val layer = rememberMochiCombinedBackdrop(under.layer, own)
+                                val face = rememberMochiCombinedBackdrop(under.face, own)
                                 val chain = remember(layer, face) { GlassSource(layer, face) }
-                                Box(Modifier.fillMaxSize().layerBackdrop(own)) {
+                                Box(Modifier.fillMaxSize().mochiBackdropSource(ownBackdrop)) {
                                     CompositionLocalProvider(
                                         LocalGlassSources provides LocalGlassSources.current.copy(overlay = under, window = chain),
                                     ) { currentContent() }
@@ -77,7 +82,17 @@ internal fun InWindowOverlay(leaving: () -> Boolean = { false }, content: @Compo
     }
     DisposableEffect(overlay) {
         val decor = hostView.rootView as ViewGroup
-        decor.addView(overlay, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // 按内容收高的窗口（输入法窗口就是 WRAP_CONTENT）里，铺满的浮层会把窗口撑成整屏、内容被顶走；
+        // 这种窗口里浮层固定成窗口此刻的大小，菜单在窗口里面开
+        val wrap = (decor.layoutParams as? WindowManager.LayoutParams)?.let {
+            it.height == ViewGroup.LayoutParams.WRAP_CONTENT || it.width == ViewGroup.LayoutParams.WRAP_CONTENT
+        } == true
+        val params = if (wrap && decor.width > 0 && decor.height > 0) {
+            ViewGroup.LayoutParams(decor.width, decor.height)
+        } else {
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        decor.addView(overlay, params)
         onDispose {
             if (overlay.hasFocus()) {
                 // 浮层里有输入框聚焦时直接移除，系统会把焦点交回页面，Compose 顺手聚焦页面上第一个输入框、键盘又弹出来。

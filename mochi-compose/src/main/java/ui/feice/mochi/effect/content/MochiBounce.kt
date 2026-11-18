@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 
 /**
  * 图标「弹一下」（SF Symbols 的 bounce）：[trigger] 每变成一个新的、非 null / 非 false 的值，内容先快速压扁一点，
@@ -61,7 +61,7 @@ private class BounceNode(private var last: Any?, var depth: Float) :
         job = coroutineScope.launch {
             // 压下去很快，弹回来带一点过冲
             scale.animateTo(1f - depth, tween(70))
-            scale.animateTo(1f, MochiMotions.responseSpring(0.38f, 0.45f))
+            scale.animateTo(1f, MochiMotionTokens.Bounce)
         }
     }
 

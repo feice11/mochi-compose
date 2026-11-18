@@ -222,11 +222,19 @@ internal class GlassTabState(private val scope: CoroutineScope, initial: Float) 
         go(index, iosSpring(0.4f, 0.85f))
     }
 
-    /** 不按下，直接滑过去 */
-    fun slideTo(index: Float) = go(index, iosSpring(0.4f, 0.85f))
+    /**
+     * 不按下，直接滑过去。[velocity]（项 / 秒）不为 null 时从这个速度出发（左右拖页面松手，接着页面的速度走）。
+     *
+     * 横向是透镜的原生值 0.4 / 0.85（欠阻尼），页面是临界阻尼的 MochiMotionTokens.Page（0.42 / 1）：两者同时起步、
+     * 时长相近，透镜到位时那一点过冲是原生的，保留，不为了和页面一致改成临界阻尼
+     */
+    fun slideTo(index: Float, velocity: Float? = null) = go(index, iosSpring(0.4f, 0.85f), velocity)
 
-    private fun go(index: Float, spec: AnimationSpec<Float>) {
-        scope.launch { position.animateTo(index.coerceIn(0f, last), spec) }
+    /** 左右拖页面时跟着拖动进度：和按住拖动同一档跟手弹簧 0.2 / 0.85，不鼓起 */
+    fun follow(index: Float) = go(index, iosSpring(0.2f, 0.85f))
+
+    private fun go(index: Float, spec: AnimationSpec<Float>, velocity: Float? = null) {
+        scope.launch { position.animateTo(index.coerceIn(0f, last), spec, velocity ?: position.velocity) }
         runStretch()
     }
 
@@ -258,12 +266,6 @@ private fun iosSpring(response: Float, dampingRatio: Float): AnimationSpec<Float
     val w = 2f * PI.toFloat() / response
     return spring(dampingRatio = dampingRatio, stiffness = w * w, visibilityThreshold = 0.0005f)
 }
-
-/**
- * 选中块背后的模糊（iOS 的 UITabSelectionView：在 1/4 分辨率上取样再 gaussianBlur 半径 2）。
- * 写成等效的高斯 sigma：竖条纹上量选中块里外条纹的衰减，扣掉选中矩阵的增益，得到 2.9pt
- */
-internal val SelectionBlur = 2.9.dp
 
 /** 按下时底栏上的图标放大多少（1 + 0.16p） */
 internal const val IconPressScale = 0.16f

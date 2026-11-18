@@ -4,7 +4,6 @@
 package ui.feice.mochi.basic
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,6 +22,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurTransitions
@@ -57,7 +57,7 @@ public fun MochiSelectFrame(
     content: @Composable () -> Unit,
 ) {
     // 选中时带回弹弹起来（和卡片弹出同一种手感），没选中的收小一点
-    val sel by animateFloatAsState(if (selected) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = 380f), label = "selectFrame")
+    val sel by animateFloatAsState(if (selected) 1f else 0f, MochiMotionTokens.Bounce, label = "selectFrame")
     val cs = MochiTheme.colorScheme
     val ring = lerp(cs.outlineVariant, cs.primary, sel.coerceIn(0f, 1f))
     val inset = MochiSelectFrameDefaults.Gap

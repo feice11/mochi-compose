@@ -37,7 +37,7 @@ MochiChip("未读", selected, onClick, leadingIcon = { MochiIonicon("mail-unread
 - 高度 34dp，文字 subhead 中等字重；单选和多选的字重一样，切换时文字宽度不跳。
 - 没选中是半透明灰色填充，放在灰色页面底和白卡片上都看得清；选中是主色实底。
 - `MochiChipGroup` 横排时两端留 `contentPadding`（默认 16dp，和卡片外边对齐），滑到头有弹性。
-- 横排两端自带渐隐遮罩：还能往哪边滑，哪边就渐隐（iOS 外观同时渐进模糊）；滑到头那一边是实的。不用再自己套 `mochiScrollFadeMask`。
+- 横排两端自带渐隐遮罩：还能往哪边滑，哪边就渐隐；滑到头那一边是实的。不用再自己套 `mochiScrollFadeMask`。
 - 放在已经有左右边距的容器里时，传 `contentPadding = PaddingValues(0.dp)` 和 `bleed` = 容器的边距。只传 `PaddingValues(0.dp)` 的话，滑动区域停在容器边距以内，渐隐落在卡片边上，屏幕边和卡片边之间空着一条。
 - 遮罩是按自己矩形裁切的离屏图层，组件上下已经给按压放大留了余量，报给父布局的高度不变。
 - 读屏：`MochiChip` 带选中状态；`MochiRemovableChip` 读作「移除 + 文字」，可以用 `removeDescription` 换成别的语言。

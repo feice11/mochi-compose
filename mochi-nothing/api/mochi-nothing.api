@@ -1,0 +1,21 @@
+public final class ui/feice/mochi/nothing/MochiNothingThemeKt {
+	public static final fun MochiNothingTheme (ZLui/feice/mochi/theme/MochiTextStyles;Lui/feice/mochi/theme/MochiShapes;Lui/feice/mochi/theme/MochiMotionScheme;Lui/feice/mochi/theme/MochiMaterials;Lkotlin/jvm/functions/Function2;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class ui/feice/mochi/nothing/NothingColors {
+	public static final field $stable I
+	public static final field INSTANCE Lui/feice/mochi/nothing/NothingColors;
+	public final fun getAccent-0d7_KjU ()J
+}
+
+public final class ui/feice/mochi/nothing/NothingColorsKt {
+	public static final fun nothingColorScheme (Z)Lui/feice/mochi/theme/MochiColorScheme;
+	public static final fun nothingControlPalette (Z)Lui/feice/mochi/theme/MochiControlPalette;
+}
+
+public final class ui/feice/mochi/nothing/NothingTypographyKt {
+	public static final fun nothingDotTextStyle (Landroidx/compose/ui/text/TextStyle;)Landroidx/compose/ui/text/TextStyle;
+	public static final fun nothingTextStyles (Lui/feice/mochi/theme/MochiTextStyles;Z)Lui/feice/mochi/theme/MochiTextStyles;
+	public static synthetic fun nothingTextStyles$default (Lui/feice/mochi/theme/MochiTextStyles;ZILjava/lang/Object;)Lui/feice/mochi/theme/MochiTextStyles;
+}
+

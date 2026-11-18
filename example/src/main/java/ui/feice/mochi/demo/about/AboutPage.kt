@@ -11,18 +11,11 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,8 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -61,17 +52,13 @@ import ui.feice.mochi.basic.Text
 import ui.feice.mochi.basic.rememberMochiToastState
 import ui.feice.mochi.demo.R
 import ui.feice.mochi.demo.common.AppIcon
-import ui.feice.mochi.demo.common.DemoSection
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.IconColors
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tag
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.demo.routeTitle
-import ui.feice.mochi.effect.elastic.mochiPressDeform
-import ui.feice.mochi.effect.glow.mochiPressGlow
-import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListDisclosure
 import ui.feice.mochi.list.MochiListRow
@@ -90,10 +77,7 @@ private const val Afdian = "https://afdian.com/a/feice"
 /** 长按团子多久进入彩蛋 */
 private const val ChargeMillis = 800
 
-/**
- * 关于页：作者、赞助与交流群、鸣谢。顶部的团子能戳（中间那颗被按扁、挤开两边），
- * 长按蓄满进入彩蛋（[RibbonEggOverlay]：玻璃飘带、折射和色散）；交流群只写入群步骤，群号由爱发电在赞助后私信发出。
- */
+/** 关于页：作者、交流群、鸣谢；长按团子进入彩蛋 [RibbonEggOverlay]。 */
 @Composable
 internal fun AboutPage(modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
@@ -131,11 +115,9 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
         var more by remember { mutableStateOf(false) }
         MochiLazyCompactTitleScaffold(
             title = "关于",
-            // 彩蛋：整页透过一层流动的玻璃看，效果直接作用在页面图层上
             modifier = Modifier.ribbonEggEffect(egg),
             navigationIcon = { MochiBackButton(history = ::routeTitle) },
         ) {
-            // —— 团子 + 名字 ——
             demoItem {
                 Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
@@ -147,7 +129,6 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                                     awaitFirstDown()
                                     val job = scope.launch {
                                         coroutineScope {
-                                            // 蓄力：每过 1/4 轻震一下，团子越鼓越抖
                                             val ticker = launch {
                                                 var step = 0
                                                 snapshotFlow { (charge.value * 4).toInt() }.collect {
@@ -162,7 +143,6 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                                         }
                                         haptics.confirm()
                                         startEgg()
-                                        // 团子弹回原样，飘带从它这里抽出来
                                         scope.launch { charge.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 240f)) }
                                     }
                                     val up = waitForUpOrCancellation()
@@ -192,7 +172,7 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                     Text("Mochi", style = ts.largeTitle, modifier = Modifier.padding(top = 4.dp))
                     Text("麻薯", style = ts.titleMedium.emphasized(), color = Dango.Top)
                     Text(
-                        "软软弹弹、跟手顺滑的 Compose 组件库",
+                        "Jetpack Compose 组件库",
                         style = ts.subhead.copy(textAlign = TextAlign.Center),
                         color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
@@ -200,11 +180,10 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                     Tag("v$version", cs.surfaceContainerHigh, cs.onSurfaceVariant, Modifier.padding(top = 12.dp))
                 }
             }
-            // —— 作者 ——
             demoItem {
                 MochiListSection(
                     header = "开发者",
-                    footer = "Mochi 由我一个人在业余时间开发维护，免费开源。赞助会用在打磨手感、补组件和测试设备上。",
+                    footer = "Mochi 由我一个人在业余时间开发维护，免费开源。",
                 ) {
                     MochiListRow(
                         "稽品飞车",
@@ -220,12 +199,12 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                             }
                         },
                     )
-                    LinkRow("GitHub", "feice11", Icons.GITHUB, IconColors(Color(0xFF24292F), Color.White)) { open(GitHub) }
-                    LinkRow("哔哩哔哩", "UID 626797481", Icons.BILIBILI, IconColors(Color(0xFFFB7299), Color.White)) { open(Bilibili) }
-                    LinkRow("爱发电", "feice", Icons.HEART, IconColors(Color(0xFF946CE6), Color.White)) { open(Afdian) }
+                    LinkRow("GitHub", "feice11", DemoIcons.GITHUB, IconColors(Color(0xFF24292F), Color.White)) { open(GitHub) }
+                    LinkRow("哔哩哔哩", "UID 626797481", DemoIcons.BILIBILI, IconColors(Color(0xFFFB7299), Color.White)) { open(Bilibili) }
+                    LinkRow("爱发电", "feice", DemoIcons.HEART, IconColors(Color(0xFF946CE6), Color.White)) { open(Afdian) }
                 }
             }
-            // —— 交流群：只写步骤，群号在赞助后由爱发电私信发出 ——
+            // 群号由爱发电在赞助后私信发出，这里只写步骤
             demoItem {
                 MochiListSection(header = "加入交流群", footer = "交流群只对赞助者开放，申请入群时会核对订单号。") {
                     StepRow(1, "在爱发电赞助任意一档", onClick = { open(Afdian) })
@@ -233,29 +212,28 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                     StepRow(3, "申请入群时填写爱发电订单号", subtitle = "在爱发电「我的订单」里可以看到")
                 }
             }
-            // —— 鸣谢 ——
             demoItem {
                 MochiListSection(header = "鸣谢") {
                     LinkRow(
                         "Kyant0",
                         null,
-                        Icons.GITHUB,
+                        DemoIcons.GITHUB,
                         Tone.Neutral.tile(),
                         subtitle = "提供了圆角算法。",
                     ) { open("https://github.com/Kyant0") }
                     LinkRow(
                         "Bear",
                         null,
-                        Icons.GITHUB,
+                        DemoIcons.GITHUB,
                         Tone.Neutral.tile(),
                         subtitle = "做了计数器的滚轮动画。",
                     ) { open("https://github.com/mif9499") }
                     LinkRow(
                         "Nevoit",
                         null,
-                        Icons.GITHUB,
+                        DemoIcons.GITHUB,
                         Tone.Neutral.tile(),
-                        subtitle = "一直骂我。",
+                        subtitle = "参与了越界回弹的实现。",
                     ) { open("https://github.com/Nevodev") }
                     MochiListDisclosure(
                         "其他开源项目",
@@ -263,7 +241,7 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                         onExpandedChange = { more = it },
                         leading = {
                             AppIcon(
-                                Icons.GIFT,
+                                DemoIcons.GIFT,
                                 Tone.Neutral.tile(),
                                 MochiListDefaults.LeadingSize,
                                 corner = MochiListDefaults.LeadingCorner,
@@ -284,7 +262,7 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
             }
             demoItem {
                 Text(
-                    "Made with 🍡 by 稽品飞车 · Apache-2.0",
+                    "由稽品飞车开发，按 Apache-2.0 许可开源",
                     style = ts.footnote.copy(textAlign = TextAlign.Center),
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth(),

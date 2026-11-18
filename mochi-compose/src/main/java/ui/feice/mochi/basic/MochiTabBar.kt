@@ -59,7 +59,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.content.mochiBlur
 import ui.feice.mochi.effect.content.mochiBlurAlpha
 import ui.feice.mochi.effect.content.mochiBounce
@@ -67,6 +67,7 @@ import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
 import ui.feice.mochi.effect.glass.LocalMochiBackdrop
 import ui.feice.mochi.effect.glass.MochiBackdrop
+import ui.feice.mochi.effect.glass.resolved
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.drawGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
@@ -84,6 +85,7 @@ import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.lerp
 import ui.feice.mochi.utils.MochiHaptics
 import ui.feice.mochi.utils.lerp
+import ui.feice.mochi.utils.lerpRect
 import ui.feice.mochi.utils.smoothstep
 
 /**
@@ -130,7 +132,8 @@ public fun MochiTabBar(
 ) {
     val n = items.size
     if (n == 0) return
-    if (material != null) {
+    val glass = material.resolved()
+    if (glass != null) {
         MochiGlassTabBar(
             selectedIndex,
             onSelect,
@@ -143,7 +146,7 @@ public fun MochiTabBar(
             scrollBehavior,
             search,
             accessory,
-            material,
+            glass,
             backdrop,
             modifier,
         )
@@ -156,6 +159,8 @@ public fun MochiTabBar(
     val haptics = remember(view, behavior.hapticProfile) { MochiHaptics(view, behavior.hapticProfile) }
     val state = remember { TabBarState(selectedIndex.toFloat()) }
     val selected by rememberUpdatedState(selectedIndex.coerceIn(0, n - 1))
+    // 在 MochiTabScaffold 里：选中块等页面起步再出发、拖页面时跟手（见 TabBarLink）
+    val link = LocalTabBarLink.current
     val currentOnSelect by rememberUpdatedState(onSelect)
     val currentOnReselect by rememberUpdatedState(onReselect)
     val currentSearch by rememberUpdatedState(search)
@@ -170,7 +175,7 @@ public fun MochiTabBar(
     // 搜索展开进度：和滚动收起同一种弹簧
     val searchActive = search?.active == true
     val searchProgress = remember { Animatable(if (searchActive) 1f else 0f) }
-    LaunchedEffect(searchActive) { searchProgress.animateTo(if (searchActive) 1f else 0f, MochiMotions.responseSpring(0.42f, 0.82f)) }
+    LaunchedEffect(searchActive) { searchProgress.animateTo(if (searchActive) 1f else 0f, MochiMotionTokens.Present) }
     if (search != null) BackHandler(enabled = searchActive) { search.onActiveChange(false) }
 
     // 浮在内容上面的栏：从这一页的卡片打开时先盖在变形的容器上再淡掉（mochiNavOccluder）
@@ -243,7 +248,9 @@ public fun MochiTabBar(
             search = searchProgress.value,
         )
 
-        LaunchedEffect(state, n, fullPx, hPx) { state.run(n, { selected }, haptics, Size(fullPx, hPx), maxShift) }
+        LaunchedEffect(state, n, fullPx, hPx, link) {
+            state.run(n, { link?.shown(n) ?: selected }, haptics, Size(fullPx, hPx), maxShift, link)
+        }
 
         // 第 x 项的选中块位置（没变形；收起时过渡到那一个圆）
         fun slot(x: Float, c: Float): Rect {
@@ -409,7 +416,7 @@ public fun MochiTabBar(
                             state.held = true
                             scope.launch { glow.press(down.position, indGlowR) }
                             scope.launch { barGlow.press(down.position, barGlowR) }
-                            scope.launch { lift.animateTo(behavior.pressScale, MochiMotions.responseSpring(0.3f, 0.6f)) }
+                            scope.launch { lift.animateTo(behavior.pressScale, MochiMotionTokens.PressDown) }
                             var released = false
                             while (true) {
                                 val e = awaitPointerEvent()
@@ -430,7 +437,7 @@ public fun MochiTabBar(
                             barGlow.markReleased()
                             scope.launch { glow.release() }
                             scope.launch { barGlow.release() }
-                            scope.launch { lift.animateTo(1f, MochiMotions.responseSpring(0.38f, 0.62f)) }
+                            scope.launch { lift.animateTo(1f, MochiMotionTokens.PressRelease) }
                             if (released && target != selected) currentOnSelect(target)
                             if (released && target == selected) currentOnReselect?.invoke(target)
                         }
@@ -456,7 +463,10 @@ public fun MochiTabBar(
                         val tint = lerp(colors.content, colors.selectedContent, t)
                         val icon = @Composable {
                             // 被选中的那一下，图标弹一下（iOS 26 的标签图标）
-                            Box(Modifier.size(24.dp).mochiBounce(selected == i, depth = 0.16f), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.size(24.dp).mochiBounce((link?.shown(n) ?: selected) == i, depth = 0.16f),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 val sel = item.selectedIcon
                                 if (sel == null) {
                                     item.icon(tint)

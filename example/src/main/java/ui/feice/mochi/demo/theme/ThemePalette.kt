@@ -1,0 +1,184 @@
+// Copyright 2026, mochi-compose contributors
+// SPDX-License-Identifier: Apache-2.0
+
+package ui.feice.mochi.demo.theme
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.ZeroCornerSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import ui.feice.mochi.basic.Text
+import ui.feice.mochi.demo.common.DemoSection
+import ui.feice.mochi.theme.MochiDefaults
+import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.emphasized
+
+/** 主题色板：色块共用卡片轮廓，之间只留细缝。 */
+@Composable
+internal fun ThemeColorPalette(title: String) {
+    val cs = MochiTheme.colorScheme
+    val accents = listOf(
+        PaletteSwatch("主色", "primary", cs.primary, cs.onPrimary),
+        PaletteSwatch("主色容器", "primaryContainer", cs.primaryContainer, cs.onPrimaryContainer),
+        PaletteSwatch("辅助色", "secondary", cs.secondary, cs.onSecondary),
+        PaletteSwatch("辅助色容器", "secondaryContainer", cs.secondaryContainer, cs.onSecondaryContainer),
+        PaletteSwatch("第三色", "tertiary", cs.tertiary, cs.onTertiary),
+        PaletteSwatch("第三色容器", "tertiaryContainer", cs.tertiaryContainer, cs.onTertiaryContainer),
+    )
+    DemoSection(title, padding = 0.dp, clip = false) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val columns = if (maxWidth >= 300.dp * LocalDensity.current.fontScale) 2 else 1
+            PaletteGrid(accents, columns)
+        }
+    }
+}
+
+@Composable
+internal fun ThemeSurfaceLevels(title: String) {
+    val cs = MochiTheme.colorScheme
+    val ts = MochiTheme.textStyles
+    val shape = MochiTheme.shapes.extraLarge
+    DemoSection(title, padding = 0.dp, clip = false) {
+        Column(Modifier.fillMaxWidth()) {
+            val levels = listOf(
+                cs.surfaceContainerLowest to "Lowest",
+                cs.surfaceContainerLow to "Low",
+                cs.surfaceContainer to "Container",
+                cs.surfaceContainerHigh to "High",
+                cs.surfaceContainerHighest to "Highest",
+            )
+            levels.forEachIndexed { index, (color, name) ->
+                val top = index == 0
+                val bottom = index == levels.lastIndex
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        // 首末行自己带上卡片的圆角，不把整块裁进卡片形状（见 DemoCard 的 clip）
+                        .background(color, shape.corners(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom))
+                        .padding(horizontal = 22.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("${index + 1}", color = cs.onSurfaceVariant, style = ts.footnote, modifier = Modifier.alignByBaseline())
+                    Text(name, color = cs.onSurface, style = ts.body, modifier = Modifier.weight(1f).alignByBaseline())
+                }
+            }
+        }
+    }
+}
+
+private data class PaletteSwatch(val name: String, val token: String, val color: Color, val content: Color)
+
+@Composable
+private fun PaletteGrid(swatches: List<PaletteSwatch>, columns: Int) {
+    val ts = MochiTheme.textStyles
+    val gutter = 2.dp
+    val shape = MochiTheme.shapes.extraLarge
+    Layout(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 贴着卡片角的色块自己按卡片圆角画，不把整块裁进卡片形状（见 DemoCard 的 clip）
+            .background(MochiDefaults.groupedContainer(), shape)
+            .drawBehind {
+                val gap = gutter.roundToPx()
+                val rows = (swatches.size + columns - 1) / columns
+                val width = size.width.roundToInt()
+                val available = (width - gap * (columns - 1)).coerceAtLeast(0)
+                val rowHeight = (size.height.roundToInt() - gap * (rows - 1)) / rows
+                swatches.forEachIndexed { i, swatch ->
+                    val column = i % columns
+                    val row = i / columns
+                    val left = available * column / columns + gap * column
+                    val right = available * (column + 1) / columns + gap * column
+                    val x = if (layoutDirection == LayoutDirection.Rtl) width - right else left
+                    val top = row == 0
+                    val bottom = row == rows - 1
+                    val start = column == 0
+                    val end = column == columns - 1
+                    val cell = shape.corners(
+                        topStart = top && start,
+                        topEnd = top && end,
+                        bottomEnd = bottom && end,
+                        bottomStart =
+                            bottom && start,
+                    )
+                    translate(x.toFloat(), (row * (rowHeight + gap)).toFloat()) {
+                        drawOutline(
+                            cell.createOutline(Size((right - left).toFloat(), rowHeight.toFloat()), layoutDirection, this),
+                            swatch.color,
+                        )
+                    }
+                }
+            },
+        content = {
+            swatches.forEach { swatch ->
+                Column(
+                    Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(swatch.name, color = swatch.content, style = ts.labelLarge.emphasized().copy(textAlign = TextAlign.Center))
+                    Text(
+                        swatch.token,
+                        color = swatch.content,
+                        style = ts.footnote.copy(textAlign = TextAlign.Center),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+    ) { measurables, constraints ->
+        val gap = gutter.roundToPx()
+        val available = (constraints.maxWidth - gap * (columns - 1)).coerceAtLeast(0)
+        val placeables = measurables.mapIndexed { i, measurable ->
+            val column = i % columns
+            val width = available * (column + 1) / columns - available * column / columns
+            measurable.measure(Constraints.fixedWidth(width))
+        }
+        val rowHeight = maxOf(112.dp.roundToPx(), placeables.maxOf { it.height })
+        val rows = (placeables.size + columns - 1) / columns
+        layout(constraints.maxWidth, constraints.constrainHeight(rows * rowHeight + gap * (rows - 1))) {
+            placeables.forEachIndexed { i, p ->
+                val column = i % columns
+                p.placeRelative(
+                    available * column / columns + gap * column,
+                    (i / columns) * (rowHeight + gap) + (rowHeight - p.height) / 2,
+                )
+            }
+        }
+    }
+}
+
+/** 只保留指定的角，其余为直角；非 CornerBasedShape 原样返回 */
+private fun Shape.corners(topStart: Boolean, topEnd: Boolean, bottomEnd: Boolean, bottomStart: Boolean): Shape {
+    val s = this as? CornerBasedShape ?: return this
+    return s.copy(
+        topStart = if (topStart) s.topStart else ZeroCornerSize,
+        topEnd = if (topEnd) s.topEnd else ZeroCornerSize,
+        bottomEnd = if (bottomEnd) s.bottomEnd else ZeroCornerSize,
+        bottomStart = if (bottomStart) s.bottomStart else ZeroCornerSize,
+    )
+}

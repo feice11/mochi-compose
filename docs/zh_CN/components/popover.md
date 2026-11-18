@@ -18,6 +18,7 @@ MochiPopoverButton(
 
 - **触发者是按钮时用 `MochiPopoverButton`**：按钮和面板是同一个组件，和[下拉菜单](dropdown.md)共用同一套实现。按下放大、指尖发光、按钮颜色融进面板、融球颈、果冻、橡皮筋都一样，只是面板里放任意内容、按内容尺寸长出来。按钮外观取 `colors`（`buttonColor` / `buttonContentColor`），`behavior.openMode = Cover` 时按钮整个长成面板
 - **按钮色必须不透明**：打开时真按钮藏起来、浮层里画一个克隆，下面还垫着面板阴影。半透明的灰会让阴影从按钮里透出来，看起来像一块突然浮起的半透明遮罩，收起时又随浮层一下消失。按钮放在卡片里要用灰色时，先合成到卡片底色上：`MochiDefaults.fill().compositeOver(MochiDefaults.groupedContainer())`。没合成的半透明色引擎会兜底合成到面板色上
+- 面板（气泡）的阴影只跟着展开出现：按住按钮时没有，按钮本身永远不带影子
 - **`MochiPopoverBox` 只用于锚点不是按钮的情况**（程序主动弹出的提示、自定义控件）：锚点不归它管，所以没有按压反馈和融色
 - 面板里放的是一串选项时，不要用弹出层再自己摆 `MochiListRow`，直接用 `MochiDropdown` / `MochiIconDropdown`：选项的高亮块、按住滑选、滑过轻震都是菜单引擎提供的
 

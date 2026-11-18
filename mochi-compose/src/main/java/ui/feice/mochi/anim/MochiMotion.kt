@@ -81,7 +81,7 @@ public object MochiMotions {
      * 展开时位置、宽高、内容同一组弹簧 dampingRatio 0.8、response 0.3；收起（liquidMorphShrink）宽高、位置、内容 0.9 / 0.3。
      * 内容比形状晚 secondStepDelay = 0.3 × 0.1 = 0.03 秒，换成形状弹簧在 0.03 秒时走到的进度。
      * blurInSpring / blurOutSpring 是透镜里内容的模糊和放大用的（见 DropdownOverlay 的 MenuLens），不管内容透明度。
-     * 开了液态玻璃的菜单默认用它（见 [ui.feice.mochi.theme.MochiMaterials.menuGlass]）
+     * 开了玻璃的菜单默认用它（见 [ui.feice.mochi.theme.MochiMaterials.menuGlass]）
      */
     public val Ios27Menu: MochiMotion = MochiMotion(
         name = "iOS 27 玻璃菜单",

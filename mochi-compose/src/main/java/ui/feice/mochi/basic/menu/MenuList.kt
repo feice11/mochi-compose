@@ -57,6 +57,7 @@ import kotlin.math.tanh
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.LiquidMenu
 import ui.feice.mochi.basic.MochiItem
@@ -115,6 +116,7 @@ internal fun MochiList(
     // 玻璃菜单和 iOS 布局一样：对勾在左、选中不铺底色
     val ios = style.itemLayout == MochiItemLayout.Ios || style.liquid
     val itemH = px.itemHeight
+    val icons = remember(items) { items.any { it.icon != null } }
     val hlPathCache = remember { G2PathCache() }
     val currentHover by rememberUpdatedState(hover)
     val currentPointer by rememberUpdatedState(pointer)
@@ -134,11 +136,11 @@ internal fun MochiList(
         snapshotFlow { currentPointer() != null && currentHover() >= 0 }.distinctUntilChanged().collect { on ->
             if (on) {
                 launch { itemGlow.press(radius = MochiGlowDefaults.radius(Size(width, itemH), density)) }
-                launch { hlPress.animateTo(ItemPressScale, MochiMotions.responseSpring(0.22f, 0.62f)) }
+                launch { hlPress.animateTo(ItemPressScale, MochiMotionTokens.PressDown) }
             } else {
                 itemGlow.markReleased()
                 launch { itemGlow.release() }
-                launch { hlPress.animateTo(1f, MochiMotions.responseSpring(0.36f, 0.6f)) }
+                launch { hlPress.animateTo(1f, MochiMotionTokens.PressRelease) }
             }
         }
     }
@@ -225,7 +227,6 @@ internal fun MochiList(
                 .offset { IntOffset(0, (from * itemH - scroll()).roundToInt()) },
         ) {
             val radio = selectedIndex >= 0
-            val icons = items.any { it.icon != null }
             for (i in from until until) {
                 key(i) {
                     val item = items[i]

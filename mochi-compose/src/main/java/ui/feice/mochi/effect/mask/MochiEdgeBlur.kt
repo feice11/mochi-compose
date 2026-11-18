@@ -28,18 +28,19 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import ui.feice.mochi.theme.LocalMochiMaterials
 
 /**
- * 滚动边缘效果的渐进模糊（iOS 26 的 scroll edge effect 里顶部那份 variableBlur），加在**滚动容器**上：
- * 容器自己在顶栏下面那一段把内容按遮罩渐进模糊，顶栏只画颜色那一层（[ui.feice.mochi.navigation.mochiScrollEdgeFade]）。
+ * 顶栏下面的均匀模糊（iOS 27 的顶栏），加在**滚动容器**上：容器自己把顶栏下沿以上那一段内容按同一个 sigma 模糊，
+ * 到下沿直接截断（硬边）；顶栏只画半透明底色和下沿细线（[ui.feice.mochi.navigation.mochiScrollEdgeFade]）。
  * 模糊的是内容自己，不需要背景来源，栏也不会画到自己身上。
  *
- * 遮罩、模糊量来自主题的 [ui.feice.mochi.theme.MochiMaterials.scrollEdge]；主题没给（Mochi、Nothing 外观）或 Android 12 及以下时不做任何事。
- * `MochiLargeTitleScaffold`、`MochiCompactTitleScaffold` 已经接好。
+ * 模糊量来自主题的 [ui.feice.mochi.theme.MochiMaterials.scrollEdge]；主题给 null 或 Android 12 及以下时不做任何事。
+ * `MochiLargeTitleScaffold`、`MochiCompactTitleScaffold`、`MochiSheetScaffold` 已经接好。
  *
  * @param top 顶栏下沿离容器顶边多远（状态栏 + 顶栏高度，容器从屏幕顶开始时）
  * @param alpha 和顶栏的 backgroundProgress 用同一个：内容停在顶部时是 0，栏下面没有内容，不模糊第一行
@@ -67,32 +68,48 @@ private class ScrollEdgeBlurNode(var top: Dp, var alpha: () -> Float) :
         val edge = currentValueOf(LocalMochiMaterials).scrollEdge
         val a = alpha().coerceIn(0f, 1f)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || edge == null || a <= 0f) return plain()
-        val side = edge.top
-        val sigma = side.blur.toPx() * a
-        if (sigma < MinSigma || size.width < 1f || size.height < 1f) return plain()
-        val line = top.toPx() - side.inset.toPx()
-        val soft = side.softness.toPx().coerceAtLeast(0.5f)
-        // 遮罩 1.25/(1 + e^(−1.702z)) − 0.25 在 z < −0.8145 时是 0：模糊只到线下面 0.82 个柔和度为止，再往下画原样
+        val sigma = edge.blur.toPx() * a
+        val line = min(ceil(size.height), ceil(top.toPx()))
+        if (sigma < MinSigma || size.width < 1f || line < 1f) return plain()
         bands.clear()
-        bands.add(0, 0, ceil(size.width).toInt(), min(ceil(size.height).toInt(), ceil(line + soft * 0.82f).toInt() + 1))
-        drawBands(sigma) { ox, oy, w, h ->
-            setFloatUniform("uMode", 0f, sigma, line, soft)
+        bands.add(0, 0, ceil(size.width).toInt(), line.toInt())
+        drawBands(sigma, boost = 1f) { ox, oy, w, h ->
+            setFloatUniform("uMode", 2f, sigma, line, 0f)
             setFloatUniform("uFrame", ox, oy, w, h)
         }
     }
 }
 
 /**
- * 渐变遮罩的边上也渐进模糊（[mochiFadeMask] 在主题有 scrollEdge 时自动加）：越靠边越糊，和透明度渐隐是同一条边、同一个深浅，
- * 模糊的范围是渐隐长度的两倍——渐隐快看不见的地方模糊已经到头，内容还清楚的地方也先开始轻微发糊。
- * 最大 sigma 借用主题顶部滚动边缘的实测值（iOS 没有单独的「容器内渐隐」可以对照）。
+ * 渐进模糊：越靠边越糊，边的长度、深浅和 [mochiFadeMask] 是同一套写法（Android 13+，更早的版本原样画）。
+ * 库里的栏和渐变遮罩都不再用它（顶栏是均匀模糊，见 [mochiScrollEdgeBlur]），要这种效果时自己加在容器上，
+ * 一般和同样边长的 [mochiFadeMask] 叠着用。
+ *
+ * @param edges 四条边各自模糊多长
+ * @param blur 最靠边处的模糊 sigma
+ * @param amount 各边的深浅（0..1），比如跟着滚动位置；在绘制阶段读，变了只重画这一层
  */
-internal data class FadeBlurElement(val edges: MochiFadeEdges, val amount: MochiFadeAmount) : ModifierNodeElement<FadeBlurNode>() {
-    override fun create(): FadeBlurNode = FadeBlurNode(edges, amount)
+public fun Modifier.mochiProgressiveBlur(
+    edges: MochiFadeEdges,
+    blur: Dp = MochiProgressiveBlurDefaults.Blur,
+    amount: MochiFadeAmount = MochiFadeAmount { 1f },
+): Modifier = this then FadeBlurElement(edges, amount, blur, reach = 1f)
+
+public object MochiProgressiveBlurDefaults {
+    /** 最靠边处的模糊 sigma */
+    public val Blur: Dp = 4.dp
+}
+
+/** 渐进模糊的四条边：长度 = edges × [reach]，越靠边越糊，最靠边是 [blur] */
+internal data class FadeBlurElement(val edges: MochiFadeEdges, val amount: MochiFadeAmount, val blur: Dp, val reach: Float) :
+    ModifierNodeElement<FadeBlurNode>() {
+    override fun create(): FadeBlurNode = FadeBlurNode(edges, amount, blur, reach)
 
     override fun update(node: FadeBlurNode) {
         node.edges = edges
         node.amount = amount
+        node.blur = blur
+        node.reach = reach
         node.invalidateDraw()
     }
 
@@ -101,13 +118,12 @@ internal data class FadeBlurElement(val edges: MochiFadeEdges, val amount: Mochi
     }
 }
 
-internal class FadeBlurNode(var edges: MochiFadeEdges, var amount: MochiFadeAmount) :
+internal class FadeBlurNode(var edges: MochiFadeEdges, var amount: MochiFadeAmount, var blur: Dp, var reach: Float) :
     BandBlurNode(),
     CompositionLocalConsumerModifierNode {
     override fun ContentDrawScope.draw() {
-        val edge = currentValueOf(LocalMochiMaterials).scrollEdge
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || edge == null || size.width < 1f || size.height < 1f) return plain()
-        val sigma = edge.top.blur.toPx()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || size.width < 1f || size.height < 1f) return plain()
+        val sigma = blur.toPx()
         // amount 读的是滚动状态之类，在这里读：变了只重画这一层
         (amount as? ScrollFadeAmount)?.density = density
         val rtl = currentValueOf(LocalLayoutDirection) == LayoutDirection.Rtl
@@ -116,13 +132,13 @@ internal class FadeBlurNode(var edges: MochiFadeEdges, var amount: MochiFadeAmou
         val sx = if (rtl) edges.end else edges.start
         val ex = if (rtl) edges.start else edges.end
         val v = floatArrayOf(
-            edges.top.toPx() * BlurReach,
+            edges.top.toPx() * reach,
             amount.amount(MochiFadeEdge.Top),
-            edges.bottom.toPx() * BlurReach,
+            edges.bottom.toPx() * reach,
             amount.amount(MochiFadeEdge.Bottom),
-            sx.toPx() * BlurReach,
+            sx.toPx() * reach,
             amount.amount(start),
-            ex.toPx() * BlurReach,
+            ex.toPx() * reach,
             amount.amount(end),
         )
         fun len(i: Int) = if (v[i * 2] > 0f && v[i * 2 + 1] > 0.001f) ceil(v[i * 2]).toInt() else 0
@@ -171,7 +187,11 @@ internal abstract class BandBlurNode :
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    protected fun ContentDrawScope.drawBands(sigma: Float, setup: RuntimeShader.(Float, Float, Float, Float) -> Unit) {
+    protected fun ContentDrawScope.drawBands(
+        sigma: Float,
+        boost: Float = BlurBoost,
+        setup: RuntimeShader.(Float, Float, Float, Float) -> Unit,
+    ) {
         val ctx = requireGraphicsContext()
         val c = content ?: ctx.createGraphicsLayer().also { content = it }
         val w = ceil(size.width).toInt()
@@ -197,9 +217,9 @@ internal abstract class BandBlurNode :
             val ew = (er - el).toFloat()
             val eh = (eb - et).toFloat()
             layer.renderEffect = caches[i].get(
-                floatArrayOf(sigma, el.toFloat(), et.toFloat(), ew, eh, w.toFloat(), h.toFloat(), *bands.key(i)),
+                floatArrayOf(sigma, boost, el.toFloat(), et.toFloat(), ew, eh, w.toFloat(), h.toFloat(), *bands.key(i)),
             ) {
-                maskedBlur(sigma, ew, eh, w.toFloat(), h.toFloat()) { setup(el.toFloat(), et.toFloat(), ew, eh) }
+                maskedBlur(sigma, boost, ew, eh, w.toFloat(), h.toFloat()) { setup(el.toFloat(), et.toFloat(), ew, eh) }
             }
             layer.record(IntSize(er - el, eb - et)) {
                 translate(-el.toFloat(), -et.toFloat()) { drawLayer(c) }
@@ -300,9 +320,17 @@ private class EffectCache {
     }
 }
 
-/** 普通高斯模糊（最大 [sigma]）× 遮罩 + 清晰内容 ×（1 − 遮罩）；[setup] 给遮罩着色器设遮罩规则和这条带子在容器里的位置 */
+/** 普通高斯模糊（最大 [sigma] × [boost]；均匀模糊时 boost = 1）× 遮罩 + 清晰内容 ×（1 − 遮罩）；[setup] 给遮罩着色器设遮罩规则和这条带子在容器里的位置 */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-internal fun maskedBlur(sigma: Float, w: Float, h: Float, fullW: Float, fullH: Float, setup: RuntimeShader.() -> Unit): RenderEffect {
+internal fun maskedBlur(
+    sigma: Float,
+    boost: Float,
+    w: Float,
+    h: Float,
+    fullW: Float,
+    fullH: Float,
+    setup: RuntimeShader.() -> Unit,
+): RenderEffect {
     fun mask(invert: Boolean, input: RenderEffect?): RenderEffect {
         val shader = RuntimeShader(MASK_AGSL).apply {
             setFloatUniform("uSize", fullW, fullH)
@@ -317,25 +345,22 @@ internal fun maskedBlur(sigma: Float, w: Float, h: Float, fullW: Float, fullH: F
     }
     // 只有一份「全糊」去和清晰的交叉淡化，过渡段整体偏清楚：全糊那份比原来的最大 sigma 大一些（BlurBoost），和逐像素变半径的观感对上。
     // createBlurEffect 收的是「半径」，HWUI 按 sigma = 0.57735·r + 0.5 换算
-    val radius = ((sigma * BlurBoost - 0.5f) / 0.57735f).coerceAtLeast(0.01f)
+    val radius = ((sigma * boost - 0.5f) / 0.57735f).coerceAtLeast(0.01f)
     val blurred = mask(false, RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP))
     // 预乘颜色直接相加 = 按遮罩交叉淡化
     return RenderEffect.createBlendModeEffect(mask(true, null), blurred, android.graphics.BlendMode.PLUS)
 }
 
 /** 全糊那份的 sigma 比原来的最大 sigma 大多少（对着旧的逐像素变半径截图调的） */
-private const val BlurBoost = 1.4f
+internal const val BlurBoost = 1.4f
 
 /** 小于这个 sigma 就当作不模糊（和着色器里的判断一致） */
 private const val MinSigma = 0.3f
 
-/** 模糊范围是渐隐长度的几倍 */
-private const val BlurReach = 2f
-
 // 模糊过的内容乘遮罩、清晰的内容乘（1 − 遮罩）（uInvert = 1）：遮罩就是原来逐像素 sigma 曲线除以最大 sigma（0..1）。
 // 这一层只是容器里的一条带子：uFrame = 带子在容器里的位置和大小，uSize = 容器大小。
-// uMode.x = 0：滚动边缘（阴影边遮罩：线 uMode.z、柔和度 uMode.w，再按 1.25·a − 0.25 收紧，和 iOS 一样）
-// uMode.x = 1：渐变遮罩的四条边（长度 uLen、深浅 uAmt，越靠边越糊）
+// uMode.x = 1：渐进模糊的四条边（长度 uLen、深浅 uAmt，越靠边越糊）
+// uMode.x = 2：顶栏的均匀模糊（线 uMode.z 以上全糊，以下清晰，硬边）
 private const val MASK_AGSL = """
 uniform shader content;
 uniform float2 uSize;
@@ -352,10 +377,7 @@ float edgeFade(float d, float len, float amt) {
 }
 
 float maskAt(float2 p) {
-    if (uMode.x < 0.5) {
-        float z = (uMode.z - p.y) / uMode.w;
-        return clamp(1.25 / (1.0 + exp(-1.702 * z)) - 0.25, 0.0, 1.0);
-    }
+    if (uMode.x > 1.5) return p.y < uMode.z ? 1.0 : 0.0;
     return max(max(edgeFade(p.y, uLen.x, uAmt.x), edgeFade(uSize.y - p.y, uLen.y, uAmt.y)),
                max(edgeFade(p.x, uLen.z, uAmt.z), edgeFade(uSize.x - p.x, uLen.w, uAmt.w)));
 }

@@ -22,6 +22,10 @@ jobs:
       - name: Check formatting
         run: ./gradlew --no-daemon spotlessCheck
 
+      # 公开 API 和 api/*.api 快照比对；有意改了公开 API 就本地跑 ./gradlew apiDump 并提交 .api 的变化
+      - name: Check public API
+        run: ./gradlew --no-daemon apiCheck
+
       - name: Build library
         run: ./gradlew --no-daemon :mochi-compose:assembleRelease :mochi-compose:publishToMavenLocal
 

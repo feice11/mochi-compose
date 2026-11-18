@@ -19,9 +19,6 @@ internal enum class GlassRole {
     /** 栏里的按钮、搜索框，以及显式写了玻璃样式的正文按钮 */
     Control,
 
-    /** iOS 的 .clear 玻璃（clearGlass / prominentClearGlass 样式的按钮） */
-    Clear,
-
     /** 下拉菜单、上下文菜单、气泡 */
     Menu,
 
@@ -32,15 +29,20 @@ internal enum class GlassRole {
     Sheet,
 }
 
-/** 某个角色用的玻璃材质，按 [MochiMaterials] 的回退顺序取；null = 画纯色 */
+/**
+ * 某个角色用的玻璃材质，按 [MochiMaterials] 的回退顺序取；null = 画纯色。
+ * 菜单、警告框、面板这类大块玻璃不按背后亮度翻明暗（关掉 [MochiGlass.adaptive]），跟主题走：
+ * 里面是成段的文字和应用自己的内容，翻成另一种明暗后应用的配色就对不上了。自适应留给栏和控件这些小块玻璃
+ */
 internal fun MochiMaterials.glassFor(role: GlassRole): MochiGlass? = when (role) {
     GlassRole.Bar -> bar
     GlassRole.Control -> controlGlass
-    GlassRole.Clear -> clearGlass
-    GlassRole.Menu -> menuGlass
-    GlassRole.Alert -> alertGlass
-    GlassRole.Sheet -> sheetGlass
+    GlassRole.Menu -> menuGlass?.fixedTone()
+    GlassRole.Alert -> alertGlass?.fixedTone()
+    GlassRole.Sheet -> sheetGlass?.fixedTone()
 }
+
+private fun MochiGlass.fixedTone(): MochiGlass = if (adaptive) copy(adaptive = false) else this
 
 /** 当前主题下这个角色画不画玻璃 */
 @Composable
@@ -52,10 +54,14 @@ internal fun glassOn(role: GlassRole): Boolean = MochiTheme.materials.glassFor(r
  */
 @Composable
 internal fun rememberGlassFill(role: GlassRole, source: GlassSource? = defaultSource(role)): GlassFill? =
-    rememberGlassFill(MochiTheme.materials.glassFor(role), source)
+    rememberGlassFill(MochiTheme.materials.glassFor(role).resolved(), source)
+
+/** 兼容旧调用：材质原样 */
+@Composable
+internal fun MochiGlass?.resolved(): MochiGlass? = this
 
 @Composable
 private fun defaultSource(role: GlassRole): GlassSource? = when (role) {
-    GlassRole.Bar, GlassRole.Control, GlassRole.Clear -> barGlassSource()
+    GlassRole.Bar, GlassRole.Control -> barGlassSource()
     GlassRole.Menu, GlassRole.Alert, GlassRole.Sheet -> LocalGlassSources.current.overlay
 }

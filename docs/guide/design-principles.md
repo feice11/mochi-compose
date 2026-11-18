@@ -99,7 +99,7 @@ See [Theme](theme.md).
 
 ## 5. Motion
 
-- Springs first: position and size use `MochiTheme.motionScheme`, content transitions use `MochiSprings.snappy(300)`, menus use `MochiMotions`. Opening may bounce a little; closing doesn't.
+- Springs first: library components pick position and size springs from the `MochiMotionTokens` tiers (see Choreography below); app-specific motion can use `MochiTheme.motionScheme`; content transitions use `MochiSprings.snappy(300)`, menus use `MochiMotions`. Opening may bounce a little; closing doesn't.
 - **Leave the way you came**: a menu grows out of its button and shrinks back into it; a page opens from its card and shrinks back into it on back.
 - An interrupted animation continues from where it is, never jumping back to the start.
 - Cancelling or disabling an active button must release its press deformation and glow and cancel any repeat job. Claim button Down/Up events without taking parent drag movement; never leave a disabled button fused to its neighbour. Floating sheets hide the navigation handle when opening is requested, without waiting for the spring to settle.
@@ -161,6 +161,31 @@ See [Theme](theme.md).
 - **Register bars floating over content as occluders:** top bars, bottom bars, toolbars and scroll-edge fades use `mochiNavOccluder` (library bars already do). When a card under a bar opens into a page, the bar stays above the morphing container and fades out with the open progress, fading back in on close, so start and landing look exactly like before the tap; the container must not cover the bar instantly as it starts.
 
 See [Effects](effects.md), [Overscroll](overscroll.md), [Navigation](navigation.md).
+
+### Choreography: several components moving together
+
+One change often moves several things at once (when the keyboard rises, the sheet, the field and the list all make room; when a row expands, the card height, the chevron and the child rows all change). However good each component is, the whole feels off when the participants keep their own rhythm. Rules:
+
+1. **One clock per change**: participants read the same progress, or start together on the same spring tier. A parent passes it down with `ProvideMochiTransition`; whatever moves inside because of that change reads `MochiTransition.current` instead of picking its own spec. Card height and the disclosure chevron both default to `MochiMotionTokens.Settle`.
+2. **Split by axis**: when horizontal and vertical movement mean different things, run them separately. Horizontal (alignment) settles first with critical damping; vertical (landing) may overshoot a little. Menus open horizontally first, then vertically.
+3. **Opacity is separate and short**: position and size use springs; opacity uses `MochiMotionTokens.Fade` (150ms) / `FadeOut` (120ms), or a short leading slice of the progress, never the spring progress itself. Cross-fades are staggered: the old content leaves first, then the new one arrives, so two half-transparent layers never sit on top of each other.
+4. **Keep the anchor**: things return where they came from. Compensate translation while scaling so the edge or corner that should stay put doesn't move.
+5. **Interruptible, velocity carried**: a new target continues from the current value and velocity; a gesture's release velocity goes into the following animation, with no stop-and-go.
+6. **Clean landing frame**: animations that end together are removed together, with no one-frame flash or size jump.
+7. **Few, shared tiers**: components don't hard-code spring parameters; they pick from `MochiMotionTokens`:
+
+| Tier | Parameters (response / damping ratio) | Used for |
+|---|---|---|
+| `Page` | 0.42s / 1 | Side push, tab page switch, sidebar, progress values |
+| `Present` | 0.42s / 0.86 | Sheet rising, toast, tab bar search expanding |
+| `Pop` | 0.36s / 0.78 | Dialog, index bubble, calendar popup |
+| `Control` | 0.34s / 0.86 | Swipe row snapping, drag reorder, cancel button, gesture-cancel return |
+| `Settle` | 0.28s / 1 | Closing, disappearing, height changes, disclosure chevron, checkmarks |
+| `Bounce` | 0.34s / 0.55 | Badge popping in, selection frame, bounce |
+| `PressDown` / `PressRelease` | 0.22s / 0.62, 0.38s / 0.62 | Press settles down; release springs back |
+| `Fade` / `FadeOut` | 150ms / 120ms eased | Opacity |
+
+Not tiered: native values from reverse engineering (iOS menus `MochiMotions.Ios26` / `Ios27Menu`, the lens, glass press flex), physical settling such as wheels, and content transitions (`MochiSprings.snappy(300)`). A new component looks for a tier first; only when none fits, add one to `MochiMotionTokens` with its purpose written down, instead of writing numbers in the component.
 
 ## 6. No instant content swaps
 

@@ -9,13 +9,38 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import ui.feice.mochi.shape.addG2RoundRect
 
-/** Screen-space contour of the transformed page; individual sheet corners remain independent. */
+/** Page contour with independent corners for sheets. */
 internal data class NavPageOutline(val rect: Rect, val tl: Float, val tr: Float, val br: Float, val bl: Float)
 
-/** Reuses the page's existing capture layer; does not install a graphicsLayer/path clip. */
+/** Clips the retained page commands without an intermediate full-screen target. */
+internal class NavPageClip {
+    private val path = Path()
+    private var previous: NavPageOutline? = null
+
+    fun draw(scope: ContentDrawScope, outline: NavPageOutline?) {
+        if (outline == null) {
+            scope.drawContent()
+            return
+        }
+        scope.clipPath(pathFor(outline)) { scope.drawContent() }
+    }
+
+    fun pathFor(outline: NavPageOutline): Path {
+        if (outline != previous) {
+            previous = outline
+            path.rewind()
+            path.addG2RoundRect(outline.rect, outline.tl, outline.tr, outline.br, outline.bl)
+        }
+        return path
+    }
+}
+
+/** Masks the exterior of occluder copies in their isolated fade layer. */
 internal class NavPageMask {
     private val outside = Path().apply { fillType = PathFillType.EvenOdd }
     private var previous: NavPageOutline? = null

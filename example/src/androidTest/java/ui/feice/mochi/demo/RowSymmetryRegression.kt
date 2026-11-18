@@ -48,7 +48,7 @@ import ui.feice.mochi.basic.MochiStepper
 import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.common.AppIcon
-import ui.feice.mochi.demo.common.Icons
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.tile
 import ui.feice.mochi.list.MochiListCard
@@ -232,7 +232,7 @@ class RowSymmetryRegression {
                                     } else {
                                         {
                                             AppIcon(
-                                                Icons.NOTE,
+                                                DemoIcons.NOTE,
                                                 Tone.Neutral.tile(),
                                                 MochiListDefaults.LeadingSize,
                                                 Modifier.onGloballyPositioned { c ->

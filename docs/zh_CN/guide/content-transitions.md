@@ -1,6 +1,6 @@
 # 内容变换
 
-内容换掉时不瞬切，这是全库的规范（见文末）。包 `ui.feice.mochi.effect.content` 提供四个 API：
+内容换掉时不瞬切，这是全库的规范（见文末）。包 `ui.feice.mochi.effect.content` 提供下面这些 API：
 
 | 场景 | API | 样子 |
 |---|---|---|
@@ -8,6 +8,7 @@
 | 文字换成别的 | `MochiBlurText(text)` | 模糊替换：旧的变糊、缩小、淡出，新的从糊里清晰起来 |
 | 出现 / 消失 | `MochiBlurVisibility(visible) { … }` | 从更小、更糊、透明里长出来，消失时原路退回 |
 | 数字变化 | `MochiCounterText(value)` | 计数器：变了的位像滚轮一样转过去（变大往前、变小往回），越快越糊，落定时回弹一点 |
+| 流式文字 | `MochiFlyInText(text)` | 一段段长出来的字像软纸带一样从近处飞进来、卷平落定，后面的字被改掉时旧字退开淡出 |
 | 任意内容 | `MochiBlurCrossfade(state) { … }` | 通用的模糊替换，上面几个都建在它上面 |
 | 图标描绘 | `MochiDrawIcon(icon, drawn)` | SF Symbols 7 的 Draw On / Off：笔画一笔笔画出来 / 擦掉 |
 | 图标弹一下 | `Modifier.mochiBounce(trigger)` | SF Symbols 的 bounce：先压扁再带回弹地弹起 |
@@ -54,11 +55,20 @@ MochiBlurCrossfade(state, contentAlignment = Alignment.CenterStart) { Content(it
 | 参数 | 说明 | 默认值 |
 |---|---|---|
 | blur | 完全隐去时的模糊半径 | 8.dp |
-| scale | 完全隐去时的缩放 | 0.9 |
+| scale | 完全隐去时的缩放（新内容从这个大小长到原大） | 0.9 |
+| exitScale | 旧内容消失时缩到多大；和 scale 分开设就是景深切换 | 同 scale |
 | slide | 完全隐去时沿方向的位移（按内容高度算） | 0 |
 | enter / exit | 出现 / 消失的动画 | `MochiSprings.snappy(300)`：300ms、回弹 0.15。缩放和位移看得到收尾那一点点回弹，透明度和模糊截断 |
 
-内置三种：`MochiBlurTransitions.Replace`（替换）、`Appear`（出现消失，缩放 0.8、模糊 10dp）、`Counter`（数字滚动，位移 0.55 倍高度、模糊 5dp、不缩放）。
+内置四种：`MochiBlurTransitions.Replace`（替换）、`Appear`（出现消失，缩放 0.8、模糊 10dp）、`Counter`（数字滚动，位移 0.55 倍高度、模糊 5dp、不缩放）、`Subtle`（轻替换：模糊 3dp、缩放 0.97，旧的 160ms 让开、新的 220ms 清楚）、`Depth`（景深切换：不模糊，旧的缩到 0.96、140ms 淡掉，新的晚 60ms 从 1.03 缩回原大，和键盘 emoji 面板的切换一样）。
+
+`Depth` 适合换得很勤、又要看得出换了的地方（输入法候选）：只动缩放和透明度，不开模糊图层；要带一点模糊时 `MochiBlurTransitions.Depth.copy(blur = 4.dp)`，只给最显眼的那一块用。
+
+一屏里很多文字跟着打字一起换（输入法候选、搜索联想、筛选结果）时用 `Subtle`：`Replace` 在这种地方太抢眼，每块文字都要开模糊图层，十几块一起换会掉帧。
+
+## 减弱动态效果
+
+系统关了动画（动画缩放为 0）、或者应用在根部提供 `LocalMochiReduceMotion provides true` 时，`MochiBlurCrossfade` / `MochiBlurText`、`MochiFlyInText`、菜单和弹出框的弹性都直接到位。自己写的动画用 `mochiReduceMotion()` 判断。
 
 ## 换字体
 
@@ -82,6 +92,22 @@ MochiCounterText("%02d:%02d".format(m, s), direction = 1)   // 自己格式化�
 - 位数变多时新的高位从下面升上来、宽度从 0 长出来；变少时那一位沉下去、宽度缩回 0，旁边的数字被平滑推开。退到一半又变回来时同一格从半路升回去。
 - 数字以外的字符（¥、逗号、单位）变了做模糊替换（`transition`）。
 - 自动用等宽数字（`tnum`），个位来回变时整串不会左右抖。字体、字号、颜色来自 `style` / `color`，静止时和同一行的 `Text` 完全重合。读屏读整串文字。
+
+## 流式文字
+
+```kotlin
+MochiFlyInText(partialTranscript)
+MochiFlyInText(answer, style = MochiTheme.textStyles.body, leadingGap = 8.dp)
+```
+
+给一段一段长出来的文字用：语音转写的半句、逐字吐出的回答、正在组的拼音。整段换成别的文字仍然用 `MochiBlurText`。
+
+- 和上一次的文字从头比，没变的字不动；往后接上的字从左到右一个接一个起飞（间隔 45ms，几个字叠着飞），从近处、下面、糊的状态飞到自己的位置，一边飞一边从底边往上卷平，像一条软纸带。每个字的进度是一根阻尼 0.45 的弹簧，冲过头约两成时贴着底边压扁一点再弹回来。
+- 前面的字被改掉时，从改动处起当新字飞进来：已经落定的旧字往上、往远处退开并糊掉淡出；还在飞的字被换掉时，新字接着它的进度飞，旧字沿原轨迹飞完、很快淡出，飞行不被打断。
+- 只占一行。放不下时靠右显示最新的字，左边渐隐，往左让出的距离用弹簧滚过去；清空时字退开淡出，宽度变 0。
+- 飞的字会画出这一行的范围（近处的字大、在下面），外面的容器不要裁它的上、下、左边。
+- `motionBlur = false` 只飞、不糊：字很少、换得很勤（正在组的拼音）时更清爽，飞行、卷曲、回弹照旧。
+- 模糊是每个字预先画好的两张小图（清楚、糊）按速度交叉，形变用 `drawBitmapMesh` 贴网格，不需要 Android 12，落定后按普通文字画。读屏读整段文字；系统关了动画时字直接出现。
 
 ## 图标描绘
 
@@ -124,7 +150,7 @@ MochiDrawIcon(checkIcon, drawn = done, tint = …, size = 40.dp)
 库里的组件和示例都遵守：
 
 1. **图标换图标**：用 `MochiMorphIcon` 原位变形；形状差太多就用 `MochiBlurCrossfade` 模糊替换。不要直接换掉。
-2. **文字换文字**：用 `MochiBlurText`（按钮文字、状态、行尾的值……）。
+2. **文字换文字**：用 `MochiBlurText`（按钮文字、状态、行尾的值……）；一屏里很多文字跟着打字一起换时传 `MochiBlurTransitions.Subtle`；一段段长出来的文字用 `MochiFlyInText`。
 3. **出现 / 消失**：小块内容（角标、提示文字、行内图标）用 `MochiBlurVisibility`，旁边的东西被平滑推开。
 4. **数字变化**：用 `MochiCounterText`（数量、价格、计时、百分比）。
 5. **例外**：用户正在拖动、一帧一变的数值（比如滑块旁边的读数）直接显示，不做过渡，不然会拖着尾巴跟不上手。

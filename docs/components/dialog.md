@@ -29,7 +29,7 @@ MochiDialog(
 MochiDialog(
     visible = show,
     onDismissRequest = { show = false },
-    title = "Turn on liquid glass?",
+    title = "Turn on glass?",
     message = "Every frame needs extra rendering and uses more power.",
     icon = { MochiIonicon("warning", tint = MochiTheme.colorScheme.error, size = 44.dp) },
     actions = persistentListOf(
@@ -41,9 +41,9 @@ MochiDialog(
 
 A setting that only needs consent (power, data use) is confirmed with a plain tap; keep `holdToConfirm` for irreversible destructive actions.
 
-## Glow and deformation
+## Press and slide to select
 
-Same as the tab bar: a pressed button grows, glows and follows the finger, and two side-by-side buttons join with a metaball neck; the whole card (shadow, text and buttons included) moves with the finger and stretches slightly toward it, and its rim catches the button's ambient light. The card doesn't clip, so a pressed button can grow past its edge a little, feeling the same as buttons elsewhere.
+After pressing any button, the finger can slide between buttons, vertically (or horizontally when they sit side by side): the button under the finger lights up, and haptics match the selection list: a light tick on press and on every new button, plus a confirm tap when lifting the finger selects it; lifting outside the button area does nothing. Buttons only grow slightly and glow under the fingertip; they don't stretch or move with the finger, side-by-side buttons don't join with a metaball neck, and the card no longer deforms with the finger. Hold-to-confirm buttons (`holdToConfirm`) don't take part in sliding and keep their own hold gesture.
 
 ## Dismissing
 

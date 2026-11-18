@@ -6,25 +6,56 @@
 
 Building an app? Start with [theme integration in the app integration guide](application-integration.md): wire the theme once at the root and keep appearance branches out of pages.
 
-## Materials: liquid glass (long-term beta) and blur
+## Materials: liquid glass and blur
 
-`MochiTheme(materials = …)` decides whether floating bars are solid or liquid glass and whether scroll edges blur progressively. Materials are independent of colors, so the Mochi, Nothing and iOS appearances can all use them, each with its own switch:
+`MochiTheme(materials = …)` decides whether floating bars are solid or glass and whether content scrolled under the top bar is blurred. Materials are independent of colors, so the Mochi, Nothing and iOS appearances can all use them, each with its own switch:
 
 ```kotlin
 MochiTheme(
     colors = colors,
-    materials = iosMaterials(isDark, glass = glassOn, blur = blurOn, themeAccent = true),
+    // Liquid glass; the scroll-edge blur is on by default (scrollEdge = MochiScrollEdge.Default)
+    materials = mochiGlassMaterials(),
 ) { … }
+
+// Or the mochi-ios form with two switches
+MochiTheme(colors = colors, materials = iosMaterials(glass = glassOn, blur = blurOn)) { … }
 ```
 
-- `glass`: tab bars (search field and accessory included) and other floating bars, plus the buttons in bars, menus, sheets and alerts, are glass; off means a solid capsule with a shadow. It never restyles page content: buttons in content are glass only with a glass style (`MochiButtonStyle.ProminentGlass` and friends), and solid styles such as `Filled` always stay solid; see [Button](../components/button.md)
-- `blur`: content scrolled under the top and bottom bars blurs progressively and dims by luminance; off means a fading background
-- `themeAccent`: keep the glass neutral and color the selected item with the theme's accent. Pass false for iOS colors (iOS derives its accent from the glass) and true for others
-- The default is `MochiMaterials()`: both off. `iosMaterials` lives in mochi-ios; see [iOS appearance and glass materials](ios-theme.md) for glass styles and transparency
+- Glass: tab bars (search field and accessory included) and other floating bars, plus the buttons in bars, menus, sheets and alerts, are glass; off means a solid capsule with a shadow. It never restyles page content: buttons in content are glass only with a glass style (`MochiButtonStyle.ProminentGlass` and friends), and solid styles such as `Filled` always stay solid; see [Button](../components/button.md)
+- `scrollEdge` / `blur`: following the iOS 27 top bar, once content scrolls under the top bar the whole bar area is evenly blurred, covered with a translucent page background, cut off hard at the bar's bottom edge, with a very faint hairline there. It is the same in every appearance, and the bar's text does not change color. The default is `MochiScrollEdge.Default` (`blur` 16dp, background opacity 0.78 light / 0.72 dark). With null (`iosMaterials(blur = false)`) or on Android 12 and below there is no blur under the bar and the background is nearly opaque (0.94), with the same hard edge and hairline. The bottom bar only gets a page-background gradient, without blur
+- The default is `MochiMaterials()`: no glass, scroll-edge blur on
 
-Components read the materials (`MochiTheme.materials`); pages never check the switches. To keep one region free of glass use `MochiMaterialsScope(MochiMaterials()) { … }`, which swaps only the materials and leaves colors and type alone. Liquid glass re-renders what is behind it every frame and costs more power, so let users opt in and tell them the cost first.
+Components read the materials (`MochiTheme.materials`); pages never check the switches. To keep one region free of glass use `MochiMaterialsScope(MochiMaterials()) { … }`, which swaps only the materials and leaves colors and type alone. Glass re-renders what is behind it every frame and costs more power, so let users opt in and tell them the cost first.
 
-Liquid glass is a **long-term beta**: its look, performance and public API may change in minor releases with no compatibility guarantee, and rendering cost varies a lot between devices. In shipping apps keep it off by default and let users turn it on. Blur (`blur`) is not part of the beta.
+### Liquid glass (`MochiGlass`)
+
+Liquid glass and scroll-edge blur can be switched on and off independently.
+
+The rendering pipeline is ported from the WebGL liquid glass at [liquid.refract.im](https://liquid.refract.im/launch/) (recipes its author sampled from macOS 27 QuartzCore; see THIRD_PARTY_NOTICES) and runs as AGSL on Android 13+, with every floating-point constant kept as is:
+
+- Shape: an analytic supercircle (continuous corner) distance field; nearby pieces merge through a polynomial smooth union with the neck gradient corrected
+- Backdrop: sampled at 0.5 × screen density texels per pt, with a 13-tap downsampled blur pyramid read between two levels by radius
+- Body: inner refraction (quarter-circle bevel) with distance-dependent blur, outer refraction, backdrop filter (darken in dark, lighten in light), face matrix with luma compensation, edge bleed
+- Edges and outside: drop shadow, ring shadow, stroke key/fill highlight, the @2 diffuse highlight
+- Tint, press feedback (matrix layer plus a Gaussian glow under the finger) and adaptive light/dark from the backdrop luma
+
+The parameters follow the short side of the glass (pt) continuously, as they do natively, so you pick a style and a tint rather than tuning fields:
+
+| Parameter | Meaning |
+|---|---|
+| `style` | `MochiGlassStyle.Regular` or `Thick`. Regular has a light and a dark face; shadow, ring shadow and edge bleed appear only past a 64dp short side. Thick keeps Regular's refraction, bleed, shadow and rim, raises the blur to 16pt, and lets much less of the backdrop through: 25% in light mode (saturation 1.8, a tenth brighter, over a near-white base) and 30% in dark mode (black lifted to 32/255, white only reaching 0.43). These values are approximations |
+| `tint` | Tint, or null. A color matrix interpolated by backdrop luma (not a translucent overlay); the alpha is the tint layer opacity |
+| `adaptive` | Flip to the other shade over very dark or very bright content: in light mode below 0.1 to dark and back above 0.3; in dark mode above 0.9 to light and back below 0.7; sampled every 250 ms. `LocalMochiGlassDark` reports the current shade. Applies to small glass (bars, controls, buttons, `MochiGlassGroup`); menus, alerts and sheets always follow the theme shade |
+| `spacing` | Distance at which pieces start to merge, 8dp by default (GlassEffectContainer spacing) |
+| `fallback` | Solid color without a backdrop source; defaults by style and shade |
+
+`MochiGlassDefaults` holds the presets: `Regular`, `Thick` and `TintedBlue` (system blue). There is no dark tint: dark glass follows the theme's dark mode. `mochiGlassMaterials(glass, menu)` builds the whole set: bars, controls and sheets use `glass`; selection lists (menus) and alerts use the more solid `menu` (`Thick` by default).
+
+Text on glass uses the web version's three colors from `MochiGlassContent`: `label` (black 86% on light glass, white 94% on dark glass; titles, body, icons), `secondary` (50% / 58%, secondary text) and `separator` (10% / 14%, separators, off-state wells, slider tracks), each taking the glass's current shade (`LocalMochiGlassDark.current`). Untinted glass provides `label` as `LocalContentColor` to its content; when it flips shade the color fades over 180 ms after 110 ms and snaps back on return. Menus and alerts use the same color. Accent colors such as blue and red follow the theme.
+
+The full effect needs Android 13+; Android 12 gets the system blur plus the face matrix; older systems draw the `fallback` color.
+
+`MochiGlassSurface`, `MochiGlassCapsule` and `MochiGlassBlobs` draw a single piece of glass, defaulting to the theme's material. `MochiGlassGroup` is a glass container: create pieces with `rememberMochiGlassGroupState()` and `item()`, move them with `place` (position and size are sprung), grow one out of another or pull it back with `bloom` (the SwiftUI glassEffectID trajectories the web version recorded frame by frame, with the content blurred along the native curve), show or hide without a trajectory with `pop`, spring in from an offset and smaller scale (or a given size) with `appear`, hide at once with `hide`, and `press` / `release` for the 1.875% press scale plus glow; `item()` takes `MochiGlassSpring`s to replace the default position and size springs (12.9 / 0.7, 11.9 / 0.7); fade the whole group with `MochiGlassGroup`'s `alpha`; place each piece's content with `Modifier.mochiGlassItem(state, item)`. The demo app's Theme › Materials › Liquid glass demos rebuilds the web showcase's seven scenes one to one.
 
 ## Usage
 
@@ -143,7 +174,7 @@ Components pick a shadow level from the theme; the numbers live in one table, so
 | `low` | the step slider's knob |
 | `raised` | the tab bar at rest |
 | `lifted` | the held tab bar, index bar, toasts |
-| `floating` | open menus and popovers, alerts, the sidebar (menus interpolate from `rest` while opening) |
+| `floating` | open menus and popovers, alerts, the sidebar (menus interpolate from `rest` while opening; there is none while the entry is held). Same spread as `elevation(1)` but darker: ambient 0.17 light / 0.34 dark, contact 0.06 light / 0.2 dark |
 
 Each `MochiShadowLevel` is a wide, inset, faint ambient layer plus a very soft contact layer, with separate opacities for light and dark. Swap one level or the whole table:
 

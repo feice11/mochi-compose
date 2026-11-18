@@ -30,25 +30,56 @@ MochiTheme.shapes.largeIncreased
 MochiTheme.motionScheme.defaultSpatial
 ```
 
-## 材质：液态玻璃（长期 Beta）与模糊
+## 材质：液态玻璃与模糊
 
-`MochiTheme(materials = …)` 决定浮在内容上的栏用纯色还是液态玻璃、滚动边缘要不要渐进模糊。材质和配色无关，Mochi、Nothing、iOS 三套外观都能用，两项各自开关：
+`MochiTheme(materials = …)` 决定浮在内容上的栏用纯色还是玻璃、滚到顶栏下面的内容要不要模糊。材质和配色无关，Mochi、Nothing、iOS 三套外观都能用，两项各自开关：
 
 ```kotlin
 MochiTheme(
     colors = colors,
-    materials = iosMaterials(isDark, glass = glassOn, blur = blurOn, themeAccent = true),
+    // 液态玻璃；滚动边缘模糊默认就开着（scrollEdge = MochiScrollEdge.Default）
+    materials = mochiGlassMaterials(),
 ) { … }
+
+// 或者用 mochi-ios 的写法，两个开关
+MochiTheme(colors = colors, materials = iosMaterials(glass = glassOn, blur = blurOn)) { … }
 ```
 
-- `glass`：标签栏（含搜索框、附件条）等浮在内容上的栏，以及栏里的按钮、菜单、面板、弹窗是玻璃；关掉是纯色胶囊加投影。它不改正文内容：正文按钮只有写了玻璃样式（`MochiButtonStyle.ProminentGlass` 等）才是玻璃，`Filled` 等纯色样式始终是纯色，见[按钮](../components/button.md)
-- `blur`：滚到顶栏、底栏下面的内容渐进模糊并按亮度压暗；关掉是底色渐隐
-- `themeAccent`：玻璃保持中性，选中项用主题的强调色。iOS 配色传 false（用 iOS 按玻璃算出的强调色），其他配色传 true
-- 默认（不传）是 `MochiMaterials()`：都关。`iosMaterials` 在 mochi-ios 里，玻璃样式、通透度等参数见 [iOS 外观与玻璃材质](ios-theme.md)
+- 玻璃：标签栏（含搜索框、附件条）等浮在内容上的栏，以及栏里的按钮、菜单、面板、弹窗是玻璃；关掉是纯色胶囊加投影。它不改正文内容：正文按钮只有写了玻璃样式（`MochiButtonStyle.ProminentGlass` 等）才是玻璃，`Filled` 等纯色样式始终是纯色，见[按钮](../components/button.md)
+- `scrollEdge` / `blur`：照 iOS 27 的顶栏，内容滚进顶栏下面后，栏的整块区域均匀模糊，上面盖半透明的页面底色，到栏下沿硬截断，下沿一条很淡的细线。所有外观都一样，栏上文字不换色。默认 `MochiScrollEdge.Default`（`blur` 16dp，底色不透明度浅色 0.78、深色 0.72）。给 null（`iosMaterials(blur = false)`）或 Android 12 及以下时栏下不模糊，底色 0.94 几乎不透明，同样硬边加细线。底栏只是页面底色的渐变遮罩，不模糊
+- 默认（不传）是 `MochiMaterials()`：没有玻璃，滚动边缘模糊开着
 
-组件自己读材质（`MochiTheme.materials`），页面不需要判断开关。只想让某一块区域不用玻璃时用 `MochiMaterialsScope(MochiMaterials()) { … }`，它只换材质，不重设配色和字体。液态玻璃每帧都要重新渲染背后的内容，更耗电：适合交给用户打开，打开前提示代价。
+组件自己读材质（`MochiTheme.materials`），页面不需要判断开关。只想让某一块区域不用玻璃时用 `MochiMaterialsScope(MochiMaterials()) { … }`，它只换材质，不重设配色和字体。玻璃每帧都要重新渲染背后的内容，更耗电：适合交给用户打开，打开前提示代价。
 
-液态玻璃是**长期 Beta**：外观参数、性能和公开 API 都可能在小版本里调整，不保证兼容；不同机型的渲染开销差别也大。正式产品里建议默认关闭，交给用户打开。模糊效果（`blur`）不在此列。
+### 液态玻璃（MochiGlass）
+
+液态玻璃和顶栏模糊可以分别开关。
+
+渲染管线移植自 [liquid.refract.im](https://liquid.refract.im/launch/) 的 WebGL 液态玻璃（其作者从 macOS 27 QuartzCore 采样的配方，来源见 THIRD_PARTY_NOTICES），在 Android 13+ 用 AGSL 实现，浮点常量照原样保留：
+
+- 形状：超圆连续圆角的解析距离场；几块玻璃靠近时按多项式光滑并集融成一块，颈部按梯度校正
+- 背景：按每 pt 0.5×屏幕密度个 texel 取样，13 点下采样建模糊金字塔，按半径在相邻两级间插值
+- 玻璃面：内折射（四分之一圆倒角）加沿距离变化的模糊、外折射、背景滤镜（深色取暗、浅色取亮）、面色矩阵和亮度补偿、边缘渗色
+- 边和外面：投影、环形阴影、描边式 key/fill 高光、@2 层漫反射高光
+- 染色、按压（矩阵层 + 手指处的高斯光晕）、按背后亮度自适应明暗
+
+参数随玻璃短边（pt）连续变化，和原生一样，所以只选样式和染色，不提供逐项调参：
+
+| 参数 | 含义 |
+|---|---|
+| `style` | `MochiGlassStyle.Regular`（标准）或 `Thick`（厚实）。标准的面色分浅色、深色两套，短边超过 64dp 才有投影、环形阴影和边缘渗色；厚实沿用标准的折射、渗色、投影和边光，模糊加到 16pt，透出的背景少得多：浅色只透出 25%（饱和度 1.8、提亮一成，底是接近白的），深色透出 30%（黑抬到 32/255、白只到 0.43），数值是近似 |
+| `tint` | 染色，null 不染。按背后亮度插值的颜色矩阵（不是盖一层半透明色），透明度是染色层的不透明度 |
+| `adaptive` | 背后很暗或很亮时翻到另一种明暗：浅色模式下暗于 0.1 翻深、亮过 0.3 翻回，深色模式下亮过 0.9 翻浅、暗于 0.7 翻回，每 250ms 取样一次。`LocalMochiGlassDark` 给出当前明暗。只对栏、控件、按钮、`MochiGlassGroup` 这些小块玻璃生效；菜单、警告框、面板始终跟主题明暗 |
+| `spacing` | 几块玻璃开始融合的距离，默认 8dp（GlassEffectContainer 的 spacing） |
+| `fallback` | 没有背景来源时的纯色，不给按样式和深浅取默认 |
+
+内置档位 `MochiGlassDefaults`：`Regular`、`Thick`、`TintedBlue`（系统蓝）。没有深色染色：深色玻璃跟着主题的深色走。`mochiGlassMaterials(glass, menu)` 生成整套：栏、控件、面板用 `glass`，选择列表（菜单）和警告框用更实的 `menu`（默认 `Thick`）。
+
+玻璃上的字照网页的三档颜色，`MochiGlassContent` 给出：`label`（浅玻璃黑 86%、深玻璃白 94%，标题、正文、图标）、`secondary`（50% / 58%，次要文字）、`separator`（10% / 14%，分隔线、关着的底块、滑轨），参数是玻璃此刻的明暗（`LocalMochiGlassDark.current`）。没染色的玻璃把 `label` 作为 `LocalContentColor` 给里面的内容，翻明暗时 110ms 后用 180ms 渐变过去、翻回来直接切；菜单、警告框用的也是这一档。蓝色、红色这类强调色照主题。
+
+完整效果要 Android 13+；Android 12 只有系统模糊加面色矩阵；更低的系统画 `fallback` 纯色。
+
+`MochiGlassSurface`、`MochiGlassCapsule`、`MochiGlassBlobs` 直接画一块玻璃，材质默认取主题里的。`MochiGlassGroup` 是玻璃容器：用 `rememberMochiGlassGroupState()` 建几块（`item()`），`place` 摆位置（位置、尺寸都有弹簧），`bloom` 让块从另一块里长出来或收回去（网页版逐帧录下的 SwiftUI glassEffectID 轨迹，过程中内容按原生曲线模糊），`pop` 不带轨迹地出现和消失，`appear` 从偏移、缩小（或给定大小）的样子弹到位，`hide` 立刻藏起，`press` / `release` 是按压放大 1.875% 加光晕；`item()` 可以用 `MochiGlassSpring` 换掉默认的位置、尺寸弹簧（12.9 / 0.7、11.9 / 0.7）；整组淡入淡出用 `MochiGlassGroup` 的 `alpha`；每块的内容用 `Modifier.mochiGlassItem(state, item)` 摆上去。演示 App 的「主题 › 材质 › 液态玻璃演示」照网页展示页一比一做了七个场景。
 
 `MochiTheme` 还会在根部提供 `LocalContentColor`（= onSurface）和 `LocalTextStyle`（= bodyLarge），库里的 `Text` 默认用它们，所以不放在任何容器里的文字在深色模式下也是正确的浅色。
 
@@ -137,7 +168,7 @@ MD3 字阶：`displayLarge/Medium/Small`、`headlineLarge/Medium/Small`、`title
 | `low` | 步进滑条的滑块 |
 | `raised` | 静止的标签栏 |
 | `lifted` | 按住的标签栏、索引条、提示条 |
-| `floating` | 展开的菜单和气泡、警告框、侧边栏（菜单展开时从 `rest` 插值过来） |
+| `floating` | 展开的菜单和气泡、警告框、侧边栏（菜单展开时从 `rest` 插值过来，按住入口时还没有）。散开程度同 `elevation(1)`，颜色深一截：环境影浅色 0.17、深色 0.34，接触影浅色 0.06、深色 0.2 |
 
 每一档 `MochiShadowLevel` 是往里收、大半径的淡环境影加一层很软的接触影，浅色、深色各有一份不透明度。可以换掉某一档，也可以整表换掉：
 

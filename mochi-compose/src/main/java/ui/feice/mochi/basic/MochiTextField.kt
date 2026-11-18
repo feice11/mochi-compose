@@ -5,8 +5,6 @@ package ui.feice.mochi.basic
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -15,48 +13,33 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,24 +48,14 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.layoutId
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
@@ -97,84 +70,22 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.mochiAnimateHeight
-import ui.feice.mochi.effect.content.mochiBlur
-import ui.feice.mochi.effect.content.mochiBlurAlpha
-import ui.feice.mochi.effect.content.mochiRevealBlur
-import ui.feice.mochi.list.ListItemInfo
-import ui.feice.mochi.list.LocalListCardClip
 import ui.feice.mochi.list.MochiListColors
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.shape.mochiBorder
 import ui.feice.mochi.theme.MochiDefaults
-import ui.feice.mochi.theme.MochiIcon
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.lerp
-import ui.feice.mochi.utils.rememberMochiHaptics
-
-/** 输入框配色 */
-@Immutable
-public data class MochiTextFieldColors(
-    val container: Color,
-    val content: Color,
-    val placeholder: Color,
-    val cursor: Color,
-    /** 行首图标、清除按钮、小眼睛 */
-    val icon: Color,
-    /** 出错时的说明文字和光标 */
-    val error: Color,
-    /** 出错时的底色 */
-    val errorContainer: Color,
-    /** 说明文字、字数 */
-    val supporting: Color,
-)
-
-public object MochiTextFieldDefaults {
-    /**
-     * 单行输入框的高度；圆角是它的一半，单行时是胶囊，多行长高后变成圆角矩形。
-     * 直接取按钮的标准高度：输入框旁边并排的按钮 / 图标按钮（MochiButton、MochiIconButton 默认尺寸）和它一样高、同一条中线
-     */
-    public val Height: Dp = MochiButtonDefaults.Height
-
-    /** 输入框里行尾按钮离胶囊边的距离（上下右都是它），按钮和胶囊同心 */
-    public val TrailingInset: Dp = 6.dp
-
-    /** 输入框里的行尾按钮（发送键这类）的尺寸 = 高度 − 2 × [TrailingInset] */
-    public val TrailingButtonSize: Dp = Height - TrailingInset * 2
-
-    /** 文字离左右边的距离 */
-    public val HorizontalPadding: Dp = 16.dp
-
-    /** 默认形状：半径 = 单行高度的一半 */
-    public val Shape: Shape = MochiRoundedRectangle(Height / 2)
-
-    @Composable
-    public fun colors(
-        container: Color = MochiDefaults.fill().copy(alpha = if (MochiTheme.colorScheme.isDark) 0.2f else 0.08f),
-        content: Color = MochiTheme.colorScheme.onSurface,
-        placeholder: Color = MochiTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        cursor: Color = MochiTheme.colorScheme.primary,
-        icon: Color = MochiTheme.colorScheme.onSurfaceVariant,
-        error: Color = MochiTheme.colorScheme.error,
-        errorContainer: Color = MochiTheme.colorScheme.error.copy(alpha = 0.12f),
-        supporting: Color = MochiTheme.colorScheme.onSurfaceVariant,
-    ): MochiTextFieldColors = remember(container, content, placeholder, cursor, icon, error, errorContainer, supporting) {
-        MochiTextFieldColors(container, content, placeholder, cursor, icon, error, errorContainer, supporting)
-    }
-}
 
 /**
  * iOS 26 的输入框：
@@ -184,6 +95,8 @@ public object MochiTextFieldDefaults {
  * - [error] 不为 null：底色带一点警示色、下面模糊淡入说明，并左右抖一下（iOS 密码输错）；[shakeTrigger] 变化时也抖
  * - [maxLength]：超出的字输不进去，下方右侧的字数像计数器一样滚动
  * - [selectAllOnFocus]：获得焦点时选中全部文字，一输入就整段换掉（Safari 的地址栏、改名框）
+ * - [leading] 默认按图标排（离左边 [MochiTextFieldDefaults.LeadingIconInset]）；放胶囊控件（国家码下拉）时
+ *   [leadingInset] 传 [MochiTextFieldDefaults.LeadingControlInset]、控件高度用 [MochiTextFieldDefaults.TrailingButtonSize]，和胶囊同心
  *
  * 想要聚焦，把 `Modifier.focusRequester(...)` 传进 [modifier] 就行。
  */
@@ -210,6 +123,7 @@ public fun MochiTextField(
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     selectAllOnFocus: Boolean = false,
+    leadingInset: Dp = MochiTextFieldDefaults.LeadingIconInset,
 ) {
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
@@ -248,7 +162,7 @@ public fun MochiTextField(
                 .heightIn(min = MochiTextFieldDefaults.Height)
                 .clickable(remember { MutableInteractionSource() }, indication = null, enabled = enabled) { requester.requestFocus() }
                 .padding(
-                    start = if (leading != null) 14.dp else MochiTextFieldDefaults.HorizontalPadding,
+                    start = if (leading != null) leadingInset else MochiTextFieldDefaults.HorizontalPadding,
                     end = if (hasTrailing) MochiTextFieldDefaults.TrailingInset else MochiTextFieldDefaults.HorizontalPadding,
                 ),
             // 多行时行首图标、按钮都和最后一行对齐（iMessage 的发送键在右下角）
@@ -277,7 +191,7 @@ public fun MochiTextField(
                         singleLine = singleLine,
                         maxLines = maxLines,
                         textStyle = textStyle.copy(color = colors.content),
-                        cursorBrush = SolidColor(if (error != null) colors.error else colors.cursor),
+                        cursorBrush = dialogAwareCaret(if (error != null) colors.error else colors.cursor),
                         visualTransformation = if (secure && !revealed) PasswordVisualTransformation('•') else VisualTransformation.None,
                         keyboardOptions = if (secure && keyboardOptions.keyboardType == KeyboardType.Unspecified) {
                             keyboardOptions.copy(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
@@ -307,7 +221,7 @@ public fun MochiTextField(
                 )
             }
             if (secure) {
-                val slash by animateFloatAsState(if (revealed) 1f else 0f, MochiMotions.responseSpring(0.3f, 0.9f), label = "eye")
+                val slash by animateFloatAsState(if (revealed) 1f else 0f, MochiMotionTokens.Control, label = "eye")
                 FieldSlot(
                     Modifier
                         .width(40.dp)
@@ -397,7 +311,7 @@ public fun MochiListTextFieldRow(
                     singleLine = singleLine,
                     maxLines = maxLines,
                     textStyle = style.copy(color = colors.content),
-                    cursorBrush = SolidColor(colors.accent),
+                    cursorBrush = dialogAwareCaret(colors.accent),
                     visualTransformation = if (secure) PasswordVisualTransformation('•') else VisualTransformation.None,
                     keyboardOptions = if (secure && keyboardOptions.keyboardType == KeyboardType.Unspecified) {
                         keyboardOptions.copy(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
@@ -458,95 +372,6 @@ public fun MochiListFormRow(
     }
 }
 
-public object MochiListTextFieldDefaults {
-    /** 表单行标签的宽度：同一张卡片里都用它，输入区和值对齐成一列 */
-    public val LabelWidth: Dp = 88.dp
-}
-
-/**
- * 表单行的外壳：标签 + 内容列。行高规则和普通 MochiListRow 一样（至少 RowMinHeight、上下至少 RowVerticalPadding、整行居中），
- * 标签从 22dp 文字边开始，内容列从 22dp + [labelWidth] 开始；输入行和取值行共用它，所以列一定对齐。
- */
-@Composable
-private fun FormRowShell(
-    label: String?,
-    labelWidth: Dp,
-    enabled: Boolean,
-    colors: MochiListColors,
-    endPadding: Dp,
-    highlight: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable RowScope.() -> Unit,
-) {
-    val info = remember { ListItemInfo(MochiListDefaults.TextRowPadding) }
-    val grouped = LocalListCardClip.current != null
-    info.ownsVerticalInsets = grouped
-    val press = info.press
-    val scope = rememberCoroutineScope()
-    val currentOnClick by rememberUpdatedState(onClick)
-    val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
-    Row(
-        modifier
-            .layoutId(info)
-            .fillMaxWidth()
-            // 按下高亮连同卡片给首末行多留的白一起盖住（和 MochiListRow 一样）
-            .drawBehind {
-                if (press.value > 0f) {
-                    drawRect(
-                        colors.highlight,
-                        Offset(0f, -info.extraTop),
-                        Size(size.width, size.height + info.extraTop + info.extraBottom),
-                        alpha = press.value,
-                    )
-                }
-            }
-            .defaultMinSize(minHeight = MochiListDefaults.RowMinHeight)
-            .then(
-                if (!enabled) {
-                    Modifier
-                } else if (highlight) {
-                    Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                // 稍等再亮：手指是来滚动的话不闪
-                                val lit = scope.launch {
-                                    delay(70)
-                                    press.snapTo(1f)
-                                }
-                                val released = tryAwaitRelease()
-                                lit.cancel()
-                                if (released) press.snapTo(1f)
-                                scope.launch { press.animateTo(0f, tween(if (released) 350 else 120)) }
-                            },
-                            onTap = { currentOnClick() },
-                        )
-                    }
-                } else {
-                    Modifier.clickable(remember { MutableInteractionSource() }, indication = null) { currentOnClick() }
-                },
-            )
-            .padding(start = MochiListDefaults.TextRowPadding, end = endPadding)
-            .layout { measurable, constraints ->
-                val p = measurable.measure(constraints)
-                layout(p.width, p.height) { p.placeWithLayer(0, 0) { translationY = info.contentCenterOffset() } }
-            }
-            .graphicsLayer { this.alpha = alpha },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (label != null) {
-            Text(
-                label,
-                style = MochiTheme.textStyles.body,
-                color = colors.content,
-                maxLines = 1,
-                modifier = Modifier.width(labelWidth).padding(vertical = MochiListDefaults.RowVerticalPadding).padding(end = 8.dp),
-            )
-        }
-        content()
-    }
-}
-
 /**
  * 原地更改（iOS「文件」里重命名、提醒事项改列表名那种）：文字原地变成输入框，位置、字号一点不动；
  * 后面淡入一块圆角底色，全选原文字，键盘弹出。
@@ -576,7 +401,7 @@ public fun MochiInlineTextField(
     val focus = LocalFocusManager.current
     val holder = remember { booleanArrayOf(false) }
     val currentValue by rememberUpdatedState(value)
-    val p by animateFloatAsState(if (editing) 1f else 0f, MochiMotions.responseSpring(0.34f, 0.82f), label = "inlineEdit")
+    val p by animateFloatAsState(if (editing) 1f else 0f, MochiMotionTokens.Control, label = "inlineEdit")
     val bg = remember { MochiRoundedRectangle(10.dp) }
     // 底色只包住文字本身（输入框可能比文字宽）
     var inkLeft by remember { mutableFloatStateOf(0f) }
@@ -611,7 +436,7 @@ public fun MochiInlineTextField(
             singleLine = maxLines == 1,
             maxLines = maxLines,
             textStyle = style.copy(color = color),
-            cursorBrush = SolidColor(cursor),
+            cursorBrush = dialogAwareCaret(cursor),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { finish(true) }),
             onTextLayout = { t ->
@@ -730,6 +555,7 @@ public fun MochiCodeField(
     val bringer = rememberFieldBringer(focused)
     val currentOnComplete by rememberUpdatedState(onComplete)
     val cellShape = remember { MochiRoundedRectangle(14.dp) }
+    val dialogCaret = LocalMochiDialogCaretVisible.current
     val blink = rememberInfiniteTransition(label = "caret")
     val caret by blink.animateFloat(
         1f,
@@ -758,7 +584,7 @@ public fun MochiCodeField(
         enabled = enabled,
         singleLine = true,
         textStyle = TextStyle(color = Color.Transparent),
-        cursorBrush = SolidColor(Color.Transparent),
+        cursorBrush = SolidColor(Color.Unspecified),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
         modifier = modifier
             .fillMaxWidth()
@@ -805,7 +631,7 @@ public fun MochiCodeField(
                                 Box(
                                     Modifier
                                         .size(width = 2.dp, height = 26.dp)
-                                        .graphicsLayer { this.alpha = caret }
+                                        .graphicsLayer { this.alpha = if (dialogCaret?.value != false) caret else 0f }
                                         .background(colors.cursor, CircleShape),
                                 )
                             }
@@ -816,146 +642,3 @@ public fun MochiCodeField(
         },
     )
 }
-
-/** 抖一下（iOS 密码输错）：trigger 每变一次（第一次组合不算、变成 null 不算）左右衰减着晃几下，并轻震 */
-@Composable
-internal fun rememberMochiShake(trigger: Any?): Animatable<Float, AnimationVector1D> {
-    val offset = remember { Animatable(0f) }
-    val haptics = rememberMochiHaptics()
-    val first = remember { booleanArrayOf(true) }
-    LaunchedEffect(trigger) {
-        if (first[0]) {
-            first[0] = false
-            return@LaunchedEffect
-        }
-        if (trigger == null || trigger == false) return@LaunchedEffect
-        haptics.threshold()
-        offset.snapTo(0f)
-        // 欠阻尼弹簧：初速度把它甩出去约 10dp，来回衰减四五下停住
-        offset.animateTo(0f, spring(dampingRatio = 0.16f, stiffness = 1100f), initialVelocity = 360f)
-    }
-    return offset
-}
-
-/**
- * 聚焦时把整个输入框（连同下面的说明、字数）滚到键盘上方。只靠系统的话只保证光标那一行露出来，
- * 胶囊的下半截和说明会被键盘挡住；键盘每次动完（高度稳定下来）再确认一遍。
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun rememberFieldBringer(focused: Boolean): FieldBringer {
-    val bringer = remember { FieldBringer() }
-    val density = LocalDensity.current
-    val ime = WindowInsets.ime
-    LaunchedEffect(focused) {
-        if (!focused) return@LaunchedEffect
-        snapshotFlow { ime.getBottom(density) }.collectLatest {
-            delay(80)
-            val sz = bringer.size
-            // 下面多留一点，不贴着键盘
-            val margin = with(density) { 16.dp.toPx() }
-            bringer.requester.bringIntoView(Rect(0f, 0f, sz.width.toFloat(), sz.height + margin))
-        }
-    }
-    return bringer
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-internal class FieldBringer {
-    val requester = BringIntoViewRequester()
-    var size = IntSize.Zero
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-internal fun Modifier.mochiFieldBringer(b: FieldBringer): Modifier = bringIntoViewRequester(b.requester).onSizeChanged { b.size = it }
-
-/** 选中文字的底色和水滴把手用主色 */
-@Composable
-internal fun MochiSelectionColors(color: Color, content: @Composable () -> Unit) {
-    val colors = remember(color) { TextSelectionColors(handleColor = color, backgroundColor = color.copy(alpha = 0.3f)) }
-    CompositionLocalProvider(LocalTextSelectionColors provides colors, content = content)
-}
-
-/** 占位文字：开始输入时很快淡掉（不瞬切），清空时淡回来 */
-@Composable
-private fun FieldPlaceholder(text: String, visible: Boolean, style: TextStyle, color: Color) {
-    if (text.isEmpty()) return
-    val a by animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 180 else 90), label = "placeholder")
-    if (a > 0f) Text(text, style = style, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { alpha = a })
-}
-
-/** 输入框里图标 / 按钮的位置：单行高度那么高，内容居中（多行时落在最后一行） */
-@Composable
-private fun FieldSlot(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(modifier.height(MochiTextFieldDefaults.Height), contentAlignment = Alignment.Center) { content() }
-}
-
-/**
- * 清除按钮的位置：占位一直在（文字不会因为它出现消失而左右挪），按钮本身原地模糊渐显、略微放大到位；
- * 看不见的时候点不到
- */
-@Composable
-private fun ClearSlot(visible: Boolean, onClear: () -> Unit, color: Color, hole: Color, modifier: Modifier = Modifier) {
-    val v by animateFloatAsState(if (visible) 1f else 0f, MochiMotions.responseSpring(0.3f, 1f), label = "clear")
-    Box(
-        modifier.then(
-            if (visible) {
-                Modifier
-                    .clickable(remember { MutableInteractionSource() }, indication = null) { onClear() }
-                    .semantics { contentDescription = "清除" }
-            } else {
-                Modifier
-            },
-        ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier.graphicsLayer {
-                mochiBlurAlpha(v.coerceIn(0f, 1f), mochiRevealBlur(v, 6.dp))
-                val sc = 0.8f + 0.2f * v.coerceIn(0f, 1f)
-                scaleX = sc
-                scaleY = sc
-            }.mochiBlur { mochiRevealBlur(v, 6.dp) },
-        ) { ClearBadge(color, hole) }
-    }
-}
-
-/** iOS 的清除按钮：灰色实心小圆，中间镂空的 ✕ */
-@Composable
-private fun ClearBadge(color: Color, hole: Color) {
-    Box(Modifier.size(18.dp).background(color.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
-        ClearGlyph(if (hole.alpha < 0.9f) Color.White else hole)
-    }
-}
-
-/** 小眼睛：[slash] 0 = 睁眼，1 = 斜杠画满（密码正在显示，点了会藏起来） */
-@Composable
-private fun EyeGlyph(color: Color, slash: Float) {
-    MochiIcon("eye", Modifier.size(22.dp), tint = color) { slot ->
-        // 离屏画：斜杠旁边那道缝是真的挖空，透出输入框底色
-        Canvas(slot.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
-            val w = size.width
-            val h = size.height
-            val sw = w * 0.085f
-            val eye = Path().apply {
-                moveTo(w * 0.06f, h * 0.5f)
-                quadraticTo(w * 0.5f, h * 0.02f, w * 0.94f, h * 0.5f)
-                quadraticTo(w * 0.5f, h * 0.98f, w * 0.06f, h * 0.5f)
-                close()
-            }
-            drawPath(eye, color, style = Stroke(sw))
-            drawCircle(color, radius = w * 0.14f, center = Offset(w * 0.5f, h * 0.5f))
-            if (slash > 0.01f) {
-                val a = Offset(w * 0.16f, h * 0.14f)
-                val b = Offset(w * 0.84f, h * 0.86f)
-                val e = Offset(lerp(a.x, b.x, slash.coerceIn(0f, 1f)), lerp(a.y, b.y, slash.coerceIn(0f, 1f)))
-                // 先挖一道缝，斜杠和眼睛之间留白（SF Symbols 的 eye.slash）
-                drawLine(Color.Black, a, e, sw * 3f, StrokeCap.Round, blendMode = BlendMode.Clear)
-                drawLine(color, a, e, sw, StrokeCap.Round)
-            }
-        }
-    }
-}
-
-/** 截短文字后把选区收进新长度 */
-private fun TextRange.clampTo(length: Int): TextRange = TextRange(start.coerceAtMost(length), end.coerceAtMost(length))

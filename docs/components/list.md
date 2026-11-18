@@ -13,7 +13,7 @@ iOS Settings-style grouped cards (inset grouped). Package `ui.feice.mochi.list`.
   - It follows the finger and snaps open or closed by position and velocity.
   - Past 60% of the width, the rightmost action fills the row and ticks; releasing then runs it. For a delete, the row slides out and collapses, the rows below move up, and the callback runs after that.
   - Dragging right is held by a rubber band; tapping an open row closes it.
-- The `basic` package also has **MochiActivityIndicator** (the iOS 8-spoke spinner: capsule spokes with a highlight sweeping smoothly clockwise, black 60% in light / white 80% in dark by default), **MochiProgressBar** (a G2 capsule progress bar, 6dp tall by default) and **MochiProgressRing** (a ring: with a value it is the App Store download ring, `null` spins indeterminately, and a `sweep` under 360 makes a gauge open at the bottom; put a stop square or a value in the middle). The bar and ring tracks default to 30% of the progress color (`MochiProgressDefaults.TrackAlpha`). See Components → 加载与进度 in the demo; for a gauge use `MochiGauge` (Components → 徽标、头像与仪表).
+- The `basic` package also has **MochiActivityIndicator** (the iOS 8-spoke spinner: capsule spokes with a highlight sweeping smoothly clockwise, black 60% in light / white 80% in dark by default), **MochiProgressBar** (a G2 capsule progress bar, 6dp tall by default) and **MochiProgressRing** (a ring: with a value it is the App Store download ring, `null` spins indeterminately, and a `sweep` under 360 makes a gauge open at the bottom; put a stop square or a value in the middle). The bar and ring tracks default to 30% of the progress color (`MochiProgressDefaults.TrackAlpha`). See Components → 加载 in the demo; for a gauge use `MochiGauge` (Components → 仪表).
 
 ## Usage
 
@@ -85,6 +85,8 @@ Using two kinds of card on one page makes the hierarchy clearer (as the iOS stor
 | dividerInset | Where its divider starts inside a section | 16dp |
 
 `MochiListDefaults`: `RowMinHeight` 52dp, `RowPadding` 16dp, `LeadingSize` 28dp, `LeadingGap` 15dp, `SymbolWidth` 24dp, `SymbolGap` 16dp, `SectionCorner` 26dp.
+
+For a compact group, provide `LocalMochiListSupportingTextGap` around those rows. For example, `CompositionLocalProvider(LocalMochiListSupportingTextGap provides 2.dp) { ... }` uses a 2dp title-to-subtitle gap there.
 
 ## Spacing (iOS 26)
 

@@ -64,10 +64,11 @@ public fun MochiBackButton(
         MochiIcon("chevron-back", Modifier.size(22.dp), tint = color) { slot ->
             Canvas(slot) {
                 val p = Path().apply {
-                    // 「‹」两笔的重心落在圆形按钮正中（按视觉重心居中，不按包围盒）
-                    moveTo(size.width * 0.66f, size.height * 0.16f)
-                    lineTo(size.width * 0.34f, size.height * 0.5f)
-                    lineTo(size.width * 0.66f, size.height * 0.84f)
+                    // 「‹」按视觉重心居中：包围盒居中时开口那侧显得空、整体看着偏右，
+                    // 按两笔围成的三角形取重心（在包围盒中心往开口方向 1/6 宽处），整体朝尖端挪回这么多（22dp 里约 1.1dp）
+                    moveTo(size.width * 0.607f, size.height * 0.16f)
+                    lineTo(size.width * 0.287f, size.height * 0.5f)
+                    lineTo(size.width * 0.607f, size.height * 0.84f)
                 }
                 drawPath(p, color, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }

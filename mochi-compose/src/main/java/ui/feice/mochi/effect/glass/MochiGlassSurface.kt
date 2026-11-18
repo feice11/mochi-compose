@@ -16,8 +16,12 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
@@ -31,7 +35,6 @@ import ui.feice.mochi.effect.glass.engine.rememberGlassGlow
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiGlass
-import ui.feice.mochi.theme.MochiGlassRecipe
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -43,6 +46,43 @@ import ui.feice.mochi.theme.MochiTheme
 public val LocalMochiGlassShadow: ProvidableCompositionLocal<() -> Float> = compositionLocalOf { NoShadowFade }
 
 private val NoShadowFade: () -> Float = { 1f }
+
+/**
+ * 玻璃里的内容所在的明暗：玻璃自适应翻到另一种明暗时和主题不同（见 [MochiGlass.adaptive]）。玻璃外面是主题的深浅。
+ * 玻璃会同时把 [ui.feice.mochi.theme.LocalContentColor] 换成白 / 黑，自己挑颜色的内容读这个
+ */
+public val LocalMochiGlassDark: ProvidableCompositionLocal<Boolean> = staticCompositionLocalOf { false }
+
+/**
+ * 玻璃上的文字和细节颜色（网页版 liquid.refract.im 的 CSS：--label-light / --label-dark、--sub、--hair）。
+ * 浅玻璃上是黑、深玻璃上是白，按不透明度分三档；蓝色、红色这类强调色不在这里，照主题。
+ * 没有染色的玻璃会把它的 [label] 作为 [ui.feice.mochi.theme.LocalContentColor] 提供给里面的内容
+ */
+public object MochiGlassContent {
+    /** 标题、正文、图标：浅玻璃黑 86%，深玻璃白 94% */
+    public fun label(dark: Boolean): Color = if (dark) Color(1f, 1f, 1f, 0.94f) else Color(0f, 0f, 0f, 0.86f)
+
+    /** 次要文字、副标题、未选中的标签：浅玻璃黑 50%，深玻璃白 58% */
+    public fun secondary(dark: Boolean): Color = if (dark) Color(1f, 1f, 1f, 0.58f) else Color(0f, 0f, 0f, 0.5f)
+
+    /** 分隔线、关着的圆形底块、滑轨：浅玻璃黑 10%，深玻璃白 14% */
+    public fun separator(dark: Boolean): Color = if (dark) Color(1f, 1f, 1f, 0.14f) else Color(0f, 0f, 0f, 0.1f)
+
+    /**
+     * 玻璃上的强调色字和图标：浅玻璃上把强调色提亮（更浅、更鲜艳：亮度 +0.12、饱和度拉满），
+     * 原色在灰白的玻璃上发闷、不好认；深玻璃上原样
+     */
+    public fun accent(color: Color, dark: Boolean): Color {
+        if (dark) return color
+        val hsl = FloatArray(3)
+        androidx.core.graphics.ColorUtils.colorToHSL(color.toArgb(), hsl)
+        hsl[1] = 1f
+        hsl[2] = (hsl[2] + AccentLift).coerceAtMost(0.72f)
+        return Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl)).copy(alpha = color.alpha)
+    }
+}
+
+private const val AccentLift = 0.12f
 
 /** 不画外阴影，见 [LocalMochiGlassShadow] */
 public val MochiNoGlassShadow: () -> Float = { 0f }
@@ -56,16 +96,14 @@ public val MochiNoGlassShadow: () -> Float = { 0f }
 public fun mochiGlassOverflow(): Dp {
     val materials = MochiTheme.materials
     val dark = MochiTheme.colorScheme.isDark
-    return listOfNotNull(materials.bar, materials.controlGlass)
-        .maxOfOrNull { (if (dark) it.dark else it.light).outlineReach() } ?: 0.dp
+    return listOfNotNull(materials.bar, materials.controlGlass).maxOfOrNull { it.outlineReach(dark) } ?: 0.dp
 }
 
 /**
  * 一块玻璃表面（按钮、搜索框、菜单、警告框这类），里面放 [content]。画法和玻璃标签栏同一套（[GlassBody]），
- * 配方跟主题深浅取 [MochiGlass.light] / [MochiGlass.dark]。[cornerRadius] 为 null 时是胶囊。
- * 给了 [interactionSource] 时，按下从手指处亮起 iOS 的光斑：下面的玻璃过一组提饱和矩阵后按光斑形状混进来，
- * 提亮的是玻璃本来的颜色，不叠白（数值读自 iOS 的 _UIFlexInteractionLittleGlowView）。
- * [material] 或 [backdrop] 为 null 时画成 [MochiGlass.fallback] 纯色；没有材质时和栏按钮（[MochiButtonDefaults.barColors]）同色，
+ * 材质默认是主题里栏按钮那份（液态玻璃 [MochiGlass]）。
+ * [cornerRadius] 为 null 时是胶囊。给了 [interactionSource] 时按下有矩阵层和手指处的光晕。
+ * [material] 或 [backdrop] 为 null 时画成纯色（[MochiGlass.fallback]）；没有材质时和栏按钮（[MochiButtonDefaults.barColors]）同色，
  * 和同一排的圆按钮、按钮组放在一起是同一种纯色。
  * 玻璃不能放在 [backdrop] 的来源里面（会取样到自己），见 [MochiBackdrop]。
  */
@@ -79,21 +117,19 @@ public fun MochiGlassSurface(
     contentAlignment: Alignment = Alignment.Center,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val fill = rememberGlassFill(material, backdrop?.source)
+    val engine = material.resolved()
+    val fill = rememberGlassFill(engine, backdrop?.source)
     if (fill == null) {
         val shape = remember(cornerRadius) { cornerRadius?.let { MochiRoundedRectangle(it) } ?: MochiCapsule }
         Box(
-            modifier.background(material?.fallback ?: MochiButtonDefaults.barColors().container, shape),
+            modifier.background(engine?.fallbackColor(MochiTheme.colorScheme.isDark) ?: MochiButtonDefaults.barColors().container, shape),
             contentAlignment,
             content = content,
         )
         return
     }
-    val glow = if (fill.material.blurOnly) null else rememberGlassGlow(interactionSource)
-    Box(modifier, contentAlignment) {
-        GlassSurface(fill, cornerRadius, glow, Modifier.matchParentSize())
-        content()
-    }
+    val glow = rememberGlassGlow(interactionSource)
+    GlassSurface(fill, cornerRadius, glow, modifier, contentAlignment = contentAlignment, content = content)
 }
 
 /** 一处玻璃要的东西：材质和取样的背景；任何一个没有就画纯色 */
@@ -106,7 +142,8 @@ internal fun rememberGlassFill(material: MochiGlass?, source: GlassSource?): Gla
 
 /**
  * 按 [fill] 画玻璃本体；[scaleX] / [scaleY] 是绕中心的按压形变（背景不跟着放大），平移挂在 [modifier] 的图层上。
- * [cornerRadiusPx] 每帧读的圆角（见 [GlassBody]）；[adjust] 每帧改配方（菜单开合时的透镜）；[merge] 两块融成一块（见 [GlassBody]）
+ * [cornerRadiusPx] 每帧读的圆角（见 [GlassBody]）；[merge] 几块融成一块（见 [GlassBody]）；[content] 放在玻璃上面，
+ * 玻璃自适应时它的内容色跟着翻
  */
 @Composable
 internal fun GlassSurface(
@@ -118,23 +155,33 @@ internal fun GlassSurface(
     scaleY: () -> Float = { 1f },
     alpha: () -> Float = { 1f },
     cornerRadiusPx: (() -> Float)? = null,
-    adjust: ((MochiGlassRecipe) -> MochiGlassRecipe)? = null,
     merge: (() -> GlassMerge?)? = null,
+    hold: (() -> Rect?)? = null,
+    recipeSide: (() -> Float?)? = null,
+    recipeThick: (() -> Float)? = null,
+    shadowScale: () -> Float = { 1f },
+    contentAlignment: Alignment = Alignment.Center,
+    content: @Composable BoxScope.() -> Unit = {},
 ) {
-    val recipe = if (MochiTheme.colorScheme.isDark) fill.material.dark else fill.material.light
     GlassBody(
         backdrop = fill.source.layer,
-        recipe = if (adjust == null) ({ recipe }) else ({ adjust(recipe) }),
+        glass = fill.material,
         modifier = modifier,
         scaleX = scaleX,
         scaleY = scaleY,
         faceBackdrop = fill.source.face,
         alpha = alpha,
         cornerRadius = cornerRadius,
-        glow = if (fill.material.blurOnly) null else glow,
+        glow = glow,
         cornerRadiusPx = cornerRadiusPx,
         merge = merge,
-    )
+        hold = hold,
+        recipeSide = recipeSide,
+        recipeThick = recipeThick,
+        shadowScale = shadowScale,
+    ) {
+        Box(Modifier.matchParentSize(), contentAlignment, content = content)
+    }
 }
 
 /**

@@ -154,7 +154,7 @@ public fun MochiRemovableChip(
 
 /**
  * 一组芯片。默认排成一行、放不下时横向滑动（两端留出和卡片对齐的 [contentPadding]，滑到边上有弹性）。
- * 横排两端自动加渐隐遮罩：还能往哪边滑，哪边就渐隐（iOS 外观同时渐进模糊），滑到头那一边是实的，不会在边上硬切半个芯片。
+ * 横排两端自动加渐隐遮罩：还能往哪边滑，哪边就渐隐，滑到头那一边是实的，不会在边上硬切半个芯片。
  *
  * 放在已经有左右边距的容器里（演示页、列表的 contentPadding）时，传 [bleed] = 那个边距、[contentPadding] = 0：
  * 滑动区域往两边伸出去铺到容器外边（通常是屏幕边），第一个芯片仍和卡片对齐，渐隐落在屏幕边上而不是卡片边上。
@@ -226,7 +226,7 @@ private fun ChipCore(
         content = text,
         outline = Color.Transparent,
         pressedContainer = Color.Transparent,
-        glow = Color.White.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.16f else 0.4f),
+        glow = Color.White.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.16f else 0.28f),
         disabledContainer = colors.disabledContainer,
         disabledContent = colors.disabledContent,
     )
@@ -237,7 +237,8 @@ private fun ChipCore(
         colors = buttonColors,
         contentPadding = contentPadding,
         minHeight = MochiChipDefaults.Height,
-        behavior = MochiButtonDefaults.behavior(pressScale = 1.06f, maxGrow = 4.dp),
+        // 芯片常排在横向滑动的一行里：手指一过阈值就让给外层滚动，不跟手
+        behavior = MochiButtonDefaults.behavior(pressScale = 1.06f, maxGrow = 4.dp, yieldToScroll = true),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, content = content)
     }

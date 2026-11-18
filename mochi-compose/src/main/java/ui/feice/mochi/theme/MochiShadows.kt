@@ -81,7 +81,7 @@ public data class MochiShadows(
     val low: MochiShadowLevel = elevation(0.2f),
     val raised: MochiShadowLevel = elevation(0.35f),
     val lifted: MochiShadowLevel = elevation(0.6f),
-    val floating: MochiShadowLevel = elevation(1f),
+    val floating: MochiShadowLevel = Floating,
     val rest: MochiShadowLevel = elevation(0f),
 ) {
     public companion object {
@@ -94,6 +94,17 @@ public data class MochiShadows(
 
 // 拇指静止：只有一层 3dp 的软影，颜色系数 0.5（拇指阴影色默认 22% 黑，乘出来 11%）
 private val Contact = MochiShadowLevel(0.dp, 0.dp, 0.dp, 0f, 0f, 1.5.dp, 3.dp, 0.5f, 0.5f)
+
+/**
+ * 盖在页面上的面板：散开程度和 elevation(1) 一样，颜色比它深一截。浅色灰底上纯色菜单只靠阴影和页面分层，
+ * elevation(1) 的 11% 太淡、看不出浮在上面；也不压到发脏（弹窗、气泡同一档）
+ */
+private val Floating = elevation(1f).copy(
+    ambientAlpha = 0.17f,
+    ambientAlphaDark = 0.34f,
+    keyAlpha = 0.06f,
+    keyAlphaDark = 0.2f,
+)
 
 private val ContactPressed = MochiShadowLevel(0.dp, 0.dp, 0.dp, 0f, 0f, 3.5.dp, 7.dp, 0.8f, 0.8f)
 

@@ -15,9 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.requireGraphicsContext
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import ui.feice.mochi.effect.glass.engine.GlassBody
 import ui.feice.mochi.theme.MochiDefaults
@@ -40,7 +44,7 @@ import ui.feice.mochi.theme.MochiDefaults
  * 玻璃引用这个图层，所以内容滚动时玻璃跟着变。
  */
 @Stable
-public class MochiBackdrop internal constructor(internal val layer: LayerBackdrop) {
+public class MochiBackdrop internal constructor(internal val layer: LayerBackdrop, internal val once: RecordOnce = RecordOnce()) {
     /** 面色读的那份：和本体同一份 */
     internal val face: Backdrop get() = layer
 }
@@ -52,21 +56,65 @@ public class MochiBackdrop internal constructor(internal val layer: LayerBackdro
 @Composable
 public fun rememberMochiBackdrop(background: Color = MochiDefaults.groupedBackground()): MochiBackdrop {
     val bg = rememberUpdatedState(background)
+    val once = remember { RecordOnce() }
     val onDraw: ContentDrawScope.() -> Unit = remember {
         {
             drawRect(bg.value)
-            drawContent()
+            // 这一遍只回放上屏时录好的那份（见 RecordOnce），不再把正文执行一遍
+            once.replay = true
+            try {
+                drawContent()
+            } finally {
+                once.replay = false
+            }
         }
     }
     val layer = rememberLayerBackdrop(onDraw = onDraw)
-    return remember(layer) { MochiBackdrop(layer) }
+    return remember(layer) { MochiBackdrop(layer, once) }
 }
 
 /** 把这块内容作为玻璃的背景来源，见 [MochiBackdrop]；null 时什么都不做 */
 public fun Modifier.mochiBackdropSource(backdrop: MochiBackdrop?): Modifier = if (backdrop == null) {
     this
 } else {
-    this.graphicsLayer().layerBackdrop(backdrop.layer)
+    this.graphicsLayer().mochiLayerBackdrop(backdrop.layer).then(RecordOnceElement(backdrop.once))
+}
+
+/**
+ * 来源的正文每帧只执行一遍绘制：kyant 的来源节点先把正文画上屏，再为取样录一遍（又执行一遍正文）；
+ * 正文外面常套着几层来源（导航主机、标签页、标题脚手架），一帧要把可见的行重放 2^N 遍，列表滚得越久越卡。
+ * 这里在来源节点里面把正文录进一个图层：上屏那遍录一次并画这个图层，取样那遍（[replay]）只画这个图层。
+ */
+internal class RecordOnce {
+    var replay: Boolean = false
+}
+
+private data class RecordOnceElement(val once: RecordOnce) : ModifierNodeElement<RecordOnceNode>() {
+    override fun create() = RecordOnceNode(once)
+    override fun update(node: RecordOnceNode) {
+        node.once = once
+    }
+}
+
+private class RecordOnceNode(var once: RecordOnce) :
+    Modifier.Node(),
+    DrawModifierNode {
+    private var layer: GraphicsLayer? = null
+
+    override fun onAttach() {
+        layer = requireGraphicsContext().createGraphicsLayer()
+    }
+
+    override fun onDetach() {
+        layer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
+        layer = null
+    }
+
+    override fun ContentDrawScope.draw() {
+        val l = layer ?: return drawContent()
+        if (!once.replay) l.record { this@draw.drawContent() }
+        drawLayer(l)
+    }
 }
 
 /**

@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.roborazzi) apply false
     alias(libs.plugins.maven.publish) apply false
     alias(libs.plugins.spotless)
+    alias(libs.plugins.binary.compatibility.validator)
 }
 
 // 格式检查：ktlint + Compose 规则，所有源码文件带 Apache-2.0 许可头（和 miuix 一致）
@@ -70,4 +71,11 @@ subprojects {
             if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
         }
     }
+}
+
+// 公开 API 快照：四个库模块根下的 api/<模块>.api 记着所有公开签名，apiCheck（check 会带上）和编译产物比对，
+// 改了公开 API 会失败。确认是有意的改动就跑 ./gradlew apiDump，把 .api 的 diff 和代码一起提交
+apiValidation {
+    // 键盘和输入法只在本地检出里有，不在就不能写进忽略列表（插件会报找不到项目）
+    ignoredProjects += listOf("example", "mochi-keyboard", "mochi-ime").filter { rootProject.findProject(":$it") != null }
 }

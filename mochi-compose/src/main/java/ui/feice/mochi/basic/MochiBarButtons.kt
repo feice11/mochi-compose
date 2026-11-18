@@ -21,6 +21,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -33,7 +34,9 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -255,19 +258,46 @@ private fun GlassBarGroup(
 ) {
     val glow = rememberGlassGlowState()
     val layer = rememberGraphicsLayer()
-    val handle = remember(layer) { BarGroupHandle(layer) }
+    // 和单个玻璃栏按钮同一套形变（iOS 的 _UIFlexInteraction）：按下放大，拖动时朝手指拉伸、挪动
+    val flex = remember { ButtonVisual().apply { flex = true } }
+    val handle = remember(layer, flex) {
+        BarGroupHandle(layer).apply {
+            visual = { r ->
+                val c = r.center + flex.shift
+                val w = r.width * flex.flexX
+                val h = r.height * flex.flexY
+                Rect(c.x - w / 2f, c.y - h / 2f, c.x + w / 2f, c.y + h / 2f)
+            }
+        }
+    }
     val view = LocalView.current
+    flex.unit = LocalDensity.current.density
+    val scope = rememberCoroutineScope()
     CompositionLocalProvider(LocalContentColor provides colors.content, LocalBarGroup provides handle) {
         Box(
             modifier
                 .barShape(navId, colors, glass = glass)
                 .height(MochiButtonDefaults.BarItemSize)
+                .onPlaced { flex.coords = it }
+                .glassFlexGesture(flex, scope)
                 .glassGlowInput(glow)
                 .onGloballyPositioned { handle.rect = Rect(it.positionInWindow() + view.windowOriginOnScreen(), it.size.toSize()) },
         ) {
-            GlassSurface(glass, null, glow, Modifier.matchParentSize(), alpha = { if (handle.hidden) 0f else 1f })
+            GlassSurface(
+                glass,
+                null,
+                glow,
+                Modifier.matchParentSize().graphicsLayer {
+                    translationX = flex.shift.x
+                    translationY = flex.shift.y
+                },
+                scaleX = { flex.flexX },
+                scaleY = { flex.flexY },
+                alpha = { if (handle.hidden) 0f else 1f },
+            )
             Row(
                 Modifier
+                    .graphicsLayer { pressTransform(flex) }
                     // 组里的内容录一份：菜单从组里脱出来时浮层接手画整个组，在玻璃上面画这份
                     .drawWithContent {
                         layer.record { this@drawWithContent.drawContent() }
@@ -290,6 +320,12 @@ private fun GlassBarGroup(
 internal class BarGroupHandle(val content: GraphicsLayer, val color: Color? = null) {
     var rect: Rect = Rect.Zero
     var hidden by mutableStateOf(false)
+
+    /**
+     * 组此刻在屏幕上的样子：布局矩形叠上按下的放大和跟手挪动（玻璃组的 flex）。浮层从这个样子接手，
+     * 不从布局矩形接手：不然按住打开时，放大的组和原大小的菜单水滴在交接那一帧叠成两层玻璃、尺寸一跳
+     */
+    var visual: (Rect) -> Rect = { it }
 }
 
 /** 当前所在的按钮组；组外面是 null */

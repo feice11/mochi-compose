@@ -44,7 +44,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.glass.barGlassSource
@@ -84,7 +84,13 @@ public fun MochiSearchBar(
     var focused by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val requester = remember { FocusRequester() }
-    val p by animateFloatAsState(if (focused) 1f else 0f, MochiMotions.responseSpring(0.38f, 0.86f), label = "cancel")
+    val p by animateFloatAsState(if (focused) 1f else 0f, MochiMotionTokens.Control, label = "cancel")
+    // 取消按钮的透明度单独走短时长，不跟宽度的弹簧拖（编排规则：透明度独立且短）
+    val cancelAlpha by animateFloatAsState(
+        if (focused) 1f else 0f,
+        if (focused) MochiMotionTokens.Fade else MochiMotionTokens.FadeOut,
+        label = "cancelAlpha",
+    )
     val fieldColor = cs.onSurface.copy(alpha = 0.08f)
     val hint = cs.onSurfaceVariant
 
@@ -107,7 +113,8 @@ public fun MochiSearchBar(
                 MagnifierGlyph(hint)
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) Text(placeholder, style = ts.bodyLarge, color = hint, maxLines = 1)
+                    // 占位文字淡入淡出，不瞬切（和 MochiTextField 同一个）
+                    FieldPlaceholder(placeholder, query.isEmpty(), ts.bodyLarge, hint)
                     BasicTextField(
                         value = query,
                         onValueChange = onQueryChange,
@@ -122,15 +129,38 @@ public fun MochiSearchBar(
                             .onFocusChanged { focused = it.isFocused },
                     )
                 }
-                if (query.isNotEmpty()) {
-                    Box(
-                        Modifier
-                            .size(width = 32.dp, height = 36.dp)
-                            .clickable(remember { MutableInteractionSource() }, indication = null) { onQueryChange("") }
-                            .semantics { contentDescription = "清除" },
-                        contentAlignment = Alignment.CenterEnd,
-                    ) {
-                        Box(Modifier.size(18.dp).background(hint.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
+                // 清除按钮占位一直保留，只在原地缩放淡入淡出（固定位置的小按钮不随占位增长滑进来）
+                val clear by animateFloatAsState(
+                    if (query.isNotEmpty()) 1f else 0f,
+                    if (query.isNotEmpty()) MochiMotionTokens.Pop else MochiMotionTokens.Settle,
+                    label = "clear",
+                )
+                Box(
+                    Modifier
+                        .size(width = 32.dp, height = 36.dp)
+                        .then(
+                            if (query.isNotEmpty()) {
+                                Modifier
+                                    .clickable(remember { MutableInteractionSource() }, indication = null) { onQueryChange("") }
+                                    .semantics { contentDescription = "清除" }
+                            } else {
+                                Modifier
+                            },
+                        ),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    if (clear > 0.001f) {
+                        Box(
+                            Modifier
+                                .size(18.dp)
+                                .graphicsLayer {
+                                    alpha = clear.coerceIn(0f, 1f)
+                                    scaleX = 0.5f + 0.5f * clear
+                                    scaleY = 0.5f + 0.5f * clear
+                                }
+                                .background(hint.copy(alpha = 0.6f), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             ClearGlyph(cs.surface)
                         }
                     }
@@ -147,7 +177,7 @@ public fun MochiSearchBar(
                     layout(w, pl.height) { pl.place(0, 0) }
                 }
                 .graphicsLayer {
-                    alpha = p.coerceIn(0f, 1f)
+                    alpha = cancelAlpha
                     val s = 0.6f + 0.4f * p.coerceIn(0f, 1f)
                     scaleX = s
                     scaleY = s

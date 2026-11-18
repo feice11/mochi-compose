@@ -85,7 +85,10 @@ public object MochiDefaults {
     @Composable
     @ReadOnlyComposable
     public fun groupedContainer(): Color = MochiTheme.colorScheme.run {
-        if (isDark) {
+        if (LocalMochiSheetGlass.current) {
+            // 玻璃面板里卡片半透明，透出面板的玻璃
+            (if (isDark) surfaceContainerHigh else surfaceContainerLowest).copy(alpha = if (isDark) 0.45f else 0.55f)
+        } else if (isDark) {
             if (LocalMochiElevated.current) surfaceContainerHigh else surfaceContainer
         } else {
             surfaceContainerLowest

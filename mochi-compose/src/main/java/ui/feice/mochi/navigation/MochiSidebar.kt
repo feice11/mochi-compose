@@ -81,6 +81,7 @@ import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiIconButton
@@ -109,7 +110,7 @@ public enum class MochiSidebarStyle {
 @Stable
 public class MochiSidebarState internal constructor(initiallyOpen: Boolean) {
     internal val anim = Animatable(if (initiallyOpen) 1f else 0f)
-    internal var spec: AnimationSpec<Float> = MochiMotions.responseSpring(0.42f, 1f)
+    internal var spec: AnimationSpec<Float> = MochiMotionTokens.Page
     internal var scope: CoroutineScope? = null
 
     /** 目标状态：打开中、已打开为 true；拖动途中按松手前的目标算 */
@@ -630,7 +631,7 @@ private fun SidebarRow(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val sel by animateFloatAsState(if (selected) 1f else 0f, MochiMotions.responseSpring(0.3f, 1f), label = "selected")
+    val sel by animateFloatAsState(if (selected) 1f else 0f, MochiMotionTokens.Settle, label = "selected")
     val press by animateFloatAsState(if (pressed) 1f else 0f, MochiMotions.responseSpring(0.2f, 1f), label = "pressed")
     Row(
         modifier

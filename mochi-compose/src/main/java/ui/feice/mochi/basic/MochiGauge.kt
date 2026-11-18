@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.roundToLong
 import kotlin.math.sin
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.shape.drawG2RoundRect
 import ui.feice.mochi.theme.MochiTheme
@@ -145,7 +145,7 @@ public fun MochiLinearGauge(
 ) {
     val span = (range.endInclusive - range.start).takeIf { it > 0f } ?: 1f
     val fraction = ((value - range.start) / span).coerceIn(0f, 1f)
-    val p by animateFloatAsState(fraction, MochiMotions.responseSpring(0.5f, 0.9f), label = "gauge")
+    val p by animateFloatAsState(fraction, MochiMotionTokens.Page, label = "gauge")
     Column(
         modifier.semantics { progressBarRangeInfo = ProgressBarRangeInfo(value, range) },
         verticalArrangement = Arrangement.spacedBy(6.dp),

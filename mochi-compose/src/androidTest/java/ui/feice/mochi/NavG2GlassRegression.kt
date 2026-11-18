@@ -34,11 +34,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import ui.feice.mochi.effect.glass.engine.drawGlassOuterShadow
 import ui.feice.mochi.navigation.NavPageMask
 import ui.feice.mochi.navigation.NavPageOutline
 import ui.feice.mochi.shape.addG2RoundRect
-import ui.feice.mochi.theme.MochiGlassRecipe
 
 @RunWith(AndroidJUnit4::class)
 class NavG2GlassRegression {
@@ -165,20 +163,5 @@ class NavG2GlassRegression {
             actual.recycle()
             expected.recycle()
         }
-    }
-
-    @Test
-    fun exteriorShadowNeverPaintsInsideGlass() {
-        val recipe = MochiGlassRecipe(shadowOpacity = 0.9f, shadowSoftness = 16.dp, shadowOffsetY = 8.dp, shadowSpread = (-1).dp)
-        val bitmap = render("shadow-outside", Color.White) {
-            drawGlassOuterShadow(recipe, Rect(100f, 130f, 380f, 210f), 1f)
-        }
-        for (y in 140..200 step 5) {
-            for (x in 140..340 step 5) {
-                assertTrue("shadow must not dim body at $x,$y", android.graphics.Color.red(bitmap.getPixel(x, y)) >= 254)
-            }
-        }
-        assertTrue("shadow must still be visible outside", android.graphics.Color.red(bitmap.getPixel(240, 220)) < 240)
-        bitmap.recycle()
     }
 }

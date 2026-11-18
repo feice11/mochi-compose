@@ -65,7 +65,9 @@ import kotlinx.coroutines.launch
 import ui.feice.mochi.basic.parts.ControlSmoothing
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiDefaults
+import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.rememberMochiHaptics
+import ui.feice.mochi.utils.smoothstep
 
 /**
  * 强度调整条，照 Codex 桌面版的思考强度滑条（`ModelPickerPowerSliderImpl`）做：24dp 的胶囊轨道，28dp 白色圆拇指上下各凸出 2dp，
@@ -311,10 +313,7 @@ private fun IntensityTrack(
 }
 
 /** 高值效果的强度：HighFrom 以下是 0，到 1 时满 */
-private fun high(v: Float): Float {
-    val t = ((v - MochiIntensitySliderDefaults.HighFrom) / (1f - MochiIntensitySliderDefaults.HighFrom)).coerceIn(0f, 1f)
-    return t * t * (3f - 2f * t)
-}
+private fun high(v: Float): Float = smoothstep(MochiIntensitySliderDefaults.HighFrom, 1f, v)
 
 private fun snap(v: Float, stops: Int): Float {
     val c = v.coerceIn(0f, 1f)
@@ -401,8 +400,8 @@ private class HighEffects {
         // 每颗星到点就换一个新目标：横向偏 ±4、纵向 12±7，过渡时长 = 1.6s ×（0.8..2.0）
         for (i in 0 until StarCount) {
             if (time < next[i] && time >= start[i]) continue
-            fromX[i] = lerpF(fromX[i], toX[i], progress(i))
-            fromY[i] = lerpF(fromY[i], toY[i], progress(i))
+            fromX[i] = lerp(fromX[i], toX[i], progress(i))
+            fromY[i] = lerp(fromY[i], toY[i], progress(i))
             val a = rnd.nextFloat()
             val b = rnd.nextFloat()
             dur[i] = StarPeriod * (0.8f + rnd.nextFloat() * 1.2f)
@@ -432,8 +431,8 @@ private class HighEffects {
             val k = ((alpha * StarCount) - i).coerceIn(0f, 1f) * opacity[i]
             if (k <= 0.01f) continue
             val u = progress(i)
-            val cx = x + w * base[i] + lerpF(fromX[i], toX[i], u) * dp
-            val cy = bandTop + lerpF(fromY[i], toY[i], u) * dp
+            val cx = x + w * base[i] + lerp(fromX[i], toX[i], u) * dp
+            val cy = bandTop + lerp(fromY[i], toY[i], u) * dp
             val r = 1.5f * dp * scale[i]
             // box-shadow 0 0 5px #ffffff57
             drawCircle(Color.White, r + 2.5f * dp * scale[i], Offset(cx, cy), alpha = 0.34f * 0.35f * k)
@@ -453,12 +452,12 @@ private class HighEffects {
             if (t < 0.22f) {
                 val e = BurstEasing.transform(t / 0.22f)
                 o = e
-                s = lerpF(0.25f, 1.28f, e)
+                s = lerp(0.25f, 1.28f, e)
                 m = 0f
             } else {
                 val e = BurstEasing.transform((t - 0.22f) / 0.78f)
                 o = 1f - e
-                s = lerpF(1.28f, 0.55f, e)
+                s = lerp(1.28f, 0.55f, e)
                 m = e
             }
             // :nth-child(4n+3) 紫 82% + 蓝，:nth-child(4n+1)（第一颗除外）紫 68% + 蓝，其余纯紫
@@ -488,8 +487,6 @@ private fun hash(e: Int, t: Int): Float {
     val n = sin((e + 1) * 12.9898 + t * 78.233) * 43758.5453
     return (n - floor(n)).toFloat()
 }
-
-private fun lerpF(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
 /** Codex 的高值渐变着色器（逐行移植），再按 mix-blend-mode: luminosity 叠到横向的蓝紫渐变上 */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)

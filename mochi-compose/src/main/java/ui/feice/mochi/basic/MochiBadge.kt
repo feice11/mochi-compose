@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiTheme
@@ -76,12 +76,12 @@ public fun MochiBadge(
             shown = text
             if (changed) {
                 bump.snapTo(1.25f)
-                bump.animateTo(1f, MochiMotions.responseSpring(0.32f, 0.45f))
+                bump.animateTo(1f, MochiMotionTokens.Bounce)
             } else {
-                presence.animateTo(1f, MochiMotions.responseSpring(0.34f, 0.55f))
+                presence.animateTo(1f, MochiMotionTokens.Bounce)
             }
         } else {
-            presence.animateTo(0f, MochiMotions.responseSpring(0.25f, 1f))
+            presence.animateTo(0f, MochiMotionTokens.Settle)
             shown = null
         }
     }

@@ -51,8 +51,6 @@ import ui.feice.mochi.navigation.MochiNavSpec
 import ui.feice.mochi.navigation.MochiNavigator
 import ui.feice.mochi.navigation.mochiNavSource
 import ui.feice.mochi.navigation.rememberMochiNavigator
-import ui.feice.mochi.theme.MochiGlass
-import ui.feice.mochi.theme.MochiGlassRecipe
 import ui.feice.mochi.theme.MochiTheme
 
 @RunWith(AndroidJUnit4::class)
@@ -117,91 +115,6 @@ class NavGlassVisualRegression {
             assertEquals(before.height, after.height, 0.5f)
         }
         screenshot("stationary-background").recycle()
-        inst.runOnMainSync { activity.setContent { } }
-    }
-
-    @Test
-    fun barShadowDoesNotTintPressedLens() {
-        var shadow by mutableFloatStateOf(0f)
-        var bounds = Rect.Zero
-        var density = 1f
-        val pageColor = Color(0.7f, 0.7f, 0.7f)
-        rule.scenario.onActivity { host ->
-            activity = host
-            host.setContent {
-                MochiTheme {
-                    density = LocalDensity.current.density
-                    val backdrop = rememberMochiBackdrop(pageColor)
-                    Box(Modifier.fillMaxSize().background(pageColor)) {
-                        Box(Modifier.fillMaxSize().mochiBackdropSource(backdrop))
-                        val recipe = MochiGlassRecipe(blur = 2.dp, shadowOpacity = shadow, shadowSoftness = 14.dp, shadowOffsetY = 8.dp)
-                        MochiTabBar(
-                            0,
-                            {
-                            },
-                            persistentListOf(
-                                MochiTabItem("A") {
-                                    Text("A")
-                                },
-                                MochiTabItem("B") { Text("B") },
-                                MochiTabItem("C") { Text("C") },
-                            ),
-                            modifier = Modifier.align(Alignment.Center).width(300.dp).onGloballyPositioned { bounds = it.boundsInWindow() },
-                            behavior = MochiTabBarBehavior(itemWidth = 80.dp),
-                            windowInsets = WindowInsets(0),
-                            backdrop = backdrop,
-                            material = MochiGlass(pageColor, recipe),
-                        )
-                    }
-                }
-            }
-        }
-        SystemClock.sleep(650)
-        val x = bounds.center.x - 80f * density
-        val y = bounds.top + 32f * density
-        val now = SystemClock.uptimeMillis()
-        fun touch(action: Int) {
-            val event = MotionEvent.obtain(now, SystemClock.uptimeMillis(), action, x, y, 0).apply {
-                source = InputDevice.SOURCE_TOUCHSCREEN
-            }
-            try {
-                assertTrue(inst.uiAutomation.injectInputEvent(event, true))
-            } finally {
-                event.recycle()
-            }
-        }
-        touch(MotionEvent.ACTION_DOWN)
-        SystemClock.sleep(1400)
-        val noShadow = screenshot("pressed-no-shadow")
-        inst.runOnMainSync { shadow = 0.9f }
-        SystemClock.sleep(600)
-        val withShadow = screenshot("pressed-with-shadow")
-        touch(MotionEvent.ACTION_UP)
-        var max = 0
-        var total = 0L
-        var samples = 0
-        for (py in (bounds.top - density).toInt()..(bounds.top + 2 * density).toInt()) {
-            for (px in (x - 10 * density).toInt()..(x + 10 * density).toInt()) {
-                val a = noShadow.getPixel(px, py)
-                val b = withShadow.getPixel(px, py)
-                for (shift in listOf(0, 8, 16)) {
-                    val delta = abs((a ushr shift and 255) - (b ushr shift and 255))
-                    max = maxOf(max, delta)
-                    total += delta
-                    samples++
-                }
-            }
-        }
-        val mean = total.toDouble() / samples
-        val outsideX = (bounds.center.x + 80 * density).toInt()
-        val outsideY = (bounds.bottom + 12 * density).toInt()
-        val outsideDrop =
-            android.graphics.Color.red(noShadow.getPixel(outsideX, outsideY)) -
-                android.graphics.Color.red(withShadow.getPixel(outsideX, outsideY))
-        assertTrue("pressed lens mean=$mean max=$max", mean <= 2.0 && max <= 8)
-        assertTrue("the visible exterior shadow must remain: $outsideDrop", outsideDrop > 4)
-        noShadow.recycle()
-        withShadow.recycle()
         inst.runOnMainSync { activity.setContent { } }
     }
 }

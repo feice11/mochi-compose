@@ -1,0 +1,42 @@
+public final class ui/feice/mochi/icons/MochiIconInfo {
+	public static final field $stable I
+	public final fun getKeywordsZh ()Ljava/util/List;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getTags ()Ljava/util/List;
+	public final fun has (Lui/feice/mochi/icons/MochiIconStyle;)Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ui/feice/mochi/icons/MochiIconStyle : java/lang/Enum {
+	public static final field Filled Lui/feice/mochi/icons/MochiIconStyle;
+	public static final field Outline Lui/feice/mochi/icons/MochiIconStyle;
+	public static final field Sharp Lui/feice/mochi/icons/MochiIconStyle;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lui/feice/mochi/icons/MochiIconStyle;
+	public static fun values ()[Lui/feice/mochi/icons/MochiIconStyle;
+}
+
+public final class ui/feice/mochi/icons/MochiIoniconDefaults {
+	public static final field $stable I
+	public static final field INSTANCE Lui/feice/mochi/icons/MochiIoniconDefaults;
+	public final fun getSize-D9Ej5fM ()F
+}
+
+public final class ui/feice/mochi/icons/MochiIonicons {
+	public static final field $stable I
+	public static final field INSTANCE Lui/feice/mochi/icons/MochiIonicons;
+	public static final field Version Ljava/lang/String;
+	public final fun catalog (Landroid/content/Context;)Ljava/util/List;
+	public final fun exists (Landroid/content/Context;Ljava/lang/String;)Z
+	public final fun preload (Landroid/content/Context;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun search (Ljava/util/List;Ljava/lang/String;)Ljava/util/List;
+	public final fun vector (Landroid/content/Context;Ljava/lang/String;Lui/feice/mochi/icons/MochiIconStyle;Landroidx/compose/ui/text/font/FontWeight;Z)Landroidx/compose/ui/graphics/vector/ImageVector;
+	public static synthetic fun vector$default (Lui/feice/mochi/icons/MochiIonicons;Landroid/content/Context;Ljava/lang/String;Lui/feice/mochi/icons/MochiIconStyle;Landroidx/compose/ui/text/font/FontWeight;ZILjava/lang/Object;)Landroidx/compose/ui/graphics/vector/ImageVector;
+}
+
+public final class ui/feice/mochi/icons/MochiIoniconsKt {
+	public static final fun MochiIonicon-rT3HnGc (Ljava/lang/String;Landroidx/compose/ui/Modifier;Lui/feice/mochi/icons/MochiIconStyle;JFLjava/lang/String;ZLandroidx/compose/runtime/Composer;II)V
+	public static final fun getLocalMochiIconStyle ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+	public static final fun rememberMochiIonicon (Ljava/lang/String;Lui/feice/mochi/icons/MochiIconStyle;ZLandroidx/compose/runtime/Composer;II)Landroidx/compose/ui/graphics/vector/ImageVector;
+}
+

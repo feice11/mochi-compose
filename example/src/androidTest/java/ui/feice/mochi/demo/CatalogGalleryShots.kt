@@ -44,7 +44,7 @@ class CatalogGalleryShots {
         val dm = inst.targetContext.resources.displayMetrics
         for (mode in modes) {
             val dark = mode == "dark"
-            for (entry in catalog.filter { it.page != null && (only == null || it.id in only) }) {
+            for (entry in catalog.filter { only == null || it.id in only }) {
                 show(entry.id, dark)
                 var last: IntArray? = null
                 for (i in 0 until 12) {
@@ -91,12 +91,10 @@ class CatalogGalleryShots {
                 key(route, dark) {
                     val controller = remember { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) }
                     MochiTheme(controller) {
-                        M3Bridge {
-                            val nav = rememberMochiNavigator(route)
-                            MochiNavHost(nav) { r ->
-                                val entry = catalog.first { it.id == r }
-                                entry.page!!.invoke(entry)
-                            }
+                        val nav = rememberMochiNavigator(route)
+                        MochiNavHost(nav) { r ->
+                            val entry = catalog.first { it.id == r }
+                            entry.page(entry)
                         }
                     }
                 }

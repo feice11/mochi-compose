@@ -51,6 +51,9 @@ public object MochiPressDefaults {
 public fun Modifier.mochiPressDeform(scale: Float = MochiPressDefaults.Scale, follow: Dp = MochiPressDefaults.Follow): Modifier =
     this then PressDeformElement(scale, follow)
 
+internal fun Modifier.mochiTrackedPressDeform(scale: Float, follow: Dp, onMotionChanged: (Boolean) -> Unit): Modifier =
+    this then PressDeformElement(scale, follow, onMotionChanged = onMotionChanged)
+
 /**
  * 自己在 Main 阶段消费整下拖动的按钮（按住期间外层不会滚动）用这个：按下立即反馈，不按滚动容器的节奏等待，
  * 也不把「移动被消费了」当成滚动接手而收回
@@ -68,14 +71,16 @@ private data class PressDeformElement(
     val extraScale: (() -> Float)? = null,
     val bounds: (() -> Rect)? = null,
     val claimed: Boolean = false,
+    val onMotionChanged: ((Boolean) -> Unit)? = null,
 ) : ModifierNodeElement<PressDeformNode>() {
-    override fun create(): PressDeformNode = PressDeformNode(scale, follow, extraScale, bounds, claimed)
+    override fun create(): PressDeformNode = PressDeformNode(scale, follow, extraScale, bounds, claimed, onMotionChanged)
 
     override fun update(node: PressDeformNode) {
         node.scale = scale
         node.follow = follow
         node.extraScale = extraScale
         node.bounds = bounds
+        node.onMotionChanged = onMotionChanged
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -91,6 +96,7 @@ private class PressDeformNode(
     var extraScale: (() -> Float)?,
     var bounds: (() -> Rect)?,
     val claimed: Boolean,
+    var onMotionChanged: ((Boolean) -> Unit)?,
 ) : DelegatingNode(),
     LayoutModifierNode {
     /** (缩放, 0) */
@@ -148,6 +154,7 @@ private class PressDeformNode(
     private fun startLoop() {
         if (loop?.isActive == true) return
         loop = coroutineScope.launch {
+            onMotionChanged?.invoke(true)
             val s = MochiFollowSpring(0.24f, 0.62f)
             val o = MochiFollowSpring(0.3f, 0.7f)
             s.snapTo(press)
@@ -164,7 +171,12 @@ private class PressDeformNode(
                     break
                 }
             }
+            onMotionChanged?.invoke(false)
         }
+    }
+
+    override fun onDetach() {
+        onMotionChanged?.invoke(false)
     }
 
     override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {

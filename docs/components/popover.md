@@ -18,6 +18,7 @@ MochiPopoverButton(
 
 - **Use `MochiPopoverButton` when a button triggers it.** The button and the panel are one component sharing the [dropdown](dropdown.md)'s implementation: press scale, glow from the finger, the button color blending into the panel, the metaball neck, jelly and rubber band are all identical; the panel just holds any content and is sized to it. The button look comes from `colors` (`buttonColor` / `buttonContentColor`); with `behavior.openMode = Cover` the whole button grows into the panel
 - **The button color must be opaque**: while open, the real button is hidden and a clone is drawn in the overlay with the panel shadow underneath. A translucent gray lets that shadow show through the button, so it looks like a translucent mask popping up, which then vanishes with the overlay on close. For a gray button inside a card, composite it onto the card color first: `MochiDefaults.fill().compositeOver(MochiDefaults.groupedContainer())`. The engine composites any remaining translucent color onto the panel color as a fallback
+- The panel (bubble) shadow only appears as it opens: there is none while the button is held, and the button itself never has one
 - **Use `MochiPopoverBox` only when the anchor is not a button** (a tip shown programmatically, a custom control): it does not own the anchor, so there is no press feedback or color blending
 - When the panel holds a list of options, do not lay out `MochiListRow`s in a popover; use `MochiDropdown` / `MochiIconDropdown`. The highlight, press-and-slide and ticks come from the menu engine
 

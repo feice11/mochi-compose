@@ -39,10 +39,8 @@ import ui.feice.mochi.effect.content.mochiBlurAlpha
 import ui.feice.mochi.utils.rememberMochiHaptics
 
 /**
- * 一个手写的词：几笔（一笔 = 一条中心线），按书写顺序。[box] 是笔画所在的范围（设计稿单位）。
- * [lift] = 每笔之间提笔（「你好」按笔顺一笔一笔写）；false = 连笔（「hello」按字母分段，但笔不离纸）。
- *
- * 每一笔有自己的时长（按长度）和速度曲线：提笔的字起笔顿一下、中段快、收笔慢；连笔的字在字母交接处只稍稍放慢，不停。
+ * 手写的词：按书写顺序的中心线笔画，[box] 为设计稿范围。
+ * [lift] = 每笔之间提笔；false = 连笔（按字母分段，笔不离纸）。
  */
 private class InkWord(paths: List<String>, val box: Rect, val lift: Boolean) {
     val strokes: List<Path> = paths.map { PathParser().parsePathString(it).toPath() }
@@ -68,10 +66,9 @@ private class InkWord(paths: List<String>, val box: Rect, val lift: Boolean) {
     }
 }
 
-// 提笔字：起笔、收笔只稍稍放缓，整体顺下来，不一顿一顿
 private val StrokeEasing = CubicBezierEasing(0.3f, 0.15f, 0.35f, 1f)
 
-// 连笔字：字母之间只放慢一点，速度不归零
+// 连笔字母交接处速度不归零
 private val LetterEasing = CubicBezierEasing(0.32f, 0.12f, 0.5f, 0.9f)
 
 private const val InkWidth = 7f
@@ -117,18 +114,13 @@ private val Hello = InkWord(
 
 private val Words = listOf(Nihao, Hello)
 
-/** 写完一笔后笔画粗细的回弹：从原粗细鼓起来，再来回两下收住（t：写完后过了多少 ms） */
+/** 写完一笔后的粗细回弹（t：写完后的 ms） */
 private fun strokeBounce(t: Float, amount: Float): Float = if (t < 0f) 0f else amount * exp(-t / 150f) * sin(t / 46f)
 
-/** 整个词写完后的回弹：轻轻放大约 4% 再落定 */
+/** 整个词写完后的缩放回弹 */
 private fun wordBounce(t: Float): Float = if (t < 0f) 0f else 0.045f * exp(-t / 210f) * sin(t / 62f)
 
-/**
- * 苹果「hello」那样一笔一笔写出来的问候：「你好」→「hello」轮流写，写完停一会儿，模糊淡出再写下一个。
- * - 每笔有自己的节奏；写完一笔，那一笔弹一下（粗细回弹）并轻震；整个词写完再整体轻轻弹一下；
- * - 笔画是扁平的纯色（跟主题色），没有玻璃、扫光和笔尖亮点；
- * - 只在绘制阶段读动画进度，不触发重组。
- */
+/** 「你好」「hello」轮流手写出来的问候；只在绘制阶段读动画进度，不触发重组。 */
 @Composable
 internal fun HandwrittenHello(color: Color, modifier: Modifier = Modifier, startDelay: Long = 0L) {
     val haptics = rememberMochiHaptics()
@@ -152,7 +144,6 @@ internal fun HandwrittenHello(color: Color, modifier: Modifier = Modifier, start
                         clock.animateTo(end + word.gap, tween(word.gap.toInt(), easing = LinearEasing))
                     }
                 }
-                // 停一会儿（回弹在这段时间里收住）
                 clock.animateTo(word.end + 1500f, tween(1500, easing = LinearEasing))
                 fade.animateTo(0f, tween(460, easing = FastOutSlowInEasing))
                 delay(180)
@@ -170,7 +161,7 @@ internal fun HandwrittenHello(color: Color, modifier: Modifier = Modifier, start
                 scaleX = b
                 scaleY = b
             }
-            // 手写字每帧都在长，模糊没法缓存；降采样让每帧的模糊便宜很多
+            // 每帧都在变，模糊无法缓存，靠降采样省开销
             .mochiBlur(continuous = true) { 10.dp * (1f - fade.value) },
     ) {
         val c = clock.value

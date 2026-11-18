@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.platform.LocalView
 import java.util.function.Consumer
 import kotlin.math.min
+import ui.feice.mochi.utils.smoothstep
 
 /**
  * 实验性 HDR 高光：打开后窗口切到 HDR 模式，按住时的镜面高光、开关滑块的圆钮和边缘流光
@@ -100,8 +101,7 @@ internal fun Color.hdrLift(gain: Float): Color {
     // 彩色部分的放大倍数：让最亮的通道到 hi·g，最小的通道不动
     val chroma = if (hi - lo > 1e-4f) (hi * g - lo) / (hi - lo) else g
     // 饱和度低（接近白、灰）时平滑地退回整体乘 g
-    val t = ((hi - lo) / hi / 0.3f).coerceIn(0f, 1f)
-    val w = t * t * (3f - 2f * t)
+    val w = smoothstep(0f, 0.3f, (hi - lo) / hi)
     fun ch(v: Float) = (v * g) * (1f - w) + (lo + (v - lo) * chroma) * w
     return Color(
         red = ch(l.red).coerceIn(-0.5f, 7.4f),

@@ -35,7 +35,7 @@ MochiButtonGroup {
 
 | 参数 | 说明 |
 |---|---|
-| style | 纯色：`Filled` / `Tonal` / `Outlined` / `Text`，主题开不开液态玻璃都是纯色。玻璃：iOS 的 `ProminentGlass` / `Glass` / `ProminentClearGlass` / `ClearGlass`，主题有控件玻璃时才是玻璃，没有时 prominent 两种和 `Filled` 一样、另外两种和 `Tonal` 一样 |
+| style | 纯色：`Filled` / `Tonal` / `Outlined` / `Text`，主题开不开玻璃都是纯色。玻璃：iOS 的 `ProminentGlass` / `Glass`，主题有控件玻璃时才是玻璃，没有时 `ProminentGlass` 和 `Filled` 一样、`Glass` 和 `Tonal` 一样 |
 | colors | `MochiButtonDefaults.colors(style)`：底色、内容色、描边、按下时叠的颜色、高光色、不可用时的颜色 |
 | cornerRadius | 圆角；不给就是胶囊 |
 | contentPadding | 默认左右 24dp、上下 12dp；最小高度 48dp |
@@ -68,9 +68,9 @@ MochiButtonGroup {
 
 `MochiButton` 新增 `minHeight`（默认 48dp）。
 
-## 开了液态玻璃
+## 开了玻璃
 
-正文里的按钮画不画玻璃由**样式**决定，和 iOS 26 一样：主题开了液态玻璃，`Filled` / `Tonal` / `Outlined` / `Text` 仍是纯色，橙色的填充按钮就是橙色的纯色按钮。要玻璃就写玻璃样式：主题的控件是玻璃（`MochiTheme.materials.controlGlass`）时，不在栏里的 `MochiButton` / `MochiIconButton` 用 `ProminentGlass` 画成 iOS 的 prominentGlass，`Glass` 画成 glass，`ProminentClearGlass` / `ClearGlass` 画成 prominentClearGlass / clearGlass；主题没有玻璃时它们退回 `Filled` / `Tonal` 的纯色，所以页面里不用写按玻璃开关的分支。自定义配色也一样画成玻璃，底色全透明的除外。（以前填充、色调按钮会跟着主题自动变成玻璃，升级后要玻璃的地方改写成玻璃样式。）iOS 26（24A435 UIKitCore 逆向）里 glass 两种是 `_UIViewGlass` regular（variant 0），clear 两种是 clear（variant 1，`MochiMaterials.clear`，iOS 的原生值），都不自适应、可形变、胶囊；prominent 两种另外把按钮底色设成玻璃的 tintColor。正文里的玻璃不能取样包含它自己的页面，背景是一块纯色画布：prominent 两种用自己的底色，并去掉配方里的面色调整，底色原样透出来，只加上下的边光和阴影；色调按钮用默认配色时用材质的 fallback 色，自定义了就用那个底色；clearGlass 用自己的底色。半透明的底色（比如 iOS 配色的 secondarySystemFill）先垫一层 surface 色，真正垫在按钮下面的是什么不知道，是近似。纯色画布上折射、模糊看不出来，所以 clear 和 regular 在填充按钮上几乎一样。几种都去掉原生的暗色细描边（纯色上它是贴着按钮的一圈黑边）；边光保持按钮自己的色相、略提亮，下面比上面弱，照 iOS 纯色截图估的，是近似。tintColor 怎么混进玻璃没逆出来，这是近似。
+正文里的按钮画不画玻璃由**样式**决定，和 iOS 26 一样：主题开了玻璃，`Filled` / `Tonal` / `Outlined` / `Text` 仍是纯色，橙色的填充按钮就是橙色的纯色按钮。要玻璃就写玻璃样式：主题的控件是玻璃（`MochiTheme.materials.controlGlass`）时，不在栏里的 `MochiButton` / `MochiIconButton` 用 `ProminentGlass` 画成 iOS 的 prominentGlass，`Glass` 画成 glass；主题没有玻璃时它们退回 `Filled` / `Tonal` 的纯色，所以页面里不用写按玻璃开关的分支。自定义配色也一样画成玻璃，底色全透明的除外。（以前填充、色调按钮会跟着主题自动变成玻璃，升级后要玻璃的地方改写成玻璃样式。）iOS 26（24A435 UIKitCore 逆向）里这两种是 `_UIViewGlass` regular（variant 0），不自适应、可形变、胶囊；`ProminentGlass` 另外把按钮底色设成玻璃的 tintColor。正文里的玻璃不能取样包含它自己的页面，背景是一块纯色画布：`ProminentGlass` 用自己的底色，并去掉配方里的面色调整，底色原样透出来，只加上下的边光和阴影；色调按钮用默认配色时用材质的 fallback 色，自定义了就用那个底色。半透明的底色（比如 iOS 配色的 secondarySystemFill）先垫一层 surface 色，真正垫在按钮下面的是什么不知道，是近似。两种都去掉原生的暗色细描边（纯色上它是贴着按钮的一圈黑边）；边光保持按钮自己的色相、略提亮，下面比上面弱，照 iOS 纯色截图估的，是近似。tintColor 怎么混进玻璃没逆出来，这是近似。
 
 按钮组（`MochiButtonGroup`）里用玻璃样式的按钮由组画（同一组里纯色和玻璃样式可以混排，纯色的照常画）：同一种材质的按钮一层玻璃画完，形状是这些按钮的并集，按下的按钮和连上的邻居做光滑并集，融球颈也是玻璃（像 SwiftUI 的 GlassEffectContainer；一层最多融 7 个按钮，要 Android 13+，更低的系统按纯色画）。
 

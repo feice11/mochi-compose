@@ -86,10 +86,15 @@ class NewComponentsTour {
         "calendar" to ::calendarScript,
         "color" to ::colorScript,
         "popover" to ::popoverScript,
+        "dialog" to ::dialogScript,
         "carousel" to ::carouselScript,
         "refresh" to ::refreshScript,
         "badge" to ::badgeScript,
+        "avatar" to ::avatarScript,
+        "gauge" to ::gaugeScript,
+        "list" to ::listScript,
         "list-edit" to ::listEditScript,
+        "index-bar" to ::indexBarScript,
         "toolbar" to ::toolbarScript,
     )
 
@@ -210,22 +215,6 @@ class NewComponentsTour {
         settle(800)
         check({ find("上次选择：扫描文稿") != null }, { "包裹式弹出层的选项没生效" })
 
-        tap("删除…")
-        settle(800)
-        shot("confirm-anchored")
-        tap("删除照片")
-        settle(800)
-        check({ find("上次选择：删除照片") != null }, { "从按钮弹出的确认没生效" })
-
-        tap("无来源确认")
-        burst("action-sheet", 5, 60)
-        settle(800)
-        shot("action-sheet")
-        check({ find("取消") != null }, { "无来源确认对话框没有取消按钮" })
-        tap("拷贝链接")
-        settle(800)
-        check({ find("上次选择：拷贝链接") != null }, { "无来源确认对话框选项没生效" })
-
         // 星星轻点是收藏、长按才展开提示；这里用程序主动显示
         scrollTo("重新显示提示")
         tap("重新显示提示")
@@ -238,6 +227,38 @@ class NewComponentsTour {
         settle(900)
         shot("tip-card-closed")
         check({ find("长按照片可以预览，再往上拖出菜单。") == null }, { "提示卡没有收起" })
+    }
+
+    private fun dialogScript() {
+        val anchored = scrollTo("删除…")
+        tapAt(anchored.exactCenterX(), anchored.exactCenterY())
+        settle(800)
+        shot("confirm-anchored")
+        tap("删除照片")
+        settle(800)
+        check({ find("上次选择：删除照片") != null }, { "从按钮弹出的确认没生效" })
+
+        tap("处理文稿")
+        burst("action-sheet", 5, 60)
+        settle(800)
+        shot("action-sheet")
+        check({ find("取消") != null }, { "无来源确认对话框没有取消按钮" })
+        tap("拷贝链接")
+        settle(800)
+        check({ find("上次选择：拷贝链接") != null }, { "无来源确认对话框选项没生效" })
+
+        val hold = scrollTo("按住删除")
+        // 中途松手：不执行
+        dragHold(hold.exactCenterX(), hold.exactCenterY(), hold.exactCenterX(), hold.exactCenterY(), holdMs = 500, moveMs = 0) {
+            shot("hold-half")
+        }
+        settle(700)
+        check({ find("还没删除") != null }, { "中途松手也执行了" })
+        // 按满：执行一次
+        dragHold(hold.exactCenterX(), hold.exactCenterY(), hold.exactCenterX(), hold.exactCenterY(), holdMs = 1700, moveMs = 0) {}
+        settle(900)
+        check({ find("已删除 1 次") != null }, { "按满没有执行：${textWithPrefix("已删除") ?: textWithPrefix("还没")}" })
+        shot("hold-done")
     }
 
     private fun carouselScript() {
@@ -291,20 +312,30 @@ class NewComponentsTour {
         tap("清除")
         settle(700)
         shot("badge-cleared")
+    }
+
+    private fun avatarScript() {
         repeat(3) { tap("加一人") }
         settle(500)
         shot("avatars")
+    }
+
+    private fun gaugeScript() {
         val slider = scrollTo("仪表数值")
         swipe(slider.left + slider.width() * 0.72f, slider.exactCenterY(), slider.left + slider.width() * 0.15f, slider.exactCenterY(), 500)
         settle(900)
         shot("gauges-low")
     }
 
-    private fun listEditScript() {
-        tap("显示与亮度")
+    private fun listScript() {
+        val row = scrollTo("显示与亮度")
+        tapAt(row.exactCenterX(), row.exactCenterY())
         settle(800)
         check({ find("日落到日出") != null }, { "可展开行没有展开" })
         shot("disclosure-open")
+    }
+
+    private fun listEditScript() {
         tap("编辑")
         settle(800)
         shot("editing")
@@ -319,12 +350,15 @@ class NewComponentsTour {
         check({ find("购物清单") == null }, { "批量删除没生效" })
         tap("完成")
         settle(600)
+    }
+
+    private fun indexBarScript() {
         val bar = scrollTo("索引")
         dragHold(bar.exactCenterX(), bar.top + dp(10), bar.exactCenterX(), bar.bottom - dp(10), holdMs = 120, moveMs = 900) {
             shot("index-bubble")
         }
         settle(600)
-        check({ textWithPrefix("跳到：") != null }, { "字母索引没有回调" })
+        check({ textWithPrefix("已跳到") != null }, { "字母索引没有回调" })
         shot("index-after")
     }
 
@@ -340,18 +374,6 @@ class NewComponentsTour {
         tap("完成")
         settle(1200)
         check({ find("下一项") == null }, { "完成后键盘工具栏没有收起" })
-        val hold = scrollTo("按住删除")
-        // 中途松手：不执行
-        dragHold(hold.exactCenterX(), hold.exactCenterY(), hold.exactCenterX(), hold.exactCenterY(), holdMs = 500, moveMs = 0) {
-            shot("hold-half")
-        }
-        settle(700)
-        check({ find("还没删除") != null }, { "中途松手也执行了" })
-        // 按满：执行一次
-        dragHold(hold.exactCenterX(), hold.exactCenterY(), hold.exactCenterX(), hold.exactCenterY(), holdMs = 1700, moveMs = 0) {}
-        settle(900)
-        check({ find("已删除 1 次") != null }, { "按满没有执行：${textWithPrefix("已删除") ?: textWithPrefix("还没")}" })
-        shot("hold-done")
     }
 
     // ───────────── 日历格子坐标 ─────────────
@@ -372,13 +394,11 @@ class NewComponentsTour {
                 key(id) {
                     val controller = remember { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) }
                     MochiTheme(controller) {
-                        M3Bridge {
-                            val nav = rememberMochiNavigator(route)
-                            SideEffect { navigator = nav }
-                            MochiNavHost(nav) { r ->
-                                val entry = catalog.first { it.id == r }
-                                entry.page!!.invoke(entry)
-                            }
+                        val nav = rememberMochiNavigator(route)
+                        SideEffect { navigator = nav }
+                        MochiNavHost(nav) { r ->
+                            val entry = catalog.first { it.id == r }
+                            entry.page(entry)
                         }
                     }
                 }

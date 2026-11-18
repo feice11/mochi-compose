@@ -6,7 +6,7 @@
 
 | Scenario | Integration | Toolbar |
 |---|---|---|
-| Card/icon opens a page | `mochiNavSource` + `push(route, from = key)` | The whole page, including the bar, morphs from and back into the source |
+| One-shot transition from a card or icon | `mochiNavSource` + `push(route, from = key)` | The whole page, including the bar, morphs from and back into the source |
 | List-to-detail, settings child page | `push(route)` without a source | The page slides; registered shared toolbar controls stay in place and morph |
 | Multi-page sheet | Separate navigator passed to both sheet and internal host | Shared internal push toolbar; pop children before dismissing the sheet |
 
@@ -17,14 +17,14 @@
 | `rememberMochiNavigator(root)` | String routes saved through rememberSaveable for recreation |
 | `MochiNavHost(navigator)` | Page display, transitions, system back and full-screen swipe back |
 | `push(route, from = key)` / `push(route)` | Source-container morph / push |
-| `pop()` / `popTo(index)` | Back one page / return to an earlier page (root index 0) |
+| `pop()` / `popTo(index)` | Back one page / return to an earlier page (root index 0). Interrupted side pushes continue exiting from their current positions. |
 | `MochiNavigator.current` | Enclosing host's navigator |
 | `mochiNavSource(key, cornerRadius, color)` | Source registration matching the real card's key, radius and color |
 | `mochiNavOccluder()` | Registers a bar floating over content as an occluder: during a source morph the bar stays above the container and fades with progress (a glass bar shows the morphing container through it, not the covered content); built into `MochiTitleBar`, `mochiScrollEdgeFade`, `MochiTabBar`, `MochiBottomToolbar` |
 | `rememberMochiScreenCorners()` | Four physical corner radii in px, not dp |
 | `MochiNavHost(corners = …)` | Corner override; inherit sheet corners inside a sheet and screen corners elsewhere by default; `MochiScreenCorners.None` explicitly disables inner transition rounding |
 
-## Minimal source-container example
+## One-shot transition
 
 Place this complete function inside the app's existing `MochiTheme` and `ProvideMochiOverscroll`. The full starter supplies Activity/system bars and the third push page.
 
@@ -133,42 +133,13 @@ Load business data asynchronously. The host waits until the new page has compose
 
 The host keeps the drawing cost of transitions down by itself; pages do not need to cooperate:
 
-- When opening from / closing back into a source, the captured top-page image is transformed and given a G2 alpha contour; the covered page stays in place by default. The source card's image is cached as a texture during the transition as well.
+- Pushes retain a fixed G2 clip in page coordinates and move it with the page layer. Source morphs clip the moving container in host coordinates and record it only while a visible glass bar needs to sample it. The covered page stays in place by default, and the morph reuses the source card’s recording.
 - Bars collapsed with `mochiHideWhenCovered` in the covered page (tab bar, bottom toolbar) are drawn by the host meanwhile, with the same position, slide and stacking as before, so the covered page is not redrawn every frame just because a bar moves.
 - In pages, do not write screen coordinates that change with the transition (`positionInRoot` / `positionInWindow`) into state that triggers recomposition or redraw every frame: the whole page is scaling, those values change every frame, and the offscreen cache is invalidated every frame. Use page-local coordinates (`localPositionOf`) when a position within the page is needed; the library's menu anchors only track their position while the menu is open.
 
 Custom scrollers inherit `ProvideMochiOverscroll` and use `MochiScrollDefaults.flingBehavior()` (default velocity retention 0.998/ms, ending near rest). `MochiLargeTitleScaffold` already handles its scrolling, title handoff and refresh; do not wrap another vertical scroller around it. `mochiScrollEdgeFade` paints bar-edge background; `mochiScrollFadeMask` fades local scrolling content. Neither replaces insets.
 
 Review registration/source keys and compile the starter, then report actual verification separately. Interaction acceptance covers source opening/back, group-to-single and text/icon changes, interrupted push/back cancellation, sheet pop-before-dismiss and large type. When the user reserves device acceptance, do not operate the UI or equate compilation with visual validation.
-
-## Peer transitions
-
-Use `MochiPeerTransition` between pages on the same level (the pages behind a bottom tab bar, or behind a segmented control). Use the push transition for hierarchical navigation (opening a detail, the next step).
-
-```kotlin
-MochiPeerTransition(
-    targetState = tab,
-    modifier = Modifier.fillMaxSize(),
-    pages = listOf(0, 1, 2, 3),
-    onPageChange = { tab = it },
-) { page ->
-    when (page) { … }
-}
-```
-
-- The two pages sit side by side with only a narrow gap between them (8dp by default) and slide together away from the direction you switch toward. Neither page covers the other.
-- On the way both pages shrink a little (to 0.92 by default) and their corners round to match the screen corners; near the end the new page grows back to fill the screen. The shrink depends only on whichever is closer, the start or the end, so pages shrink as soon as they move and grow back just before they settle.
-- The slide is spring-driven and non-linear: fast at the start, slowing before it settles.
-- Interruptions continue from the current position. All pages sit on one track. Switching to a page still on screen moves the track straight to it; switching to a new page appends it at the outer end of the track, and the track slides all the way there without jumping.
-- With `pages` and `onPageChange`, you can swipe left and right to switch. The pages follow your finger and shrink along the same curve as a tap switch. On release, the pager moves to the neighbor if you dragged past halfway or flung fast enough toward it, carrying the finger's velocity; otherwise it springs back. At either end there is no neighbor and the drag rubber-bands. Dragging only starts while the pager is at rest.
-- Each page's state is kept with `rememberSaveableStateHolder`, so leaving a page and coming back keeps its state. Hoist state that must always survive, such as scroll positions, as the demo home screen does.
-- Visited pages stay composed by default (`retainPages = true`): while away they are not placed, drawn or hit-tested, so coming back does not recompose the whole page and the first frame of the switch does not stall. The cost is that their side effects (`LaunchedEffect`, ongoing animations) keep running; pass `false` for heavy pages or pages with ongoing animation so they leave composition when switched away. Whatever a page that is not shown has registered with the nav host (occluders such as top bar fades, source cards, collapsed bars, shared top bar buttons) does not take part in open / push transitions, so another tab's bar is never drawn.
-- The switch spring advances per frame: if a frame stalls (a new page drawing for the first time), the animation just runs slower for that frame instead of jumping halfway. Before moving, a new page is drawn once at an almost invisible alpha, so its first-draw cost lands before the animation starts.
-- Depth style: `spec = MochiPeerTransitionSpec.Depth`. No sliding and no blur: the old page recedes in place (down to 0.94) and fades out while the new one comes forward from behind and fades in. Both use the same curve, so reversing mid-way and swipe-following stay continuous. The spring is critically damped and does not overshoot.
-- The Depth style has no "track": each page has its own visibility progress; the target goes to 1 and every other page goes to 0. Whatever pages are left over (for example a neighbor that a slight horizontal finger movement pulled in and that is still springing back), tapping from page 1 to page 4 only transitions between what is visible now and page 4, never passing through pages 2 and 3. When the target changes mid-transition, the other pages keep fading out while the new page warms up at an almost invisible alpha and appears once it has drawn.
-- During a transition each page is drawn into its own offscreen layer and only that image is scaled, moved and faded, so text glyphs and paths are not re-rasterized at every frame's scale. At rest no offscreen layer is used.
-- Without `pages`, `direction` decides the side: positive means the new page is on the right, negative on the left. `background` is drawn under each page and `backdrop` fills the gap and the area around shrunk pages. Tuning lives in `MochiPeerTransitionSpec`: minimum scale, gap width, how far the pages travel before reaching minimum scale, and the spring.
-- The demo app's home tab bar uses it (Depth style) and also switches tabs on swipe; Navigation → 同层级切换 has a standalone demo of the sliding style.
 
 ## Back previews and persistent tab bars
 
@@ -182,6 +153,6 @@ During source morphs the navigation host exclusively draws registered occluders;
 
 ## Stationary source backgrounds and G2 contours
 
-The underlying page stays at its original scale during source expansion, return and predictive back, preserving scroll position, source coordinates and bar positions. `underScale` defaults to 1; explicit values below 1 retain legacy depth for existing callers. Dimming is calculated independently from scale.
+The underlying page stays at its original scale during source expansion, return and predictive back, preserving scroll position, source coordinates and bar positions. `underScale` defaults to 1; explicit values below 1 retain legacy depth for existing callers. Dimming is calculated independently from scale. One-shot transitions dim with `sourceScrim` (black 36% light / 60% dark), deeper than the side push `scrim` (18% / 40%), so the page growing out of the card separates more clearly from the background.
 
-Pushes and source morphs use the same Kyant G2 continuous contour, retaining screen radii and each sheet corner (full-height sheet bottom corners remain zero). The existing captured page uses an antialiased exterior alpha mask instead of a `graphicsLayer.clip` or path clip on the page tree. Occluder overlays use the same contour. The mask is removed at rest.
+Pushes and source morphs use the same Kyant G2 continuous contour, retaining screen radii and each sheet corner (full-height sheet bottom corners remain zero). The page uses a path clip, and fading occluder overlays use the same contour as an exterior alpha mask. At rest the page draws without the transition clip.

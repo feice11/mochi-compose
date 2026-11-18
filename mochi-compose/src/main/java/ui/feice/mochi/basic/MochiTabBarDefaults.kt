@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.theme.LocalMochiControlPalette
@@ -180,7 +180,7 @@ public class MochiTabBarScrollBehavior internal constructor(private val scope: C
         accumulated = 0f
         if (collapsed == value) return
         collapsed = value
-        scope.launch { fraction.animateTo(if (value) 1f else 0f, MochiMotions.responseSpring(0.42f, 0.82f)) }
+        scope.launch { fraction.animateTo(if (value) 1f else 0f, MochiMotionTokens.Present) }
     }
 
     public val nestedScrollConnection: NestedScrollConnection = object : NestedScrollConnection {

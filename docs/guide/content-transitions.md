@@ -8,6 +8,7 @@ Content never swaps instantly — this is a library-wide rule (see the end). The
 | Text changes | `MochiBlurText(text)` | Blur replace: the old text blurs, shrinks and fades; the new one sharpens out of the blur |
 | Appear / disappear | `MochiBlurVisibility(visible) { … }` | Grows out of a smaller, blurred, transparent state and goes back the same way |
 | A number changes | `MochiCounterText(value)` | Counter: changed digits turn like a wheel (forward when increasing, back when decreasing), blurrier the faster they go, with a small bounce as they land |
+| Streaming text | `MochiFlyInText(text)` | Text that grows piece by piece: new characters fly in from up close like a soft paper strip and flatten as they land; replaced characters back away and fade |
 | Anything else | `MochiBlurCrossfade(state) { … }` | The general blur replace the others are built on |
 | Icon draw | `MochiDrawIcon(icon, drawn)` | SF Symbols 7 Draw On / Off: strokes drawn on / erased one by one |
 | Icon bounce | `Modifier.mochiBounce(trigger)` | SF Symbols bounce: squash, then spring back |
@@ -53,11 +54,20 @@ MochiBlurCrossfade(state, contentAlignment = Alignment.CenterStart) { Content(it
 | Parameter | Description | Default |
 |---|---|---|
 | blur | Blur radius when fully hidden | 8.dp |
-| scale | Scale when fully hidden | 0.9 |
+| scale | Scale when fully hidden (new content grows from this size) | 0.9 |
+| exitScale | Scale the old content shrinks to; set it apart from scale for a depth switch | same as scale |
 | slide | Offset along the direction when fully hidden (fraction of content height) | 0 |
 | enter / exit | Appear / disappear animations | `MochiSprings.snappy(300)`: 300 ms, bounce 0.15. Scale and offset show the small bounce; alpha and blur are clamped |
 
-Built in: `MochiBlurTransitions.Replace`, `Appear` (scale 0.8, blur 10dp) and `Counter` (slide 0.55 × height, blur 5dp, no scale).
+Built in: `MochiBlurTransitions.Replace`, `Appear` (scale 0.8, blur 10dp), `Counter` (slide 0.55 × height, blur 5dp, no scale) `Subtle` (blur 3dp, scale 0.97; the old text leaves in 160ms, the new one sharpens in 220ms) and `Depth` (a depth switch with no blur: the old content shrinks to 0.96 and fades in 140ms, the new one starts 60ms later and settles from 1.03, like the keyboard's emoji panel switch).
+
+Use `Depth` where content changes often but the change should still be visible (IME candidates): it only animates scale and alpha, with no blur layer. For a touch of blur, use `MochiBlurTransitions.Depth.copy(blur = 4.dp)` on the most prominent piece only.
+
+Use `Subtle` where many pieces of text change together as the user types (IME candidates, search suggestions, filter results): `Replace` is too loud there, and every piece needs its own blur layer, so a dozen changing at once drops frames.
+
+## Reduce motion
+
+When the system turns animations off (animator scale 0), or the app provides `LocalMochiReduceMotion provides true` at the root, `MochiBlurCrossfade` / `MochiBlurText`, `MochiFlyInText` and the elastic menus and popovers settle at once. Check `mochiReduceMotion()` in your own animations.
 
 ## Font changes
 
@@ -81,6 +91,22 @@ MochiCounterText("%02d:%02d".format(m, s), direction = 1)   // text you formatte
 - A new leading digit rises from below while its width grows from 0; a removed one sinks while its width shrinks to 0, and the neighbors slide smoothly. If it comes back halfway, the same cell rises back from where it is.
 - Non-digit characters ($, commas, units) blur-replace (`transition`).
 - Tabular figures (`tnum`) are used automatically so the string does not wobble sideways. Font, size and color come from `style` / `color`, and at rest it matches a `Text` on the same line exactly. Screen readers read the whole string.
+
+## Streaming text
+
+```kotlin
+MochiFlyInText(partialTranscript)
+MochiFlyInText(answer, style = MochiTheme.textStyles.body, leadingGap = 8.dp)
+```
+
+For text that grows piece by piece: a partial speech transcript, an answer streamed word by word, pinyin being composed. Replacing the whole text with something else is still `MochiBlurText`.
+
+- The new text is compared with the previous one from the start; unchanged characters stay put. Appended characters take off left to right, 45ms apart so several fly at once, travelling from close up, lower down and blurred into place while curling flat from the bottom edge like a soft paper strip. Each character's progress is a spring with damping 0.45: it overshoots by about a fifth, squashing slightly against the baseline, then springs back.
+- When earlier characters change, everything from the change on flies in as new: settled old characters back away upwards and into the distance, blurring and fading; a character replaced mid-flight hands its progress to the new one while the old one finishes its path and fades quickly, so the flight is never interrupted.
+- Single line. When it doesn't fit, the newest characters stay visible on the right with a fade on the left, and the shift is animated with a spring; clearing it backs the characters away and the width goes to 0.
+- Flying characters draw outside the line (close ones are larger and lower), so the parent must not clip its top, bottom or left edge.
+- `motionBlur = false` keeps the flight, curl and bounce but drops the blur: cleaner for short text that changes constantly, such as pinyin being composed.
+- Blur comes from two small pre-rendered images per character (sharp and blurred) cross-faded by speed, and the deformation is a `drawBitmapMesh` grid, so it needs no Android 12; settled characters are drawn as ordinary text. Screen readers read the whole text; with system animations off the characters just appear.
 
 ## Icon draw
 
@@ -123,7 +149,7 @@ Blur uses `RenderEffect` and needs Android 12 (API 31). Older versions get the f
 All components and the example follow this:
 
 1. **Icon to icon**: morph in place with `MochiMorphIcon`; if the shapes are too different, blur-replace with `MochiBlurCrossfade`. Never swap directly.
-2. **Text to text**: `MochiBlurText` (button labels, status, trailing values…).
+2. **Text to text**: `MochiBlurText` (button labels, status, trailing values…); pass `MochiBlurTransitions.Subtle` where many pieces change together as the user types; use `MochiFlyInText` for text that grows piece by piece.
 3. **Appear / disappear**: small pieces (badges, hints, inline icons) use `MochiBlurVisibility`, pushing neighbours smoothly.
 4. **Numbers**: `MochiCounterText` (counts, prices, timers, percentages).
 5. **Exception**: values that change every frame while the user drags (a slider's readout) are shown directly, otherwise they lag behind the finger.

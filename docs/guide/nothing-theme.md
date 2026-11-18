@@ -1,6 +1,6 @@
 # Nothing appearance
 
-`mochi-nothing` is an optional local asset module. It changes colors, fonts and control colors only. Mochi's icons, row geometry, corner shapes, navigation, gestures and motion are retained. The demo's Theme → Appearance selector switches between Mochi, Nothing and iOS and persists the selection. Mochi's wallpaper-color mode and palette algorithm remain independent of Nothing's System / Light / Dark modes.
+`mochi-nothing` is an optional local asset module. It supplies Nothing’s colors and control palette, with Mochi’s typography, geometry, icons and interactions. The demo's Theme → Appearance selector switches between Mochi, Nothing and iOS and persists the selection. Mochi's wallpaper-color mode and palette algorithm remain independent of Nothing's System / Light / Dark modes.
 
 ## Integration
 
@@ -21,7 +21,7 @@ fun ApplicationTheme(content: @Composable () -> Unit) {
 ## Colors and typography
 
 - `nothingColorScheme(isDark)` supplies the complete semantic palette: light gray pages / white cards, black pages / charcoal cards, limited red primary actions and small selection markers on neutral surfaces and icon tiles. Error colors remain distinct. This is an evidence-informed preset, not a claim of pixel-exact system replication.
-- `nothingTextStyles(base)` retains type sizes, weights, line heights, tracking and platform font scaling. Display/Headline roles, `largeTitle` and `navTitle` use `FontFamily.Serif` for both Latin and Chinese, resolved by the device's system serif family and glyph fallback. `navTitle` is the large title collapsed into the toolbar, so it keeps the same serif family. Latin body text, list labels and buttons retain Inter with platform Chinese fallback. Chinese never uses dot typography. The exact serif glyphs depend on the device's installed system fonts; no Chinese font is bundled.
+- The demo shares one serif-title setting across Mochi, iOS and Nothing. Apps can opt into the alternative families with `textStyles = nothingTextStyles()`. That helper preserves the input type weights, sizes and spacing, uses system serif for display and title roles, and uses Inter with platform fallback for body text.
 - Explicitly use `nothingDotTextStyle(base)` for standalone numbers or short Latin display labels. It does not replace list values, button labels or paragraphs. Synthetic bold is disabled for dot glyphs to prevent adjacent dots joining.
 - List metrics follow iOS 26 like the other themes (52dp minimum, 28dp tiles). Real font metrics still govern measurement; wrapping and larger fonts may increase height. Never shrink or clip text to force a fixed height.
 
@@ -29,17 +29,17 @@ fun ApplicationTheme(content: @Composable () -> Unit) {
 
 ## Liquid glass and blur
 
-Materials are independent of colors, so the Nothing appearance can also turn on the liquid-glass tab bar and the progressive scroll-edge blur, each with its own switch:
+Materials are independent of colors, so the Nothing appearance can also turn on the liquid glass tab bar and the scroll-edge blur (an even blur under the top bar, on by default), each with its own switch:
 
 ```kotlin
 MochiNothingTheme(
     isDark = dark,
-    materials = iosMaterials(dark, glass = glassOn, blur = blurOn, themeAccent = true),
+    materials = iosMaterials(glass = glassOn, blur = blurOn),
     content = content,
 )
 ```
 
-`iosMaterials` lives in mochi-ios. `themeAccent = true` keeps the glass neutral and colors the selected tab with Nothing red (`tabSelected` from `nothingControlPalette`) instead of the blue iOS derives from the glass color. Components read materials from the theme; pages need no theme or switch branches.
+`iosMaterials` lives in mochi-ios (without mochi-ios, use `mochiGlassMaterials()`). The glass is neutral and the selected tab uses Nothing red (`tabSelected` from `nothingControlPalette`). Components read materials from the theme; pages need no theme or switch branches.
 
 ## Runtime switching
 

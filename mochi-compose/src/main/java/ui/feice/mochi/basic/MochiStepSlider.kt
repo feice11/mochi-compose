@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.parts.ControlSmoothing
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.shape.G2PathCache
@@ -140,7 +141,7 @@ public fun MochiStepSlider(
                         awaitEachGesture {
                             val down = awaitFirstDown()
                             dragging = true
-                            scope.launch { press.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 700f)) }
+                            scope.launch { press.animateTo(1f, MochiMotionTokens.PressDown) }
                             var last = pos.value.roundToInt()
                             // 按下：直接滑到手指那里（不吸附），跟手开始
                             scope.launch { pos.animateTo(fraction(down.position.x), spring(dampingRatio = 1f, stiffness = 900f)) }
@@ -161,7 +162,7 @@ public fun MochiStepSlider(
                             }
                             dragging = false
                             val target = pos.value.roundToInt().coerceIn(0, n - 1)
-                            scope.launch { press.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
+                            scope.launch { press.animateTo(0f, MochiMotionTokens.PressRelease) }
                             scope.launch { pos.animateTo(target.toFloat(), SnapSpring) }
                             if (target != current) change(target)
                         }

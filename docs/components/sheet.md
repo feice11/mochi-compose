@@ -1,6 +1,6 @@
 # MochiSheet
 
-The iOS bottom sheet. With liquid glass in the theme it is glass at medium height and turns opaque when pulled to full screen (see "Liquid glass" below).
+The iOS bottom sheet. With glass in the theme it is glass at medium height and turns opaque when pulled to full screen (see "Glass" below).
 
 - **Medium**: the sheet floats 8dp from the sides and bottom, using its original single continuous rounded outline. Each top corner uses the original `max(physicalRadius, 32dp) - floatingInset` radius, capped at a fixed 48dp.
 - **Large**: edge to edge up to just below the status bar, filling through the navigation area to the window bottom. The page behind it (the one with `mochiSheetBackdrop`) shrinks from its top edge into a rounded card that peeks out above the sheet, over black.
@@ -16,6 +16,7 @@ MochiSheet(sheet, onDismiss = { … }) {
     MochiSheetHeader("Title")
     MochiSheetContent { … }                    // scrolls by itself when it does not fit; do not add another scroll container
 }
+// Fixed header with content scrolling underneath: MochiSheetScaffold(header = { MochiSheetHeader("Title") }) { … }
 Button(onClick = { sheet.show() })
 ```
 
@@ -78,6 +79,32 @@ Wrap the content below the header in `MochiSheetContent { … }`: its sides line
 
 Releasing a drag onto a different detent (medium ↔ large) gives a light haptic tick.
 
+## Header floating over the content (MochiSheetScaffold)
+
+When the content is long and should scroll under the header, use `MochiSheetScaffold`: the header (usually `MochiSheetHeader`) stays fixed on top and the content scrolls underneath it.
+
+```kotlin
+MochiSheet(sheet) {
+    MochiSheetScaffold(
+        header = {
+            MochiSheetHeader(
+                "Color",
+                navigationIcon = { MochiBarIconButton(onClick = { sheet.hide() }) { Icon(close) } },
+            )
+        },
+    ) {
+        MochiListSection { … }
+        MochiListSection { … }
+    }
+}
+```
+
+- At the top it looks the same as `MochiSheetHeader` + `MochiSheetContent`
+- Once content scrolls under the header, the header area gets the same treatment as the page top bar: an even blur covered with a translucent sheet background, a hard edge and a very faint hairline. The edge sits 8dp below the bottom of the header buttons. Glass sheets cover it with the solid sheet's background color too
+- The content's sides use the concentric inset, as in `MochiSheetContent`; with `contentPadding` it uses that padding's start, end and bottom instead
+- Parameters: `header`, `modifier`, `scrollState` (default `rememberScrollState()`), `contentPadding` (default null), `verticalArrangement` (default `spacedBy(16.dp)`), `content`
+- Scrolling and sheet dragging when the content does not fit work as in `MochiSheetContent`; do not add another scroll container. `MochiColorPicker` now uses it; the older `MochiSheetHeader` + `MochiSheetContent` form still works
+
 ## Navigation bar, predictive back, closing
 
 - While a sheet is composed, its window navigation-bar background and divider are transparent, with enforced navigation-bar contrast disabled on Android 10+. Full-height sheets still show navigation icons over the sheet surface. This is independent of `hideNavigationBar`: false keeps the same transparent appearance. Restore the original colors, divider and contrast policy when the last sheet releases the window; overlapping sheets share the override. Content retains its `navigationBarsIgnoringVisibility` safe area.
@@ -89,9 +116,13 @@ Releasing a drag onto a different detent (medium ↔ large) gives a light haptic
 
 - Keep the entire page behind the sheet (`mochiSheetBackdrop`); do not crop its lower half to a rectangular band. At the start of expansion its corner outlines match the physical screen circles. Both the radii and Bezier control points then interpolate continuously with expansion progress; only at the full detent do they reach the sheet's continuous top-left/top-right corner shapes (48dp on a device reporting 58dp physical corners). The bottom corners use the corresponding top-side targets too, and all radii compensate for scale. Do not abruptly switch between circular and continuous shapes. Returning to medium resets the backing layer's transform and clipping.
 
-## Liquid glass
+## Keyboard
 
-When the theme has a glass material (`MochiTheme.materials.sheetGlass`), the sheet background follows iOS 26 (UIKitCore, reverse engineered, `SheetLayoutInfo`): below the large detent it is a regular `_UIViewGlass` (subvariant "sheet"); at the large detent it is the opaque system background. The glass samples the page under the sheet together with the dimming layer.
+When a field in the sheet raises the keyboard, the sheet rises with the keyboard animation frame by frame, up to the top of the full-height detent; whatever is still covered is given up at the bottom of the content, so the field scrolls above the keyboard starting together with it. The navigation bar inset is subtracted, so it doesn't stack with the bottom padding. Closing the sheet with the keyboard open clears focus first, so the keyboard and the sheet go down together. A downward fling hands its velocity to the closing animation.
+
+## Glass
+
+When the theme has a glass material (`MochiTheme.materials.sheetGlass`), the sheet background follows iOS 26 (UIKitCore, reverse engineered, `SheetLayoutInfo`): below the large detent it is a regular `_UIViewGlass` (subvariant "sheet"); at the large detent it is the opaque system background. The glass samples the page under the sheet without the dimming, which only covers what lies outside the glass (sampling the dimmed page through the recipe's whitening face matrix turns it grey); sheet glass does not flip shade with the backdrop and follows the theme.
 
 - Pages keep using `MochiDefaults.sheetBackground()` / `groupedBackground()` as their background. Read inside a glass sheet they are transparent and the sheet draws the background, so pages need no branch on the glass switch. Read them inside the sheet (in the `MochiSheet { … }` content); read outside, they return the opaque color.
 - Natively the two backgrounds switch outright; here the opaque color fades in with the progress toward full screen (an approximation).

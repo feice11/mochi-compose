@@ -52,6 +52,8 @@ import ui.feice.mochi.effect.metaball.drawMochiMetaball
 import ui.feice.mochi.effect.metaball.proximityFuse
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiGraphics
+import ui.feice.mochi.utils.lerp
+import ui.feice.mochi.utils.lerpRect
 import ui.feice.mochi.utils.smoothstep
 
 /*
@@ -165,7 +167,7 @@ private class NavBarNode(val handle: BarHandle) :
         val n = currentValueOf(LocalMochiNavigator) ?: return
         nav = n
         handle.entry = currentValueOf(LocalMochiNavEntry)
-        handle.shown = currentValueOf(LocalMochiPeerPageShown)
+        handle.shown = currentValueOf(LocalMochiTabPageShown)
         handle.layer = requireGraphicsContext().createGraphicsLayer()
         n.registerBar(handle)
     }
@@ -387,8 +389,8 @@ private fun morphStep(cur: List<MorphShape>, target: List<Pair<BarShapeHandle, R
             val (h, r) = to
             val rect = elasticRect(from.rect, r, m)
             // 两头都是胶囊就一直是胶囊；否则圆角在两头之间过渡
-            val corner = if (from.corner < 0f && h.cornerRadius < 0f) -1f else lerpF(from.radius, h.radiusFor(r), m)
-            return MorphShape(rect, corner, color, lerpF(from.alpha, 1f, m), leading, h.glass ?: from.glass)
+            val corner = if (from.corner < 0f && h.cornerRadius < 0f) -1f else lerp(from.radius, h.radiusFor(r), m)
+            return MorphShape(rect, corner, color, lerp(from.alpha, 1f, m), leading, h.glass ?: from.glass)
         }
         for (i in 0 until n) {
             val from = cur[a[i]]
@@ -507,11 +509,6 @@ private fun backOut(t: Float): Float {
 
 /** 0 → 1 → 0 的鼓起曲线，峰值在 0.5 */
 private fun pop(t: Float): Float = 4f * t * (1f - t)
-
-private fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t
-
-private fun lerpRect(a: Rect, b: Rect, t: Float) =
-    Rect(lerpF(a.left, b.left, t), lerpF(a.top, b.top, t), lerpF(a.right, b.right, t), lerpF(a.bottom, b.bottom, t))
 
 /** 内容换掉时最模糊处（视频里几乎糊成一团） */
 private val ContentBlur = 12.dp

@@ -3,14 +3,9 @@
 
 package ui.feice.mochi.basic
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.os.Build
-import android.view.Window
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -22,11 +17,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -36,20 +33,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -71,46 +63,40 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import java.util.WeakHashMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.awaitFrameSettle
 import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.effect.elastic.rubberBand
 import ui.feice.mochi.effect.glass.GlassRole
-import ui.feice.mochi.effect.glass.GlassSource
 import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.glass.LocalGlassSources
 import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
 import ui.feice.mochi.effect.glass.MochiNoGlassShadow
 import ui.feice.mochi.effect.glass.glassFor
 import ui.feice.mochi.effect.glass.rememberGlassFill
+import ui.feice.mochi.effect.glass.resolved
+import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
 import ui.feice.mochi.navigation.LocalMochiNavSurface
 import ui.feice.mochi.navigation.LocalMochiPredictiveBack
 import ui.feice.mochi.navigation.MochiNavSurface
 import ui.feice.mochi.navigation.MochiNavigator
 import ui.feice.mochi.navigation.MochiScreenCorners
+import ui.feice.mochi.navigation.MochiScrollEdgeDefaults
+import ui.feice.mochi.navigation.mochiScrollEdgeFade
 import ui.feice.mochi.navigation.rememberMochiScreenCorners
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.G2RectClipShape4
@@ -121,79 +107,6 @@ import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
 import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.rememberMochiHaptics
-import ui.feice.mochi.utils.smoothstep
-
-/** 底部面板停靠的高度 */
-public enum class MochiSheetDetent {
-    /** 半屏：面板悬浮，四周留边；底部圆角与屏幕同心，顶部圆角上限为 48dp */
-    Medium,
-
-    /** 全屏：贴边铺满到状态栏下面，后面的页面缩小退后 */
-    Large,
-}
-
-/**
- * 底部面板的状态。[show] / [hide] 可以在任何地方调用（点击回调里也行），动画由 [MochiSheet] 跑。
- */
-@Stable
-public class MochiSheetState internal constructor(internal val detents: List<MochiSheetDetent>, internal val initial: MochiSheetDetent) {
-    internal var requested by mutableStateOf(false)
-    internal var composed by mutableStateOf(false)
-
-    /** 面板顶边在屏幕里的位置（px） */
-    internal val top = Animatable(Float.NaN)
-
-    /** 预测性返回的拖动进度 0..1 */
-    internal val back = Animatable(0f)
-    internal var dragging by mutableStateOf(false)
-    internal var predictingBack by mutableStateOf(false)
-    internal var bottomFilled by mutableStateOf(false)
-    internal var height by mutableFloatStateOf(0f)
-    internal var width by mutableIntStateOf(0)
-    internal var largeTop = 0f
-
-    /** 屏幕的物理圆角（px），后面页面退后时按它裁 */
-    internal var screenCorners: MochiScreenCorners = MochiScreenCorners.None
-    internal var fallbackCorner = 0f
-    internal var statusTop = 0f
-
-    internal val mediumTop: Float get() = height * 0.5f
-    internal fun topOf(d: MochiSheetDetent): Float = if (d == MochiSheetDetent.Large) largeTop else mediumTop
-
-    /** 面板出没出来：0 = 完全收起，1 = 到了最低那一档 */
-    internal val presence: Float
-        get() {
-            val t = top.value
-            if (t.isNaN() || height <= 0f) return 0f
-            val low = detents.maxOf { topOf(it) }
-            return ((height - t) / (height - low).coerceAtLeast(1f)).coerceIn(0f, 1f)
-        }
-
-    /** 往全屏那一档走了多少：0 = 半屏或更低，1 = 全屏 */
-    internal val largeness: Float
-        get() {
-            val t = top.value
-            if (t.isNaN() || height <= 0f || MochiSheetDetent.Large !in detents) return 0f
-            if (MochiSheetDetent.Medium !in detents) return presence
-            return 1f - smoothstep(largeTop, mediumTop, t)
-        }
-
-    /** 全屏停稳后保留补底，上拉及回弹不撤回；向下收起或返回才结束。 */
-    internal val fillsBottom: Boolean
-        get() = bottomFilled && requested && !predictingBack && back.value == 0f
-
-    /** 是否要显示（收起动画途中已经是 false） */
-    public val isVisible: Boolean get() = requested
-
-    public fun show() {
-        requested = true
-    }
-
-    public fun hide() {
-        bottomFilled = false
-        requested = false
-    }
-}
 
 @Composable
 public fun rememberMochiSheetState(
@@ -274,7 +187,7 @@ public fun MochiSheet(
         val scope = rememberCoroutineScope()
         val corners = rememberMochiScreenCorners()
         val statusTop = WindowInsets.statusBars.getTop(density)
-        val spring = MochiMotions.responseSpring(0.42f, 0.88f)
+        val spring = MochiMotionTokens.Present
         val inset = with(density) { FloatInset.toPx() }
         val fallback = with(density) { 32.dp.toPx() }
         val topMaximum = with(density) { SheetTopCornerMaximum.toPx() }
@@ -292,22 +205,45 @@ public fun MochiSheet(
             }
         }
         val corner = remember(radii) { { radii().let { maxOf(it.topLeft, it.topRight) } } }
-        // 玻璃（iOS 26 UIKitCore SheetLayoutInfo：非全屏档默认 `_UIViewGlass` regular、subvariant "sheet"；
-        // 全屏档默认 systemBackgroundColor）。取样面板底下的内容再叠上压暗层，和眼睛看到的一致。
-        // 原生是二选一，这里按往全屏走的进度把底色淡上来（近似）
-        val under = LocalGlassSources.current.overlay
-        val sheetMaterial = MochiTheme.materials.glassFor(GlassRole.Sheet)
-        val scrimLayer = if (sheetMaterial != null && under != null) rememberLayerBackdrop() else null
-        val sheetSource = if (under != null && scrimLayer != null) {
-            val layer = rememberCombinedBackdrop(under.layer, scrimLayer)
-            val face = rememberCombinedBackdrop(under.face, scrimLayer)
-            remember(layer, face) { GlassSource(layer, face) }
-        } else {
-            null
+        // 正文的固定测量高度：按最高一档算，换档、拖动都不变（半屏时下面一截被面板裁掉）
+        val fixedContentHeight = remember(state, inset) {
+            {
+                val highest = state.detents.minOf { state.topOf(it) }
+                val bottomGap = if (MochiSheetDetent.Large in state.detents) 0f else inset
+                (state.height - highest - bottomGap).coerceAtLeast(0f).roundToInt()
+            }
         }
-        val glass = rememberGlassFill(sheetMaterial, sheetSource)
+        // 键盘：浮层挂在 edge-to-edge 的窗口上，窗口不会因键盘缩短，要自己让位。分两段、逐帧读键盘当前高度（跟着键盘动画走）：
+        // 1. 没到全屏时面板整块抬起，骑在键盘上面（iOS 的半屏面板也是这样）——只挪摆放位置，不改 state.top，
+        //    停靠档位、拖动换算、全屏进度、后面页面的退后都不受影响，拖动中也不会和手指打架；
+        // 2. 抬到顶（全屏那一档）还不够的部分由正文底部让出：正文高度减掉这一截，滚动容器视口跟着缩短，
+        //    输入框（rememberFieldBringer）就能滚到键盘上方；面板表面照旧铺到底边，被键盘盖住的部分看不见。
+        // 不用 imePadding 套在面板外面：那样表面也跟着缩短、底部圆角和补底都要重算，半屏和全屏会是两种行为。
+        // 内部 MochiNavHost 的页面按 navSurface.contentHeight 固定测量，不读外层约束，所以那边也扣同一截。
+        val ime = WindowInsets.ime
+        val keyboardLift = remember(state, ime, density) {
+            { sheetKeyboardLift(state.top.value, state.largeTop, ime.getBottom(density)) }
+        }
+        val keyboardPadding = remember(state, ime, density, navigationBottom, keyboardLift, fixedContentHeight) {
+            {
+                sheetKeyboardPadding(
+                    state.height.roundToInt(),
+                    state.top.value,
+                    keyboardLift(),
+                    fixedContentHeight(),
+                    navigationBottom,
+                    ime.getBottom(density),
+                )
+            }
+        }
+        // 玻璃（iOS 26 UIKitCore SheetLayoutInfo：非全屏档默认 `_UIViewGlass` regular、subvariant "sheet"；
+        // 全屏档默认 systemBackgroundColor）。玻璃取样面板底下没压暗的内容，压暗只盖在玻璃外面：
+        // 取压暗后的页面再过配方偏白的面色矩阵会发灰。原生是二选一，这里按往全屏走的进度把底色淡上来（近似）
+        val under = LocalGlassSources.current.overlay
+        val sheetMaterial = MochiTheme.materials.glassFor(GlassRole.Sheet).resolved()
+        val glass = rememberGlassFill(sheetMaterial, under)
         val opaque = remember(state, glass) { { if (glass == null) 1f else state.largeness } }
-        val navSurface = remember(radii, state, inset, navigationBottom, color, glass, opaque) {
+        val navSurface = remember(radii, state, inset, navigationBottom, color, glass, opaque, fixedContentHeight, keyboardPadding) {
             MochiNavSurface(
                 color = color,
                 glass = glass,
@@ -323,9 +259,8 @@ public fun MochiSheet(
                     sheetSurfaceHeight(frame, fixedHeight, state.fillsBottom)
                 },
                 contentHeight = {
-                    val highest = state.detents.minOf { state.topOf(it) }
-                    val bottomGap = if (MochiSheetDetent.Large in state.detents) 0f else inset
-                    ((state.height - highest - bottomGap).coerceAtLeast(0f).roundToInt() - navigationBottom).coerceAtLeast(0)
+                    // 和面板正文同一截：导航栏安全区 + 键盘超出安全区的部分
+                    (fixedContentHeight() - navigationBottom - keyboardPadding()).coerceAtLeast(0)
                 },
             )
         }
@@ -334,6 +269,7 @@ public fun MochiSheet(
         // 面板此刻在窗口里的 y：拖动时面板自己在动，手指位置要换成窗口坐标再算增量
         val placedY = remember { floatArrayOf(0f) }
         val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
+        val focusManager = LocalFocusManager.current
 
         // 显示 / 收起。动画会被拖动打断（手指接管面板），打断只停下这一段，不能把整个监听结束掉——
         // 以前打断时异常一路抛出去，之后 hide() 再也没人响应，面板就关不掉了。
@@ -352,10 +288,18 @@ public fun MochiSheet(
                     val settled = interruptible { state.top.animateTo(state.topOf(state.initial), spring) }
                     if (settled && state.requested && state.initial == MochiSheetDetent.Large) state.bottomFilled = true
                 } else {
+                    // 收起时一并收键盘：面板里的输入框要等收完才离开组合，不主动清焦点的话键盘会一直开着，
+                    // 面板就停在键盘顶上（抬起量跟着键盘），键盘和面板同时往下走才连贯
+                    if (ime.getBottom(density) > 0) focusManager.clearFocus(force = true)
+                    // 往下甩关闭：松手速度直接交给收起动画，不先减速再收走（只取向下的分量，关闭时不往上弹一下）
+                    var velocity = state.releaseVelocity.coerceAtLeast(0f)
+                    state.releaseVelocity = 0f
                     // 收起途中被打断（比如收之前已经按住在拖）就接着收，直到真的收到底
                     var done = false
                     while (!state.requested && !done) {
-                        done = interruptible { state.top.animateTo(state.height, MochiMotions.responseSpring(0.34f, 1f)) }
+                        val v = velocity
+                        velocity = 0f
+                        done = interruptible { state.top.animateTo(state.height, MochiMotionTokens.Settle, initialVelocity = v) }
                     }
                     if (done && !state.requested) {
                         state.top.snapTo(Float.NaN)
@@ -444,6 +388,7 @@ public fun MochiSheet(
                     val targets = state.detents.map { state.topOf(it) } + state.height
                     val target = targets.minBy { abs(it - projected) }
                     if (target == state.height) {
+                        state.releaseVelocity = v
                         state.hide()
                     } else {
                         val expandingToLarge = MochiSheetDetent.Large in state.detents && target == state.largeTop
@@ -467,11 +412,10 @@ public fun MochiSheet(
                 }
                 .pointerInput(state) { detectTapGestures { state.hide() } },
         ) {
-            // 和对话框、长按预览同一个遮罩色；半屏时浅一些，拉到全屏才到满。单独一层：玻璃面板要录下它来取样
+            // 和对话框、长按预览同一个遮罩色；半屏时浅一些，拉到全屏才到满
             Spacer(
                 Modifier
                     .fillMaxSize()
-                    .then(if (scrimLayer != null) Modifier.layerBackdrop(scrimLayer) else Modifier)
                     .drawBehind {
                         val a = 0.7f * state.presence + 0.3f * state.largeness
                         if (a > 0f) drawRect(scrim, alpha = a.coerceAtMost(1f))
@@ -554,6 +498,8 @@ public fun MochiSheet(
                                         val from = state.detents.map { state.topOf(it) }.minBy { abs(it - dragStartTop) }
                                         if (target != state.height && target != from) haptics.tick()
                                         if (target == state.height) {
+                                            // 速度和 state.top 同一坐标（窗口 px/s，向下为正），收起动画直接接上
+                                            state.releaseVelocity = v
                                             state.hide()
                                         } else {
                                             val expandingToLarge = MochiSheetDetent.Large in state.detents && target == state.largeTop
@@ -594,14 +540,17 @@ public fun MochiSheet(
                             Modifier
                                 .layout { m, c ->
                                     // 内容沿用原来的固定测量高度；底部补齐仅由表面在停稳后处理。
-                                    val highest = state.detents.minOf { state.topOf(it) }
-                                    val bottomGap = if (MochiSheetDetent.Large in state.detents) 0f else inset
-                                    val h = (state.height - highest - bottomGap).coerceAtLeast(0f).roundToInt()
-                                    val p = m.measure(Constraints.fixed(c.maxWidth, h))
+                                    val p = m.measure(Constraints.fixed(c.maxWidth, fixedContentHeight()))
                                     layout(c.maxWidth, c.maxHeight) { p.place(0, 0) }
                                 }
                                 // 安全区只限制内容，背景继续覆盖导航栏；显隐不改变预留值。
-                                .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility.only(WindowInsetsSides.Bottom)),
+                                .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility.only(WindowInsetsSides.Bottom))
+                                // 键盘超出导航栏安全区、面板抬到顶也躲不开的那一截，从正文底部让出（逐帧，只重新测量）
+                                .layout { m, c ->
+                                    val k = keyboardPadding().coerceAtMost(c.maxHeight)
+                                    val p = m.measure(c.copy(minHeight = (c.minHeight - k).coerceAtLeast(0), maxHeight = c.maxHeight - k))
+                                    layout(p.width, p.height + k) { p.place(0, 0) }
+                                },
                         ) {
                             CompositionLocalProvider(
                                 LocalMochiSheetCorner provides corner,
@@ -618,7 +567,8 @@ public fun MochiSheet(
                 val movingHeight = (state.height - highest).coerceAtLeast(0f).roundToInt()
                 val h = sheetSurfaceHeight(frame, movingHeight, state.fillsBottom)
                 val p = ms.single().measure(Constraints.fixed(frame.width, h))
-                layout(c.maxWidth, c.maxHeight) { p.place(frame.x, frame.y) }
+                // 键盘抬起只在摆放时生效（逐帧跟着键盘走，不重新测量面板）
+                layout(c.maxWidth, c.maxHeight) { p.place(frame.x, frame.y - keyboardLift()) }
             }
         }
     }
@@ -626,97 +576,6 @@ public fun MochiSheet(
 
 /** 预测性返回拖到底时面板缩小的比例 */
 private const val BackShrink = 0.1f
-
-/** 动画被别的动画 / 拖动打断时不往外抛（返回 false），协程真被取消时照常抛出 */
-private suspend fun interruptible(block: suspend () -> Unit): Boolean = try {
-    block()
-    true
-} catch (c: CancellationException) {
-    currentCoroutineContext().ensureActive()
-    false
-}
-
-/** A transparent window bar is separate from hiding its icons while the sheet floats. */
-@Composable
-private fun TransparentSheetNavigationBar() {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = view.context.findActivity()?.window
-        if (window == null) {
-            onDispose { }
-        } else {
-            SheetNavigationBarWindows.acquire(window)
-            onDispose { SheetNavigationBarWindows.release(window) }
-        }
-    }
-}
-
-// Overlapping sheets share one override; closing either one must not restore an opaque bar
-// while another sheet still owns the window. Window references are not retained after release.
-@Suppress("DEPRECATION")
-private object SheetNavigationBarWindows {
-    private class Appearance(val color: Int, val divider: Int?, val contrast: Boolean?, var owners: Int = 1)
-    private val windows = WeakHashMap<Window, Appearance>()
-
-    fun acquire(window: Window) {
-        val active = windows[window]
-        if (active != null) {
-            active.owners++
-            return
-        }
-        windows[window] = Appearance(
-            window.navigationBarColor,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) window.navigationBarDividerColor else null,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced else null,
-        )
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) window.navigationBarDividerColor = android.graphics.Color.TRANSPARENT
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
-    }
-
-    fun release(window: Window) {
-        val saved = windows[window] ?: return
-        if (--saved.owners > 0) return
-        windows.remove(window)
-        window.navigationBarColor = saved.color
-        if (Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.P
-        ) {
-            window.navigationBarDividerColor = saved.divider ?: android.graphics.Color.TRANSPARENT
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = saved.contrast ?: false
-    }
-}
-
-/** 面板半屏悬浮时藏起系统导航栏，全屏或关掉时恢复 */
-@Composable
-private fun HideNavBarWhileFloating(state: MochiSheetState) {
-    val view = LocalView.current
-    LaunchedEffect(state, view) {
-        val window = view.context.findActivity()?.window ?: return@LaunchedEffect
-        val ctl = WindowCompat.getInsetsController(window, view)
-        val oldBehavior = ctl.systemBarsBehavior
-        ctl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        try {
-            // 半屏请求打开就隐藏，向下离开全屏也立即隐藏；不再等待弹簧停稳或反复跟随 isRunning。
-            // 内容已使用 ignoringVisibility 安全区，导航栏显隐不会改变面板内部的预留空间。
-            snapshotFlow { state.requested && MochiSheetDetent.Medium in state.detents && state.largeness < 0.999f }
-                .distinctUntilChanged()
-                .collect { hide ->
-                    if (hide) ctl.hide(WindowInsetsCompat.Type.navigationBars()) else ctl.show(WindowInsetsCompat.Type.navigationBars())
-                }
-        } finally {
-            ctl.show(WindowInsetsCompat.Type.navigationBars())
-            ctl.systemBarsBehavior = oldBehavior
-        }
-    }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
 
 /** 半屏时面板离屏幕边的距离 */
 private val FloatInset: Dp = 8.dp
@@ -761,6 +620,65 @@ public fun MochiSheetContent(
         content = content,
     )
 }
+
+/**
+ * 面板脚手架（iOS 27 的面板）：[header]（一般是 [MochiSheetHeader]）固定浮在正文上面，正文从它下面滚过去。
+ * 停在顶部时和「头部 + [MochiSheetContent]」看起来一样；正文滚进头部下面后，头部整块区域是均匀模糊 + 半透明的面板底色，
+ * 到下沿截断、一条细线（和页面顶栏同一套，见 [ui.feice.mochi.navigation.mochiScrollEdgeFade]）。
+ *
+ * 正文左右和头部按钮的外沿对齐（同心内缩，同 [MochiSheetContent]）；给了 [contentPadding] 时改用它的左右和下边距。
+ */
+@Composable
+public fun MochiSheetScaffold(
+    header: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    scrollState: ScrollState = rememberScrollState(),
+    contentPadding: PaddingValues? = null,
+    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(16.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val corner = LocalMochiSheetCorner.current
+    val cs = MochiTheme.colorScheme
+    // 玻璃面板的底色是透明的，头部那层底色仍用纯色面板的颜色（盖在玻璃上，照 iOS 27 的玻璃面板）
+    val edgeColor = if (cs.isDark) cs.surfaceContainerLow else cs.surfaceContainer
+    val density = LocalDensity.current
+    var headerPx by remember { mutableIntStateOf(0) }
+    val progress = MochiScrollEdgeDefaults.progress(scrollState)
+    val layoutDirection = LocalLayoutDirection.current
+    Box(modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                // 滚进头部下面的那段在容器里自己模糊（模糊带到头部下沿为止）
+                .mochiScrollEdgeBlur(with(density) { headerPx.toDp() }, progress)
+                // 放不下时能竖着滚：滚到顶再往下拖、往上推还没到最高一档时，拖的是面板（见 MochiSheet）
+                .verticalScroll(scrollState)
+                .layout { m, c ->
+                    val inset = sheetHeaderInset(corner)
+                    val start = contentPadding?.calculateLeftPadding(layoutDirection)?.roundToPx() ?: inset
+                    val end = contentPadding?.calculateRightPadding(layoutDirection)?.roundToPx() ?: inset
+                    val bottom = contentPadding?.calculateBottomPadding()?.roundToPx() ?: inset
+                    // 头部自带往下多出的 HeaderBandExtra，正文和按钮之间仍是同心内缩那么远
+                    val top = headerPx + (inset - HeaderBandExtra.roundToPx()).coerceAtLeast(0)
+                    val w = (c.maxWidth - start - end).coerceAtLeast(0)
+                    val p = m.measure(c.copy(minWidth = w, maxWidth = w, minHeight = 0))
+                    layout(c.maxWidth, p.height + top + bottom) { p.place(start, top) }
+                },
+            verticalArrangement = verticalArrangement,
+            content = content,
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .onSizeChanged { headerPx = it.height }
+                .mochiScrollEdgeFade(edgeColor, alpha = progress)
+                .padding(bottom = HeaderBandExtra),
+        ) { header() }
+    }
+}
+
+/** 头部那层底色比按钮下沿多出来的一截（iOS 27 截图里分界线在按钮下面一点） */
+private val HeaderBandExtra: Dp = 8.dp
 
 /**
  * 面板头部（iOS 26 面板顶上那一排）：左右是 44dp 的顶栏按钮（[MochiBarIconButton] / [MochiBarButton]），中间是标题。

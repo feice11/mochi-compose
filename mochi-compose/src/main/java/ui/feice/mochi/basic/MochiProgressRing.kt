@@ -27,7 +27,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -50,7 +50,7 @@ public fun MochiProgressRing(
     sweep: Float = 360f,
     content: (@Composable () -> Unit)? = null,
 ) {
-    val p by animateFloatAsState((progress ?: 0f).coerceIn(0f, 1f), MochiMotions.responseSpring(0.5f, 0.9f), label = "ring")
+    val p by animateFloatAsState((progress ?: 0f).coerceIn(0f, 1f), MochiMotionTokens.Page, label = "ring")
     val spin = rememberInfiniteTransition(label = "ring-spin")
     val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart), label = "angle")
     val indeterminate = progress == null

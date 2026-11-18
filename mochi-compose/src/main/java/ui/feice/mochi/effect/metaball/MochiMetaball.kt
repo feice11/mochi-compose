@@ -29,6 +29,7 @@ import ui.feice.mochi.effect.glow.MochiGlowState
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.g2Corner
 import ui.feice.mochi.theme.MochiGraphics
+import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.smoothstep
 
 /*
@@ -273,8 +274,6 @@ internal fun DrawScope.drawRing(brush: Brush, outerRaw: Rect, hole: Rect) {
     if (h.left > outer.left) drawRect(brush, Offset(outer.left, h.top), Size(h.left - outer.left, h.height))
     if (outer.right > h.right) drawRect(brush, Offset(h.right, h.top), Size(outer.right - h.right, h.height))
 }
-
-private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 
 private fun lerpColor(a: Color, b: Color, t: Float) = Color(
     red = lerp(a.red, b.red, t),

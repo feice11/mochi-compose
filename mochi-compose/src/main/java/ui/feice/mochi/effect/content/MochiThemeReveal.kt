@@ -65,6 +65,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import ui.feice.mochi.navigation.MochiScreenCorners
 import ui.feice.mochi.navigation.rememberMochiScreenCorners
 import ui.feice.mochi.theme.MochiGraphics
+import ui.feice.mochi.utils.smoothstep
 
 /**
  * 主题揭开转场的状态：[reveal] 先拍下当前画面，再执行改主题，新主题从手指处（或给定的点）揭开。
@@ -321,7 +322,7 @@ public fun MochiThemeRevealHost(state: MochiThemeRevealState, modifier: Modifier
 
                 // 每个角：洞还没够到那个屏幕角时是圆（半径 r），越接近越收成屏幕的圆角
                 fun corner(d: Float, screen: Float): CornerRadius {
-                    val k = smooth((r - d * 0.55f) / (d * 0.45f + 1f))
+                    val k = smoothstep(0f, 1f, (r - d * 0.55f) / (d * 0.45f + 1f))
                     val v = (r + (screen - r) * k).coerceIn(0f, min(rect.width, rect.height) / 2f)
                     return CornerRadius(v)
                 }
@@ -378,11 +379,6 @@ public fun MochiThemeRevealHost(state: MochiThemeRevealState, modifier: Modifier
             ) { drawImage(shot) }
         }
     }
-}
-
-private fun smooth(x: Float): Float {
-    val t = x.coerceIn(0f, 1f)
-    return t * t * (3f - 2f * t)
 }
 
 private const val RevealMillis = 640

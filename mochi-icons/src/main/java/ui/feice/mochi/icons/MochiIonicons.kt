@@ -144,6 +144,13 @@ public object MochiIonicons {
     }
 }
 
+/**
+ * [MochiIonicon] 不写 style 时用的样式。应用想整体换成实心（或直角）图标时在根部提供一次，
+ * 页面里不用逐个写 style；名字里自带 -outline / -sharp 的仍按名字画
+ */
+public val LocalMochiIconStyle: androidx.compose.runtime.ProvidableCompositionLocal<MochiIconStyle> =
+    androidx.compose.runtime.staticCompositionLocalOf { MochiIconStyle.Outline }
+
 /** [MochiIonicon] 的默认值 */
 public object MochiIoniconDefaults {
     /** 17sp 正文旁边的符号框（iOS body 文字旁的符号大小） */
@@ -155,7 +162,7 @@ public object MochiIoniconDefaults {
  * 当前主题装了 [ui.feice.mochi.theme.MochiIconProvider]（应用自己的图标集）并且认得这个名字时，用主题的。
  */
 @Composable
-public fun rememberMochiIonicon(name: String, style: MochiIconStyle = MochiIconStyle.Outline, optical: Boolean = true): ImageVector? {
+public fun rememberMochiIonicon(name: String, style: MochiIconStyle = LocalMochiIconStyle.current, optical: Boolean = true): ImageVector? {
     LocalMochiIconProvider.current?.resolve(name, style == MochiIconStyle.Filled)?.let { return it }
     val context = LocalContext.current
     val weight = LocalMochiSymbolWeight.current
@@ -172,7 +179,7 @@ public fun rememberMochiIonicon(name: String, style: MochiIconStyle = MochiIconS
 public fun MochiIonicon(
     name: String,
     modifier: Modifier = Modifier,
-    style: MochiIconStyle = MochiIconStyle.Outline,
+    style: MochiIconStyle = LocalMochiIconStyle.current,
     tint: Color = LocalContentColor.current,
     size: Dp = MochiIoniconDefaults.Size,
     contentDescription: String? = null,

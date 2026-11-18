@@ -4,7 +4,6 @@
 package ui.feice.mochi.basic
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.shape.drawG2RoundRect
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
@@ -133,7 +133,7 @@ public fun MochiPageControl(
                         return@awaitEachGesture
                     }
                     if (up == false) return@awaitEachGesture
-                    scope.launch { scrub.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 600f)) }
+                    scope.launch { scrub.animateTo(1f, MochiMotionTokens.PressDown) }
                     haptics.longPress()
                     var last = kotlin.math.round(position()).toInt()
                     while (true) {
@@ -148,7 +148,7 @@ public fun MochiPageControl(
                             select(i)
                         }
                     }
-                    scope.launch { scrub.animateTo(0f, spring(dampingRatio = 1f, stiffness = 600f)) }
+                    scope.launch { scrub.animateTo(0f, MochiMotionTokens.Settle) }
                 }
             },
     ) {

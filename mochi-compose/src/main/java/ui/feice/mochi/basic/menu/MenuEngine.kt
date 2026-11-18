@@ -3,9 +3,10 @@
 
 package ui.feice.mochi.basic.menu
 
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
@@ -23,7 +24,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -34,7 +34,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
-import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.awaitFrameSettle
+import ui.feice.mochi.anim.mochiReduceMotion
+import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.basic.BarGroupHandle
 import ui.feice.mochi.basic.MochiItem
 import ui.feice.mochi.basic.MochiOpenMode
@@ -68,7 +71,13 @@ internal class MochiEngine(
     val glow: MochiGlowState,
     val callbacks: MochiCallbacks,
     val elastic: Float,
+    /** 照 FlClash 从按钮长出来、收回按钮（见 DropdownMorph）；false = 长按预览菜单的旧编排 */
+    val morph: Boolean = true,
 ) {
+    /** 开始收起时的进度（morph：收起按它折算时间）；null = 在打开 */
+    var closeFrom by mutableStateOf<Float?>(null)
+        internal set
+
     /** 浮层在不在（关闭动画途中还在） */
     var overlayVisible by mutableStateOf(false)
         internal set
@@ -93,6 +102,7 @@ internal fun rememberMochiEngine(
     dismissDelayMillis: Long,
     anchorSize: () -> Size,
     onTap: (() -> Unit)? = null,
+    morph: Boolean = true,
 ): MochiEngine {
     val progress = remember { Animatable(0f) }
     val effects = remember { Animatable(0f) }
@@ -102,13 +112,10 @@ internal fun rememberMochiEngine(
     val glowSpec = remember(style.glowColor) { MochiGlowSpec(style.glowColor) }
     val glow = rememberMochiGlowState(glowSpec, pointer = { controller.touchOnScreen })
     val view = LocalView.current
-    val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val haptics = remember(view, style.hapticProfile) { MochiHaptics(view, style.hapticProfile) }
-    val reduceMotion = remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
+    val reduceMotion = mochiReduceMotion()
 
     controller.itemCount = itemCount
     controller.itemHeightPx = with(density) { style.itemHeight.toPx() }
@@ -149,10 +156,10 @@ internal fun rememberMochiEngine(
                 scope.launch {
                     if (down) {
                         val grow = currentPressStyle == MochiPressStyle.Grow
-                        launch { press.animateTo(if (grow) 1.06f else 0.94f, MochiMotions.responseSpring(0.22f, 0.6f)) }
+                        launch { press.animateTo(if (grow) 1.06f else 0.94f, MochiMotionTokens.PressDown) }
                         if (grow) launch { glow.press(radius = anchorGlow()) }
                     } else {
-                        launch { press.animateTo(1f, MochiMotions.responseSpring(0.38f, 0.62f)) }
+                        launch { press.animateTo(1f, MochiMotionTokens.PressRelease) }
                         launch { glow.release() }
                     }
                 }
@@ -172,16 +179,35 @@ internal fun rememberMochiEngine(
         )
     }
     val engine = remember(style, callbacks) {
-        MochiEngine(style, controller, progress, effects, press, glow, callbacks, if (reduceMotion) 0f else 1f)
+        MochiEngine(style, controller, progress, effects, press, glow, callbacks, if (reduceMotion) 0f else 1f, morph)
     }
 
+    val framePeriod = rememberFramePeriodNanos()
     LaunchedEffect(expanded, motion) {
         if (expanded) {
-            if (!engine.overlayVisible) {
+            // 收起途中又打开：从和此刻形状一样的打开时刻接着走（见 morphReopenProgress）
+            val closing = engine.closeFrom
+            if (engine.morph && closing != null && progress.value > 0f) progress.snapTo(morphReopenProgress(closing, progress.value))
+            engine.closeFrom = null
+            val fresh = !engine.overlayVisible
+            if (fresh) {
                 controller.hover = -1
                 effects.snapTo(0f)
             }
             engine.overlayVisible = true
+            // 新打开的浮层先等它组合、排版、画完再动，开头几帧不被吞掉（收起途中又打开不等）
+            if (fresh) awaitFrameSettle(framePeriod)
+            if (engine.morph) {
+                // FlClash 的时钟：进度线性走 450ms，形状、内容都按时间从 DropdownMorph 算
+                coroutineScope {
+                    launch {
+                        val ms = (MorphOpenSeconds * 1000f * (1f - progress.value)).toInt().coerceAtLeast(1)
+                        progress.animateTo(1f, tween(ms, easing = LinearEasing))
+                    }
+                    launch { effects.animateTo(1f, tween(300, easing = LinearEasing)) }
+                }
+                return@LaunchedEffect
+            }
             coroutineScope {
                 launch { progress.animateTo(1f, motion.openSpatial) }
                 launch {
@@ -191,6 +217,19 @@ internal fun rememberMochiEngine(
                 }
             }
         } else if (engine.overlayVisible) {
+            if (engine.morph) {
+                engine.closeFrom = progress.value.coerceAtLeast(1e-3f)
+                controller.hover = -1
+                controller.pointer = null
+                glow.markReleased()
+                coroutineScope {
+                    launch { effects.animateTo(0f, tween(100, easing = LinearEasing)) }
+                    launch { progress.animateTo(0f, tween((MorphCloseSeconds * 1000f).toInt(), easing = LinearEasing)) }
+                }
+                engine.overlayVisible = false
+                engine.overlayReady = false
+                return@LaunchedEffect
+            }
             coroutineScope {
                 launch { effects.animateTo(0f, motion.closeEffects) }
                 launch { progress.animateTo(0f, motion.closeSpatial) }
@@ -268,6 +307,7 @@ internal fun MochiEngine.Overlay(
             buttonPadding = anchorPadding,
             scrim = scrim,
             matchAnchorWidth = matchAnchorWidth,
+            morph = if (morph) ({ closeFrom }) else null,
             onReady = { overlayReady = true },
             header = header,
             content = content,

@@ -118,7 +118,12 @@ public fun LazyListScope.mochiListSection(
     }
 }
 
-private data class SectionRowType(val type: Any?)
+/**
+ * 分组里一行的 contentType。条目动画（[withMochiItemAnimation]）认它：分组的行不做插入淡入——
+ * 每段卡片往下多画一截盖住项间距（[coverItemSpacing]），淡入的半透明图层只按条目自己的范围离屏画，
+ * 多画的那截被切掉，淡入那几帧行间露缝、最后一行字被裁（转场途中数据才到时最明显）
+ */
+internal data class SectionRowType(val type: Any?)
 
 private class SectionInterval(
     val start: Int,

@@ -35,7 +35,7 @@ MochiRemovableChip("Price < 100", onRemove = { … })
 - 34dp tall, subhead medium weight in both states so the label width never jumps.
 - Unselected chips use a translucent gray fill that reads on both the grouped background and white cards; selected chips use the primary color.
 - A horizontal `MochiChipGroup` pads both ends with `contentPadding` (16dp, aligned with card edges) and overscrolls.
-- Both ends carry a fade mask: an edge fades while there is more to scroll toward it (with a progressive blur in the iOS appearance) and turns solid at the end. Don't add your own `mochiScrollFadeMask`.
+- Both ends carry a fade mask: an edge fades while there is more to scroll toward it and turns solid at the end. Don't add your own `mochiScrollFadeMask`.
 - Inside a container that already has side padding, pass `contentPadding = PaddingValues(0.dp)` and `bleed` = that padding. With `PaddingValues(0.dp)` alone, the scroll area stops inside the container's padding, the fade lands on the card edge, and a strip between it and the screen edge stays empty.
 - The mask is an offscreen layer clipped to its own rectangle; the group already leaves room above and below for the press grow, and reports an unchanged height.
 - Accessibility: `MochiChip` exposes its selected state; `MochiRemovableChip` reads as "移除 + label" by default, override with `removeDescription`.

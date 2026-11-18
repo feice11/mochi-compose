@@ -8,16 +8,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -34,7 +29,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
@@ -55,7 +49,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.translate
 import androidx.compose.ui.graphics.BlurEffect
@@ -67,23 +60,18 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
-import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ui.feice.mochi.basic.LocalMochiFontCrossfade
@@ -102,22 +90,18 @@ import ui.feice.mochi.demo.DemoStyle
 import ui.feice.mochi.demo.NothingMode
 import ui.feice.mochi.demo.about.DangoMark
 import ui.feice.mochi.demo.common.AppIcon
+import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoSection
+import ui.feice.mochi.demo.common.DemoSettingsSection
 import ui.feice.mochi.demo.common.Glyph
-import ui.feice.mochi.demo.common.Icons
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.tile
-import ui.feice.mochi.effect.content.MochiBlurCrossfade
+import ui.feice.mochi.demo.theme.GlassLabel
 import ui.feice.mochi.effect.content.MochiBlurText
-import ui.feice.mochi.effect.content.MochiBlurTransitions
-import ui.feice.mochi.effect.content.MochiThemeRevealState
-import ui.feice.mochi.effect.content.crossfadeOrChange
 import ui.feice.mochi.effect.content.mochiBlur
 import ui.feice.mochi.effect.content.mochiBlurAlpha
 import ui.feice.mochi.effect.content.mochiBlurReveal
 import ui.feice.mochi.effect.content.revealIfShadeChanges
-import ui.feice.mochi.effect.content.revealOrChange
-import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
@@ -129,16 +113,15 @@ import ui.feice.mochi.navigation.MochiTitleBarDefaults
 import ui.feice.mochi.nothing.NothingColors
 import ui.feice.mochi.nothing.nothingColorScheme
 import ui.feice.mochi.nothing.nothingControlPalette
-import ui.feice.mochi.nothing.nothingTextStyles
 import ui.feice.mochi.picker.MochiSeedPalette
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.ColorSchemeMode
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.LocalMochiControlPalette
 import ui.feice.mochi.theme.MochiDefaults
+import ui.feice.mochi.theme.MochiGlassStyle
 import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.theme.MochiTheme
-import ui.feice.mochi.theme.defaultTextStyles
 import ui.feice.mochi.theme.emphasized
 import ui.feice.mochi.theme.isDark
 import ui.feice.mochi.utils.rememberMochiHaptics
@@ -149,10 +132,7 @@ internal fun NothingMode.isDark(systemDark: Boolean): Boolean = when (this) {
     NothingMode.System -> systemDark
 }
 
-/**
- * 首次引导的整层（学 iOS 26 的设置助理）：没走完引导时盖在 App 上面；主题页底部可以设成下次启动再播一遍。
- * 打开时铺满，结束时缩小、模糊淡出，露出底下已经换好主题的 App。
- */
+/** 首次引导层（参照 iOS 26 设置助理），没走完引导时盖在 App 上面。 */
 @Composable
 internal fun OnboardingLayer(appearance: DemoAppearance) {
     val open = remember { Animatable(0f) }
@@ -160,7 +140,6 @@ internal fun OnboardingLayer(appearance: DemoAppearance) {
     LaunchedEffect(appearance.onboarding) {
         if (appearance.onboarding) {
             present = true
-            // 弹出带一点过冲再落定（约 4%），像 iOS 弹出的卡片
             open.animateTo(1f, spring(dampingRatio = 0.68f, stiffness = 230f))
         } else if (present) {
             open.animateTo(0f, spring(dampingRatio = 1f, stiffness = 240f))
@@ -185,11 +164,10 @@ internal fun OnboardingLayer(appearance: DemoAppearance) {
                 shape = WindowShape(0f, size.height, radius / density)
                 clip = p < 0.999f
             }
-            // 引导盖着的时候，底下的 App 收不到触摸
+            // 挡住底下 App 的触摸
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
     ) {
-        // 引导盖在 App 外面，不在 DemoApp 的越界回弹范围里：自己再包一层。
-        // 引导里换主题、换衬线体不做整屏模糊转场：配色自己插值，换了字体的文字各自原位模糊替换
+        // 引导在 DemoApp 的越界回弹范围外，自己包一层；换字体时各文字原位模糊替换，不做整屏转场
         CompositionLocalProvider(LocalMochiFontCrossfade provides true) {
             ProvideMochiOverscroll { DemoOnboarding(appearance) }
         }
@@ -209,17 +187,15 @@ private class WindowShape(private val top: Float, private val bottom: Float, pri
     }
 }
 
-/** 演示里自己画的模糊也跟图形档位走：超高档半径 ×1.5 */
+/** 演示自绘的模糊也跟图形档位走 */
 internal fun inkBlur(radius: Float): BlurEffect? {
     val r = radius * MochiGraphics.blurScale
     return if (r > 0.5f && MochiGraphics.blur) BlurEffect(r, r, TileMode.Decal) else null
 }
 
-private const val PageCount = 5
+private const val PageCount = 4
 private val PageCorner = 32.dp
 private const val StaggerMillis = 1300f
-
-// 刚启动时欢迎页的前摇
 private const val WelcomeLeadMillis = 700L
 
 @Composable
@@ -228,7 +204,7 @@ private fun DemoOnboarding(appearance: DemoAppearance) {
     val pager = remember { Animatable(0f) }
     val staggers = remember { List(PageCount) { Animatable(0f) } }
     LaunchedEffect(step) { pager.animateTo(step.toFloat(), spring(dampingRatio = 0.92f, stiffness = 210f)) }
-    // 刚启动时欢迎页多等一会儿再开始（前摇）：先让引导层落定、首帧的排版过去，团子和手写字再出场
+    // 首次进入欢迎页先等引导层落定、首帧排版过去再出场
     var firstWelcome by remember { mutableStateOf(true) }
     LaunchedEffect(step) {
         staggers[step].snapTo(0f)
@@ -244,7 +220,7 @@ private fun DemoOnboarding(appearance: DemoAppearance) {
             .background(MochiDefaults.groupedBackground())
             .systemBarsPadding(),
     ) {
-        // 和 MochiTitleBar 同一套顶栏尺寸：高度、两侧边距都用库的值，返回 / 关闭按钮和其它页面的顶栏按钮对齐
+        // 与 MochiTitleBar 同尺寸，按钮和其它页顶栏对齐
         Row(
             Modifier
                 .fillMaxWidth()
@@ -256,22 +232,20 @@ private fun DemoOnboarding(appearance: DemoAppearance) {
                 TopIcon(visible = step > 0) { MochiBackButton(onClick = { if (step > 0) step-- }) }
             }
             TopIcon(visible = step < PageCount - 1) {
-                MochiBarIconButton(onClick = finish) { Glyph(Icons.CLOSE, LocalContentColor.current, size = 20) }
+                MochiBarIconButton(onClick = finish) { Glyph(DemoIcons.CLOSE, LocalContentColor.current, size = 20) }
             }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val width = constraints.maxWidth.toFloat()
             for (i in 0 until PageCount) {
                 key(i) {
-                    // 前后两页提前组合好（下一页在屏幕右边外面、上一页透明度 0，都看不见也点不到）：
-                    // 第一次翻到某页时不用在翻页开始的那一帧现组合、现录整页，不会卡一下
+                    // 前后两页提前组合（屏外或透明），避免翻页首帧现组合卡顿
                     val present by remember { derivedStateOf { abs(i - pager.value) < 0.999f || abs(i - step) == 1 } }
                     if (present) {
                         Box(
                             Modifier
                                 .fillMaxSize()
                                 .graphicsLayer {
-                                    // 新页从右边整页推进来、带一点模糊；旧页往左挪一小段、缩小、糊掉、淡出（iOS 设置助理的节奏）
                                     val d = i - pager.value
                                     if (d >= 0f) {
                                         translationX = d * width
@@ -283,7 +257,6 @@ private fun DemoOnboarding(appearance: DemoAppearance) {
                                         mochiBlurAlpha((1f + d).coerceIn(0f, 1f), 10.dp * -d, continuous = true)
                                     }
                                 }
-                                // 整页模糊：半径跟着推进连续变化（不分档），降采样后每帧只算很少的像素；外溢的软边留着
                                 .mochiBlur(continuous = true) {
                                     val d = i - pager.value
                                     if (d >= 0f) 12.dp * d else 10.dp * -d
@@ -298,9 +271,8 @@ private fun DemoOnboarding(appearance: DemoAppearance) {
                             val t = { staggers[i].value }
                             when (i) {
                                 0 -> WelcomePage(appearance, t, lead = if (firstWelcome) WelcomeLeadMillis else 0L)
-                                1 -> GraphicsPage(t)
-                                2 -> StylePage(appearance, t)
-                                3 -> AppearancePage(appearance, t)
+                                1 -> StylePage(appearance, t)
+                                2 -> AppearancePage(appearance, t)
                                 else -> DonePage(appearance, t, active = step == i)
                             }
                         }
@@ -334,7 +306,6 @@ private fun DemoOnboarding(appearance: DemoAppearance) {
 
 @Composable
 private fun TopIcon(visible: Boolean, content: @Composable () -> Unit) {
-    // 出现 / 消失：模糊淡入淡出 + 轻微缩放；看不见时不接收点击
     val a by animateFloatAsState(if (visible) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 500f), label = "top")
     Box(
         Modifier
@@ -350,10 +321,7 @@ private fun TopIcon(visible: Boolean, content: @Composable () -> Unit) {
     }
 }
 
-/**
- * 卡片类元素弹出来：和 [rise] 同样按顺序、糊着浮上来，同时从 0.82 带回弹放大到 1（冲过头约 2.5%），
- * 和引导层弹出的手感一致。
- */
+/** 卡片类元素按顺序弹出：在 [rise] 基础上加带回弹的放大。 */
 private fun Modifier.pop(t: () -> Float, i: Int): Modifier = graphicsLayer {
     val ms = t() * StaggerMillis - i * 70f
     val k = if (ms <= 0f) 0f else 1f - exp(-ms / 120f) * cos(ms / 75f)
@@ -365,7 +333,7 @@ private fun Modifier.pop(t: () -> Float, i: Int): Modifier = graphicsLayer {
     1f - (1f - v) * (1f - v) * (1f - v)
 }, blur = 10.dp, rise = 18.dp)
 
-/** 页内元素按顺序依次升起：第 [i] 个比前一个晚 70ms，各自 480ms 从下面糊着浮上来 */
+/** 页内元素依次升起：第 [i] 个比前一个晚 70ms */
 private fun Modifier.rise(t: () -> Float, i: Int): Modifier = mochiBlurReveal({
     val v = ((t() * StaggerMillis - i * 70f) / 480f).coerceIn(0f, 1f)
     1f - (1f - v) * (1f - v) * (1f - v)
@@ -374,7 +342,6 @@ private fun Modifier.rise(t: () -> Float, i: Int): Modifier = mochiBlurReveal({
 @Composable
 private fun PageColumn(content: @Composable ColumnScope.() -> Unit) {
     val scroll = rememberScrollState()
-    // 还能往哪边滚，那一边渐隐（内容自己擦掉，不盖底色）
     Column(
         Modifier
             .fillMaxSize()
@@ -404,16 +371,6 @@ private fun CenteredPage(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-// ---------- 第 2 页：液态玻璃通透度 ----------
-
-@Composable
-private fun GraphicsPage(t: () -> Float) {
-    PageColumn {
-        PageHeading("液态玻璃", "往左更通透，往右更清楚。随时可以在「主题」页改。", t)
-        GlassTintSettings(null, stagger = { Modifier.pop(t, 2 + it) })
-    }
-}
-
 @Composable
 private fun PageHeading(title: String, subtitle: String, t: () -> Float) {
     val ts = MochiTheme.textStyles
@@ -440,7 +397,6 @@ private fun WelcomePage(appearance: DemoAppearance, t: () -> Float, lead: Long) 
     CenteredPage {
         GlassDango(Modifier.size(168.dp), startDelay)
         Spacer(Modifier.height(20.dp))
-        // 手写字跟主题色；Nothing 用它的亮红
         HandwrittenHello(
             if (appearance.style == DemoStyle.Nothing) NothingColors.Accent else MochiTheme.colorScheme.primary,
             Modifier.fillMaxWidth().height(96.dp),
@@ -450,7 +406,7 @@ private fun WelcomePage(appearance: DemoAppearance, t: () -> Float, lead: Long) 
         Text("欢迎使用 Mochi", style = ts.titleLarge.emphasized(), modifier = Modifier.rise(t, 2))
         Spacer(Modifier.height(8.dp))
         Text(
-            "一套软糯、有弹性的 Compose 组件库。\n花半分钟，选一套你喜欢的外观。",
+            "Jetpack Compose 组件库。\n先选一套外观。",
             style = ts.bodyLarge.copy(textAlign = TextAlign.Center),
             color = MochiTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.rise(t, 3),
@@ -458,10 +414,7 @@ private fun WelcomePage(appearance: DemoAppearance, t: () -> Float, lead: Long) 
     }
 }
 
-/**
- * 团子以玻璃质感出现：从糊着、小一圈的一块透明玻璃里弹出来（带回弹），停一会儿再慢慢凝成三色实体。
- * 之后每隔一会儿有一道光扫过表面；点一下戳一下。动画都在图层 / 绘制阶段读，不重组。
- */
+/** 欢迎页团子：先以玻璃质感弹出，再凝成实体；点击切换。动画只在图层 / 绘制阶段读，不重组。 */
 @Composable
 private fun GlassDango(modifier: Modifier = Modifier, startDelay: Long = 0L) {
     val haptics = rememberMochiHaptics()
@@ -470,7 +423,6 @@ private fun GlassDango(modifier: Modifier = Modifier, startDelay: Long = 0L) {
     val appear = remember { Animatable(0f) }
     val glass = remember { Animatable(1f) }
     val poke = remember { Animatable(0f) }
-    // 玻璃 / 原本质感：先以玻璃停一会儿再凝成实体；点一下来回切
     var glassy by remember { mutableStateOf(true) }
     var touched by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -512,13 +464,13 @@ private fun GlassDango(modifier: Modifier = Modifier, startDelay: Long = 0L) {
     }
 }
 
-// ---------- 第 3 页：选择主题 ----------
+// ---------- 第 2 页：选择主题 ----------
 
 @Composable
 private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
     val haptics = rememberMochiHaptics()
     PageColumn {
-        PageHeading("选择主题", "两套完整的设计语言：配色、字体、控件都会跟着换。之后也能在「主题」页改。", t)
+        PageHeading("选择主题", "主题决定配色和控件样式。", t)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             listOf(DemoStyle.Mochi to "Mochi", DemoStyle.Nothing to "Nothing").forEachIndexed { index, (style, label) ->
                 Column(Modifier.weight(1f).pop(t, 2 + index), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -538,17 +490,25 @@ private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
                 }
             }
         }
+        Spacer(Modifier.height(MochiListDefaults.SectionSpacing))
+        MochiListSection(modifier = Modifier.pop(t, 4)) {
+            MochiListRow("iOS", checked = appearance.style == DemoStyle.Ios, onClick = {
+                if (appearance.style != DemoStyle.Ios) {
+                    haptics.confirm()
+                    appearance.style = DemoStyle.Ios
+                }
+            })
+        }
     }
 }
 
-/** 主题卡片里的缩小版真实界面：各自套上自己那套主题，不管当前选的是哪个 */
+/** 主题卡片里的缩小版界面，套用卡片自己的主题、当前的明暗 */
 @Composable
 private fun StylePreview(style: DemoStyle, appearance: DemoAppearance) {
     val nothing = style == DemoStyle.Nothing
-    // 两张卡都按当前界面实际的明暗来画：深色界面里预览的也是深色
     val dark = MochiTheme.colorScheme.isDark
     val colors = if (nothing) nothingColorScheme(dark) else appearance.controller.colorScheme(dark)
-    val textStyles = remember(nothing) { if (nothing) nothingTextStyles() else defaultTextStyles() }
+    val textStyles = MochiTheme.textStyles
     CompositionLocalProvider(
         LocalMochiControlPalette provides if (nothing) nothingControlPalette(dark) else null,
     ) {
@@ -565,17 +525,17 @@ private fun StylePreview(style: DemoStyle, appearance: DemoAppearance) {
                         MochiListRow(
                             "无线局域网",
                             value = "Mochi",
-                            leading = { AppIcon(Icons.WIFI, Tone.Primary.tile(), lead, corner = corner) },
+                            leading = { AppIcon(DemoIcons.WIFI, Tone.Primary.tile(), lead, corner = corner) },
                         )
                         MochiListRow(
                             "勿扰模式",
-                            leading = { AppIcon(Icons.MOON, Tone.Secondary.tile(), lead, corner = corner) },
+                            leading = { AppIcon(DemoIcons.MOON, Tone.Secondary.tile(), lead, corner = corner) },
                             trailing = { MochiSwitch(true, null) },
                         )
                         MochiListRow(
                             "通知",
                             chevron = true,
-                            leading = { AppIcon(Icons.BELL, Tone.Tertiary.tile(), lead, corner = corner) },
+                            leading = { AppIcon(DemoIcons.BELL, Tone.Tertiary.tile(), lead, corner = corner) },
                         )
                     }
                     Spacer(Modifier.height(20.dp))
@@ -609,7 +569,7 @@ private fun nothingButton() = ui.feice.mochi.basic.MochiButtonDefaults.colors(Mo
     content = Color.White,
 )
 
-// ---------- 第 4 页：外观 ----------
+// ---------- 第 3 页：外观 ----------
 
 private enum class Shade(val label: String) { Light("浅色"), Dark("深色"), Auto("自动") }
 
@@ -642,17 +602,17 @@ private fun Shade.nothingMode(): NothingMode = when (this) {
 
 @Composable
 private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
-    val nothing = appearance.style == DemoStyle.Nothing
+    val fixedPalette = appearance.style != DemoStyle.Mochi
     val reveal = appearance.reveal
     val haptics = rememberMochiHaptics()
     val controller = appearance.controller
     PageColumn {
         PageHeading(
             "外观",
-            if (nothing) "选择明暗。Nothing 外观用固定的黑白灰加红色。" else "选择明暗和主题色。色块上是从种子色生成的整套配色。",
+            if (fixedPalette) "选择明暗和材质。" else "选择明暗、主题色和材质。",
             t,
         )
-        val shade = if (nothing) appearance.nothingMode.shade() else controller.colorSchemeMode.shade()
+        val shade = if (fixedPalette) appearance.nothingMode.shade() else controller.colorSchemeMode.shade()
         val systemDark = isSystemInDarkTheme()
         val nowDark = MochiTheme.colorScheme.isDark
         Row(Modifier.fillMaxWidth().pop(t, 2), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -661,9 +621,9 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
                     MochiSelectFrame(s == shade, cornerRadius = 20.dp, modifier = Modifier.width(84.dp).aspectRatio(0.56f), onClick = {
                         if (s != shade) {
                             haptics.tick()
-                            val toDark = if (nothing) s.nothingMode().isDark(systemDark) else mochiMode(s, false).isDark(systemDark)
+                            val toDark = if (fixedPalette) s.nothingMode().isDark(systemDark) else mochiMode(s, false).isDark(systemDark)
                             reveal.revealIfShadeChanges(nowDark, toDark) {
-                                if (nothing) {
+                                if (fixedPalette) {
                                     appearance.nothingMode = s.nothingMode()
                                 } else {
                                     controller.colorSchemeMode = mochiMode(s, controller.colorSchemeMode.isMonet())
@@ -671,7 +631,7 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
                             }
                         }
                     }) {
-                        ShadeThumb(s, if (nothing) NothingColors.Accent else MochiTheme.colorScheme.primary)
+                        ShadeThumb(s, MochiTheme.colorScheme.primary)
                     }
                     Spacer(Modifier.height(10.dp))
                     Text(s.label, style = MochiTheme.textStyles.bodyMedium)
@@ -682,20 +642,31 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
         }
         Spacer(Modifier.height(28.dp))
         Column(Modifier.fillMaxWidth().pop(t, 3), verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SectionSpacing)) {
-            // 衬线体标题：两个主题都有；换了字体的文字原位模糊替换（见 OnboardingLayer）
             MochiListSection {
                 MochiListRow(
                     "衬线体标题",
-                    subtitle = "大标题和导航标题用系统衬线体（宋体），正文不变",
+                    subtitle = "标题用系统衬线体，正文不变",
                     trailing = { MochiSwitch(appearance.serif, { on -> appearance.serif = on }) },
                 )
             }
-            if (!nothing) SeedSection(appearance)
+            if (!fixedPalette) SeedSection(appearance)
+            MaterialSettings(appearance)
         }
     }
 }
 
-/** 明暗缩略图：一块小屏，上面两张卡片和几条字条；自动 = 斜着一半浅一半深 */
+@Composable
+private fun MaterialSettings(appearance: DemoAppearance) {
+    DemoSettingsSection("材质") {
+        MochiListRow(GlassLabel, trailing = { MochiSwitch(appearance.glass, { appearance.glass = it }) })
+        MochiListRow(
+            "顶栏模糊",
+            trailing = { MochiSwitch(appearance.blurEffects, { appearance.blurEffects = it }) },
+        )
+    }
+}
+
+/** 明暗缩略图；自动 = 斜分一半浅一半深 */
 @Composable
 private fun ShadeThumb(shade: Shade, accent: Color) {
     Canvas(Modifier.fillMaxSize()) {
@@ -746,7 +717,6 @@ private fun SeedSection(appearance: DemoAppearance) {
         MochiListSection {
             MochiListRow(
                 "跟随壁纸取色",
-                subtitle = "用系统壁纸生成的莫奈配色",
                 trailing = { MochiSwitch(monet, { controller.colorSchemeMode = mochiMode(shade, it) }) },
             )
         }
@@ -763,7 +733,7 @@ private fun SeedSection(appearance: DemoAppearance) {
     }
 }
 
-// ---------- 第 5 页：准备就绪 ----------
+// ---------- 第 4 页：准备就绪 ----------
 
 @Composable
 private fun DonePage(appearance: DemoAppearance, t: () -> Float, active: Boolean) {
@@ -797,7 +767,6 @@ private fun DonePage(appearance: DemoAppearance, t: () -> Float, active: Boolean
         ) {
             val stroke = 5.dp.toPx()
             val r = size.minDimension / 2f - stroke / 2f
-            // 先画一圈环，环合上时填满、对勾一笔划出来
             drawCircle(cs.primary.copy(alpha = tick.value), r)
             drawArc(
                 cs.primary,
@@ -831,7 +800,7 @@ private fun DonePage(appearance: DemoAppearance, t: () -> Float, active: Boolean
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "这些设置随时可以在「主题」页修改，\n页面底部还能设置下次启动时重新播放引导。",
+            "这些设置随时可以在「主题」页修改。",
             style = ts.bodyMedium.copy(textAlign = TextAlign.Center),
             color = cs.onSurfaceVariant,
             modifier = Modifier.rise(t, 3),
@@ -839,20 +808,16 @@ private fun DonePage(appearance: DemoAppearance, t: () -> Float, active: Boolean
     }
 }
 
-private fun summary(appearance: DemoAppearance): String = if (appearance.style == DemoStyle.Nothing) {
-    listOf(
-        "Nothing",
-        appearance.nothingMode.shade().summary(),
-        glassTintLabel(appearance.styleGlassTint),
-    ).joinToString(" · ")
-} else {
-    val mode = appearance.controller.colorSchemeMode
-    listOf(
-        "Mochi",
-        if (mode.isMonet()) "壁纸取色" else "自选主题色",
-        mode.shade().summary(),
-        glassTintLabel(appearance.styleGlassTint),
-    ).joinToString(" · ")
+private fun summary(appearance: DemoAppearance): String = when (appearance.style) {
+    DemoStyle.Nothing -> "Nothing · ${appearance.nothingMode.shade().summary()}"
+
+    DemoStyle.Ios -> "iOS · ${appearance.nothingMode.shade().summary()}"
+
+    DemoStyle.Mochi -> {
+        val mode = appearance.controller.colorSchemeMode
+        val palette = if (mode.isMonet()) "壁纸取色" else "自选主题色"
+        "Mochi · $palette · ${mode.shade().summary()}"
+    }
 }
 
 private fun Shade.summary(): String = if (this == Shade.Auto) "跟随系统" else label

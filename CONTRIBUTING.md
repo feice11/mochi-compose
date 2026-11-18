@@ -23,7 +23,7 @@ mochi-compose/        library, published to Maven Central as io.github.feice11 (
   effect/             public effects, one package per effect / 通用效果，一个效果一个包
     content/          content transitions: blur swap, counters, morphing icons / 内容变换
     elastic/          press deformation and elastic motion / 按压形变
-    glass/            liquid glass surfaces and backdrops; engine/ is the render pipeline (internal) / 液态玻璃，engine/ 是内部渲染管线
+    glass/            glass surfaces, groups and backdrops (liquid glass); engine/ is the AGSL render pipeline (internal) / 玻璃表面、玻璃容器和背景来源（液态玻璃），engine/ 是内部的 AGSL 渲染管线
     glow/ hdr/        glow and HDR highlights / 光晕、HDR 高光
     mask/             edge blur, fade masks, smooth gradients / 边缘模糊、渐隐遮罩
     metaball/         metaball fusing and shadows / 融球与阴影
@@ -34,7 +34,7 @@ mochi-compose/        library, published to Maven Central as io.github.feice11 (
   shape/              capsule paths, shader SDF approximations / 形状
   overlay/            InWindowOverlay (DecorView overlays) / 浮层
   utils/              haptics, coordinates, prerendering / 震动、坐标、预渲染
-mochi-ios/            optional iOS appearance and the liquid glass / scroll edge materials / 可选 iOS 外观与玻璃材质
+mochi-ios/            optional iOS appearance: system colors, vibrancy, iosMaterials (glass / scroll edge switches) / 可选 iOS 外观：系统色、活力色、iosMaterials（玻璃与滚动边缘开关）
 mochi-nothing/        optional Nothing appearance / 可选 Nothing 外观
 mochi-icons/          MochiIonicon, the full Ionicons set / 图标
 example/              demo catalog app / 示例 app
@@ -91,6 +91,10 @@ artifacts/            local research and screenshots, git-ignored, never committ
   注释写「为什么」；已有注释是中文，新注释中英文都行。
 - Run `./gradlew spotlessApply` before committing; CI runs `spotlessCheck`.
   提交前跑 `./gradlew spotlessApply`，CI 会跑 `spotlessCheck`。
+- The public API of each library module is recorded in `<module>/api/<module>.api`; CI runs `apiCheck`. After an intended public API change, run `./gradlew apiDump` and commit the `.api` diff with the code, so reviewers see every signature change.
+  每个库模块的公开 API 记在 `<模块>/api/<模块>.api`，CI 会跑 `apiCheck`。有意改了公开 API 就跑 `./gradlew apiDump`，把 `.api` 的变化和代码一起提交，审查时每处签名变化都看得到。
+- Glass shaders and recipe constants are ported verbatim from the liquid.refract.im WebGL glass (see THIRD_PARTY_NOTICES). Keep the constants as they are; `LiquidRecipeTest` checks the recipe against values produced by running the original JavaScript.
+  玻璃的着色器和配方常量照原样移植自 liquid.refract.im 的 WebGL 玻璃（见 THIRD_PARTY_NOTICES）。常量不要改；`LiquidRecipeTest` 拿运行原 JavaScript 得到的值对照配方。
 - After adding classes, run `./gradlew updateBaselineProfiles` so the baseline profiles (`baseline-prof.txt` in `mochi-compose` and `example`) cover them; the packaging tool does not expand package wildcards.
   新增类以后跑 `./gradlew updateBaselineProfiles`，让基线配置文件覆盖到它们（打包工具不展开按包的通配，只认逐个类的规则）。没覆盖到的代码刚装好时解释执行，第一次出现的转场会掉帧。
 
@@ -124,21 +128,15 @@ The example Release build enables R8 by default. Keep AGP/D8/R8 compatible with 
 
 示例 Release 默认启用 R8，AGP/D8/R8 必须支持当前 Kotlin 编译器；Kotlin 2.3 当前配 AGP 8.13.2。`-PmochiMinify=false` 仅供显式诊断；资源压缩仍关闭，以保留按名称读取的校准素材。优化与未优化构建的测量不能混算。
 
-For an opt-in glass comparison against the actual Release app, build `:example:assembleRelease :example:assembleReleaseAndroidTest -PmochiTestBuildType=release` and select only `ui.feice.mochi.demo.SharedTextureComparison`. Install the matching application and instrumentation APKs together. It skips without the instrumentation argument `allowPhysicalInput=true`; `cycles=3` runs three ABBA groups in one process. It fixes quality and the window display mode, resets the preview scroll/selection and live-carousel phase, captures continuous FrameMetrics and environment readings, exports `shared-texture-abba/report.json` under the demo's external files directory, then restores the test overrides. Deduplicate identical frame timestamps before analysis; compare counterbalanced groups rather than treating every frame as an independent experiment. This comparison covers the source-texture switch, not all library changes.
+Device tests normally run on the Debug build. `-PmochiTestBuildType=release` builds them against the Release app (with R8); that build also loads `example/proguard-benchmark-target.pro`, which keeps the shared members only test entry points use. Record whether it was used together with each APK hash. The old glass A/B comparison test (`SharedTextureComparison` and its `comparison=` parameters) was removed with the previous glass pipeline.
 
-液态玻璃的可选实机对照使用上述 Release 构建命令，只选 `SharedTextureComparison`，应用和测试 APK 必须成对安装。未传 `allowPhysicalInput=true` 时跳过；`cycles=3` 在同一进程跑三组 ABBA，固定画质和窗口显示档位，复位预览滚动、选中项与动态轮播相位，连续采集 FrameMetrics 与环境数据，结果输出到演示应用外部文件目录的 `shared-texture-abba/report.json`，结束恢复测试覆盖。先按帧时间戳去重，再按交错组比较，不能把每帧当成独立实验；该测试只对照共享背景纹理开关，不代表全部库修改的前后收益。
-
-Pass `comparison=finish` to compare the original finishing pass against bounded/compact inputs and the circular-contour shortcut; `finish-bounds` and `finish-geometry` isolate those parts. Output is `<comparison>-abba/report.json`. The test temporarily selects the iOS appearance to expose the glass entry and restores the previous appearance afterwards. / 传 `comparison=finish` 对照原收尾与输入范围、单输入及圆形搜索优化；`finish-bounds`、`finish-geometry` 分别隔离输入和几何部分。结果位于 `<comparison>-abba/report.json`。测试临时选择 iOS 外观以显示玻璃入口，结束后恢复原外观。
-
-`comparison=edge-face` isolates the edge-varying face atlas; `comparison=pipeline` combines it with the finish changes. An optional `glassStyle=Ios26` or `Ios27` fixes the recipe family and is restored afterwards. / `comparison=edge-face` 单独比较边缘模糊的面色管线；`comparison=pipeline` 同时对照面色与收尾优化。可传 `glassStyle=Ios26` 或 `Ios27` 固定配方系列，结束后恢复原选择。
-
-`comparison=face-inputs` isolates dependency-keyed immutable filter reuse. Release glass-test targets additionally load `proguard-benchmark-target.pro`, generated from the harness/runner's shared-class references, to keep test entry points that application-only R8 analysis would remove. This contract covers `SharedTextureComparison`; other UI tests normally use Debug. Record whether this test contract was present with each APK hash. / `comparison=face-inputs` 单独对照按依赖复用不可变滤镜对象。Release 玻璃测试构建另外加载按测试引用生成的 `proguard-benchmark-target.pro`，保留只由测试入口使用的共享类成员；该清单针对 `SharedTextureComparison`，其他 UI 测试通常使用 Debug。每个 APK 的哈希记录应同时说明是否启用了这份测试契约。
+设备测试通常用 Debug 构建。`-PmochiTestBuildType=release` 让设备测试跑在 Release（R8）应用上，这时另外加载 `example/proguard-benchmark-target.pro`，保留只由测试入口使用的共享类成员；记录 APK 哈希时一并说明是否用了它。旧的玻璃 A/B 对照测试（`SharedTextureComparison` 及其 `comparison=` 参数）已随旧玻璃管线删除。
 
 ## Releasing / 发布
 
-Push a tag `v<version>` (for example `v0.2.0`) and the Publish workflow tests and uploads mochi-compose, mochi-icons, mochi-ios and mochi-nothing to Maven Central as `io.github.feice11:<module>:<version>`. Coordinates and POM fields live in `gradle.properties`; the workflow needs the `MAVEN_CENTRAL_USERNAME` / `MAVEN_CENTRAL_PASSWORD` (Central Portal user token) and `SIGNING_KEY` / `SIGNING_KEY_PASSWORD` secrets. Move the `Unreleased` section of the changelog under the new version first. `./gradlew publishToMavenLocal -PVERSION_NAME=…` works without a signing key for local testing.
+Push a tag `v<version>` (for example `v0.3.0`) and the Publish workflow tests and uploads mochi-compose, mochi-icons, mochi-ios and mochi-nothing to Maven Central as `io.github.feice11:<module>:<version>`, then creates a GitHub release with the demo APK and that version's changelog section as notes. Coordinates and POM fields live in `gradle.properties`; the workflow needs the `MAVEN_CENTRAL_USERNAME` / `MAVEN_CENTRAL_PASSWORD` (Central Portal user token) and `SIGNING_KEY` / `SIGNING_KEY_PASSWORD` secrets. Rename the changelog's `Unreleased` section to `## <version> — <date>` and bump `VERSION_NAME` to the next `-SNAPSHOT` first; the workflow refuses to publish a version that has no changelog section. `./gradlew publishToMavenLocal -PVERSION_NAME=…` works without a signing key for local testing.
 
-推一个 `v<版本>` 的 tag（比如 `v0.2.0`），Publish 工作流先跑测试，再把 mochi-compose、mochi-icons、mochi-ios、mochi-nothing 发到 Maven Central，坐标 `io.github.feice11:<模块>:<版本>`。坐标和 POM 信息在 `gradle.properties`；工作流要用仓库 Secrets：`MAVEN_CENTRAL_USERNAME` / `MAVEN_CENTRAL_PASSWORD`（Central Portal 生成的 User Token）、`SIGNING_KEY` / `SIGNING_KEY_PASSWORD`。发之前先把更新日志里的「未发布」改成新版本号。本地试发布用 `./gradlew publishToMavenLocal -PVERSION_NAME=…`，不需要签名密钥。
+推一个 `v<版本>` 的 tag（比如 `v0.3.0`），Publish 工作流先跑测试，再把 mochi-compose、mochi-icons、mochi-ios、mochi-nothing 发到 Maven Central，坐标 `io.github.feice11:<模块>:<版本>`，最后建同名 GitHub Release，附示例 APK，说明取更新日志里这个版本的段落。坐标和 POM 信息在 `gradle.properties`；工作流要用仓库 Secrets：`MAVEN_CENTRAL_USERNAME` / `MAVEN_CENTRAL_PASSWORD`（Central Portal 生成的 User Token）、`SIGNING_KEY` / `SIGNING_KEY_PASSWORD`。发之前先把更新日志的「未发布」改成 `## <版本> — <日期>`，`VERSION_NAME` 改成下一个 `-SNAPSHOT`；更新日志里没有这个版本的段落，工作流不会发。本地试发布用 `./gradlew publishToMavenLocal -PVERSION_NAME=…`，不需要签名密钥。
 
 ## Commits / 提交
 

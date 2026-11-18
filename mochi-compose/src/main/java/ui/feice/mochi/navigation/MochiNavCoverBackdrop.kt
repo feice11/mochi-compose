@@ -4,6 +4,7 @@
 package ui.feice.mochi.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Matrix
@@ -14,6 +15,8 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
+import ui.feice.mochi.effect.glass.MotionKeyedBackdrop
+import ui.feice.mochi.effect.glass.motionKey
 
 /**
  * 页里的玻璃（标签栏等）在「从来源打开」转场中要看到的东西：正盖上来的那一页（变形中的容器）。
@@ -26,11 +29,21 @@ import com.kyant.backdrop.Backdrop
 internal fun rememberMochiNavCoverBackdrop(): Backdrop? {
     val nav = LocalMochiNavigator.current ?: return null
     val entry = LocalMochiNavEntry.current ?: return null
+    DisposableEffect(entry) {
+        entry.coverReaderCount++
+        onDispose { entry.coverReaderCount-- }
+    }
     return remember(nav, entry) { NavCoverBackdrop(nav, entry) }
 }
 
-private class NavCoverBackdrop(private val nav: MochiNavigator, private val entry: MochiNavEntry) : Backdrop {
+private class NavCoverBackdrop(private val nav: MochiNavigator, private val entry: MochiNavEntry) :
+    Backdrop,
+    MotionKeyedBackdrop {
     override val isCoordinatesDependent: Boolean = true
+
+    // 不画时位置无关；转场中容器每帧在变，但那时玻璃按「运动中冻结取样」不跟（见 LiquidNode），
+    // 转场开始 / 结束时 drawBackdrop 里读的 inTransition 一变，玻璃自己会重画
+    override fun motionKey(coordinates: LayoutCoordinates, out: MutableList<Any>): Boolean = true
     private val matrix = Matrix()
 
     override fun DrawScope.drawBackdrop(density: Density, coordinates: LayoutCoordinates?, layerBlock: (GraphicsLayerScope.() -> Unit)?) {
@@ -58,8 +71,16 @@ internal fun rememberMochiNavCarriedBackdrop(inner: Backdrop): Backdrop {
     return remember(nav, entry, inner) { CarriedBackdrop(inner, nav, entry) }
 }
 
-private class CarriedBackdrop(private val inner: Backdrop, private val nav: MochiNavigator, private val entry: MochiNavEntry) : Backdrop {
+private class CarriedBackdrop(private val inner: Backdrop, private val nav: MochiNavigator, private val entry: MochiNavEntry) :
+    Backdrop,
+    MotionKeyedBackdrop {
     override val isCoordinatesDependent: Boolean = true
+
+    override fun motionKey(coordinates: LayoutCoordinates, out: MutableList<Any>): Boolean {
+        val dy = if (coordinates.isAttached) nav.carriedShift(entry, coordinates) else 0f
+        out += dy
+        return inner.motionKey(coordinates, out)
+    }
 
     override fun DrawScope.drawBackdrop(density: Density, coordinates: LayoutCoordinates?, layerBlock: (GraphicsLayerScope.() -> Unit)?) {
         val dy = coordinates?.takeIf { it.isAttached }?.let { nav.carriedShift(entry, it) } ?: 0f

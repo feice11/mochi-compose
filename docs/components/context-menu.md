@@ -35,4 +35,4 @@ On close the content settles back into place at its original size, with no jump 
 
 ## Same engine as the dropdown
 
-The menu isn't drawn separately: the card is the anchor, and the panel grows out of it with the metaball neck and jelly, is held by a rubber band when you drag out, glows when pressed with a two-layer shadow, and scrolls (with edge auto-scroll) for long lists — everything the dropdown has. Set `cornerRadius` to the content's corner radius (used for the shadow and neck).
+The menu isn't drawn separately: the card is the anchor, and the panel grows out of it with the metaball neck and jelly, is held by a rubber band when you drag out, glows when pressed with a two-layer shadow (which only appears as it opens), and scrolls (with edge auto-scroll) for long lists — everything the dropdown has. Set `cornerRadius` to the content's corner radius (used for the shadow and neck).
