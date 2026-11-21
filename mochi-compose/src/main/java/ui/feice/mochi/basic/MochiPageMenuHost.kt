@@ -1,6 +1,8 @@
 // Copyright 2026, mochi-compose contributors
 // SPDX-License-Identifier: Apache-2.0
 
+@file:Suppress("ktlint:compose:compositionlocal-allowlist") // The toolbar resolves its nearest menu host within the navigation page.
+
 package ui.feice.mochi.basic
 
 import androidx.compose.foundation.layout.Box
@@ -30,7 +32,7 @@ private val LocalPageMenuSlot = staticCompositionLocalOf<PageMenuSlot?> { null }
 
 /** Keep the menu above its toolbar, inside the same moving navigation page. */
 @Composable
-public fun MochiPageMenuHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit): Unit {
+public fun MochiPageMenuHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val view = LocalView.current
     val slot = remember(view) { PageMenuSlot(view) }
     CompositionLocalProvider(LocalPageMenuSlot provides slot) {
