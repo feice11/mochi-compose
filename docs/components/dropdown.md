@@ -196,3 +196,7 @@ The library started with the dropdown. This is how it matches iOS 26.
 Apple has not published the menu's spring parameters or haptic timing; both are tuned by feel.
 
 With liquid glass enabled and a backdrop available, tall and scrollable menus retain the full glass, refraction and opening lens. They do not switch to translucent fills above 320 dp; scrolling affects item layout only.
+
+## Page navigation
+
+Wrap the full destination in `MochiPageMenuHost` when its toolbar menu should close as the next page slides in. Keep the outgoing destination composed during the transition. In the selection callback, set `expanded = false` and push the destination immediately. The menu draws above its own page and uses the same backdrop as its glass trigger.

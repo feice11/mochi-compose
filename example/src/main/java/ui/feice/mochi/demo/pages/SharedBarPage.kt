@@ -23,6 +23,7 @@ import ui.feice.mochi.basic.MochiBarGroupDropdownItem
 import ui.feice.mochi.basic.MochiBarGroupItem
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.basic.MochiPageMenuHost
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.Code
 import ui.feice.mochi.demo.common.DemoIcons
@@ -73,21 +74,22 @@ fun SharedBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 fun SharedBarStepPage(step: Int, modifier: Modifier = Modifier) {
     val nav = MochiNavigator.current
     val s = SharedSteps[step.coerceIn(0, SharedSteps.lastIndex)]
-    MochiLazyCompactTitleScaffold(
-        title = s.title,
-        modifier = modifier,
-        subtitle = s.note,
-        navigationIcon = { MochiBackButton(history = ::routeTitle) },
-        actions = { StepActions(s.layout) },
-    ) {
-        demoItem {
-            if (step < SharedSteps.lastIndex) {
-                MochiListSection(header = "顶栏") {
-                    val next = SharedSteps[step + 1]
-                    PushRow("推入「${next.title}」", DemoIcons.TRANSITION, Tone.Primary) { nav?.push("bar/${step + 1}") }
+    MochiPageMenuHost(modifier) {
+        MochiLazyCompactTitleScaffold(
+            title = s.title,
+            subtitle = s.note,
+            navigationIcon = { MochiBackButton(history = ::routeTitle) },
+            actions = { StepActions(s.layout) { nav?.push("bar/${step + 1}") } },
+        ) {
+            demoItem {
+                if (step < SharedSteps.lastIndex) {
+                    MochiListSection(header = "顶栏") {
+                        val next = SharedSteps[step + 1]
+                        PushRow("推入「${next.title}」", DemoIcons.TRANSITION, Tone.Primary) { nav?.push("bar/${step + 1}") }
+                    }
+                } else {
+                    MochiListSectionFooter("用返回手势拖一半再松开。")
                 }
-            } else {
-                MochiListSectionFooter("用返回手势拖一半再松开。")
             }
         }
     }
@@ -97,14 +99,14 @@ fun SharedBarStepPage(step: Int, modifier: Modifier = Modifier) {
 private enum class BarLayout { ShareMoreGroup, More, PlusEdit, HeartTrashGroup }
 
 @Composable
-private fun StepActions(layout: BarLayout) {
+private fun StepActions(layout: BarLayout, onNext: () -> Unit) {
     val tint = MochiTheme.colorScheme.onSurface
     when (layout) {
         BarLayout.ShareMoreGroup -> MochiBarGroup(navId = "trailing") {
             var more by remember { mutableStateOf(false) }
             val items = remember {
                 persistentListOf(
-                    MochiItem("拷贝", icon = { Glyph(DemoIcons.NOTE, it) }),
+                    MochiItem("打开下一页", icon = { Glyph(DemoIcons.TRANSITION, it) }),
                     MochiItem("收藏", icon = { Glyph(DemoIcons.HEART, it) }),
                     MochiItem("删除", destructive = true, icon = { Glyph(DemoIcons.TRASH, it) }),
                 )
@@ -114,7 +116,10 @@ private fun StepActions(layout: BarLayout) {
                 expanded = more,
                 onExpandedChange = { more = it },
                 items = items,
-                onItemClick = { more = false },
+                onItemClick = { index ->
+                    more = false
+                    if (index == 0) onNext()
+                },
                 navId = "more",
                 contentKey = "more",
             ) { MoreDots(tint) }

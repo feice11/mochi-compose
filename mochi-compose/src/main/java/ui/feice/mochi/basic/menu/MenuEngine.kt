@@ -44,13 +44,13 @@ import ui.feice.mochi.basic.MochiOpenMode
 import ui.feice.mochi.basic.MochiPressStyle
 import ui.feice.mochi.basic.MochiStyle
 import ui.feice.mochi.basic.MochiTrigger
+import ui.feice.mochi.basic.PageOrWindowMenuOverlay
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
 import ui.feice.mochi.effect.glow.MochiGlowState
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.gesture.MochiCallbacks
 import ui.feice.mochi.gesture.MochiController
-import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.utils.MochiHaptics
 
 /**
@@ -288,7 +288,7 @@ internal fun MochiEngine.Overlay(
     anchorContent: @Composable RowScope.() -> Unit,
 ) {
     if (!overlayVisible) return
-    InWindowOverlay(leaving = { !callbacks.isExpanded() }) {
+    PageOrWindowMenuOverlay(leaving = { !callbacks.isExpanded() }) {
         MochiOverlay(
             anchorOnScreen = anchorOnScreen,
             progress = progress,

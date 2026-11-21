@@ -752,6 +752,10 @@ public final class ui/feice/mochi/basic/MochiPageControlKt {
 	public static final fun MochiPageControl (Landroidx/compose/foundation/pager/PagerState;Landroidx/compose/ui/Modifier;ILui/feice/mochi/basic/MochiPageControlColors;Landroidx/compose/runtime/Composer;II)V
 }
 
+public final class ui/feice/mochi/basic/MochiPageMenuHostKt {
+	public static final fun MochiPageMenuHost (Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;II)V
+}
+
 public final class ui/feice/mochi/basic/MochiPopoverColors {
 	public static final field $stable I
 	public synthetic fun <init> (JJJJLkotlin/jvm/internal/DefaultConstructorMarker;)V
