@@ -45,11 +45,11 @@ import ui.feice.mochi.basic.MochiTabBarDefaults
 import ui.feice.mochi.basic.MochiTabItem
 import ui.feice.mochi.basic.TabBarLink
 import ui.feice.mochi.basic.rememberMochiTabBarScrollBehavior
-import ui.feice.mochi.effect.glass.LocalGlassSources
-import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.glassOn
+import ui.feice.mochi.effect.glass.mochiBottomBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import ui.feice.mochi.theme.MochiDefaults
-import ui.feice.mochi.theme.MochiTheme
 
 /**
  * 底部栏（标签栏、底部工具栏）从屏幕底边往上占了多高，包括导航栏和栏四周的留白。
@@ -141,10 +141,23 @@ public fun MochiTabScaffold(
     content: @Composable (index: Int) -> Unit,
 ) {
     val scrollBehavior = rememberMochiTabBarScrollBehavior()
-    val backdrop = rememberMochiBackdrop(background)
+    val backdrop = if (glassOn(GlassRole.Bar)) rememberMochiBackdrop(background) else null
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    var barPx by remember { mutableIntStateOf(0) }
+    // 按标签栏高度 + 上下留白 + 底部导航栏预估首帧高度，消除首帧 onSizeChanged 触发的整棵标签页二次重组
+    val navigationBars = WindowInsets.navigationBars
+    val navBottomPx = navigationBars.getBottom(density)
+    val estimatedBarPx = navBottomPx + with(density) { (behavior.height + TabBarVerticalPadding * 2).roundToPx() }
+    var barPx by remember { mutableIntStateOf(estimatedBarPx) }
+    val bottomCaptureMinPx = with(density) { BottomBackdropCaptureHeight.roundToPx() }
+    val bottomCapturePaddingPx = with(density) { BottomBackdropCapturePadding.roundToPx() }
+    // 给高底栏 / 大字体 / accessory 留足玻璃采样半径，避免顶部 CLAMP 拉花
+    val bottomCaptureHeight = remember(density, navigationBars, bottomCaptureMinPx, bottomCapturePaddingPx) {
+        {
+            val navBottom = navigationBars.getBottom(density)
+            maxOf(barPx, bottomCaptureMinPx + navBottom) + bottomCapturePaddingPx
+        }
+    }
     val currentOnSelect by rememberUpdatedState(onSelect)
     val select: (Int) -> Unit = remember(state, scrollBehavior) {
         { index ->
@@ -162,7 +175,13 @@ public fun MochiTabScaffold(
                 targetState = state.selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)),
                 modifier = Modifier
                     .fillMaxSize()
-                    .mochiBackdropSource(backdrop)
+                    .then(
+                        if (backdrop != null) {
+                            Modifier.mochiBottomBackdropSource(backdrop, bottomCaptureHeight)
+                        } else {
+                            Modifier
+                        },
+                    )
                     .then(if (collapseOnScroll) Modifier.nestedScroll(scrollBehavior.nestedScrollConnection) else Modifier),
                 pages = if (swipeBetweenTabs) pages else null,
                 onPageChange = select,
@@ -175,10 +194,8 @@ public fun MochiTabScaffold(
                     state.pages[page] = slot
                     onDispose { if (state.pages[page] === slot) state.pages.remove(page) }
                 }
-                CompositionLocalProvider(
-                    LocalMochiTabPage provides slot,
-                    LocalGlassSources provides LocalGlassSources.current.copy(page = backdrop),
-                ) { content(page) }
+                // 底部条带 backdrop 仅供底部标签栏取样，不覆写子页面的 LocalGlassSources.page
+                CompositionLocalProvider(LocalMochiTabPage provides slot) { content(page) }
             }
         }
         CompositionLocalProvider(LocalTabBarLink provides link) {
@@ -194,7 +211,7 @@ public fun MochiTabScaffold(
                     // 量的是含留白的整块高度；收起、推入新页时的位移不影响它，正文底部不跟着跳
                     .onSizeChanged { barPx = it.height }
                     .mochiHideWhenCovered()
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                    .padding(horizontal = 24.dp, vertical = TabBarVerticalPadding),
                 scrollBehavior = if (collapseOnScroll) scrollBehavior else null,
                 onReselect = { index ->
                     scrollBehavior.expand()
@@ -204,6 +221,10 @@ public fun MochiTabScaffold(
         }
     }
 }
+
+private val TabBarVerticalPadding = 12.dp
+private val BottomBackdropCaptureHeight = 136.dp
+private val BottomBackdropCapturePadding = 48.dp
 
 /**
  * 在 [MochiTabScaffold] 的标签页里登记「再点一次当前标签」要做的事（通常是回到顶部）。
@@ -230,6 +251,7 @@ public fun MochiTabReselectHandler(onReselect: suspend () -> Unit) {
     }
 }
 
+@Stable
 internal class TabPageSlot {
     var owner: Any? = null
     var action: (suspend () -> Unit)? = null

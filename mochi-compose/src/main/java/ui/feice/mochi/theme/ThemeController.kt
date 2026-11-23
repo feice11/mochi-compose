@@ -79,11 +79,12 @@ public class ThemeController(
 }
 
 /** Android 12+ 的系统取色种子（system_accent1 的 500 色阶）；更老的系统返回 null */
-@SuppressLint("LocalContextGetResourceValueCall") // 换壁纸取色会触发配置变化，按 LocalConfiguration 重新读
+@SuppressLint("LocalContextGetResourceValueCall") // 换壁纸取色会触发配置变化，按 uiMode 与实际系统色值缓存，避免软键盘/分屏等无关配置变化重算配色
 @Composable
 private fun systemSeedColor(): Color? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
     val context = LocalContext.current
-    val config = LocalConfiguration.current
-    return remember(context, config) { Color(context.getColor(android.R.color.system_accent1_500)) }
+    val uiMode = LocalConfiguration.current.uiMode
+    val accentArgb = context.getColor(android.R.color.system_accent1_500)
+    return remember(context, uiMode, accentArgb) { Color(accentArgb) }
 }

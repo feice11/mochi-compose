@@ -3,6 +3,7 @@
 
 package ui.feice.mochi.navigation
 
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,17 +16,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.effect.content.MochiBlurText
@@ -37,11 +39,11 @@ import ui.feice.mochi.effect.glass.LocalMochiBackdrop
 import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
 import ui.feice.mochi.effect.glass.MochiBackdrop
 import ui.feice.mochi.effect.glass.glassOn
-import ui.feice.mochi.effect.glass.mochiLayerBackdrop
-import ui.feice.mochi.effect.glass.rememberMochiCombinedBackdrop
-import ui.feice.mochi.effect.glass.source
+import ui.feice.mochi.effect.glass.rememberSolidBackdrop
+import ui.feice.mochi.effect.glass.rememberUnderTintBackdrop
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.MochiTopBarStyle
 
 /** Shared defaults for compact titles and the collapsed state of large-title pages. */
 public object MochiTitleBarDefaults {
@@ -90,32 +92,85 @@ public fun MochiTitleBar(
         }
         return
     }
-    // 栏的底色固定是页面底色，文字一直用主题色（tone 留着兼容，不再换色）
-    val tone = remember { MochiScrollEdgeTone() }
-    val textColor = MochiScrollEdgeDefaults.textColor(tone, MochiTheme.colorScheme.onSurface)
-    val subColor = MochiScrollEdgeDefaults.textColor(tone, MochiTheme.colorScheme.onSurfaceVariant, secondary = true)
-    // 栏里的玻璃（按钮、搜索框）取样「栏下面实际看到的样子」：背景来源（已经模糊过）再叠上这一层底色。
-    // 渐隐单独画在一层里录下来，不和按钮在同一层（玻璃不能取样到自己）
-    val under = LocalMochiBackdrop.current?.takeIf { glassOn(GlassRole.Control) }?.source
-    val fadeLayer = if (under != null) rememberLayerBackdrop() else null
-    val barSource = if (under != null && fadeLayer != null) {
-        val layer = rememberMochiCombinedBackdrop(under.layer, fadeLayer)
-        val face = rememberMochiCombinedBackdrop(under.face, fadeLayer)
-        remember(layer, face) { GlassSource(layer, face) }
+    // 栏的底色固定是页面底色，文字直接用主题色（由 MochiTheme 统一插值，明暗揭开期间一步到位不滞后）
+    val textColor = MochiTheme.colorScheme.onSurface
+    val subColor = MochiTheme.colorScheme.onSurfaceVariant
+    // 栏里的玻璃（按钮、搜索框）取样「栏下面实际看到的样子」：底层背景来源 + 顶栏均匀半透明底色。
+    // 纯色顶栏完全覆盖（SolidFade 且 backgroundProgress == 1）或无外部背景来源时直接走纯色背景源，
+    // 保证毛玻璃与液态玻璃顶栏按钮都不会跳过纯色顶栏，同时命中单 pass 零金字塔快路径
+    val hasControls = navigationIcon != null || actions != null
+    val controlGlass = hasControls && glassOn(GlassRole.Control)
+    val currentGlassSources = LocalGlassSources.current
+    val under = if (controlGlass) LocalMochiBackdrop.current?.source ?: currentGlassSources.bar else null
+    val barSource = if (controlGlass) {
+        val edge = MochiTheme.materials.scrollEdge
+        val dark = MochiTheme.colorScheme.isDark
+        val tintScale = remember(edge, dark) {
+            val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            val style = when {
+                edge == null -> MochiTopBarStyle.SolidFade
+                edge.style.blurs && (!canBlur || edge.blur.value <= 0f) -> MochiTopBarStyle.SolidFade
+                else -> edge.style
+            }
+            val fill = edge?.let { if (dark) it.fillDark else it.fill } ?: 1f
+            when (style) {
+                MochiTopBarStyle.SolidFade -> 1f
+                MochiTopBarStyle.GradientBlur -> fill * 0.8f
+                MochiTopBarStyle.Frosted, MochiTopBarStyle.TranslucentFade -> fill
+            }
+        }
+        val currentBg by rememberUpdatedState(background)
+        val currentBgProgress by rememberUpdatedState(backgroundProgress)
+        val currentTintScale by rememberUpdatedState(tintScale)
+        val solidOpaque by remember(tintScale) {
+            derivedStateOf {
+                tintScale >= 0.999f && currentBg.alpha >= 0.999f && currentBgProgress() >= 0.999f
+            }
+        }
+        val solidSource = rememberSolidBackdrop { currentBg }.source
+        val underTintSource = if (under != null) {
+            val tintProvider = remember {
+                {
+                    val a = currentBgProgress().coerceIn(0f, 1f) * currentTintScale
+                    if (a <= 0.001f) {
+                        Color.Unspecified
+                    } else {
+                        val bg = currentBg
+                        bg.copy(alpha = bg.alpha * a)
+                    }
+                }
+            }
+            val layer = rememberUnderTintBackdrop(under.layer, tintProvider)
+            val face = if (under.face === under.layer) layer else rememberUnderTintBackdrop(under.face, tintProvider)
+            remember(layer, face) { GlassSource(layer, face) }
+        } else {
+            null
+        }
+        if (underTintSource != null) {
+            if (solidOpaque) solidSource else underTintSource
+        } else if (background.alpha > 0.001f) {
+            solidSource
+        } else {
+            null
+        }
     } else {
         null
     }
-    val edgeFade = Modifier.mochiScrollEdgeFade(background, alpha = backgroundProgress, tone = tone)
-    Box(modifier.fillMaxWidth().then(if (fadeLayer == null) edgeFade else Modifier)) {
-        if (fadeLayer != null) {
-            Box(Modifier.matchParentSize().mochiLayerBackdrop(fadeLayer).then(edgeFade))
-        }
+    val edgeFade = Modifier.mochiScrollEdgeFade(background, alpha = backgroundProgress)
+    val providedGlassSources = remember(currentGlassSources, barSource) {
+        if (barSource != null) currentGlassSources.copy(bar = barSource) else currentGlassSources
+    }
+    Box(modifier.fillMaxWidth().then(edgeFade)) {
         // 栏里玻璃的外阴影跟着背景渐隐走：内容停在顶部、栏后面只有纯色底时没有阴影，内容滚进栏下面时渐渐出来
-        CompositionLocalProvider(
-            LocalGlassSources provides LocalGlassSources.current.let { it.copy(bar = barSource ?: it.bar) },
-            LocalMochiGlassShadow provides backgroundProgress,
-        ) {
-            TitleBarRow(title, subtitle, navigationIcon, actions, barHeight, titleProgress, textColor, subColor)
+        if (hasControls) {
+            CompositionLocalProvider(
+                LocalGlassSources provides providedGlassSources,
+                LocalMochiGlassShadow provides backgroundProgress,
+            ) {
+                TitleBarRow(title, subtitle, navigationIcon, actions, barHeight, titleProgress, textColor, subColor)
+            }
+        } else {
+            TitleBarRow(title, subtitle, null, null, barHeight, titleProgress, textColor, subColor)
         }
     }
 }
@@ -140,7 +195,9 @@ private fun TitleBarRow(
             .offset(y = -MochiTitleBarDefaults.ContentLift)
             .padding(horizontal = MochiButtonDefaults.BarHorizontalPadding),
     ) {
-        Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) { navigationIcon?.invoke() }
+        if (navigationIcon != null) {
+            Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) { navigationIcon() }
+        }
         Column(
             Modifier
                 .align(Alignment.Center)
@@ -161,9 +218,11 @@ private fun TitleBarRow(
                 contentAlignment = Alignment.Center,
             )
             if (subtitle != null) {
+                val footnote = MochiTheme.textStyles.footnote
+                val subtitleStyle = remember(footnote) { footnote.copy(fontSize = 12.sp, lineHeight = 14.sp) }
                 MochiBlurText(
                     subtitle,
-                    style = MochiTheme.textStyles.footnote.copy(fontSize = 12.sp, lineHeight = 14.sp),
+                    style = subtitleStyle,
                     color = subColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

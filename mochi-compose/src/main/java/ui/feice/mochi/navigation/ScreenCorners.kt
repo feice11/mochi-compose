@@ -37,19 +37,19 @@ public data class MochiScreenCorners(val topLeft: Float, val topRight: Float, va
 public fun rememberMochiScreenCorners(): MochiScreenCorners {
     val view = LocalView.current
     val orientation = LocalConfiguration.current.orientation
-    var corners by remember(view, orientation) { mutableStateOf(view.readScreenCorners()) }
+    var corners by remember(view, orientation) { mutableStateOf(view.readScreenCorners() ?: MochiScreenCorners.None) }
     LaunchedEffect(view, orientation) {
         // insets 在窗口挂上、布局一次之后才有；最多等几帧
         repeat(10) {
             val c = view.readScreenCorners()
             if (c != null) {
-                corners = c
+                if (c != corners) corners = c
                 return@LaunchedEffect
             }
             withFrameNanos { }
         }
     }
-    return corners ?: MochiScreenCorners.None
+    return corners
 }
 
 /** 还拿不到 insets 时返回 null */

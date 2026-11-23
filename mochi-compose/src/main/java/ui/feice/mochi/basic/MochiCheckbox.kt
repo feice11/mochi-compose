@@ -4,15 +4,17 @@
 package ui.feice.mochi.basic
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -20,9 +22,16 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.basic.parts.mochiPointerInput
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.rememberMochiHaptics
@@ -47,7 +56,7 @@ public object MochiCheckboxDefaults {
         checked: Color = MochiTheme.colorScheme.primary,
         checkmark: Color = MochiTheme.colorScheme.onPrimary,
         ring: Color = MochiTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-    ): MochiCheckboxColors = MochiCheckboxColors(checked, checkmark, ring)
+    ): MochiCheckboxColors = remember(checked, checkmark, ring) { MochiCheckboxColors(checked, checkmark, ring) }
 }
 
 /**
@@ -65,44 +74,93 @@ public fun MochiCheckbox(
     colors: MochiCheckboxColors = MochiCheckboxDefaults.colors(),
 ) {
     val haptics = rememberMochiHaptics()
-    val progress by animateFloatAsState(if (checked) 1f else 0f, MochiMotionTokens.Settle, label = "check")
+    val progressState = animateFloatAsState(if (checked) 1f else 0f, MochiMotionTokens.Settle, label = "check")
+    val currentChecked by rememberUpdatedState(checked)
+    val currentOnChange by rememberUpdatedState(onCheckedChange)
+    val interactive = onCheckedChange != null
     MochiCheckCircle(
-        progress,
-        colors,
-        modifier
+        progress = { progressState.value },
+        colors = colors,
+        modifier = modifier
             .then(
-                if (onCheckedChange == null) {
+                if (!interactive) {
                     Modifier
                 } else {
-                    Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, interactionSource = null, indication = null) {
-                        haptics.confirm()
-                        onCheckedChange(it)
-                    }
+                    Modifier
+                        .semantics {
+                            role = Role.Checkbox
+                            toggleableState = ToggleableState(checked)
+                            if (!enabled) {
+                                disabled()
+                            } else {
+                                onClick {
+                                    haptics.confirm()
+                                    currentOnChange?.invoke(!currentChecked)
+                                    true
+                                }
+                            }
+                        }
+                        .then(
+                            if (enabled) {
+                                Modifier.mochiPointerInput(Unit) {
+                                    detectTapGestures {
+                                        haptics.confirm()
+                                        currentOnChange?.invoke(!currentChecked)
+                                    }
+                                }
+                            } else {
+                                Modifier
+                            },
+                        )
                 },
             )
-            .alpha(if (enabled) 1f else MochiDefaults.DisabledAlpha),
+            .then(if (enabled) Modifier else Modifier.alpha(MochiDefaults.DisabledAlpha)),
     )
 }
 
 /** 勾选圈的画法：[progress] 0 = 空心圈，1 = 实心圆加对勾。列表编辑模式和 [MochiCheckbox] 共用 */
 @Composable
 internal fun MochiCheckCircle(progress: Float, colors: MochiCheckboxColors, modifier: Modifier = Modifier) {
-    val path = remember { Path() }
-    val seg = remember { Path() }
-    val measure = remember { PathMeasure() }
-    Canvas(modifier.size(MochiCheckboxDefaults.Size)) {
-        val r = size.minDimension / 2f
-        if (progress < 1f) drawCircle(colors.ring, r - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
-        if (progress > 0f) {
-            drawCircle(colors.checked, r * (0.6f + 0.4f * progress), alpha = progress.coerceIn(0f, 1f))
-            path.reset()
-            path.moveTo(size.width * 0.28f, size.height * 0.52f)
-            path.lineTo(size.width * 0.44f, size.height * 0.67f)
-            path.lineTo(size.width * 0.73f, size.height * 0.36f)
-            measure.setPath(path, false)
-            seg.reset()
-            measure.getSegment(0f, measure.length * progress.coerceIn(0f, 1f), seg, true)
-            drawPath(seg, colors.checkmark, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-    }
+    MochiCheckCircle(progress = { progress }, colors = colors, modifier = modifier)
+}
+
+@Composable
+internal fun MochiCheckCircle(progress: () -> Float, colors: MochiCheckboxColors, modifier: Modifier = Modifier) {
+    Spacer(
+        modifier
+            .size(MochiCheckboxDefaults.Size)
+            .drawWithCache {
+                val r = size.minDimension / 2f
+                val ringRadius = r - 0.75.dp.toPx()
+                val ringStroke = Stroke(1.5.dp.toPx())
+                val checkStroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val fullCheck = Path().apply {
+                    moveTo(size.width * 0.28f, size.height * 0.52f)
+                    lineTo(size.width * 0.44f, size.height * 0.67f)
+                    lineTo(size.width * 0.73f, size.height * 0.36f)
+                }
+                var measure: PathMeasure? = null
+                var seg: Path? = null
+                onDrawBehind {
+                    val p = progress()
+                    if (p < 1f) drawCircle(colors.ring, ringRadius, style = ringStroke)
+                    if (p > 0f) {
+                        val clamped = p.coerceIn(0f, 1f)
+                        drawCircle(colors.checked, r * (0.6f + 0.4f * p), alpha = clamped)
+                        if (p >= 1f) {
+                            drawPath(fullCheck, colors.checkmark, style = checkStroke)
+                        } else {
+                            val pm = measure ?: PathMeasure().also {
+                                it.setPath(fullCheck, false)
+                                measure = it
+                            }
+                            val s = seg ?: Path().also { seg = it }
+                            s.reset()
+                            pm.getSegment(0f, pm.length * clamped, s, true)
+                            drawPath(s, colors.checkmark, style = checkStroke)
+                        }
+                    }
+                }
+            },
+    )
 }

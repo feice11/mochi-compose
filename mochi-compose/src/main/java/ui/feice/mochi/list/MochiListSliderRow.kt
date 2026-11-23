@@ -17,14 +17,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import ui.feice.mochi.basic.MochiSlider
 import ui.feice.mochi.basic.Text
-import ui.feice.mochi.shape.ConcentricBottom
-import ui.feice.mochi.shape.ConcentricTop
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
@@ -89,17 +87,11 @@ public fun MochiListSliderRow(
                 },
             )
             .padding(horizontal = MochiListDefaults.RowPadding)
-            .layout { measurable, constraints ->
-                val p = measurable.measure(constraints)
-                val guides = listOf<AlignmentLine>(ConcentricTop, ConcentricBottom).mapNotNull {
-                    p[it].takeIf { v -> v != AlignmentLine.Unspecified }?.let { v -> it to v }
-                }.toMap()
-                layout(p.width, p.height, guides) { p.placeWithLayer(0, 0) { translationY = info.contentCenterOffset() } }
-            },
+            .shiftByRowCenter(info),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides colors.secondary) {
+        CompositionLocalProvider(LocalContentColor provides colors.secondary) {
             leading?.invoke()
             MochiSlider(
                 value,
@@ -146,15 +138,13 @@ private fun TitledSliderRow(
     info.ownsVerticalInsets = grouped
     val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
     val body = MochiTheme.textStyles.body
+    val valueStyle = remember(body) { body.copy(fontFeatureSettings = "tnum") }
     Column(
         modifier
             .layoutId(info)
             .fillMaxWidth()
             .padding(horizontal = MochiListDefaults.RowPadding)
-            .layout { measurable, constraints ->
-                val p = measurable.measure(constraints)
-                layout(p.width, p.height) { p.placeWithLayer(0, 0) { translationY = info.contentCenterOffset() } }
-            },
+            .shiftByRowCenter(info),
     ) {
         Spacer(Modifier.height(MochiListDefaults.RowVerticalPadding))
         if (title != null) {
@@ -169,7 +159,7 @@ private fun TitledSliderRow(
                 if (valueText != null) {
                     Text(
                         valueText,
-                        style = body.copy(fontFeatureSettings = "tnum"),
+                        style = valueStyle,
                         color = colors.secondary.copy(alpha = alpha),
                         maxLines = 1,
                         modifier = Modifier.padding(start = MainToTailGap).alignByBaseline(),
@@ -217,3 +207,10 @@ private fun TitledSliderRow(
 
 /** 带标题的滑块行没有说明时，滑块下面补的留白（滑块触摸区上下各约 10dp 透明） */
 private val SliderBottomPadding = 5.dp
+
+private fun Modifier.shiftByRowCenter(info: ListItemInfo): Modifier = layout { measurable, constraints ->
+    val p = measurable.measure(constraints)
+    layout(p.width, p.height) {
+        p.place(0, info.contentCenterOffset().roundToInt())
+    }
+}

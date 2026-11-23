@@ -13,10 +13,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -28,6 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -50,32 +50,50 @@ public fun MochiProgressRing(
     sweep: Float = 360f,
     content: (@Composable () -> Unit)? = null,
 ) {
-    val p by animateFloatAsState((progress ?: 0f).coerceIn(0f, 1f), MochiMotionTokens.Page, label = "ring")
-    val spin = rememberInfiniteTransition(label = "ring-spin")
-    val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart), label = "angle")
     val indeterminate = progress == null
+    val reduce = mochiReduceMotion()
+    val cleanProgress = progress?.takeUnless(Float::isNaN)?.coerceIn(0f, 1f) ?: 0f
+    val pState = animateFloatAsState(cleanProgress, MochiMotionTokens.Page, label = "ring")
+    val angle = if (indeterminate && !reduce) {
+        val spin = rememberInfiniteTransition(label = "ring-spin")
+        spin.animateFloat(0f, 360f, RingSpinSpec, label = "angle")
+    } else {
+        null
+    }
     Box(
         modifier
             .size(size)
             .semantics {
-                progressBarRangeInfo = if (progress == null) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(progress, 0f..1f)
+                progressBarRangeInfo = if (indeterminate) {
+                    ProgressBarRangeInfo.Indeterminate
+                } else {
+                    ProgressBarRangeInfo(cleanProgress, 0f..1f)
+                }
             }
-            .drawBehind {
+            .drawWithCache {
                 val sw = strokeWidth.toPx()
-                val d = this.size.minDimension - sw
+                val d = (this.size.minDimension - sw).coerceAtLeast(0f)
                 val topLeft = Offset((this.size.width - d) / 2f, (this.size.height - d) / 2f)
                 val arcSize = Size(d, d)
                 val stroke = Stroke(sw, cap = StrokeCap.Round)
                 // 开口朝下：起点在左下，顺时针绕过顶上到右下
                 val start = if (sweep >= 360f) -90f else 90f + (360f - sweep) / 2f
-                drawArc(trackColor, start, sweep, false, topLeft, arcSize, style = stroke)
-                if (indeterminate) {
-                    // 不确定进度：四分之一圈的弧一直绕着转
-                    drawArc(color, angle - 90f, 90f, false, topLeft, arcSize, style = stroke)
-                } else if (p > 0f) {
-                    drawArc(color, start, sweep * p, false, topLeft, arcSize, style = stroke)
+                onDrawBehind {
+                    if (d <= 0f) return@onDrawBehind
+                    drawArc(trackColor, start, sweep, false, topLeft, arcSize, style = stroke)
+                    if (indeterminate) {
+                        // 不确定进度：四分之一圈的弧一直绕着转；关掉动画时停在顶上
+                        drawArc(color, (angle?.value ?: 0f) - 90f, 90f, false, topLeft, arcSize, style = stroke)
+                    } else {
+                        val p = pState.value
+                        if (p > 0f) {
+                            drawArc(color, start, sweep * p.coerceIn(0f, 1f), false, topLeft, arcSize, style = stroke)
+                        }
+                    }
                 }
             },
         contentAlignment = Alignment.Center,
     ) { content?.invoke() }
 }
+
+private val RingSpinSpec = infiniteRepeatable<Float>(tween(900, easing = LinearEasing), RepeatMode.Restart)

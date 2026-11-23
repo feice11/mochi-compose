@@ -15,18 +15,22 @@ import androidx.compose.ui.graphics.Color
 public object MochiDefaults {
     /** Switch/slider knob color; the default Mochi appearance keeps its white knob. */
     @Composable
+    @ReadOnlyComposable
     public fun controlThumb(): Color = LocalMochiControlPalette.current?.thumb ?: Color.White
 
     /** A thin slider track needs a separate knob color from a full-height switch track. */
     @Composable
+    @ReadOnlyComposable
     public fun sliderThumb(): Color = LocalMochiControlPalette.current?.sliderThumb ?: Color.White
 
     /** Switch/slider inactive track, optionally supplied by an appearance preset. */
     @Composable
+    @ReadOnlyComposable
     public fun controlTrack(): Color = LocalMochiControlPalette.current?.inactiveTrack?.takeIf { it != Color.Unspecified } ?: fill()
 
     /** Switch on-track: the primary color unless an appearance preset supplies its own. */
     @Composable
+    @ReadOnlyComposable
     public fun switchTrack(): Color =
         LocalMochiControlPalette.current?.switchTrack?.takeIf { it != Color.Unspecified } ?: MochiTheme.colorScheme.primary
 

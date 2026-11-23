@@ -4,13 +4,12 @@
 package ui.feice.mochi.basic
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 
 /**
  * 缩小版的真实界面：[content] 按放大 1 / [scale] 倍的尺寸排版，再整体缩回到这块地方，字号、控件、留白都是真实比例，
@@ -22,14 +21,27 @@ import androidx.compose.ui.graphics.graphicsLayer
  */
 @Composable
 public fun MochiMiniature(scale: Float, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    BoxWithConstraints(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .requiredSize(maxWidth / scale, maxHeight / scale)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                },
-        ) { content() }
+    if (scale.isNaN() || scale <= 0f) return
+    val safeScale = scale.coerceAtLeast(1e-3f)
+    Layout(
+        content = { Box { content() } },
+        modifier = modifier.fillMaxSize(),
+    ) { measurables, constraints ->
+        if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) {
+            return@Layout layout(constraints.minWidth, constraints.minHeight) {}
+        }
+        val w = constraints.maxWidth
+        val h = constraints.maxHeight
+        val scaledW = (w / safeScale).roundToInt().coerceAtLeast(1)
+        val scaledH = (h / safeScale).roundToInt().coerceAtLeast(1)
+        val placeable = measurables[0].measure(Constraints.fixed(scaledW, scaledH))
+        val offsetX = (w - scaledW) / 2
+        val offsetY = (h - scaledH) / 2
+        layout(w, h) {
+            placeable.placeWithLayer(offsetX, offsetY) {
+                scaleX = safeScale
+                scaleY = safeScale
+            }
+        }
     }
 }

@@ -7,12 +7,14 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -27,7 +29,8 @@ import ui.feice.mochi.basic.MochiAlign
 import ui.feice.mochi.basic.MochiDropdownDefaults
 import ui.feice.mochi.basic.MochiPopoverButton
 import ui.feice.mochi.basic.opaqueButtonColor
-import ui.feice.mochi.effect.content.MochiBlurText
+import ui.feice.mochi.effect.content.MochiBlurCrossfade
+import ui.feice.mochi.effect.content.MochiBlurTransitions
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 
@@ -71,7 +74,9 @@ public object MochiDateFieldDefaults {
     @Composable
     public fun timeFormatter(): (MochiTime) -> String {
         val context = LocalContext.current
-        return remember(context) {
+        val configuration = LocalConfiguration.current
+        val is24Hour = remember(context, configuration) { android.text.format.DateFormat.is24HourFormat(context) }
+        return remember(context, configuration, is24Hour) {
             val f = android.text.format.DateFormat.getTimeFormat(context)
             val cal = Calendar.getInstance()
             return@remember { t: MochiTime ->
@@ -99,9 +104,10 @@ public fun MochiDateField(
     colors: MochiDateFieldColors = MochiDateFieldDefaults.colors(),
 ) {
     var open by remember { mutableStateOf(false) }
-    FieldButton(format(date), open, {
+    val text = remember(date, format) { format(date) }
+    FieldButton(text, open, {
         open = it
-    }, colors, modifier = modifier, width = 344.dp, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+    }, colors, modifier = modifier, width = 344.dp, contentPadding = DatePopoverPadding) {
         MochiCalendar(
             selection = MochiDateSelection.Single(date),
             onSelectionChange = { s -> (s as? MochiDateSelection.Single)?.date?.let(onDateChange) },
@@ -125,7 +131,8 @@ public fun MochiTimeField(
     colors: MochiDateFieldColors = MochiDateFieldDefaults.colors(),
 ) {
     var open by remember { mutableStateOf(false) }
-    FieldButton(format(time), open, { open = it }, colors, modifier = modifier, width = 260.dp, contentPadding = PaddingValues(12.dp)) {
+    val text = remember(time, format) { format(time) }
+    FieldButton(text, open, { open = it }, colors, modifier = modifier, width = 260.dp, contentPadding = TimePopoverPadding) {
         MochiTimePicker(time, onTimeChange, Modifier.fillMaxWidth(), minuteInterval = minuteInterval)
     }
 }
@@ -141,9 +148,10 @@ private fun FieldButton(
     modifier: Modifier = Modifier,
     popover: @Composable ColumnScope.() -> Unit,
 ) {
-    val color by animateColorAsState(if (open) colors.activeContent else colors.content, label = "chip")
+    val colorState = animateColorAsState(if (open) colors.activeContent else colors.content, label = "chip")
     // 胶囊在列表卡片里：半透明的灰先合成到卡片底色上，融色引擎拿到的是不透明色（见 opaqueButtonColor）
     val chip = opaqueButtonColor(colors.container, MochiDefaults.groupedContainer())
+    val bodyStyle = MochiTheme.textStyles.body
     MochiPopoverButton(
         expanded = open,
         onExpandedChange = onOpenChange,
@@ -156,6 +164,11 @@ private fun FieldButton(
         buttonPadding = MochiDateFieldDefaults.ContentPadding,
         buttonMinHeight = 34.dp,
     ) {
-        MochiBlurText(text, style = MochiTheme.textStyles.body, color = color, maxLines = 1)
+        MochiBlurCrossfade(text, transition = MochiBlurTransitions.Replace, contentAlignment = Alignment.CenterStart) { value ->
+            BasicText(value, style = bodyStyle, color = { colorState.value }, maxLines = 1)
+        }
     }
 }
+
+private val DatePopoverPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+private val TimePopoverPadding = PaddingValues(12.dp)

@@ -15,28 +15,41 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.currentCompositionLocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import ui.feice.mochi.effect.glass.GlassMotion
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSource
+import ui.feice.mochi.effect.glass.LocalGlassMotion
 import ui.feice.mochi.effect.glass.LocalGlassSources
 import ui.feice.mochi.effect.glass.LocalMochiBackdrop
 import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.overlayBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
-import ui.feice.mochi.effect.glass.source
 import ui.feice.mochi.navigation.LocalMochiNavEntry
 import ui.feice.mochi.navigation.MochiNavEntry
 import ui.feice.mochi.overlay.InWindowOverlay
 
 private class PageMenuSlot(val view: View, val entry: MochiNavEntry?, val backdrop: GlassSource?) {
     val panels = mutableStateListOf<@Composable () -> Unit>()
+    var fallbackReaders by mutableIntStateOf(0)
+        private set
+
+    fun acquireFallback() {
+        fallbackReaders++
+    }
+
+    fun releaseFallback() {
+        fallbackReaders--
+    }
 }
 
 private val LocalPageMenuSlot = staticCompositionLocalOf<PageMenuSlot?> { null }
@@ -54,7 +67,7 @@ public fun MochiPageMenuHost(modifier: Modifier = Modifier, content: @Composable
     CompositionLocalProvider(LocalPageMenuSlot provides slot) {
         Box(modifier.fillMaxSize()) {
             // Only the page content belongs in the menu's sampling layer.
-            val activeBackdrop = backdrop.takeIf { slot.panels.isNotEmpty() }
+            val activeBackdrop = backdrop.takeIf { slot.fallbackReaders > 0 }
             Box(Modifier.fillMaxSize().mochiBackdropSource(activeBackdrop), content = content)
             slot.panels.forEach { panel -> key(panel) { panel() } }
         }
@@ -83,7 +96,8 @@ internal fun PageOrWindowMenuOverlay(
 ) {
     val slot = if (canUsePage) pageMenuSlot(trigger) else null
     if (slot == null) {
-        InWindowOverlay(leaving) { content(true) }
+        val needsBackdrop = glassOn(GlassRole.Menu) || glassOn(GlassRole.Control)
+        InWindowOverlay(leaving, needsBackdrop = needsBackdrop) { content(true) }
         return
     }
     val locals by rememberUpdatedState(currentCompositionLocalContext)
@@ -92,11 +106,12 @@ internal fun PageOrWindowMenuOverlay(
     // Resolve the page behind the trigger before moving the menu to its overlay slot.
     val sources = LocalGlassSources.current
     val below = menuBackdropSource(trigger)
-    val overlaySources by rememberUpdatedState(remember(sources, below) { sources.copy(overlay = below) })
+    val overlaySources by rememberUpdatedState(remember(sources, below) { sources.copy(overlay = below, bar = null, page = null) })
     val panel: @Composable () -> Unit = remember {
         {
             CompositionLocalProvider(locals) {
                 CompositionLocalProvider(
+                    LocalGlassMotion provides remember { GlassMotion() },
                     LocalGlassSources provides overlaySources,
                     LocalMochiBackdrop provides null,
                     LocalMochiNavEntry provides null,
@@ -104,6 +119,11 @@ internal fun PageOrWindowMenuOverlay(
                 ) { menu(!isLeaving()) }
             }
         }
+    }
+    val usesFallback = below != null && below === slot.backdrop
+    DisposableEffect(slot, usesFallback) {
+        if (usesFallback) slot.acquireFallback()
+        onDispose { if (usesFallback) slot.releaseFallback() }
     }
     DisposableEffect(slot) {
         slot.panels.add(panel)

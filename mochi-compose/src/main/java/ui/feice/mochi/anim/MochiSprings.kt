@@ -15,7 +15,7 @@ import kotlin.math.PI
  */
 public fun <T> mochiSpring(durationMillis: Int = 500, bounce: Double = 0.0, visibilityThreshold: T? = null): SpringSpec<T> {
     require(durationMillis > 0) { "durationMillis must be positive" }
-    val b = bounce.coerceIn(-0.99999, 1.0)
+    val b = bounce.coerceIn(-0.99999, 0.99)
     val d = durationMillis / 1000.0
     val stiffness = (2.0 * PI / d).let { it * it }.toFloat()
     val damping = if (b >= 0) (1.0 - b).toFloat() else (1.0 / (1.0 + b)).toFloat()

@@ -5,12 +5,20 @@
 
 package ui.feice.mochi.effect.glass
 
+import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ui.feice.mochi.effect.glass.engine.cornerK
+import ui.feice.mochi.effect.glass.engine.cornerKInto
 import ui.feice.mochi.effect.glass.engine.liquidRecipe
 import ui.feice.mochi.effect.glass.engine.liquidTintMatrix
+import ui.feice.mochi.effect.metaball.MochiBlob
+import ui.feice.mochi.effect.metaball.MochiMetaballFrame
+import ui.feice.mochi.effect.metaball.MochiMetaballShadow
+import ui.feice.mochi.shape.g2Corner
 import ui.feice.mochi.theme.MochiGlassStyle
 
 /**
@@ -19,6 +27,21 @@ import ui.feice.mochi.theme.MochiGlassStyle
  */
 class LiquidRecipeTest {
     private val eps = 1e-4f
+
+    @Test
+    fun frostedGlassKeepsLightingWithoutDisplacingTheBackdrop() {
+        for (dark in listOf(false, true)) {
+            val frosted = liquidRecipe(MochiGlassStyle.Frosted, dark, 100f)
+            val regular = liquidRecipe(MochiGlassStyle.Regular, dark, 100f)
+            assertEquals(0f, frosted.innerAmt, 0f)
+            assertEquals(0f, frosted.outerAmt, 0f)
+            assertEquals(0f, frosted.refrOpacity, 0f)
+            assertEquals(0f, frosted.bleedOpacity, 0f)
+            assertEquals(regular.highlight, frosted.highlight, 0f)
+            assertEquals(regular.shadowOpacity, frosted.shadowOpacity, 0f)
+            assertEquals(1f, frosted.blurAlpha.first(), 0f)
+        }
+    }
 
     @Test
     fun recipe_regular_light_44() {
@@ -208,5 +231,55 @@ class LiquidRecipeTest {
         assertArrayEquals(floatArrayOf(22f, 1f, 1f), cornerK(22f, 22f, 22f), eps)
         assertArrayEquals(floatArrayOf(10f, 0f, 0f), cornerK(100f, 22f, 10f), eps)
         assertArrayEquals(floatArrayOf(16f, 0f, 0.527110693f), cornerK(30f, 20f, 16f), eps)
+
+        val buf = FloatArray(8)
+        cornerKInto(30f, 20f, 16f, buf, 4)
+        assertEquals(16f, buf[4], eps)
+        assertEquals(0f, buf[5], eps)
+        assertEquals(0.527110693f, buf[6], eps)
+    }
+
+    @Test
+    fun recipeEqualsAndHashCodeCoverAllOpticalFields() {
+        val a = liquidRecipe(MochiGlassStyle.Regular, true, 90f)
+        val b = liquidRecipe(MochiGlassStyle.Regular, true, 90f)
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertNotEquals(a, a.copy(shadowRadius = a.shadowRadius + 1f))
+        assertNotEquals(a, a.copy(ringOpacity = 0f))
+        assertNotEquals(a, a.copy(bleedBlurPt = a.bleedBlurPt + 2f))
+        assertNotEquals(a, a.copy(blurDist = floatArrayOf(-10f, -1f, 0f, 0f)))
+    }
+
+    @Test
+    fun g2CornerAndMetaballBoundsHandleDegenerateAndAsymmetricCases() {
+        val zero = g2Corner(16f, 0f, 10f, 1f)
+        assertEquals(0f, zero.extent, 0f)
+        assertEquals(2f, zero.exponent, 0f)
+
+        val normal = g2Corner(12f, 40f, 24f, 1f)
+        assertEquals(12f * 1.528f, normal.extent, 1e-3f)
+        assertTrue(normal.exponent > 2f)
+
+        val frame = MochiMetaballFrame(
+            a = MochiBlob(Rect(10f, 20f, 50f, 60f), 12f),
+            b = MochiBlob(Rect(10f, 20f, 50f, 60f), 12f),
+            fuse = 0f,
+        )
+        val noShadowBounds = frame.drawBounds(MochiMetaballShadow.None)
+        assertEquals(8f, noShadowBounds.left, eps)
+        assertEquals(52f, noShadowBounds.right, eps)
+
+        // 只有接触阴影（ambientAlpha = 0）时，包围盒仍须完整包住接触阴影柔尾
+        val keyOnly = MochiMetaballShadow(
+            ambientOffset = 0f,
+            ambientSigma = 1f,
+            ambientAlpha = 0f,
+            keyOffset = 10f,
+            keySigma = 8f,
+            keyAlpha = 0.25f,
+        )
+        val keyBounds = frame.drawBounds(keyOnly)
+        assertTrue(keyBounds.bottom >= 60f + 8f * 3f + 10f + 2f - eps)
     }
 }

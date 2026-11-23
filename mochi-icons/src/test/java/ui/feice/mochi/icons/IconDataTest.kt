@@ -54,4 +54,24 @@ class IconDataTest {
             last = s
         }
     }
+
+    @Test
+    fun parseLineHandlesRotationAndSearchPreservesRankOrder() {
+        val rot = parseIconLine("42,32,-45,256,256.002|M0 0L10 10\t1,0|M5 5z")
+        assertEquals(2, rot.size)
+        assertEquals(42, rot[0].flags)
+        assertEquals(32f, rot[0].width, 1e-4f)
+        assertEquals(-45f, rot[0].rotation, 1e-4f)
+        assertEquals(256f, rot[0].px, 1e-4f)
+        assertEquals(256.002f, rot[0].py, 1e-3f)
+        assertEquals("M0 0L10 10", rot[0].d)
+
+        val unsorted = listOf(
+            MochiIconInfo("heart-half", listOf("love"), listOf("半心"), 3),
+            MochiIconInfo("heart", listOf("love"), listOf("心"), 3),
+            MochiIconInfo("bookmark", listOf("heart-tag"), listOf("收藏"), 3),
+        )
+        val res = MochiIonicons.search(unsorted, "heart")
+        assertEquals(listOf("heart", "heart-half", "bookmark"), res.map { it.name })
+    }
 }

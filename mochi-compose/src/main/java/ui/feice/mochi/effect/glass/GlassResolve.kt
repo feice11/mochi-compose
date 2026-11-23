@@ -4,7 +4,10 @@
 package ui.feice.mochi.effect.glass
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import ui.feice.mochi.theme.MochiGlass
+import ui.feice.mochi.theme.MochiGraphics
+import ui.feice.mochi.theme.MochiGraphicsLevel
 import ui.feice.mochi.theme.MochiMaterials
 import ui.feice.mochi.theme.MochiTheme
 
@@ -44,21 +47,40 @@ internal fun MochiMaterials.glassFor(role: GlassRole): MochiGlass? = when (role)
 
 private fun MochiGlass.fixedTone(): MochiGlass = if (adaptive) copy(adaptive = false) else this
 
-/** 当前主题下这个角色画不画玻璃 */
+private fun MochiMaterials.rawGlassFor(role: GlassRole): MochiGlass? = when (role) {
+    GlassRole.Bar -> bar
+    GlassRole.Control -> controlGlass
+    GlassRole.Menu -> menuGlass
+    GlassRole.Alert -> alertGlass
+    GlassRole.Sheet -> sheetGlass
+}
+
+private val GlassRole.fixesTone: Boolean
+    get() = when (this) {
+        GlassRole.Bar, GlassRole.Control -> false
+        GlassRole.Menu, GlassRole.Alert, GlassRole.Sheet -> true
+    }
+
+/** 当前主题与图形档位下这个角色画不画玻璃（Mid 档关闭着色器时统一回落纯色） */
 @Composable
-internal fun glassOn(role: GlassRole): Boolean = MochiTheme.materials.glassFor(role) != null
+internal fun glassOn(role: GlassRole): Boolean =
+    MochiGraphics.level >= MochiGraphicsLevel.High && MochiTheme.materials.rawGlassFor(role) != null
 
 /**
  * 这个角色的玻璃：材质跟主题，背景默认取这个角色该取样的那份
- * （栏里的控件取样栏下面实际看到的样子，菜单、警告框、面板取样打开它时底下的内容）；没有材质或没有背景时是 null，画纯色
+ * （栏里的控件取样栏下面实际看到的样子，菜单、警告框、面板取样打开它时底下的内容）；没有材质、没有背景或图形档位关闭着色器时是 null，画纯色
  */
 @Composable
-internal fun rememberGlassFill(role: GlassRole, source: GlassSource? = defaultSource(role)): GlassFill? =
-    rememberGlassFill(MochiTheme.materials.glassFor(role).resolved(), source)
+internal fun rememberGlassFill(role: GlassRole, source: GlassSource? = defaultSource(role)): GlassFill? {
+    if (MochiGraphics.level < MochiGraphicsLevel.High) return null
+    val raw = MochiTheme.materials.rawGlassFor(role)
+    val resolved = remember(raw, role) { raw?.let { if (role.fixesTone) it.fixedTone() else it } }
+    return rememberGlassFill(resolved, source)
+}
 
-/** 兼容旧调用：材质原样 */
+/** 兼容旧调用：图形档位关闭着色器（Mid）时返回 null，让调用方干净回落到纯色 */
 @Composable
-internal fun MochiGlass?.resolved(): MochiGlass? = this
+internal fun MochiGlass?.resolved(): MochiGlass? = if (MochiGraphics.level >= MochiGraphicsLevel.High) this else null
 
 @Composable
 private fun defaultSource(role: GlassRole): GlassSource? = when (role) {

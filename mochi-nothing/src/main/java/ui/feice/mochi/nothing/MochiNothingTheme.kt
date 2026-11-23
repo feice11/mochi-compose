@@ -16,6 +16,8 @@ import ui.feice.mochi.theme.defaultMotionScheme
 import ui.feice.mochi.theme.defaultShapes
 import ui.feice.mochi.theme.defaultTextStyles
 
+private val SolidNothingMaterials = MochiMaterials()
+
 /**
  * Optional colors and control palette. Typography defaults to Mochi, with [nothingTextStyles] available as an opt-in.
  * [materials] works like in every other theme: pass `mochiGlassMaterials()` or `iosMaterials(glass = …, blur = …)` from mochi-ios
@@ -27,7 +29,7 @@ public fun MochiNothingTheme(
     textStyles: MochiTextStyles = defaultTextStyles(),
     shapes: MochiShapes = defaultShapes(),
     motionScheme: MochiMotionScheme = defaultMotionScheme(),
-    materials: MochiMaterials = MochiMaterials(),
+    materials: MochiMaterials = SolidNothingMaterials,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(LocalMochiControlPalette provides nothingControlPalette(isDark)) {

@@ -41,6 +41,9 @@ import ui.feice.mochi.utils.smoothstep
 @Stable
 public class MochiNavigator internal constructor(root: String, restored: List<MochiNavEntry>?, nextId: Int) {
     internal val entries = mutableStateListOf<MochiNavEntry>()
+
+    /** 被 push / popTo 直接移出栈的页面 id，由 MochiNavHost 统一清理 SaveableStateHolder，防止状态泄漏 */
+    internal val orphanedIds = mutableStateListOf<Int>()
     internal var nextId: Int = nextId
         private set
 
@@ -75,7 +78,11 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
         }
         // 侧推的页正在退出、又推入别的页：两个转场同时进行（退出的那页接着滑走，新页从右边进来），不瞬间删掉；
         // 涉及「从来源打开」的页没法同时变形，正在关闭的页直接结束
-        if (from != null || entries.any { it.closing && it.source != null }) entries.removeAll { it.closing }
+        if (from != null || entries.any { it.closing && it.source != null }) {
+            for (i in entries.lastIndex downTo 0) {
+                if (entries[i].closing) orphanedIds += entries.removeAt(i).id
+            }
+        }
         entries += MochiNavEntry(nextId++, route, from, opened = false)
     }
 
@@ -154,10 +161,12 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
             exiting.forEach { it.closing = true }
             return true
         }
-        entries.removeAll { it.closing }
+        for (i in entries.lastIndex downTo 0) {
+            if (entries[i].closing) orphanedIds += entries.removeAt(i).id
+        }
         val top = entries.last()
         // 中间的页移走；下面那页换成目标页时，它的状态由 SaveableStateHolder 恢复
-        while (entries.size > index + 2) entries.removeAt(index + 1)
+        while (entries.size > index + 2) orphanedIds += entries.removeAt(index + 1).id
         top.closing = true
         return true
     }
@@ -195,6 +204,8 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
 
     private val shared = ArrayList<SharedHandle>()
 
+    internal val sharedHandles: List<SharedHandle> get() = shared
+
     internal fun registerShared(h: SharedHandle) {
         shared += h
     }
@@ -207,7 +218,13 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
     internal fun sharedOf(entry: MochiNavEntry): List<SharedHandle> = shared.filter { it.entry === entry }
 
     /** [entry] 这一页里 key 为 [key] 的共享元素 */
-    internal fun sharedFor(key: String, entry: MochiNavEntry): SharedHandle? = shared.firstOrNull { it.key == key && it.entry === entry }
+    internal fun sharedFor(key: String, entry: MochiNavEntry): SharedHandle? {
+        for (i in 0 until shared.size) {
+            val h = shared[i]
+            if (h.entry === entry && h.key == key) return h
+        }
+        return null
+    }
 
     /**
      * 这个共享元素此刻在飞（原地的要藏起来）：栈顶页是从来源打开的、正在转场，元素在栈顶页或它下面那页，
@@ -222,12 +239,18 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
             under -> top
             else -> return false
         }
-        return shared.any { it !== h && it.key == h.key && it.entry === other }
+        for (i in 0 until shared.size) {
+            val item = shared[i]
+            if (item !== h && item.entry === other && item.key == h.key) return true
+        }
+        return false
     }
 
     // —— 遮挡物（顶栏、底栏、滚动边缘渐隐，见 mochiNavOccluder）：从来源打开时先盖在变形的容器上再淡掉 ——
 
     private val occluders = ArrayList<OccluderHandle>()
+
+    internal val occluderHandles: List<OccluderHandle> get() = occluders
 
     internal fun registerOccluder(h: OccluderHandle) {
         occluders += h
@@ -242,6 +265,8 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
     // —— 收起的栏（mochiHideWhenCovered）：从来源打开时由 MochiNavHost 代画，下层页内容才能整页离屏缓存 ——
 
     private val hidden = ArrayList<HideHandle>()
+
+    internal val hiddenHandles: List<HideHandle> get() = hidden
 
     internal fun registerHidden(h: HideHandle) {
         hidden += h
@@ -271,7 +296,9 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
     /** [c] 在这一页某个收起的栏里、而栏正由 MochiNavHost 代画时，栏此刻往下滑了多少（px）；否则 0 */
     internal fun carriedShift(entry: MochiNavEntry, c: LayoutCoordinates): Float {
         if (!isCarriedUnderSource(entry)) return 0f
-        for (h in hiddenOf(entry)) {
+        for (i in 0 until hidden.size) {
+            val h = hidden[i]
+            if (h.entry !== entry || !h.shown()) continue
             val hc = h.coords ?: continue
             var p: LayoutCoordinates? = c
             while (p != null) {
@@ -297,6 +324,12 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
     /** 登记表变了就加一，读它的绘制（按钮自己、MochiNavHost 的最上层）跟着重画 */
     private var barsVersion by mutableIntStateOf(0)
 
+    internal val barHandles: List<BarHandle>
+        get() {
+            barsVersion
+            return bars
+        }
+
     internal fun registerBar(h: BarHandle) {
         bars += h
         barsVersion++
@@ -307,9 +340,29 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
         barsVersion++
     }
 
+    /** 节点完成首次排版 / 尺寸位置变化或首次录制后通知共享顶栏刷新 */
+    internal fun invalidateBars() {
+        barsVersion++
+    }
+
     internal fun barsOf(entry: MochiNavEntry): List<BarHandle> {
         barsVersion
         return bars.filter { it.entry === entry && it.shown() }
+    }
+
+    /** 当前是否存在侧推转场（共享顶栏只在侧推时接管） */
+    internal val hasSlideTransition: Boolean
+        get() = entries.size >= 2 && entries.last().let { it.source == null && it.inTransition }
+
+    /** 侧推转场链起点在 [entries] 中的下标；栈顶没在侧推转场时返回 -1（零分配） */
+    internal fun slideChainStartIndex(): Int {
+        val n = entries.size
+        if (n < 2) return -1
+        fun sliding(e: MochiNavEntry) = e.source == null && e.inTransition
+        if (!sliding(entries[n - 1])) return -1
+        var i = n - 1
+        while (i >= 1 && sliding(entries[i])) i--
+        return i
     }
 
     /**
@@ -318,21 +371,31 @@ public class MochiNavigator internal constructor(root: String, restored: List<Mo
      * 栈顶没在侧推转场时为空
      */
     internal fun slideChain(): List<MochiNavEntry> {
-        val n = entries.size
-        if (n < 2) return emptyList()
-        fun sliding(e: MochiNavEntry) = e.source == null && e.inTransition
-        if (!sliding(entries[n - 1])) return emptyList()
-        var i = n - 1
-        while (i >= 1 && sliding(entries[i])) i--
-        return entries.subList(i, n).toList()
+        val start = slideChainStartIndex()
+        return if (start < 0) emptyList() else entries.subList(start, entries.size).toList()
     }
 
-    /** 这个顶栏按钮所在的页在变形的那一串里：由 MochiNavHost 留在顶栏原位画，它自己的页里不画 */
+    /**
+     * 这个顶栏按钮所在的页在变形的那一串里：由 MochiNavHost 留在顶栏原位画，它自己的页里不画。
+     * 必须同时确认起点页（base）的坐标已就绪，与 sharedBarFrame 的渲染条件严格一致，防止页内按钮提前隐藏导致丢帧
+     */
     internal fun isBarCarried(h: BarHandle): Boolean {
+        barsVersion
+        val start = slideChainStartIndex()
+        if (start < 0) return false
+        val base = entries[start]
+        if (base.contentCoords?.takeIf { it.isAttached } == null) return false
         val e = h.entry ?: return false
-        val page = e.contentCoords ?: return false
-        if (h.restRect(page) == null) return false
-        return slideChain().any { it === e }
+        var inChain = false
+        for (i in start until entries.size) {
+            if (entries[i] === e) {
+                inChain = true
+                break
+            }
+        }
+        if (!inChain) return false
+        val page = e.contentCoords?.takeIf { it.isAttached } ?: return false
+        return h.restRect(page) != null
     }
 
     public companion object {
@@ -441,21 +504,12 @@ internal class MochiNavEntry(val id: Int, val route: String, val source: String?
     /** 打开动画已经开始过（第一次打开前要先等页面画完第一帧） */
     var started = false
 
-    /** 关闭开始那一刻的画面已经记下（之前那一帧仍按打开时的画面画，不跳） */
-    var closeCaptured by mutableStateOf(false)
-
-    /** 关闭开始那一刻的画面（关闭动画从这里连续地缩回来源） */
-    var closeFrom: Rect? = null
-    var closeUnder: Float = 1f
-    var closeMix: Float = 1f
-    var closeCover: Float = 0f
-
-    /** 这一页内容根节点的坐标（未变换的页面坐标系） */
-    var contentCoords: LayoutCoordinates? = null
+    /** 这一页内容根节点的坐标（未变换的页面坐标系）；用可观察状态，新页 / 恢复页排版后共享顶栏立刻接上 */
+    var contentCoords: LayoutCoordinates? by mutableStateOf(null)
 
     /** 这一页变换后的整页画面（屏幕坐标系）和它的坐标：下层页的玻璃在转场中透过它看到这一页（见 rememberMochiNavCoverBackdrop） */
     var coverReaderCount by mutableIntStateOf(0)
-    var coverLayer: GraphicsLayer? = null
+    var coverLayer: GraphicsLayer? by mutableStateOf(null)
     var coverCoords: LayoutCoordinates? = null
 
     /**

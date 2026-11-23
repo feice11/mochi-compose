@@ -30,30 +30,40 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.toSize
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.tanh
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.mochiReduceMotion
+import ui.feice.mochi.basic.parts.mochiPointerInput
 import ui.feice.mochi.effect.elastic.MochiFollowSpring
 import ui.feice.mochi.effect.glass.GlassFill
 import ui.feice.mochi.effect.glass.GlassRole
@@ -63,6 +73,7 @@ import ui.feice.mochi.effect.glass.engine.glassFlexSpec
 import ui.feice.mochi.effect.glass.engine.glassFlexTarget
 import ui.feice.mochi.effect.glass.engine.rememberGlassGlowState
 import ui.feice.mochi.effect.glass.glassFor
+import ui.feice.mochi.effect.glass.rememberSolidBackdrop
 import ui.feice.mochi.effect.glass.resolved
 import ui.feice.mochi.effect.glow.MochiGlowDefaults
 import ui.feice.mochi.effect.glow.MochiGlowSpec
@@ -70,8 +81,6 @@ import ui.feice.mochi.effect.glow.MochiGlowState
 import ui.feice.mochi.effect.glow.drawGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.shape.G2PathCache
-import ui.feice.mochi.shape.MochiCapsule
-import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiGlass
 import ui.feice.mochi.theme.MochiMaterials
@@ -128,16 +137,13 @@ internal fun bodyGlass(spec: BodyGlassSpec?): GlassFill? {
     if (spec == null || LocalMochiButtonGroup.current != null) return null
     val color by rememberUpdatedState(spec.base)
     // 半透明的底色（iOS 配色的 secondarySystemFill、禁用色）先垫一层不透明的页面色：玻璃按不透明的背景算，
-    // 直接给半透明的会算成一块深灰。真正垫在按钮下面的是什么不知道，取 surface（iOS 的 systemBackground），近似
+    // 直接给半透明的会算成一块深灰。纯色背景直接走 SolidColorBackdrop 零金字塔单 pass 快路径。
     val under by rememberUpdatedState(MochiTheme.colorScheme.surface)
-    val canvas = rememberCanvasBackdrop {
-        val pad = BodyGlassCanvasPad.toPx()
-        val o = Offset(-pad, -pad)
-        val s = Size(size.width + pad * 2f, size.height + pad * 2f)
-        if (color.alpha < 1f) drawRect(under.copy(alpha = 1f), o, s)
-        drawRect(color, o, s)
+    val solid = rememberSolidBackdrop {
+        val c = color
+        if (c.alpha < 1f) c.compositeOver(under.copy(alpha = 1f)) else c
     }
-    return remember(spec.material, canvas) { GlassFill(spec.material, GlassSource(canvas, canvas)) }
+    return remember(spec.material, solid) { GlassFill(spec.material, solid.source) }
 }
 
 /** 正文玻璃按钮的纯色画布往按钮外多铺的宽度 */
@@ -163,14 +169,16 @@ internal fun ButtonCore(
     val glassGlow = if (glass != null) rememberGlassGlowState() else null
     val groupGlass = glassSpec.takeIf { group != null && group.glassOn }
     val visual = remember { ButtonVisual() }
+    LocalBarFlex.current?.visual = visual
     val glow = rememberMochiGlowState(remember(colors.glow) { MochiGlowSpec(colors.glow) })
     val scope = rememberCoroutineScope()
     val currentOnClick by rememberUpdatedState(onClick)
     val path = remember { G2PathCache() }
     val radiusPx = cornerRadius?.let { with(density) { it.toPx() } }
-    val shape = remember(cornerRadius) { cornerRadius?.let { MochiRoundedRectangle(it) } ?: MochiCapsule }
+    val outlineStroke = remember(density) { Stroke(with(density) { 1.dp.toPx() }) }
     val container = if (enabled) colors.container else colors.disabledContainer
     val contentColor = if (enabled) colors.content else colors.disabledContent
+    val reduceMotion = mochiReduceMotion()
 
     visual.container = container
     visual.content = contentColor
@@ -181,6 +189,7 @@ internal fun ButtonCore(
     visual.flex = glass != null || groupGlass != null
     visual.groupGlass = groupGlass
     visual.unit = density.density
+    visual.reduceMotion = reduceMotion
     visual.maxGrowPx = if (behavior.maxGrow.isSpecified) with(density) { behavior.maxGrow.toPx() } else Float.POSITIVE_INFINITY
     visual.followPx = with(density) { behavior.follow.toPx() }
 
@@ -197,7 +206,8 @@ internal fun ButtonCore(
         LaunchedEffect(slide, enabled) {
             var lit = false
             try {
-                snapshotFlow { (slide.held && enabled) to slide.finger }.collect { (held, finger) ->
+                snapshotFlow { if (slide.held && enabled) slide.finger else Offset.Unspecified }.collect { finger ->
+                    val held = finger != Offset.Unspecified
                     if (held && !lit) {
                         lit = true
                         val c = visual.coords?.takeIf { it.isAttached }?.size
@@ -214,6 +224,7 @@ internal fun ButtonCore(
                         }
                     } else if (held) {
                         glow.moveTo(finger)
+                        glassGlow?.drag(finger)
                     } else if (lit) {
                         lit = false
                         visual.held = false
@@ -248,8 +259,8 @@ internal fun ButtonCore(
                 }
             }
             .onPlaced { visual.coords = it }
-            .pointerInput(enabled, behavior.cancelSlop, behavior.yieldToScroll, slide) {
-                if (!enabled || slide != null) return@pointerInput
+            .mochiPointerInput(enabled, behavior.cancelSlop, behavior.yieldToScroll, slide) {
+                if (!enabled || slide != null) return@mochiPointerInput
                 val slop = behavior.cancelSlop.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown()
@@ -266,7 +277,7 @@ internal fun ButtonCore(
                     } else if (groupGlow != null) {
                         groupGlow.press(down.position + groupOrigin)
                     } else {
-                        scope.launch { glow.press(down.position, MochiGlowDefaults.radius(size.toSize(), this@pointerInput)) }
+                        scope.launch { glow.press(down.position, MochiGlowDefaults.radius(size.toSize(), this@mochiPointerInput)) }
                     }
                     val touchSlop = viewConfiguration.touchSlop
                     var moved = false
@@ -305,8 +316,8 @@ internal fun ButtonCore(
                     if (click) currentOnClick()
                 }
             }
-            // 放大 + 跟手：只改图层；底色在组里时由组画（才能和邻居融在一起）。玻璃按钮的形变交给玻璃（背景不跟着放大）
-            .then(if (glass == null) Modifier.graphicsLayer { pressTransform(visual) } else Modifier)
+            // 放大 + 跟手：仅在按压形变进行中挂载图层，静止态零硬件图层；底色在组里时由组画（才能和邻居融在一起）
+            .then(if (glass == null) Modifier.pressTransformLayer(visual) else Modifier)
             .drawBehind {
                 if (glass != null) return@drawBehind
                 val r = (radiusPx ?: (size.height / 2f)).coerceAtMost(min(size.width, size.height) / 2f)
@@ -318,10 +329,12 @@ internal fun ButtonCore(
                         val k = visual.pressAmount
                         if (k > 0.01f) drawPath(p, colors.pressedContainer, alpha = k)
                     }
-                    if (colors.outline.alpha > 0f) drawPath(p, colors.outline, style = Stroke(1.dp.toPx()))
-                    drawGlow(glow, Outline.Generic(p), glow.center, base = container)
+                    if (colors.outline.alpha > 0f) drawPath(p, colors.outline, style = outlineStroke)
+                    if (glow.intensity > 0.01f) {
+                        drawGlow(glow, Outline.Generic(p), glow.center, base = container)
+                    }
                 } else {
-                    if (colors.outline.alpha > 0f) drawPath(p, colors.outline, style = Stroke(1.dp.toPx()))
+                    if (colors.outline.alpha > 0f) drawPath(p, colors.outline, style = outlineStroke)
                 }
             },
         contentAlignment = Alignment.Center,
@@ -338,7 +351,7 @@ internal fun ButtonCore(
                 scaleX = { visual.flexX },
                 scaleY = { visual.flexY },
             )
-            Box(Modifier.graphicsLayer { pressTransform(visual) }, contentAlignment = Alignment.Center) {
+            Box(Modifier.pressTransformLayer(visual), contentAlignment = Alignment.Center) {
                 CompositionLocalProvider(LocalContentColor provides contentColor, LocalBarControlGlass provides null) { content() }
             }
         } else {
@@ -347,8 +360,45 @@ internal fun ButtonCore(
     }
 }
 
+private fun Modifier.pressTransformLayer(visual: ButtonVisual): Modifier = this then PressTransformElement(visual)
+
+private data class PressTransformElement(val visual: ButtonVisual) : ModifierNodeElement<PressTransformNode>() {
+    override fun create(): PressTransformNode = PressTransformNode(visual)
+
+    override fun update(node: PressTransformNode) {
+        node.visual = visual
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiPressTransform"
+    }
+}
+
+private class PressTransformNode(var visual: ButtonVisual) :
+    Modifier.Node(),
+    LayoutModifierNode {
+    private val layerBlock: GraphicsLayerScope.() -> Unit = { pressTransform(visual) }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val placeable = measurable.measure(constraints)
+        return layout(placeable.width, placeable.height) {
+            val v = visual
+            val active = if (v.flex) {
+                v.flexX != 1f || v.flexY != 1f || v.shift != Offset.Zero
+            } else {
+                v.scale != 1f || v.shift != Offset.Zero
+            }
+            if (active) {
+                placeable.placeWithLayer(0, 0, layerBlock = layerBlock)
+            } else {
+                placeable.place(0, 0)
+            }
+        }
+    }
+}
+
 /** 按下放大、跟手偏移、朝手指方向略微拉长；玻璃按钮照 iOS 的形变（见 [ButtonVisual.flex]） */
-internal fun androidx.compose.ui.graphics.GraphicsLayerScope.pressTransform(visual: ButtonVisual) {
+internal fun GraphicsLayerScope.pressTransform(visual: ButtonVisual) {
     if (visual.flex) {
         scaleX = visual.flexX
         scaleY = visual.flexY
@@ -370,9 +420,14 @@ internal fun androidx.compose.ui.graphics.GraphicsLayerScope.pressTransform(visu
  * 只看不拿的玻璃形变手势：在 Initial 阶段跟着手指更新 [visual]（按下、拖动、松手），不消费任何事件，
  * 点击、长按、滑选照旧由原来的手势处理。给自己不走 [ButtonCore] 的栏控件用（玻璃按钮组、带菜单的栏按钮）
  */
-internal fun Modifier.glassFlexGesture(visual: ButtonVisual, scope: kotlinx.coroutines.CoroutineScope): Modifier = pointerInput(visual) {
+internal fun Modifier.glassFlexGesture(
+    visual: ButtonVisual,
+    scope: kotlinx.coroutines.CoroutineScope,
+    canStart: (Offset) -> Boolean = { true },
+): Modifier = pointerInput(visual) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        if (!canStart(down.position)) return@awaitEachGesture
         visual.down = down.position
         visual.finger = down.position
         visual.held = true
@@ -399,6 +454,35 @@ internal class ButtonSlideHandle {
     var held by mutableStateOf(false)
     var finger by mutableStateOf(Offset.Zero)
 }
+
+/**
+ * 栏按钮此刻的按压形变（放大、跟手挪动）。共享顶栏（MochiNavBarItem.kt）从按钮「此刻」的样子接手：
+ * 按住放大时点进下一页，转场第一帧不会缩回布局大小再变形，而是从放大的样子接着按钮自己的回弹弹回去
+ */
+@Stable
+internal class BarFlex {
+    var visual: ButtonVisual? = null
+    var extraScale: (() -> Float)? = null
+
+    val scaleX: Float get() = (visual?.let { if (it.flex) it.flexX else it.scale } ?: 1f) * (extraScale?.invoke() ?: 1f)
+    val scaleY: Float get() = (visual?.let { if (it.flex) it.flexY else it.scale } ?: 1f) * (extraScale?.invoke() ?: 1f)
+    val shift: Offset get() = visual?.shift ?: Offset.Zero
+
+    /** 布局矩形 → 此刻画出来的矩形 */
+    fun rect(r: Rect): Rect {
+        val sx = scaleX
+        val sy = scaleY
+        val d = shift
+        if (sx == 1f && sy == 1f && d == Offset.Zero) return r
+        val c = r.center + d
+        val w = r.width * sx / 2f
+        val h = r.height * sy / 2f
+        return Rect(c.x - w, c.y - h, c.x + w, c.y + h)
+    }
+}
+
+/** 栏按钮把自己的 [BarFlex] 交给按钮内部（[ButtonCore] 填 visual）和共享顶栏的登记节点 */
+internal val LocalBarFlex = staticCompositionLocalOf<BarFlex?> { null }
 
 /** 栏里的按钮（[MochiBarButton]、[MochiBarIconButton]、返回按钮）自己的那块玻璃：材质加背景。不是背景来源，只在按钮内部读 */
 internal val LocalBarControlGlass = staticCompositionLocalOf<GlassFill?> { null }
@@ -446,6 +530,7 @@ internal class ButtonVisual {
         private set
     var maxGrowPx = Float.POSITIVE_INFINITY
     var followPx = 0f
+    var reduceMotion = false
 
     /** 按下时实际放大到的比例：宽按钮按每边最多长 [maxGrowPx] 封顶 */
     private val targetScale: Float
@@ -479,6 +564,12 @@ internal class ButtonVisual {
             o.snapTo(shift)
             while (true) {
                 val dt = s.awaitFrameDelta()
+                if (reduceMotion) {
+                    scale = 1f
+                    shift = Offset.Zero
+                    if (!held) break
+                    continue
+                }
                 scale = s.step(Offset(if (held) targetScale else 1f, 0f), dt).x
                 shift = o.step(shiftTarget(), dt)
                 if (!held && abs(scale - 1f) < 0.0005f && abs(s.velocity.x) < 0.01f && shift.getDistance() < 0.05f &&
@@ -500,6 +591,13 @@ internal class ButtonVisual {
         o.snapTo(shift)
         while (true) {
             val dt = f.awaitFrameDelta()
+            if (reduceMotion) {
+                flexX = 1f
+                flexY = 1f
+                shift = Offset.Zero
+                if (!held) break
+                continue
+            }
             val w = width()
             val h = height()
             val spec = glassFlexSpec(w / unit, h / unit)

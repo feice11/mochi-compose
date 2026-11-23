@@ -18,13 +18,22 @@ import java.util.Locale
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 
+private val CjkLanguages = setOf("zh", "ja", "ko")
+
 /** 中日韩的习惯：年月日、上午/下午在钟点前面 */
-private fun Locale.isCjk(): Boolean = language in setOf("zh", "ja", "ko")
+private fun Locale.isCjk(): Boolean = language in CjkLanguages
 
 @Composable
 private fun currentLocale(): Locale {
     val config = LocalConfiguration.current
     return ConfigurationCompat.getLocales(config)[0] ?: Locale.getDefault()
+}
+
+@Composable
+private fun rememberIs24HourFormat(): Boolean {
+    val context = LocalContext.current
+    val config = LocalConfiguration.current
+    return remember(context, config) { DateFormat.is24HourFormat(context) }
 }
 
 /**
@@ -39,7 +48,7 @@ public fun MochiTimePicker(
     time: MochiTime,
     onTimeChange: (MochiTime) -> Unit,
     modifier: Modifier = Modifier,
-    is24Hour: Boolean = DateFormat.is24HourFormat(LocalContext.current),
+    is24Hour: Boolean = rememberIs24HourFormat(),
     minuteInterval: Int = 1,
     colors: MochiWheelPickerColors = MochiWheelPickerDefaults.colors(),
 ) {
@@ -107,10 +116,12 @@ public fun MochiDatePicker(
     max: MochiDate = MochiDate(2100, 12, 31),
     colors: MochiWheelPickerColors = MochiWheelPickerDefaults.colors(),
 ) {
+    val loMin = minOf(min, max)
+    val hiMax = maxOf(min, max)
     val locale = currentLocale()
     val cjk = locale.isCjk()
-    val years = remember(min.year, max.year, cjk) {
-        (min.year..max.year).map { if (cjk) "${it}年" else it.toString() }.toImmutableList()
+    val years = remember(loMin.year, hiMax.year, cjk) {
+        (loMin.year..hiMax.year).map { if (cjk) "${it}年" else it.toString() }.toImmutableList()
     }
     val months = remember(locale) { monthLabels(locale) }
     val days = remember(cjk) { (1..31).map { if (cjk) "${it}日" else it.toString() }.toImmutableList() }
@@ -119,16 +130,20 @@ public fun MochiDatePicker(
 
     fun commit(year: Int, month: Int, day: Int) {
         val d = MochiDate(year, month, day.coerceAtMost(MochiDate.daysInMonth(year, month)))
-        change(d.coerceIn(min, max))
+        change(d.coerceIn(loMin, hiMax))
     }
 
     val dim = date.lengthOfMonth
+    val minYmd = loMin.year * 10_000 + loMin.month * 100 + loMin.day
+    val maxYmd = hiMax.year * 10_000 + hiMax.month * 100 + hiMax.day
+    val ymPrefix = date.year * 10_000 + date.month * 100
+    val yearIndex = (date.year - loMin.year).coerceIn(0, (years.size - 1).coerceAtLeast(0))
     MochiWheelPickerGroup(modifier, colors = colors) {
         val yearColumn: @Composable () -> Unit = {
             MochiWheelPicker(
                 years,
-                date.year - min.year,
-                { i -> commit(min.year + i, current.month, current.day) },
+                yearIndex,
+                { i -> commit(loMin.year + i, current.month, current.day) },
                 Modifier.weight(if (cjk) 1.2f else 1f),
                 colors = colors,
             )
@@ -140,6 +155,10 @@ public fun MochiDatePicker(
                 { i -> commit(current.year, i + 1, current.day) },
                 Modifier.weight(if (cjk) 1f else 1.4f),
                 cyclic = true,
+                disabled = { mIdx ->
+                    val m = mIdx + 1
+                    (date.year == loMin.year && m < loMin.month) || (date.year == hiMax.year && m > hiMax.month)
+                },
                 colors = colors,
             )
         }
@@ -150,7 +169,15 @@ public fun MochiDatePicker(
                 { i -> commit(current.year, current.month, i + 1) },
                 Modifier.weight(1f),
                 cyclic = true,
-                disabled = { it + 1 > dim },
+                disabled = { dIdx ->
+                    val d = dIdx + 1
+                    if (d > dim) {
+                        true
+                    } else {
+                        val ymd = ymPrefix + d
+                        ymd < minYmd || ymd > maxYmd
+                    }
+                },
                 colors = colors,
             )
         }

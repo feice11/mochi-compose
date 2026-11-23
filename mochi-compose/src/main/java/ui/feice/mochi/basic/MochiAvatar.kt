@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -98,11 +100,15 @@ public fun MochiAvatar(
     background: Brush = MochiAvatarDefaults.Gradient,
     contentColor: Color = Color.White,
 ) {
+    val bodyStyle = MochiTheme.textStyles.body
+    val initialsStyle = remember(bodyStyle, size) {
+        bodyStyle.copy(fontSize = (size.value * 0.4f).sp, fontWeight = FontWeight.SemiBold)
+    }
     MochiAvatar(modifier, size) {
         Box(Modifier.matchParentSize().background(background))
         Text(
             initials,
-            style = MochiTheme.textStyles.body.copy(fontSize = (size.value * 0.4f).sp, fontWeight = FontWeight.SemiBold),
+            style = initialsStyle,
             color = contentColor,
             maxLines = 1,
         )
@@ -126,21 +132,22 @@ public fun MochiAvatarGroup(
     val shown = if (initials.size > max) initials.take(max - 1) else initials
     val extra = initials.size - shown.size
     val ring = 2.dp
+    val footnoteStyle = MochiTheme.textStyles.footnote
+    val extraStyle = remember(footnoteStyle) { footnoteStyle.copy(fontWeight = FontWeight.SemiBold) }
     Layout(
         content = {
-            shown.forEach { MochiAvatar(it, Modifier.border(ring, borderColor, CircleShape).clip(CircleShape), size = size) }
+            shown.forEach { MochiAvatar(it, Modifier.border(ring, borderColor, CircleShape), size = size) }
             if (extra > 0) {
                 Box(
                     Modifier
                         .size(size)
-                        .border(ring, borderColor, CircleShape)
-                        .clip(CircleShape)
-                        .background(MochiDefaults.fill()),
+                        .background(MochiDefaults.fill(), CircleShape)
+                        .border(ring, borderColor, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         "+$extra",
-                        style = MochiTheme.textStyles.footnote.copy(fontWeight = FontWeight.SemiBold),
+                        style = extraStyle,
                         color = MochiTheme.colorScheme.onSurface,
                         maxLines = 1,
                     )
@@ -153,9 +160,13 @@ public fun MochiAvatarGroup(
         val px = size.roundToPx()
         val step = (px * (1f - MochiAvatarDefaults.Overlap)).roundToInt()
         val w = if (ps.isEmpty()) 0 else step * (ps.size - 1) + px
+        val rtl = layoutDirection == LayoutDirection.Rtl
         layout(w, px) {
             // 前面的压在后面的上面：倒着放，zIndex 由放置顺序决定
-            for (i in ps.indices.reversed()) ps[i].place(i * step, 0)
+            for (i in ps.indices.reversed()) {
+                val x = if (rtl) w - px - i * step else i * step
+                ps[i].place(x, 0)
+            }
         }
     }
 }

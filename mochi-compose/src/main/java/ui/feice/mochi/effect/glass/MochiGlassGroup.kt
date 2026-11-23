@@ -6,15 +6,19 @@ package ui.feice.mochi.effect.glass
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,14 +27,22 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateMeasurement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -38,17 +50,19 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import ui.feice.mochi.effect.glass.engine.GlassBody
-import ui.feice.mochi.effect.glass.engine.GlassMerge
+import ui.feice.mochi.effect.glass.engine.GlassMergeBuffer
 import ui.feice.mochi.effect.glass.engine.GlassMergeMax
-import ui.feice.mochi.effect.glass.engine.GlassMergePartner
 import ui.feice.mochi.effect.glass.engine.LiquidPressSpec
 import ui.feice.mochi.effect.glass.engine.LiquidSpring
 import ui.feice.mochi.effect.glass.engine.LiquidTrack
 import ui.feice.mochi.effect.glass.engine.LiquidTracks
 import ui.feice.mochi.effect.glass.engine.at
 import ui.feice.mochi.effect.glass.engine.rememberGlassGlowState
+import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiGlass
+import ui.feice.mochi.theme.MochiGraphics
+import ui.feice.mochi.theme.MochiGraphicsLevel
 import ui.feice.mochi.theme.MochiTheme
 
 /** 玻璃块位置或尺寸的弹簧：角频率 [omega]（rad/s）、阻尼比 [damping] */
@@ -83,11 +97,19 @@ public class MochiGlassItem internal constructor(
 
     /** 内容的不透明度目标（0..1），按 14/s 逼近；玻璃本身不受影响 */
     public var dim: Float = 1f
+        set(value) {
+            if (field != value) {
+                field = value
+                owner?.let { it.wake++ }
+            }
+        }
+
+    internal var owner: MochiGlassGroupState? = null
 
     internal var tx = 0f
     internal var ty = 0f
-    internal var w = 44f
-    internal var h = 44f
+    internal var w by mutableFloatStateOf(44f)
+    internal var h by mutableFloatStateOf(44f)
     internal val px = LiquidSpring(positionSpring.omega, positionSpring.damping)
     internal val py = LiquidSpring(positionSpring.omega, positionSpring.damping)
     internal val pw = LiquidSpring(sizeSpring.omega, sizeSpring.damping)
@@ -139,12 +161,21 @@ public class MochiGlassGroupState {
         positionSpring: MochiGlassSpring = MochiGlassSpring.Position,
         sizeSpring: MochiGlassSpring = MochiGlassSpring.Size,
     ): MochiGlassItem = MochiGlassItem(cornerRadius, visible, positionSpring, sizeSpring).also {
+        it.owner = this
         items += it
         wake++
     }
 
     /** 移走一块 */
     public fun remove(item: MochiGlassItem) {
+        if (pressed === item) {
+            item.press.target = 1f
+            pressed = null
+            onRelease?.invoke()
+        }
+        if (item.owner === this) {
+            item.owner = null
+        }
         items -= item
         wake++
     }
@@ -268,6 +299,11 @@ public class MochiGlassGroupState {
 
     /** 立刻藏起来（整组淡出结束时用） */
     public fun hide(item: MochiGlassItem) {
+        if (pressed === item) {
+            item.press.target = 1f
+            pressed = null
+            onRelease?.invoke()
+        }
         item.visible = false
         item.leaving = false
         wake++
@@ -295,10 +331,15 @@ public class MochiGlassGroupState {
     /** 推进一帧；返回是否还在动 */
     internal fun step(dt: Float): Boolean {
         var moving = false
-        for (e in items) {
-            for (s in arrayOf(e.px, e.py, e.pw, e.ph, e.press)) {
-                s.step(dt)
-                if (!s.settled) moving = true
+        for (idx in items.indices) {
+            val e = items[idx]
+            e.px.step(dt)
+            e.py.step(dt)
+            e.pw.step(dt)
+            e.ph.step(dt)
+            e.press.step(dt)
+            if (!e.px.settled || !e.py.settled || !e.pw.settled || !e.ph.settled || !e.press.settled) {
+                moving = true
             }
             e.kf?.let { f ->
                 moving = true
@@ -345,31 +386,72 @@ public class MochiGlassGroupState {
             if (e.blurT >= 0f) {
                 moving = true
                 e.blurT += dt
-                val u = e.blurT / e.blurS
+                val u = e.blurT / max(e.blurS, 1e-3f)
                 e.blur = LiquidTracks.ContentBlur.at(u)
                 if (u > (LiquidTracks.ContentBlur.size - 1) / 60f) e.blurT = -1f
             }
             e.rw = max(0f, e.pw.x * e.press.x)
             e.rh = max(0f, e.ph.x * e.press.x)
-            val grow = min(e.pw.x / e.w, e.ph.x / e.h)
-            e.op = if (e.op < 0f) e.dim else e.op + (e.dim - e.op) * (1f - kotlin.math.exp(-dt * 14f))
-            if (kotlin.math.abs(e.op - e.dim) > 1e-3f) moving = true
+            val grow = if (e.w > 0f && e.h > 0f) min(e.pw.x / e.w, e.ph.x / e.h) else 0f
+            e.op = if (e.op < 0f) e.dim else e.op + (e.dim - e.op) * (1f - exp(-dt * 14f))
+            if (abs(e.op - e.dim) > 1e-3f) moving = true
             e.opacity = if (e.visible) ((grow - 0.45f) / 0.45f).coerceIn(0f, 1f) * e.op else 0f
         }
         tick++
         return moving
     }
 
-    internal fun merge(density: Float, spacing: Float): Pair<GlassMerge, Float>? {
-        val list = items.filter { it.visible && it.rw > 0.5f && it.rh > 0.5f }
-        val main = list.firstOrNull() ?: return null
-        fun radius(e: MochiGlassItem): Float {
-            val base = e.cornerRadius?.let { it.value * density } ?: (min(e.w, e.h) / 2f)
-            return min(base * min(e.rw / e.w, e.rh / e.h), min(e.rw, e.rh) / 2f)
+    /** 零分配填充所有可见块到 [out]，无可见块时返回 false */
+    internal fun fillMerge(density: Float, spacing: Float, out: GlassMergeBuffer): Boolean {
+        var main: MochiGlassItem? = null
+        var visibleCount = 0
+        for (i in items.indices) {
+            val item = items[i]
+            if (item.visible && item.rw > 0.5f && item.rh > 0.5f) {
+                if (main == null) main = item
+                visibleCount++
+            }
         }
-        fun rect(e: MochiGlassItem) = Rect(e.px.x - e.rw / 2f, e.py.x - e.rh / 2f, e.px.x + e.rw / 2f, e.py.x + e.rh / 2f)
-        val k = if (list.size > 1) spacing else 0f
-        return GlassMerge(rect(main), list.drop(1).take(GlassMergeMax).map { GlassMergePartner(rect(it), radius(it), k) }) to radius(main)
+        val first = main ?: return false
+        fun radius(e: MochiGlassItem): Float {
+            val safeW = max(e.w, 1e-3f)
+            val safeH = max(e.h, 1e-3f)
+            val base = e.cornerRadius?.let { it.value * density } ?: (min(safeW, safeH) / 2f)
+            val scale = if (e.w > 0f && e.h > 0f) min(e.rw / safeW, e.rh / safeH) else 1f
+            return min(base * scale, min(e.rw, e.rh) / 2f).coerceAtLeast(0f)
+        }
+        val fhw = first.rw * 0.5f
+        val fhh = first.rh * 0.5f
+        out.setMain(first.px.x - fhw, first.py.x - fhh, first.px.x + fhw, first.py.x + fhh, radius(first))
+        if (visibleCount > 1) {
+            var seenFirst = false
+            for (i in items.indices) {
+                val item = items[i]
+                if (!item.visible || item.rw <= 0.5f || item.rh <= 0.5f) continue
+                if (!seenFirst) {
+                    seenFirst = true
+                    continue
+                }
+                val ihw = item.rw * 0.5f
+                val ihh = item.rh * 0.5f
+                out.addPartner(item.px.x - ihw, item.py.x - ihh, item.px.x + ihw, item.py.x + ihh, radius(item), spacing)
+                if (out.partnerCount >= GlassMergeMax) break
+            }
+        }
+        return true
+    }
+
+    /** 基于可见块目标尺寸（而非 bloom/pop 动画中 20% 起步的临时尺寸）计算稳定配方短边（px），杜绝逐帧重建金字塔 */
+    internal fun stableRecipeSidePx(): Float? {
+        var minSide = Float.MAX_VALUE
+        for (i in items.indices) {
+            val item = items[i]
+            if (item.visible && item.w > 0.5f && item.h > 0.5f) {
+                val side = min(item.w, item.h)
+                if (side < minSide) minSide = side
+            }
+        }
+        return if (minSide < Float.MAX_VALUE) minSide else null
     }
 }
 
@@ -393,8 +475,16 @@ public fun MochiGlassGroup(
 ) {
     val density = LocalDensity.current.density
     val glow = rememberGlassGlowState()
-    state.onPress = { glow.press(it) }
-    state.onRelease = { glow.release() }
+    DisposableEffect(state, glow) {
+        val pressHandler: (Offset) -> Unit = { glow.press(it) }
+        val releaseHandler: () -> Unit = { glow.release() }
+        state.onPress = pressHandler
+        state.onRelease = releaseHandler
+        onDispose {
+            if (state.onPress === pressHandler) state.onPress = null
+            if (state.onRelease === releaseHandler) state.onRelease = null
+        }
+    }
     LaunchedEffect(state) {
         var last = -1L
         while (true) {
@@ -413,33 +503,46 @@ public fun MochiGlassGroup(
     val spacingPx = (material?.spacing?.value ?: 8f) * density
     val source = backdrop?.source
     Box(modifier) {
-        if (material != null && source != null) {
-            val radius = remember { FloatArray(1) }
+        if (material != null && source != null && MochiGraphics.level >= MochiGraphicsLevel.High) {
             GlassBody(
                 backdrop = source.layer,
                 glass = material,
                 modifier = Modifier.fillMaxSize(),
                 faceBackdrop = source.face,
-                alpha = { if (state.tick >= 0 && state.items.none { it.visible }) 0f else alpha() },
-                glow = glow,
-                cornerRadiusPx = { radius[0] },
-                merge = {
+                alpha = {
                     state.tick
-                    state.merge(density, spacingPx)?.let { (m, r) ->
-                        radius[0] = r
-                        m
+                    var anyVisible = false
+                    for (i in state.items.indices) {
+                        if (state.items[i].visible) {
+                            anyVisible = true
+                            break
+                        }
                     }
+                    if (!anyVisible) 0f else alpha()
+                },
+                glow = glow,
+                recipeSide = {
+                    state.tick
+                    state.stableRecipeSidePx()
+                },
+                fillMerge = { out ->
+                    state.tick
+                    state.fillMerge(density, spacingPx, out)
                 },
                 content = content,
             )
         } else {
+            // 订阅 state.wake，确保动态 item() / remove() 增删玻璃块时降级分支及时重组
+            state.wake
             val color = material?.fallbackColor(MochiTheme.colorScheme.isDark) ?: MochiTheme.colorScheme.surfaceContainer
             for (item in state.items) {
-                Box(
-                    Modifier
-                        .mochiGlassItem(state, item, contentOnly = false)
-                        .background(color, item.cornerRadius?.let { MochiRoundedRectangle(it) } ?: ui.feice.mochi.shape.MochiCapsule),
-                )
+                key(item) {
+                    Box(
+                        Modifier
+                            .mochiGlassItem(state, item, contentOnly = false)
+                            .background(color, item.cornerRadius?.let { MochiRoundedRectangle(it) } ?: MochiCapsule),
+                    )
+                }
             }
             content()
         }
@@ -452,33 +555,78 @@ public fun MochiGlassGroup(
  */
 public fun Modifier.mochiGlassItem(state: MochiGlassGroupState, item: MochiGlassItem): Modifier = mochiGlassItem(state, item, true)
 
-private fun Modifier.mochiGlassItem(state: MochiGlassGroupState, item: MochiGlassItem, contentOnly: Boolean): Modifier = this
-    .layout { measurable, constraints ->
-        state.tick
-        val w = item.w.roundToInt().coerceAtLeast(0)
-        val h = item.h.roundToInt().coerceAtLeast(0)
-        val p = measurable.measure(Constraints.fixed(w, h))
-        // 放在容器左上角（Box 的默认对齐），位置全靠下面的平移
-        layout(w, h) { p.place(0, 0) }
+private fun Modifier.mochiGlassItem(state: MochiGlassGroupState, item: MochiGlassItem, contentOnly: Boolean): Modifier =
+    this then GlassItemElement(state, item, contentOnly)
+
+private data class GlassItemElement(val state: MochiGlassGroupState, val item: MochiGlassItem, val contentOnly: Boolean) :
+    ModifierNodeElement<GlassItemNode>() {
+    override fun create(): GlassItemNode = GlassItemNode(state, item, contentOnly)
+
+    override fun update(node: GlassItemNode) {
+        if (node.state !== state || node.item !== item || node.contentOnly != contentOnly) {
+            node.state = state
+            node.item = item
+            node.contentOnly = contentOnly
+            node.invalidateMeasurement()
+        }
     }
-    .graphicsLayer {
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiGlassItem"
+    }
+}
+
+private class GlassItemNode(var state: MochiGlassGroupState, var item: MochiGlassItem, var contentOnly: Boolean) :
+    Modifier.Node(),
+    LayoutModifierNode {
+    private var lastSigma = 0f
+    private var cachedBlur: androidx.compose.ui.graphics.RenderEffect? = null
+
+    private val layerBlock: GraphicsLayerScope.() -> Unit = {
         state.tick
-        translationX = item.px.x - item.w / 2f
-        translationY = item.py.x - item.h / 2f
-        scaleX = if (item.w > 0f) item.rw / item.w else 1f
-        scaleY = if (item.h > 0f) item.rh / item.h else 1f
+        val e = item
+        translationX = e.px.x - e.w / 2f
+        translationY = e.py.x - e.h / 2f
+        scaleX = if (e.w > 0f) e.rw / e.w else 1f
+        scaleY = if (e.h > 0f) e.rh / e.h else 1f
         alpha = if (contentOnly) {
-            item.opacity
-        } else if (item.visible) {
+            e.opacity
+        } else if (e.visible) {
             1f
         } else {
             0f
         }
-        transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
-        val sigma = item.blur * density
-        renderEffect = if (contentOnly && sigma > 0.01f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            RenderEffect.createBlurEffect(sigma, sigma, Shader.TileMode.DECAL).asComposeRenderEffect()
+        transformOrigin = TransformOrigin.Center
+        val sigma = e.blur * density * MochiGraphics.blurScale
+        renderEffect = if (contentOnly && sigma >= 0.3f && MochiGraphics.blur && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (cachedBlur != null && abs(sigma - lastSigma) < 0.5f) {
+                cachedBlur
+            } else {
+                val quantized = (sigma * 2f).roundToInt() * 0.5f
+                lastSigma = quantized
+                Api31GlassItemBlur.create(quantized.coerceAtLeast(0.5f)).also { cachedBlur = it }
+            }
         } else {
             null
         }
     }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        // 只读目标宽高 item.w / item.h，不读每帧递增的 state.tick：弹簧按压和轨迹动画全程留在图层阶段，不再触发子树重测
+        val w = item.w.roundToInt().coerceAtLeast(0)
+        val h = item.h.roundToInt().coerceAtLeast(0)
+        val p = measurable.measure(Constraints.fixed(w, h))
+        return layout(w, h) { p.placeWithLayer(0, 0, layerBlock = layerBlock) }
+    }
+
+    override fun onDetach() {
+        cachedBlur = null
+        lastSigma = 0f
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+private object Api31GlassItemBlur {
+    fun create(sigma: Float): androidx.compose.ui.graphics.RenderEffect =
+        RenderEffect.createBlurEffect(sigma, sigma, Shader.TileMode.DECAL).asComposeRenderEffect()
+}

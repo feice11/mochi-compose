@@ -10,26 +10,31 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.mochiReduceMotion
+import ui.feice.mochi.basic.parts.ControlSmoothing
 import ui.feice.mochi.basic.parts.drawG2Capsule
 import ui.feice.mochi.shape.G2PathCache
+import ui.feice.mochi.shape.addG2RoundRect
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -47,34 +52,45 @@ public fun MochiActivityIndicator(
     color: Color = MochiProgressDefaults.activityColor(),
     reveal: (() -> Float)? = null,
 ) {
-    val transition = rememberInfiniteTransition(label = "activity")
-    val phase by transition.animateFloat(
-        0f,
-        1f,
-        infiniteRepeatable(tween(CycleMillis, easing = LinearEasing), RepeatMode.Restart),
-        label = "phase",
-    )
-    val tick = remember { G2PathCache() }
-    Canvas(
+    val reduce = mochiReduceMotion()
+    val phase = if (reveal == null && !reduce) {
+        val transition = rememberInfiniteTransition(label = "activity")
+        transition.animateFloat(0f, 1f, ActivityCycleSpec, label = "phase")
+    } else {
+        null
+    }
+    Spacer(
         modifier
             .size(size)
-            .semantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate },
-    ) {
-        val r = this.size.minDimension / 2f
-        val length = r * 0.6f
-        val width = r * 0.25f
-        // 辐条横放在中心右侧，旋转到各自的角度：从内半径 0.4r 伸到外沿
-        val rect = Rect(center.x + r - length, center.y - width / 2f, center.x + r, center.y + width / 2f)
-        val shown = reveal?.invoke()?.let { (it.coerceIn(0f, 1f) * Spokes).toInt() }
-        for (k in 0 until Spokes) {
-            if (shown != null && k >= shown) break
-            // 第 k 根从顶上顺时针数；亮光顺时针走，所以后一根比前一根晚 1/8 周期
-            val a = if (shown != null) RevealAlpha else spokeAlpha((phase - k.toFloat() / Spokes + 1f) % 1f)
-            rotate(-90f + k * 360f / Spokes, center) {
-                drawG2Capsule(tick, rect, color, alpha = a)
-            }
-        }
-    }
+            .semantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }
+            .drawWithCache {
+                val r = this.size.minDimension / 2f
+                val cx = this.size.width / 2f
+                val cy = this.size.height / 2f
+                val pivot = Offset(cx, cy)
+                val spokePath = if (r > 0f) {
+                    val length = r * 0.6f
+                    val width = r * 0.25f
+                    val rect = Rect(cx + r - length, cy - width / 2f, cx + r, cy + width / 2f)
+                    Path().apply { addG2RoundRect(rect, minOf(rect.width, rect.height) / 2f, ControlSmoothing) }
+                } else {
+                    null
+                }
+                onDrawBehind {
+                    val path = spokePath ?: return@onDrawBehind
+                    val shown = reveal?.invoke()?.let { (it.takeUnless(Float::isNaN)?.coerceIn(0f, 1f) ?: 0f) * Spokes }?.toInt()
+                    val p = phase?.value ?: 0f
+                    for (k in 0 until Spokes) {
+                        if (shown != null && k >= shown) break
+                        // 第 k 根从顶上顺时针数；亮光顺时针走，所以后一根比前一根晚 1/8 周期
+                        val a = if (shown != null) RevealAlpha else spokeAlpha((p - k.toFloat() / Spokes + 1f) % 1f)
+                        rotate(-90f + k * 360f / Spokes, pivot) {
+                            drawPath(path, color, alpha = a)
+                        }
+                    }
+                }
+            },
+    )
 }
 
 /** 一根辐条在周期内 t（0..1）时的亮度：0→10% 亮起，10%→50% 暗回，之后保持 [RestAlpha] */
@@ -88,6 +104,7 @@ private const val Spokes = 8
 private const val CycleMillis = 1000
 private const val RestAlpha = 0.3f
 private const val RevealAlpha = 0.55f
+private val ActivityCycleSpec = infiniteRepeatable<Float>(tween(CycleMillis, easing = LinearEasing), RepeatMode.Restart)
 
 /** 加载与进度指示的默认值 */
 public object MochiProgressDefaults {
@@ -113,21 +130,32 @@ public fun MochiProgressBar(
     trackColor: Color = color.copy(alpha = color.alpha * MochiProgressDefaults.TrackAlpha),
     height: Dp = 6.dp,
 ) {
-    val p by animateFloatAsState(progress.coerceIn(0f, 1f), MochiMotionTokens.Page, label = "progress")
-    val track = remember { G2PathCache() }
+    val cleanProgress = progress.takeUnless(Float::isNaN)?.coerceIn(0f, 1f) ?: 0f
+    val pState = animateFloatAsState(cleanProgress, MochiMotionTokens.Page, label = "progress")
     val bar = remember { G2PathCache() }
-    Canvas(
+    Spacer(
         modifier
             .fillMaxWidth()
             .height(height)
-            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f) },
-    ) {
-        val h = this.size.height
-        drawG2Capsule(track, Rect(Offset.Zero, this.size), trackColor)
-        if (p > 0f) {
-            // 进度很小时也保持胶囊形（至少一个圆那么宽）
-            val w = (this.size.width * p).coerceAtLeast(h)
-            drawG2Capsule(bar, Rect(0f, 0f, w, h), color)
-        }
-    }
+            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(cleanProgress, 0f..1f) }
+            .drawWithCache {
+                val h = this.size.height
+                val totalW = this.size.width
+                val trackPath = if (totalW > 0f && h > 0f) {
+                    Path().apply { addG2RoundRect(Rect(Offset.Zero, this@drawWithCache.size), minOf(totalW, h) / 2f, ControlSmoothing) }
+                } else {
+                    null
+                }
+                onDrawBehind {
+                    if (trackPath != null) drawPath(trackPath, trackColor)
+                    val p = pState.value
+                    if (p > 0f && totalW > 0f) {
+                        // 进度很小时也保持胶囊形（至少一个圆那么宽，不超过整条宽）
+                        val w = (totalW * p.coerceIn(0f, 1f)).coerceAtLeast(minOf(h, totalW)).coerceAtMost(totalW)
+                        val left = if (layoutDirection == LayoutDirection.Rtl) totalW - w else 0f
+                        drawG2Capsule(bar, Rect(left, 0f, left + w, h), color)
+                    }
+                }
+            },
+    )
 }

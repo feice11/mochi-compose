@@ -16,13 +16,22 @@ import ui.feice.mochi.anim.MochiMotions
  */
 @Immutable
 public data class MochiMotionScheme(
-    val fastSpatial: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.6f, stiffness = 800f),
-    val defaultSpatial: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 380f),
-    val slowSpatial: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 200f),
-    val fastEffects: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 3800f),
-    val defaultEffects: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 1600f),
-    val slowEffects: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 800f),
+    val fastSpatial: FiniteAnimationSpec<Float> = DefaultFastSpatial,
+    val defaultSpatial: FiniteAnimationSpec<Float> = DefaultSpatial,
+    val slowSpatial: FiniteAnimationSpec<Float> = DefaultSlowSpatial,
+    val fastEffects: FiniteAnimationSpec<Float> = DefaultFastEffects,
+    val defaultEffects: FiniteAnimationSpec<Float> = DefaultEffects,
+    val slowEffects: FiniteAnimationSpec<Float> = DefaultSlowEffects,
     val menu: MochiMotion = MochiMotions.Ios26,
 )
 
-public fun defaultMotionScheme(): MochiMotionScheme = MochiMotionScheme()
+private val DefaultFastSpatial: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.6f, stiffness = 800f)
+private val DefaultSpatial: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 380f)
+private val DefaultSlowSpatial: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 200f)
+private val DefaultFastEffects: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 3800f)
+private val DefaultEffects: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 1600f)
+private val DefaultSlowEffects: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 800f)
+
+private val DefaultMotionScheme = MochiMotionScheme()
+
+public fun defaultMotionScheme(): MochiMotionScheme = DefaultMotionScheme

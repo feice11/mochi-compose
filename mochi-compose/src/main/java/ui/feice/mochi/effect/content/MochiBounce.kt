@@ -5,12 +5,16 @@ package ui.feice.mochi.effect.content
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.InspectorInfo
@@ -20,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.isReduceMotion
 
 /**
  * 图标「弹一下」（SF Symbols 的 bounce）：[trigger] 每变成一个新的、非 null / 非 false 的值，内容先快速压扁一点，
@@ -49,29 +54,47 @@ private class BounceElement(val trigger: Any?, val depth: Float) : ModifierNodeE
 
 private class BounceNode(private var last: Any?, var depth: Float) :
     Modifier.Node(),
+    CompositionLocalConsumerModifierNode,
     LayoutModifierNode {
     private val scale = Animatable(1f)
+    private var active by mutableStateOf(false)
     private var job: Job? = null
 
     fun onTrigger(t: Any?) {
         if (t == last) return
         last = t
-        if (t == null || t == false || !isAttached) return
+        if (t == null || t == false || !isAttached || isReduceMotion()) return
         job?.cancel()
         job = coroutineScope.launch {
-            // 压下去很快，弹回来带一点过冲
-            scale.animateTo(1f - depth, tween(70))
-            scale.animateTo(1f, MochiMotionTokens.Bounce)
+            active = true
+            try {
+                // 压下去很快，弹回来带一点过冲
+                scale.animateTo(1f - depth, tween(70))
+                scale.animateTo(1f, MochiMotionTokens.Bounce)
+            } finally {
+                scale.snapTo(1f)
+                active = false
+            }
         }
+    }
+
+    override fun onDetach() {
+        job?.cancel()
+        job = null
+        active = false
     }
 
     override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
         val p = measurable.measure(constraints)
         return layout(p.width, p.height) {
-            p.placeWithLayer(0, 0) {
-                val s = scale.value
-                scaleX = s
-                scaleY = s
+            if (!active) {
+                p.place(0, 0)
+            } else {
+                p.placeWithLayer(0, 0) {
+                    val s = scale.value
+                    scaleX = s
+                    scaleY = s
+                }
             }
         }
     }

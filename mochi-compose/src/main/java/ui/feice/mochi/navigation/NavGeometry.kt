@@ -6,7 +6,6 @@ package ui.feice.mochi.navigation
 import androidx.activity.BackEventCompat
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.CornerRadius
@@ -16,8 +15,11 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -28,8 +30,9 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import ui.feice.mochi.effect.glass.source
 import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.smoothstep
 
@@ -46,7 +49,9 @@ internal class TopFrame(
     val mix: Float,
     val underScale: Float,
     val source: SourceInfo?,
-)
+) {
+    val outline: NavPageOutline = NavPageOutline(rect, tl, tr, br, bl)
+}
 
 /** 来源元素此刻在屏幕上的样子（已经按下层页面的缩放换算） */
 internal class SourceInfo(val rect: Rect, val radius: Float, val color: Color)
@@ -65,6 +70,37 @@ internal class NavGeometry(val nav: MochiNavigator) {
     /** 侧推时屏幕没有物理圆角（模拟器、直角屏）用的圆角（px），保证转场中始终是圆角 */
     var fallbackCorner: Float = 0f
 
+    /** 在面板（底部面板等 [LocalMochiNavSurface]）里：侧推子页时下层页不压暗，只保留圆角轮廓 */
+    var inPanel: Boolean = false
+
+    private val layerPaint = Paint()
+    private val placedLayers = ArrayList<GraphicsLayer>(4)
+    private val placedRects = ArrayList<Rect>(4)
+
+    // 单帧 TopFrame 缓存：同一帧里 sourceOutline / applyLayer / visibleHeight / drawOver / drawShared / drawOccluders 共用
+    private var cachedEntry: MochiNavEntry? = null
+    private var cachedProgress = Float.NaN
+    private var cachedMove = Float.NaN
+    private var cachedBack = Float.NaN
+    private var cachedBackDy = Float.NaN
+    private var cachedBackEdge = Int.MIN_VALUE
+    private var cachedFade = Float.NaN
+    private var cachedFadeClosing = false
+    private var cachedFadeFromCover = Float.NaN
+    private var cachedSize = Size.Unspecified
+    private var cachedCorners = MochiScreenCorners.None
+    private var cachedUnderScale = Float.NaN
+    private var cachedSrcRect: Rect? = null
+    private var cachedSrcRadius = Float.NaN
+    private var cachedSrcColor = Color.Unspecified
+    private var cachedTopFrame: TopFrame? = null
+
+    private var cachedSlideSize = Size.Unspecified
+    private var cachedSlideCorners = MochiScreenCorners.None
+    private var cachedSlideFallback = Float.NaN
+    private var cachedSlideOutline: NavPageOutline? = null
+    private var cachedSlideShape: Shape? = null
+
     private fun slideCorner(c: Float): Float = if (c > 0.5f) c else fallbackCorner
 
     private val full get() = Rect(Offset.Zero, size)
@@ -78,6 +114,7 @@ internal class NavGeometry(val nav: MochiNavigator) {
         layer.translationY = 0f
         layer.alpha = 1f
         layer.clip = false
+        layer.shape = RectangleShape
         val top = top() ?: return
         if (size.width <= 0f) return
         if (top.source == null && nav.under(top) != null) {
@@ -116,11 +153,16 @@ internal class NavGeometry(val nav: MochiNavigator) {
     }
 
     /**
-     * 侧推：栈顶页 x = W·(1 − p)，下层页 x = −0.3·W·p。转场中两页共用 G2 透明度轮廓，
+     * 侧推：栈顶页 x = W·(1 − p)，下层页 x = −0.3·W·p。转场中两页在图层上挂载硬件 RRect 轮廓裁切，
      * 静止时撤掉轮廓处理（零开销）
      */
     private fun applySlide(e: MochiNavEntry, layer: androidx.compose.ui.graphics.GraphicsLayerScope) {
         layer.translationX = slideX(e)
+        val outline = slideOutline(e)
+        if (outline != null && !outline.isRectangular) {
+            layer.shape = cachedSlideShape ?: SlideOutlineShape(outline)
+            layer.clip = true
+        }
         // 玻璃面板里页面是透明的：下层页随上面那页盖上来淡出，两页的内容不会叠在一起（近似，原生的做法没逆向）。
         // 面板越不透明淡得越少，全屏时和平常一样只压暗
         val opaque = glassOpaque ?: return
@@ -137,15 +179,30 @@ internal class NavGeometry(val nav: MochiNavigator) {
     fun slideOutline(e: MochiNavEntry): NavPageOutline? {
         if (!clipsSlide(e)) return null
         val c = corners
-        return NavPageOutline(full, slideCorner(c.topLeft), slideCorner(c.topRight), slideCorner(c.bottomRight), slideCorner(c.bottomLeft))
+        val existing = cachedSlideOutline
+        if (existing != null && cachedSlideSize == size && cachedSlideCorners == c && cachedSlideFallback == fallbackCorner) {
+            return existing
+        }
+        val outline = NavPageOutline(
+            full,
+            slideCorner(c.topLeft),
+            slideCorner(c.topRight),
+            slideCorner(c.bottomRight),
+            slideCorner(c.bottomLeft),
+        )
+        cachedSlideSize = size
+        cachedSlideCorners = c
+        cachedSlideFallback = fallbackCorner
+        cachedSlideOutline = outline
+        cachedSlideShape = if (outline.isRectangular) RectangleShape else SlideOutlineShape(outline)
+        return outline
     }
 
     fun sourceOutline(e: MochiNavEntry): NavPageOutline? {
         val top = top() ?: return null
         if (size.width <= 0f || top.source == null) return null
         if (e === top && nav.under(e) != null && e.inTransition) {
-            val f = frame(e)
-            return NavPageOutline(f.rect, f.tl, f.tr, f.br, f.bl)
+            return frame(e).outline
         }
         if (nav.under(top) === e) {
             val u = underScale(top)
@@ -170,10 +227,12 @@ internal class NavGeometry(val nav: MochiNavigator) {
     fun drawOver(e: MochiNavEntry, scope: DrawScope) {
         val top = top() ?: return
         if (top.source == null) {
-            // 侧推：这一页被上面那页盖着时压暗，并在上面那页左边缘外侧画一道投影
+            // 侧推：这一页被上面那页盖着时压暗（面板里不压）
             // （画在这一页上：上面那页自己被裁成圆角，画不到边外）。连续返回时每一对相邻页各画各的
             val above = nav.above(e) ?: return
             if (above.source != null || !above.inTransition) return
+            // 面板里的侧推不压暗：面板本身已经浮在压暗的页面上，再压一层下层页发灰发脏（iOS 面板内导航也不压）
+            if (inPanel) return
             val p = nav.slideCoverOf(e)
             if (p > 0.001f) scope.drawRect(spec.scrim.copy(alpha = spec.scrim.alpha * p))
             return
@@ -192,14 +251,20 @@ internal class NavGeometry(val nav: MochiNavigator) {
                 // 不让页面从卡片画面下面露出来
                 if (isWideSource(e)) scope.drawRect(f.coverColor.copy(alpha = f.coverColor.alpha * card))
                 val k = size.width / h.size.width
-                // 离屏层只开卡片画面那么大（不开整屏）：每帧少分配、少合成一整屏
-                val bounds = Rect(0f, 0f, scope.size.width, (h.size.height * k).coerceAtMost(scope.size.height))
-                // 不能改 layer.alpha 再改回来：图层的透明度是渲染线程上才读的属性，改回 1 之后实际画出来一直是不透明的，
-                // 卡片就会在淡出阈值处一下消失（打开）/ 一下冒出来（关闭）。用一层带透明度的离屏层把它整体淡掉
-                scope.drawIntoCanvas { canvas ->
-                    canvas.saveLayer(bounds, Paint().apply { alpha = card })
+                if (card >= 0.996f) {
                     scope.scale(k, pivot = Offset.Zero) { drawLayer(layer) }
-                    canvas.restore()
+                } else {
+                    // 离屏层只开卡片画面那么大（不开整屏）：每帧少分配、少合成一整屏
+                    val bounds = Rect(0f, 0f, scope.size.width, (h.size.height * k).coerceAtMost(scope.size.height))
+                    // 不能改 layer.alpha 再改回来：图层的透明度是渲染线程上才读的属性，改回 1 之后实际画出来一直是不透明的，
+                    // 卡片就会在淡出阈值处一下消失（打开）/ 一下冒出来（关闭）。用一层带透明度的离屏层把它整体淡掉
+                    scope.drawIntoCanvas { canvas ->
+                        layerPaint.alpha = card
+                        layerPaint.blendMode = BlendMode.SrcOver
+                        canvas.saveLayer(bounds, layerPaint)
+                        scope.scale(k, pivot = Offset.Zero) { drawLayer(layer) }
+                        canvas.restore()
+                    }
                 }
             }
         } else if (nav.under(top) === e && top.inTransition) {
@@ -215,7 +280,7 @@ internal class NavGeometry(val nav: MochiNavigator) {
 
     /** 容器此刻的圆角矩形（屏幕坐标），共享元素裁在里面 */
     private fun containerPath(f: TopFrame): Path = sharedClip.apply {
-        reset()
+        rewind()
         addRoundRect(
             RoundRect(
                 f.rect,
@@ -234,6 +299,8 @@ internal class NavGeometry(val nav: MochiNavigator) {
     fun drawShared(scope: DrawScope) {
         val top = top() ?: return
         if (top.source == null || !top.inTransition || size.width <= 0f) return
+        val handles = nav.sharedHandles
+        if (handles.isEmpty()) return
         val under = nav.under(top) ?: return
         val f = frame(top)
         if (f.source == null) return
@@ -247,8 +314,10 @@ internal class NavGeometry(val nav: MochiNavigator) {
         // 插值用先快后慢的曲线：容器才长开一点，元素就先铺到目标位置附近，中途目标位置不会空出一块
         val p = top.progress.value.coerceIn(0f, 1f)
         val t = 1f - (1f - p) * (1f - p)
-        val outline = containerPath(f)
-        for (a in nav.sharedOf(under)) {
+        var outline: Path? = null
+        for (idx in 0 until handles.size) {
+            val a = handles[idx]
+            if (a.entry !== under) continue
             val b = nav.sharedFor(a.key, top) ?: continue
             val ac = a.coords?.takeIf { it.isAttached } ?: continue
             val bc = b.coords?.takeIf { it.isAttached } ?: continue
@@ -261,8 +330,9 @@ internal class NavGeometry(val nav: MochiNavigator) {
             val w = lerp(from.width, local.width * s, t)
             val h = lerp(from.height, local.height * s, t)
             val r = Rect(f.rect.topLeft + offset, Size(w, h))
+            val clip = outline ?: containerPath(f).also { outline = it }
             // 裁在容器里：元素不会伸到变形中的容器外面
-            scope.clipPath(outline) { drawSharedFlight(a, b, r, u, s, t) }
+            scope.clipPath(clip) { drawSharedFlight(a, b, r, u, s, t) }
         }
     }
 
@@ -270,7 +340,10 @@ internal class NavGeometry(val nav: MochiNavigator) {
     fun drawCarriedBars(e: MochiNavEntry, scope: DrawScope) {
         if (!nav.isCarriedUnderSource(e)) return
         val root = e.contentCoords?.takeIf { it.isAttached } ?: return
-        for (h in nav.hiddenOf(e)) {
+        val handles = nav.hiddenHandles
+        for (i in 0 until handles.size) {
+            val h = handles[i]
+            if (h.entry !== e || !h.shown()) continue
             val layer = h.layer ?: continue
             val c = h.coords?.takeIf { it.isAttached } ?: continue
             val dy = nav.hideOffset(h)
@@ -288,7 +361,10 @@ internal class NavGeometry(val nav: MochiNavigator) {
 
     /** 遮挡物在收起的栏里面时，跟着栏一起往下滑的量（栏被代画时它自己的图层不动） */
     private fun carriedOffset(under: MochiNavEntry, c: LayoutCoordinates): Float {
-        for (h in nav.hiddenOf(under)) {
+        val handles = nav.hiddenHandles
+        for (i in 0 until handles.size) {
+            val h = handles[i]
+            if (h.entry !== under || !h.shown()) continue
             val hc = h.coords ?: continue
             var p: LayoutCoordinates? = c
             while (p != null) {
@@ -387,9 +463,9 @@ internal class NavGeometry(val nav: MochiNavigator) {
     fun drawOccluders(scope: DrawScope) {
         val top = top() ?: return
         if (top.source == null || !top.inTransition || size.width <= 0f) return
+        val handles = nav.occluderHandles
+        if (handles.isEmpty()) return
         val under = nav.under(top) ?: return
-        val list = nav.occludersOf(under)
-        if (list.isEmpty()) return
         val a = occluderAlpha(top)
         if (a <= 0.004f) return
         val root = under.contentCoords?.takeIf { it.isAttached } ?: return
@@ -397,44 +473,64 @@ internal class NavGeometry(val nav: MochiNavigator) {
         val page = mapUnder(full, u)
         // 下层页缩小后裁成屏幕圆角，栏的副本也裁在同一个轮廓里，四角不会露出直角
         // 先算出每个栏副本此刻的位置；已经滑出页面的不画，淡出用的离屏层也只开这些栏合起来那么大（不开整屏）
-        val placed = ArrayList<Pair<GraphicsLayer, Rect>>(list.size)
+        placedLayers.clear()
+        placedRects.clear()
         var bounds = Rect.Zero
-        for (h in list) {
+        for (i in 0 until handles.size) {
+            val h = handles[i]
+            if (h.entry !== under || !h.shown()) continue
             val layer = h.layer ?: continue
             val c = h.coords?.takeIf { it.isAttached } ?: continue
             val r = mapUnder(root.localBoundingBoxOf(c, clipBounds = false).translate(0f, carriedOffset(under, c)), u)
             if (!r.overlaps(page)) continue
-            placed += layer to r
+            placedLayers += layer
+            placedRects += r
             bounds = if (bounds.isEmpty) {
                 r
             } else {
                 Rect(minOf(bounds.left, r.left), minOf(bounds.top, r.top), maxOf(bounds.right, r.right), maxOf(bounds.bottom, r.bottom))
             }
         }
-        if (placed.isEmpty()) return
+        if (placedLayers.isEmpty()) return
         // 栏本身一直画在下层页里（见 mochiNavOccluder），容器外面看到的就是它；副本只补「容器盖住栏」的那一块，
         // 裁在容器此刻的轮廓里（和栈顶页的裁切是同一条 G2 路径），两份不会在同一处叠出双倍的底色和阴影
         val f = frame(top)
         val reach = with(scope) { OccluderShadowReach.toPx() }
         val layerBounds = bounds.inflate(reach).intersect(page).intersect(f.rect)
         if (layerBounds.isEmpty) return
-        val container = occluderClip.pathFor(NavPageOutline(f.rect, f.tl, f.tr, f.br, f.bl))
+        val container = occluderClip.pathFor(f.outline)
+        val k = navUnderDim(top.progress.value, top.back.value)
+        val needsLayer = a < 0.996f || k > 0.001f || u < 1f
         scope.clipPath(container) {
-            drawIntoCanvas { canvas ->
-                // 整组一起淡：栏底色和上面的图标、文字不会各自半透明叠出深浅。
-                // 离屏层往外多开一圈：栏的投影、玻璃的外阴影和边光都画在栏的矩形外面，只开栏那么大会被切成直角
-                canvas.saveLayer(layerBounds, Paint().apply { alpha = a })
-                for ((layer, r) in placed) {
-                    translate(r.left, r.top) { scale(u, pivot = Offset.Zero) { drawLayer(layer) } }
+            if (!needsLayer) {
+                for (i in 0 until placedLayers.size) {
+                    val r = placedRects[i]
+                    translate(r.left, r.top) { drawLayer(placedLayers[i]) }
                 }
-                // 下层页此刻的压暗也压在栏的副本上，和栏下面那份一样深
-                val k = navUnderDim(top.progress.value, top.back.value)
-                if (k > 0.001f) drawRect(spec.sourceScrim.copy(alpha = spec.sourceScrim.alpha * k), blendMode = BlendMode.SrcAtop)
-                occluderMask.clearOutside(
-                    this,
-                    NavPageOutline(page, corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft),
-                )
-                canvas.restore()
+            } else {
+                drawIntoCanvas { canvas ->
+                    // 整组一起淡：栏底色和上面的图标、文字不会各自半透明叠出深浅。
+                    // 离屏层往外多开一圈：栏的投影、玻璃的外阴影和边光都画在栏的矩形外面，只开栏那么大会被切成直角
+                    layerPaint.alpha = a
+                    layerPaint.blendMode = BlendMode.SrcOver
+                    canvas.saveLayer(layerBounds, layerPaint)
+                    for (i in 0 until placedLayers.size) {
+                        val r = placedRects[i]
+                        translate(r.left, r.top) {
+                            if (u < 1f) scale(u, pivot = Offset.Zero) { drawLayer(placedLayers[i]) } else drawLayer(placedLayers[i])
+                        }
+                    }
+                    // 下层页此刻的压暗也压在栏的副本上，和栏下面那份一样深
+                    if (k > 0.001f) drawRect(spec.sourceScrim.copy(alpha = spec.sourceScrim.alpha * k), blendMode = BlendMode.SrcAtop)
+                    // 默认静止背景（underScale == 1f）下下层页铺满视口，跳过整屏 EvenOdd DstOut 清除路径
+                    if (u < 1f) {
+                        occluderMask.clearOutside(
+                            this,
+                            NavPageOutline(page, corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft),
+                        )
+                    }
+                    canvas.restore()
+                }
             }
         }
     }
@@ -461,6 +557,7 @@ internal class NavGeometry(val nav: MochiNavigator) {
 
     /** 下层页坐标 → 屏幕坐标（下层页绕中心缩放了 u） */
     private fun mapUnder(r: Rect, u: Float): Rect {
+        if (u == 1f) return r
         val c = full.center
         return Rect(c + (r.topLeft - c) * u, c + (r.bottomRight - c) * u)
     }
@@ -477,16 +574,43 @@ internal class NavGeometry(val nav: MochiNavigator) {
         return Rect(c - half, c + half)
     }
 
-    fun frame(e: MochiNavEntry, asOpen: Boolean = false): TopFrame {
+    fun frame(e: MochiNavEntry): TopFrame {
         val p = e.progress.value
         val pc = p.coerceIn(0f, 1f)
+        val m = e.move.value
+        val bk = e.back.value
+        val bkDy = e.backDy
+        val bkEdge = e.backEdge
+        val fd = e.fade.value
+        val fdClosing = e.fadeClosing
+        val fdFromCover = e.fadeFromCover
+        val cns = corners
         val u = openUnderScale(e)
         val src = source(e, u)
+        val existing = cachedTopFrame
+        if (existing != null &&
+            cachedEntry === e &&
+            cachedProgress == p &&
+            cachedMove == m &&
+            cachedBack == bk &&
+            cachedBackDy == bkDy &&
+            cachedBackEdge == bkEdge &&
+            cachedFade == fd &&
+            cachedFadeClosing == fdClosing &&
+            cachedFadeFromCover == fdFromCover &&
+            cachedSize == size &&
+            cachedCorners == cns &&
+            cachedUnderScale == u &&
+            cachedSrcRect == src?.rect &&
+            cachedSrcRadius == (src?.radius ?: -1f) &&
+            cachedSrcColor == (src?.color ?: Color.Unspecified)
+        ) {
+            return existing
+        }
         var alpha = 1f
         // 打开、关闭、掉头都是同一个映射：矩形只由进度决定，所以任何时候换方向画面都连续
         val base = if (src != null) {
             // 大小跟 progress（smooth），中心跟 move（带一点回弹）：两根弹簧，位移到位时轻轻冲过再落回
-            val m = e.move.value
             val w = lerp(src.rect.width, full.width, p)
             val h = lerp(src.rect.height, full.height, p)
             val c = Offset(lerp(src.rect.center.x, full.center.x, m), lerp(src.rect.center.y, full.center.y, m))
@@ -513,27 +637,34 @@ internal class NavGeometry(val nav: MochiNavigator) {
         val sr = src?.radius ?: 0f
         return TopFrame(
             rect = rect,
-            tl = lerp(sr, corners.topLeft, w),
-            tr = lerp(sr, corners.topRight, w),
-            br = lerp(sr, corners.bottomRight, w),
-            bl = lerp(sr, corners.bottomLeft, w),
+            tl = lerp(sr, cns.topLeft, w),
+            tr = lerp(sr, cns.topRight, w),
+            br = lerp(sr, cns.bottomRight, w),
+            bl = lerp(sr, cns.bottomLeft, w),
             alpha = alpha,
             cover = cover,
             coverColor = src?.color ?: Color.Transparent,
             mix = mix,
             underScale = u,
             source = src,
-        )
-    }
-
-    /** 关闭开始：记下此刻的画面，关闭动画从这里连续地缩回来源 */
-    fun captureClose(e: MochiNavEntry) {
-        val f = frame(e, asOpen = true)
-        e.closeFrom = f.rect
-        e.closeUnder = f.underScale
-        e.closeMix = f.mix.coerceIn(0f, 1f)
-        e.closeCover = f.cover
-        e.closeCaptured = true
+        ).also { computed ->
+            cachedEntry = e
+            cachedProgress = p
+            cachedMove = m
+            cachedBack = bk
+            cachedBackDy = bkDy
+            cachedBackEdge = bkEdge
+            cachedFade = fd
+            cachedFadeClosing = fdClosing
+            cachedFadeFromCover = fdFromCover
+            cachedSize = size
+            cachedCorners = cns
+            cachedUnderScale = u
+            cachedSrcRect = src?.rect
+            cachedSrcRadius = src?.radius ?: -1f
+            cachedSrcColor = src?.color ?: Color.Unspecified
+            cachedTopFrame = computed
+        }
     }
 }
 
@@ -577,3 +708,19 @@ private const val WideCardShowWithin = 0.14f
 private const val FadeCard = 0
 private const val FadeCover = 1
 private const val FadeOccluder = 2
+
+/** 侧推转场复用的硬件 RRect 轮廓形状：整个侧推动画期间实例不变，RenderNode 只更新平移，不重建裁切路径 */
+private class SlideOutlineShape(private val outline: NavPageOutline) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline = Outline.Rounded(
+        RoundRect(
+            left = 0f,
+            top = 0f,
+            right = size.width,
+            bottom = size.height,
+            topLeftCornerRadius = CornerRadius(outline.tl),
+            topRightCornerRadius = CornerRadius(outline.tr),
+            bottomRightCornerRadius = CornerRadius(outline.br),
+            bottomLeftCornerRadius = CornerRadius(outline.bl),
+        ),
+    )
+}

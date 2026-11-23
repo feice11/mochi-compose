@@ -7,23 +7,29 @@ import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.toRect
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.colorFilter
+import ui.feice.mochi.theme.MochiGraphics
 
 /**
  * 活力（vibrancy，iOS 的 UIVibrancyEffect / vibrantColorMatrix）：[content] 只当遮罩用，形状里填的是背后的内容——
@@ -47,8 +53,10 @@ public fun MochiVibrant(
         return
     }
     require(matrix.size == 20) { "matrix 要 4×5 = 20 个数" }
-    // Android 的 ColorMatrix 偏移按 0..255 算
-    val filter = ColorFilter.colorMatrix(ColorMatrix(FloatArray(20) { i -> if (i % 5 == 4) matrix[i] * 255f else matrix[i] }))
+    // Android 的 ColorMatrix 偏移按 0..255 算，按 matrix 记住避免每次重组重建 ColorFilter
+    val filter = remember(matrix) {
+        ColorFilter.colorMatrix(ColorMatrix(FloatArray(20) { i -> if (i % 5 == 4) matrix[i] * 255f else matrix[i] }))
+    }
     Box(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }, contentAlignment) {
         content()
         // 只留内容不透明的地方（SrcIn）：形状是内容的，颜色是背后过了矩阵的
@@ -56,13 +64,13 @@ public fun MochiVibrant(
             Modifier
                 .matchParentSize()
                 .graphicsLayer { blendMode = BlendMode.SrcIn }
-                .then(if (Build.VERSION.SDK_INT < 31) Modifier.matrixLayer(filter) else Modifier)
+                .then(if (Build.VERSION.SDK_INT < 31) MatrixLayerElement(filter) else Modifier)
                 .drawBackdrop(
                     backdrop = backdrop.layer,
                     shape = { RectangleShape },
-                    // 31 以下 Kyant 不跑这里的效果（见上面的 matrixLayer）
+                    // 31 以下 Kyant 不跑这里的效果（见上面的 MatrixLayerElement）
                     effects = {
-                        if (blur > 0.dp) blur(blur.toPx())
+                        if (blur > 0.dp && MochiGraphics.blur) blur(blur.toPx() * MochiGraphics.blurScale)
                         colorFilter(filter)
                     },
                     highlight = null,
@@ -72,12 +80,46 @@ public fun MochiVibrant(
     }
 }
 
-/** 把下面画的东西整层过一遍 [filter]（saveLayer 的画笔），所有版本都能用 */
-private fun Modifier.matrixLayer(filter: ColorFilter): Modifier = drawWithContent {
-    val paint = Paint().apply { colorFilter = filter }
-    drawIntoCanvas { canvas ->
-        canvas.saveLayer(size.toRect(), paint)
-        drawContent()
-        canvas.restore()
+/** 把下面画的东西整层过一遍 [filter]（saveLayer 的画笔），复用 Paint 避免每帧分配 */
+private data class MatrixLayerElement(val filter: ColorFilter) : ModifierNodeElement<MatrixLayerNode>() {
+    override fun create(): MatrixLayerNode = MatrixLayerNode(filter)
+
+    override fun update(node: MatrixLayerNode) {
+        if (node.filter != filter) {
+            node.updateFilter(filter)
+        }
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "matrixLayer"
+    }
+}
+
+private class MatrixLayerNode(var filter: ColorFilter) :
+    Modifier.Node(),
+    DrawModifierNode {
+    private val paint = Paint().apply { colorFilter = filter }
+    private var cachedW = -1f
+    private var cachedH = -1f
+    private var cachedRect = Rect.Zero
+
+    fun updateFilter(next: ColorFilter) {
+        filter = next
+        paint.colorFilter = next
+        invalidateDraw()
+    }
+
+    override fun ContentDrawScope.draw() {
+        if (size.width <= 0f || size.height <= 0f) return
+        if (size.width != cachedW || size.height != cachedH) {
+            cachedW = size.width
+            cachedH = size.height
+            cachedRect = Rect(0f, 0f, cachedW, cachedH)
+        }
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(cachedRect, paint)
+            drawContent()
+            canvas.restore()
+        }
     }
 }

@@ -34,6 +34,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,15 +47,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -74,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiBlurVisibility
@@ -81,8 +86,8 @@ import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.list.MochiListColors
 import ui.feice.mochi.list.MochiListDefaults
+import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.MochiRoundedRectangle
-import ui.feice.mochi.shape.mochiBorder
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.lerp
@@ -91,7 +96,8 @@ import ui.feice.mochi.utils.lerp
  * iOS 26 的输入框：
  * - 填充底色，不画边框、不画下划线、聚焦不变色，只有光标是主色；单行是胶囊，多行随内容长高（高度平滑过渡）、变成圆角矩形
  * - 聚焦且有内容时，右边模糊淡入一颗清除按钮（iOS 的 whileEditing）
- * - [secure]：密码点，右边小眼睛切换显示，斜杠原位画出 / 收回
+ * - [secure]：密码点，右边小眼睛切换显示，斜杠原位画出 / 收回；[onRevealChange] 在切换时回调（比如让插画捂眼 / 偷看）
+ * - [onFocusChange]：聚焦变化回调，不用再自己在 modifier 上挂 onFocusChanged
  * - [error] 不为 null：底色带一点警示色、下面模糊淡入说明，并左右抖一下（iOS 密码输错）；[shakeTrigger] 变化时也抖
  * - [maxLength]：超出的字输不进去，下方右侧的字数像计数器一样滚动
  * - [selectAllOnFocus]：获得焦点时选中全部文字，一输入就整段换掉（Safari 的地址栏、改名框）
@@ -124,16 +130,43 @@ public fun MochiTextField(
     trailing: (@Composable () -> Unit)? = null,
     selectAllOnFocus: Boolean = false,
     leadingInset: Dp = MochiTextFieldDefaults.LeadingIconInset,
+    onRevealChange: ((Boolean) -> Unit)? = null,
+    onFocusChange: ((Boolean) -> Unit)? = null,
 ) {
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
-    // 选区自己记着；文字从外面改了（清除、换了一份）就按新文字、光标放到末尾
-    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
-    val current = if (field.text == value) field else TextFieldValue(value, TextRange(value.length))
+    // 选区自己记着；外部修改 value 时尽量保留/夹紧选区，组合阶段只派生不写 state，避免组合副作用
+    var fieldState by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    val lastExternal = remember { arrayOf(value) }
+    val externalChanged = lastExternal[0] != value
+    val current = when {
+        fieldState.text == value -> fieldState
+
+        // IME 组合态（如中文拼音未上屏）且外部未主动修改 value 时保留当前组合态文本与选区，避免打断输入法
+        !externalChanged && fieldState.composition != null -> fieldState
+
+        externalChanged -> TextFieldValue(
+            text = value,
+            selection = if (fieldState.text.isEmpty() || value.isEmpty()) {
+                TextRange(value.length)
+            } else {
+                fieldState.selection.clampTo(value.length)
+            },
+        )
+
+        else -> fieldState.copy(text = value, selection = fieldState.selection.clampTo(value.length))
+    }
+    SideEffect {
+        lastExternal[0] = value
+        if (fieldState != current) {
+            fieldState = current
+        }
+    }
     var revealed by remember { mutableStateOf(false) }
     val shake = rememberMochiShake(shakeTrigger)
-    val container by animateColorAsState(
-        if (error != null) colors.errorContainer else colors.container,
+    val targetContainer = if (error != null) colors.errorContainer else colors.container
+    val containerState = animateColorAsState(
+        targetContainer,
         spring(stiffness = 500f),
         label = "fieldContainer",
     )
@@ -144,20 +177,31 @@ public fun MochiTextField(
     val textPad = ((MochiTextFieldDefaults.Height - lineHeight) / 2 - 2.dp).coerceAtLeast(8.dp)
     val hasTrailing = clearButton || secure || trailing != null
     val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
+    val needsLayer by remember(shake, alpha) { derivedStateOf { shake.value != 0f || alpha < 1f } }
+    val resolvedTextStyle = remember(textStyle, colors.content) { textStyle.copy(color = colors.content) }
     val bringer = rememberFieldBringer(focused)
 
     Column(
         modifier
             .mochiFieldBringer(bringer)
-            .graphicsLayer {
-                translationX = shake.value.dp.toPx()
-                this.alpha = alpha
-            },
+            .then(
+                if (needsLayer) {
+                    Modifier.graphicsLayer {
+                        translationX = shake.value.dp.toPx()
+                        this.alpha = alpha
+                    }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(container, shape)
+                .drawWithCache {
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    onDrawBehind { drawOutline(outline, containerState.value) }
+                }
                 .mochiAnimateHeight(shape)
                 .heightIn(min = MochiTextFieldDefaults.Height)
                 .clickable(remember { MutableInteractionSource() }, indication = null, enabled = enabled) { requester.requestFocus() }
@@ -178,21 +222,25 @@ public fun MochiTextField(
                 Modifier.weight(1f).heightIn(min = MochiTextFieldDefaults.Height).padding(vertical = textPad),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                FieldPlaceholder(placeholder, value.isEmpty(), textStyle, colors.placeholder)
+                FieldPlaceholder(placeholder, current.text.isEmpty(), textStyle, colors.placeholder)
                 MochiSelectionColors(colors.cursor) {
                     BasicTextField(
                         value = current,
                         onValueChange = { v ->
-                            val t = if (maxLength != null) v.text.take(maxLength) else v.text
-                            field = if (t == v.text) v else TextFieldValue(t, v.selection.clampTo(t.length))
-                            if (t != value) onValueChange(t)
+                            val composing = v.composition != null
+                            // 中文拼音等组合态未上屏前不截断，待上屏确认后再按 maxLength 截断
+                            val t = if (maxLength != null && !composing) v.text.take(maxLength) else v.text
+                            fieldState = if (t == v.text) v else TextFieldValue(t, v.selection.clampTo(t.length))
+                            if (t != value && (!composing || maxLength == null || t.length <= maxLength)) {
+                                onValueChange(t)
+                            }
                         },
                         enabled = enabled,
                         singleLine = singleLine,
                         maxLines = maxLines,
-                        textStyle = textStyle.copy(color = colors.content),
+                        textStyle = resolvedTextStyle,
                         cursorBrush = dialogAwareCaret(if (error != null) colors.error else colors.cursor),
-                        visualTransformation = if (secure && !revealed) PasswordVisualTransformation('•') else VisualTransformation.None,
+                        visualTransformation = if (secure && !revealed) BulletPasswordTransformation else VisualTransformation.None,
                         keyboardOptions = if (secure && keyboardOptions.keyboardType == KeyboardType.Unspecified) {
                             keyboardOptions.copy(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
                         } else {
@@ -204,8 +252,9 @@ public fun MochiTextField(
                             .focusRequester(requester)
                             .onFocusChanged {
                                 if (selectAllOnFocus && it.isFocused && !focused) {
-                                    field = current.copy(selection = TextRange(0, current.text.length))
+                                    fieldState = current.copy(selection = TextRange(0, current.text.length))
                                 }
+                                if (it.isFocused != focused) onFocusChange?.invoke(it.isFocused)
                                 focused = it.isFocused
                             },
                     )
@@ -213,21 +262,27 @@ public fun MochiTextField(
             }
             if (clearButton) {
                 ClearSlot(
-                    focused && value.isNotEmpty() && enabled,
-                    { onValueChange("") },
+                    focused && current.text.isNotEmpty() && enabled,
+                    {
+                        fieldState = TextFieldValue("")
+                        onValueChange("")
+                    },
                     colors.icon,
-                    container,
+                    targetContainer,
                     Modifier.size(width = 32.dp, height = MochiTextFieldDefaults.Height),
                 )
             }
             if (secure) {
-                val slash by animateFloatAsState(if (revealed) 1f else 0f, MochiMotionTokens.Control, label = "eye")
+                val slashState = animateFloatAsState(if (revealed) 1f else 0f, MochiMotionTokens.Control, label = "eye")
                 FieldSlot(
                     Modifier
                         .width(40.dp)
-                        .clickable(remember { MutableInteractionSource() }, indication = null, enabled = enabled) { revealed = !revealed }
+                        .clickable(remember { MutableInteractionSource() }, indication = null, enabled = enabled) {
+                            revealed = !revealed
+                            onRevealChange?.invoke(revealed)
+                        }
                         .semantics { contentDescription = if (revealed) "隐藏密码" else "显示密码" },
-                ) { EyeGlyph(colors.icon, slash) }
+                ) { EyeGlyph(colors.icon) { slashState.value } }
             }
             if (trailing != null) {
                 FieldSlot { CompositionLocalProvider(ui.feice.mochi.theme.LocalContentColor provides colors.icon) { trailing() } }
@@ -290,6 +345,7 @@ public fun MochiListTextFieldRow(
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
     val style = MochiTheme.textStyles.body
+    val resolvedStyle = remember(style, colors.content) { style.copy(color = colors.content) }
     val bringer = rememberFieldBringer(focused)
     FormRowShell(
         label,
@@ -310,9 +366,9 @@ public fun MochiListTextFieldRow(
                     enabled = enabled,
                     singleLine = singleLine,
                     maxLines = maxLines,
-                    textStyle = style.copy(color = colors.content),
+                    textStyle = resolvedStyle,
                     cursorBrush = dialogAwareCaret(colors.accent),
-                    visualTransformation = if (secure) PasswordVisualTransformation('•') else VisualTransformation.None,
+                    visualTransformation = if (secure) BulletPasswordTransformation else VisualTransformation.None,
                     keyboardOptions = if (secure && keyboardOptions.keyboardType == KeyboardType.Unspecified) {
                         keyboardOptions.copy(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
                     } else {
@@ -401,8 +457,8 @@ public fun MochiInlineTextField(
     val focus = LocalFocusManager.current
     val holder = remember { booleanArrayOf(false) }
     val currentValue by rememberUpdatedState(value)
-    val p by animateFloatAsState(if (editing) 1f else 0f, MochiMotionTokens.Control, label = "inlineEdit")
-    val bg = remember { MochiRoundedRectangle(10.dp) }
+    val pState = animateFloatAsState(if (editing) 1f else 0f, MochiMotionTokens.Control, label = "inlineEdit")
+    val bgCache = remember { G2PathCache() }
     // 底色只包住文字本身（输入框可能比文字宽）
     var inkLeft by remember { mutableFloatStateOf(0f) }
     var inkRight by remember { mutableFloatStateOf(0f) }
@@ -428,6 +484,7 @@ public fun MochiInlineTextField(
     LaunchedEffect(value) { if (!editing) draft = TextFieldValue(value) }
     BackHandler(enabled = editing) { finish(false) }
 
+    val resolvedStyle = remember(style, color) { style.copy(color = color) }
     MochiSelectionColors(cursor) {
         BasicTextField(
             value = draft,
@@ -435,7 +492,7 @@ public fun MochiInlineTextField(
             enabled = editing,
             singleLine = maxLines == 1,
             maxLines = maxLines,
-            textStyle = style.copy(color = color),
+            textStyle = resolvedStyle,
             cursorBrush = dialogAwareCaret(cursor),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { finish(true) }),
@@ -447,16 +504,15 @@ public fun MochiInlineTextField(
             },
             modifier = modifier
                 .drawBehind {
+                    val p = pState.value
                     if (p > 0.005f) {
                         // 底色画在文字外面：往外扩，不改变布局，文字一点不动
                         val padX = lerp(2.dp.toPx(), 8.dp.toPx(), p)
                         val padY = lerp(0f, 4.dp.toPx(), p)
                         // 空的时候也留一小块，看得出是可以输入的
                         val right = maxOf(inkRight, inkLeft + 24.dp.toPx()).coerceAtMost(size.width)
-                        val s = Size(right - inkLeft + padX * 2, size.height + padY * 2)
-                        translate(inkLeft - padX, -padY) {
-                            drawOutline(bg.createOutline(s, layoutDirection, this), highlight, alpha = p.coerceIn(0f, 1f))
-                        }
+                        val rect = Rect(inkLeft - padX, -padY, right + padX, size.height + padY)
+                        drawPath(bgCache.get(rect, 10.dp.toPx(), 1f), highlight, alpha = p.coerceIn(0f, 1f))
                     }
                 }
                 .focusRequester(requester)
@@ -552,26 +608,21 @@ public fun MochiCodeField(
 ) {
     var focused by remember { mutableStateOf(false) }
     val shake = rememberMochiShake(shakeTrigger)
+    val needsShakeLayer by remember(shake) { derivedStateOf { shake.value != 0f } }
     val bringer = rememberFieldBringer(focused)
     val currentOnComplete by rememberUpdatedState(onComplete)
     val cellShape = remember { MochiRoundedRectangle(14.dp) }
     val dialogCaret = LocalMochiDialogCaretVisible.current
-    val blink = rememberInfiniteTransition(label = "caret")
-    val caret by blink.animateFloat(
-        1f,
-        0f,
-        infiniteRepeatable(
-            keyframes {
-                durationMillis = 1000
-                1f at 0
-                1f at 450
-                0f at 550
-                0f at 950
-            },
-            RepeatMode.Restart,
-        ),
-        label = "caretAlpha",
-    )
+    val bodyStyle = MochiTheme.textStyles.body
+    val digitStyle = remember(bodyStyle) {
+        bodyStyle.copy(
+            fontSize = 26.sp,
+            lineHeight = 32.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            fontFeatureSettings = "tnum",
+        )
+    }
     BasicTextField(
         value = TextFieldValue(value, TextRange(value.length)),
         onValueChange = { v ->
@@ -589,7 +640,7 @@ public fun MochiCodeField(
         modifier = modifier
             .fillMaxWidth()
             .mochiFieldBringer(bringer)
-            .graphicsLayer { translationX = shake.value.dp.toPx() }
+            .then(if (needsShakeLayer) Modifier.graphicsLayer { translationX = shake.value.dp.toPx() } else Modifier)
             .onFocusChanged { focused = it.isFocused },
         decorationBox = { inner ->
             Box {
@@ -598,15 +649,26 @@ public fun MochiCodeField(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (i in 0 until length) {
                         val active = focused && enabled && (i == value.length || (value.length == length && i == length - 1))
-                        val ring by animateFloatAsState(if (active) 1f else 0f, tween(160), label = "cellRing")
+                        val ringState = animateFloatAsState(if (active) 1f else 0f, tween(160), label = "cellRing")
+                        val borderCache = remember { G2PathCache() }
                         val fill = if (error) colors.errorContainer else colors.container
+                        val borderColor = if (error) colors.error else colors.cursor
                         Box(
                             Modifier
                                 .weight(1f)
                                 .widthIn(max = 56.dp)
                                 .heightIn(min = 56.dp)
                                 .background(fill, cellShape)
-                                .mochiBorder(2.dp, (if (error) colors.error else colors.cursor).copy(alpha = ring), cellShape),
+                                .drawWithContent {
+                                    drawContent()
+                                    val rAlpha = (borderColor.alpha * ringState.value).coerceIn(0f, 1f)
+                                    if (rAlpha > 0.005f) {
+                                        val w = 2.dp.toPx()
+                                        val rect = Rect(w / 2f, w / 2f, size.width - w / 2f, size.height - w / 2f)
+                                        val path = borderCache.get(rect, (14.dp.toPx() - w / 2f).coerceAtLeast(0f), 1f)
+                                        drawPath(path, borderColor.copy(alpha = 1f), alpha = rAlpha, style = Stroke(w))
+                                    }
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
                             MochiBlurCrossfade(
@@ -616,24 +678,13 @@ public fun MochiCodeField(
                                 if (c != null) {
                                     Text(
                                         c.toString(),
-                                        style = MochiTheme.textStyles.body.copy(
-                                            fontSize = 26.sp,
-                                            lineHeight = 32.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            textAlign = TextAlign.Center,
-                                            fontFeatureSettings = "tnum",
-                                        ),
+                                        style = digitStyle,
                                         color = if (error) colors.error else colors.content,
                                     )
                                 }
                             }
                             if (active && i == value.length) {
-                                Box(
-                                    Modifier
-                                        .size(width = 2.dp, height = 26.dp)
-                                        .graphicsLayer { this.alpha = if (dialogCaret?.value != false) caret else 0f }
-                                        .background(colors.cursor, CircleShape),
-                                )
+                                CodeCaret(colors.cursor) { dialogCaret?.value != false }
                             }
                         }
                     }
@@ -642,3 +693,36 @@ public fun MochiCodeField(
         },
     )
 }
+
+@Composable
+private fun CodeCaret(color: Color, isCaretVisible: () -> Boolean) {
+    val reduce = mochiReduceMotion()
+    val caret = if (reduce) {
+        null
+    } else {
+        val blink = rememberInfiniteTransition(label = "caret")
+        blink.animateFloat(
+            1f,
+            0f,
+            infiniteRepeatable(
+                keyframes {
+                    durationMillis = 1000
+                    1f at 0
+                    1f at 450
+                    0f at 550
+                    0f at 950
+                },
+                RepeatMode.Restart,
+            ),
+            label = "caretAlpha",
+        )
+    }
+    Box(
+        Modifier
+            .size(width = 2.dp, height = 26.dp)
+            .graphicsLayer { this.alpha = if (isCaretVisible()) (caret?.value ?: 1f) else 0f }
+            .background(color, CircleShape),
+    )
+}
+
+private val BulletPasswordTransformation = PasswordVisualTransformation('•')

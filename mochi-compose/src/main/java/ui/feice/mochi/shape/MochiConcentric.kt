@@ -37,7 +37,30 @@ public object MochiConcentric {
     @ReadOnlyComposable
     public fun shape(fallback: Dp = 16.dp, extraInset: Dp = 0.dp): Shape {
         val r = LocalMochiConcentricCorner.current?.let { inner(it, extraInset) } ?: fallback
-        return MochiRoundedRectangle(r)
+        return cachedConcentricShape(r)
+    }
+}
+
+private const val IntRadiusCacheMax = 48
+private const val FractionalRadiusCacheMax = 64
+
+private val IntRadiusShapes = arrayOfNulls<Shape>(IntRadiusCacheMax + 1)
+private val FractionalRadiusShapes = object : LinkedHashMap<Int, Shape>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Shape>?): Boolean = size > FractionalRadiusCacheMax
+}
+
+private fun cachedConcentricShape(radius: Dp): Shape {
+    val v = radius.value
+    val intVal = v.toInt()
+    if (intVal in 0..IntRadiusCacheMax && intVal.toFloat() == v) {
+        IntRadiusShapes[intVal]?.let { return it }
+        synchronized(IntRadiusShapes) {
+            return IntRadiusShapes[intVal] ?: MochiRoundedRectangle(radius).also { IntRadiusShapes[intVal] = it }
+        }
+    }
+    val bits = v.toRawBits()
+    synchronized(FractionalRadiusShapes) {
+        return FractionalRadiusShapes.getOrPut(bits) { MochiRoundedRectangle(radius) }
     }
 }
 

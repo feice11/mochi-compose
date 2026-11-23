@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * 液态玻璃的两种样式：标准和厚实。厚实沿用标准的折射、边光、投影，磨砂更厚、透出的背景更少，
+ * 液态玻璃样式：标准、厚实和毛玻璃。厚实沿用标准的折射、边光、投影，磨砂更厚、透出的背景更少，
  * 照 iOS 27 菜单、警告框的玻璃（FlClash 在模拟器上的拟合）。
  */
 public enum class MochiGlassStyle {
@@ -21,6 +21,9 @@ public enum class MochiGlassStyle {
      * 选择列表（菜单）、警告框用
      */
     Thick,
+
+    /** Blurred in place with diffuse highlights, rim lighting and shadows. */
+    Frosted,
 }
 
 /**
@@ -29,7 +32,7 @@ public enum class MochiGlassStyle {
  * 内外折射、背景滤镜、面色矩阵、边缘渗色、投影与环形阴影、描边高光和漫反射高光、染色、按压光晕。
  * 参数随玻璃短边（pt）连续变化，和原生一样；这里只选样式和染色，不提供逐项调参。
  *
- * - [style]：[MochiGlassStyle.Regular] 或 [MochiGlassStyle.Thick]
+ * - [style]：[MochiGlassStyle.Regular] 、[MochiGlassStyle.Thick] 或 [MochiGlassStyle.Frosted]
  * - [tint]：染色（iOS 的 `.tint(_:)`），null 不染；透明度就是染色层的不透明度，比如黑色 0.42 是搜索框那种深色玻璃
  * - [adaptive]：按背后亮度自动翻转明暗（每 250ms 取样，浅色底 0.1 / 0.3、深色底 0.7 / 0.9 两道迟滞），
  *   玻璃里的内容色跟着在 110ms 后用 180ms 换过去
@@ -73,7 +76,7 @@ public object MochiGlassDefaults {
  */
 public fun mochiGlassMaterials(
     glass: MochiGlass = MochiGlassDefaults.Regular,
-    menu: MochiGlass = MochiGlassDefaults.Thick,
+    menu: MochiGlass = if (glass.style == MochiGlassStyle.Frosted) glass else MochiGlassDefaults.Thick,
     scrollEdge: MochiScrollEdge? = MochiScrollEdge.Default,
 ): MochiMaterials = MochiMaterials(
     bar = glass,

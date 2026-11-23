@@ -19,13 +19,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,16 +33,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.toArgb
@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +78,7 @@ import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.shape.drawG2RoundRect
+import ui.feice.mochi.shape.mochiBorder
 import ui.feice.mochi.theme.MochiTheme
 
 /** 颜色选择器的默认值 */
@@ -104,7 +106,7 @@ public fun MochiColorWell(
     val sheet = rememberMochiSheetState(listOf(MochiSheetDetent.Medium, MochiSheetDetent.Large))
     val recents = remember { mutableStateListOf<Color>() }
     val current by rememberUpdatedState(color)
-    Canvas(
+    Spacer(
         modifier
             .size(size)
             .pointerInput(Unit) { detectTapGestures { sheet.show() } }
@@ -115,34 +117,41 @@ public fun MochiColorWell(
                     sheet.show()
                     true
                 }
+            }
+            .drawWithCache {
+                val ring = 3.dp.toPx()
+                val ringRadius = this.size.minDimension / 2f - ring / 2f
+                val swatch = this.size.minDimension / 2f - ring - 2.dp.toPx()
+                val checkerRadius = (swatch - 1.dp.toPx()).coerceAtLeast(0f)
+                val center = Offset(this.size.width / 2f, this.size.height / 2f)
+                val sweep = Brush.sweepGradient(RainbowStops, center = center)
+                val ringStroke = Stroke(ring)
+                val checkerClip = Path().apply { addOval(Rect(center, checkerRadius)) }
+                onDrawBehind {
+                    drawCircle(sweep, radius = ringRadius, style = ringStroke)
+                    // 同一条边只留一层抗锯齿：棋盘格只在半透明时画，并内缩 1dp 藏在色块边缘里面，
+                    // 否则白底和灰格的半透明边会从色块边缘透出来，形成一圈毛边
+                    if (color.alpha < 1f && checkerRadius > 0f) drawCheckerCircle(checkerRadius, checkerClip)
+                    drawCircle(color, radius = swatch)
+                }
             },
-    ) {
-        val ring = 3.dp.toPx()
-        drawCircle(
-            Brush.sweepGradient(RainbowStops),
-            radius = this.size.minDimension / 2f - ring / 2f,
-            style = Stroke(ring),
-        )
-        val swatch = this.size.minDimension / 2f - ring - 2.dp.toPx()
-        // 同一条边只留一层抗锯齿：棋盘格只在半透明时画，并内缩 1dp 藏在色块边缘里面，
-        // 否则白底和灰格的半透明边会从色块边缘透出来，形成一圈毛边
-        if (color.alpha < 1f) drawCheckerCircle(swatch - 1.dp.toPx())
-        drawCircle(color, radius = swatch)
-    }
-    MochiColorPickerSheet(
-        state = sheet,
-        color = color,
-        onColorChange = onColorChange,
-        title = title,
-        supportsAlpha = supportsAlpha,
-        recents = recents,
-        onDismiss = {
-            val c = current
-            recents.remove(c)
-            recents.add(0, c)
-            while (recents.size > MochiColorPickerDefaults.RecentCount) recents.removeAt(recents.lastIndex)
-        },
     )
+    if (sheet.composed) {
+        MochiColorPickerSheet(
+            state = sheet,
+            color = color,
+            onColorChange = onColorChange,
+            title = title,
+            supportsAlpha = supportsAlpha,
+            recents = recents,
+            onDismiss = {
+                val c = current
+                recents.remove(c)
+                recents.add(0, c)
+                while (recents.size > MochiColorPickerDefaults.RecentCount) recents.removeAt(recents.lastIndex)
+            },
+        )
+    }
 }
 
 /**
@@ -160,6 +169,7 @@ public fun MochiColorPickerSheet(
     recents: List<Color> = emptyList(),
     onDismiss: () -> Unit = {},
 ) {
+    if (!state.composed) return
     var mode by remember { mutableIntStateOf(0) }
     val change by rememberUpdatedState(onColorChange)
     val alpha = color.alpha
@@ -176,7 +186,7 @@ public fun MochiColorPickerSheet(
                 )
             },
         ) {
-            MochiSegmentedControl(mode, { mode = it }, persistentListOf("网格", "色谱", "滑块"), Modifier.fillMaxWidth())
+            MochiSegmentedControl(mode, { mode = it }, PickerModeLabels, Modifier.fillMaxWidth())
             MochiBlurCrossfade(mode, Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) { m ->
                 when (m) {
                     0 -> ColorGrid(color.copy(alpha = 1f)) { change(it.copy(alpha = alpha)) }
@@ -189,20 +199,52 @@ public fun MochiColorPickerSheet(
                     change(color.copy(alpha = it))
                 }
             }
+            val borderColor = MochiTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            val previewShape = remember { MochiRoundedRectangle(MochiRoundedCorner) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Canvas(Modifier.size(48.dp).clip(MochiRoundedRectangle(MochiRoundedCorner))) {
-                    drawCheckerRect(MochiRoundedCorner.toPx())
+                Canvas(
+                    Modifier
+                        .size(48.dp)
+                        .clip(previewShape)
+                        .mochiBorder(0.5.dp, borderColor, previewShape),
+                ) {
+                    // 同一条边只留一层抗锯齿：不透明色不画棋盘格，半透明色内缩 1dp 防圆角透出灰白毛边
+                    if (color.alpha < 1f) drawCheckerRect(1.dp.toPx())
                     drawRect(color)
                 }
                 Box(Modifier.width(1.dp).height(32.dp).background(MochiTheme.colorScheme.outlineVariant))
                 recents.take(MochiColorPickerDefaults.RecentCount).forEach { c ->
                     Box(
                         Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(c)
-                            .pointerInput(c) { detectTapGestures { change(c) } },
-                    )
+                            .height(44.dp)
+                            .pointerInput(c) { detectTapGestures { change(c) } }
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "最近使用颜色"
+                                onClick {
+                                    change(c)
+                                    true
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Spacer(
+                            Modifier
+                                .size(30.dp)
+                                .drawWithCache {
+                                    val r = size.minDimension / 2f
+                                    val checkerR = (r - 1.dp.toPx()).coerceAtLeast(0f)
+                                    val clip = Path().apply { addOval(Rect(Offset(size.width / 2f, size.height / 2f), checkerR)) }
+                                    val borderW = 0.5.dp.toPx()
+                                    val borderStroke = Stroke(borderW)
+                                    onDrawBehind {
+                                        if (c.alpha < 1f && checkerR > 0f) drawCheckerCircle(checkerR, clip)
+                                        drawCircle(c, radius = r)
+                                        drawCircle(borderColor, radius = r - borderW / 2f, style = borderStroke)
+                                    }
+                                },
+                        )
+                    }
                 }
             }
         }
@@ -212,13 +254,15 @@ public fun MochiColorPickerSheet(
 /** 网格：第一行灰阶，下面 12 种色相从深到浅 */
 @Composable
 private fun ColorGrid(selected: Color, onPick: (Color) -> Unit) {
-    val cols = 12
-    val rows = 10
-    val colors = remember { gridColors(cols, rows) }
+    val cols = GridCols
+    val rows = GridRows
+    val colors = StaticGridColors
+    val gridBitmap = StaticGridBitmap
     val sel = remember(selected) { colors.indexOfFirst { it.toArgb() == selected.toArgb() } }
-    val shape = MochiRoundedRectangle(MochiRoundedCorner)
+    val shape = remember { MochiRoundedRectangle(MochiRoundedCorner) }
     val scratch = remember { Path() }
-    Canvas(
+    val currentPick by rememberUpdatedState(onPick)
+    Spacer(
         Modifier
             .fillMaxWidth()
             .aspectRatio(cols / rows.toFloat())
@@ -227,9 +271,10 @@ private fun ColorGrid(selected: Color, onPick: (Color) -> Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     fun pickAt(p: Offset) {
+                        if (size.width <= 0 || size.height <= 0) return
                         val c = (p.x / size.width * cols).toInt().coerceIn(0, cols - 1)
                         val r = (p.y / size.height * rows).toInt().coerceIn(0, rows - 1)
-                        onPick(colors[r * cols + c])
+                        currentPick(colors[r * cols + c])
                     }
                     pickAt(down.position)
                     while (true) {
@@ -240,29 +285,34 @@ private fun ColorGrid(selected: Color, onPick: (Color) -> Unit) {
                         ch.consume()
                     }
                 }
+            }
+            .drawWithCache {
+                val cw = size.width / cols
+                val ch = size.height / rows
+                val dstSize = IntSize(size.width.roundToInt().coerceAtLeast(1), size.height.roundToInt().coerceAtLeast(1))
+                val borderW = 3.dp.toPx()
+                val borderStroke = Stroke(borderW)
+                val cornerPx = 4.dp.toPx()
+                onDrawBehind {
+                    // 12×10 静态色块网格单次最近邻绘制，替代每帧 120 次 drawRect
+                    drawImage(gridBitmap, dstSize = dstSize, filterQuality = FilterQuality.None)
+                    if (sel >= 0) {
+                        drawG2RoundRect(
+                            scratch,
+                            Rect(
+                                (sel % cols) * cw + borderW / 2f,
+                                (sel / cols) * ch + borderW / 2f,
+                                (sel % cols + 1) * cw - borderW / 2f,
+                                (sel / cols + 1) * ch - borderW / 2f,
+                            ),
+                            cornerPx,
+                            Color.White,
+                            style = borderStroke,
+                        )
+                    }
+                }
             },
-    ) {
-        val cw = size.width / cols
-        val ch = size.height / rows
-        for (i in colors.indices) {
-            drawRect(colors[i], topLeft = Offset((i % cols) * cw, (i / cols) * ch), size = Size(cw + 0.5f, ch + 0.5f))
-        }
-        if (sel >= 0) {
-            val w = 3.dp.toPx()
-            drawG2RoundRect(
-                scratch,
-                Rect(
-                    (sel % cols) * cw + w / 2f,
-                    (sel / cols) * ch + w / 2f,
-                    (sel % cols + 1) * cw - w / 2f,
-                    (sel / cols + 1) * ch - w / 2f,
-                ),
-                4.dp.toPx(),
-                Color.White,
-                style = Stroke(w),
-            )
-        }
-    }
+    )
 }
 
 internal fun gridColors(cols: Int, rows: Int): List<Color> {
@@ -293,7 +343,7 @@ internal fun gridColors(cols: Int, rows: Int): List<Color> {
 private fun ColorSpectrum(selected: Color, onPick: (Color) -> Unit) {
     var model by rememberSaveable { mutableIntStateOf(0) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        MochiSegmentedControl(model, { model = it }, persistentListOf("HSL", "HCT", "Lab", "LCH"), Modifier.fillMaxWidth())
+        MochiSegmentedControl(model, { model = it }, SpectrumModelLabels, Modifier.fillMaxWidth())
         MochiBlurCrossfade(model, Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) { m ->
             SpectrumPlane(SpectrumModel.entries[m], selected, onPick)
         }
@@ -349,8 +399,7 @@ internal enum class SpectrumModel(val sliderLabel: String, val sliderMax: Int, v
     }
 
     /** 滑条在 z 时整张平面的样子（小图，画的时候双线性放大） */
-    fun render(z: Float, w: Int, h: Int, active: () -> Boolean): IntArray? {
-        val out = IntArray(w * h)
+    fun render(z: Float, w: Int, h: Int, out: IntArray = IntArray(w * h), active: () -> Boolean): IntArray? {
         val scratch = FloatArray(3)
         for (j in 0 until h) {
             if (!active()) return null
@@ -363,26 +412,43 @@ internal enum class SpectrumModel(val sliderLabel: String, val sliderMax: Int, v
 
 @Composable
 private fun SpectrumPlane(model: SpectrumModel, selected: Color, onPick: (Color) -> Unit) {
-    // 位置自己记着：显示不出来的点映射回色域后颜色会变，再从颜色反推位置标记就会跳。外面改了颜色才重新定位
-    var pos by remember(model) { mutableStateOf(model.locate(selected)) }
+    // 位置拆成三个原生 Float 状态：平面拖动每帧零 FloatArray 分配；显示不出来的点映射回色域后标记不乱跳
+    val initial = remember(model) { model.locate(selected) }
+    var posX by remember(model) { mutableFloatStateOf(initial[0]) }
+    var posY by remember(model) { mutableFloatStateOf(initial[1]) }
+    var posZ by remember(model) { mutableFloatStateOf(initial[2]) }
     var emitted by remember(model) { mutableIntStateOf(selected.toArgb()) }
     if (selected.toArgb() != emitted) {
         emitted = selected.toArgb()
-        pos = model.locate(selected)
+        val loc = model.locate(selected)
+        posX = loc[0]
+        posY = loc[1]
+        posZ = loc[2]
     }
+    val pickScratch = remember { FloatArray(3) }
     fun pick(x: Float, y: Float, z: Float) {
-        pos = floatArrayOf(x, y, z)
-        val c = Color(model.argb(x, y, z))
+        posX = x
+        posY = y
+        posZ = z
+        val c = Color(model.argb(x, y, z, pickScratch))
         emitted = c.toArgb()
         onPick(c)
     }
-    val z = pos[2]
-    // 第三个维度变了就在后台重算整张平面（只有 96×80 个点），算好之前先显示上一张
-    val plane by produceState<ImageBitmap?>(null, model, z) {
-        val pixels = withContext(Dispatchers.Default) { model.render(z, PlaneW, PlaneH) { isActive } } ?: return@produceState
-        value = android.graphics.Bitmap.createBitmap(pixels, PlaneW, PlaneH, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+    val z = posZ
+    // 复用双缓冲像素数组与单张可变 Bitmap：拖动第三维滑条时零 IntArray / Bitmap 分配
+    val pixelBuffers = remember { arrayOf(IntArray(PlaneW * PlaneH), IntArray(PlaneW * PlaneH)) }
+    var bufferSlot by remember { mutableIntStateOf(0) }
+    val backingBitmap = remember { android.graphics.Bitmap.createBitmap(PlaneW, PlaneH, android.graphics.Bitmap.Config.ARGB_8888) }
+    val planeBitmap = remember(backingBitmap) { backingBitmap.asImageBitmap() }
+    var planeRevision by remember { mutableIntStateOf(0) }
+    LaunchedEffect(model, z) {
+        val buf = pixelBuffers[bufferSlot and 1]
+        bufferSlot++
+        val pixels = withContext(Dispatchers.Default) { model.render(z, PlaneW, PlaneH, buf) { isActive } } ?: return@LaunchedEffect
+        backingBitmap.setPixels(pixels, 0, PlaneW, 0, 0, PlaneW, PlaneH)
+        planeRevision++
     }
-    val shape = MochiRoundedRectangle(MochiRoundedCorner)
+    val shape = remember { MochiRoundedRectangle(MochiRoundedCorner) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Canvas(
             Modifier
@@ -392,7 +458,10 @@ private fun SpectrumPlane(model: SpectrumModel, selected: Color, onPick: (Color)
                 .pointerInput(model) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
-                        fun pickAt(p: Offset) = pick((p.x / size.width).coerceIn(0f, 1f), (p.y / size.height).coerceIn(0f, 1f), pos[2])
+                        fun pickAt(p: Offset) {
+                            if (size.width <= 0 || size.height <= 0) return
+                            pick((p.x / size.width).coerceIn(0f, 1f), (p.y / size.height).coerceIn(0f, 1f), posZ)
+                        }
                         pickAt(down.position)
                         while (true) {
                             val e = awaitPointerEvent()
@@ -404,13 +473,16 @@ private fun SpectrumPlane(model: SpectrumModel, selected: Color, onPick: (Color)
                     }
                 },
         ) {
-            val img = plane
-            if (img != null) {
-                drawImage(img, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()), filterQuality = FilterQuality.Low)
+            if (planeRevision > 0) {
+                drawImage(
+                    planeBitmap,
+                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                    filterQuality = FilterQuality.Low,
+                )
             } else {
                 drawRect(Color.Gray.copy(alpha = 0.2f))
             }
-            val c = Offset(pos[0] * size.width, pos[1] * size.height)
+            val c = Offset(posX * size.width, posY * size.height)
             val r = 14.dp.toPx()
             drawCircle(selected, r, c)
             drawCircle(Color.White, r, c, style = Stroke(3.dp.toPx()))
@@ -422,17 +494,62 @@ private fun SpectrumPlane(model: SpectrumModel, selected: Color, onPick: (Color)
             z,
             0f..1f,
             selected,
-        ) { pick(pos[0], pos[1], it) }
+        ) { pick(posX, posY, it) }
     }
 }
 
 private const val PlaneW = 96
 private const val PlaneH = 80
 
-/** HSL → ARGB（h 角度，s、l 0..1）；s、l 在范围内时结果天然在 sRGB 里 */
+/** HSL → ARGB（h 角度，s、l 0..1）：纯标量计算，零 ColorSpace 校验开销 */
 internal fun hslToArgb(h: Float, s: Float, l: Float): Int {
-    val c = Color.hsl(h.mod(360f), s, l)
-    return c.toArgb()
+    val sat = s.coerceIn(0f, 1f)
+    val lit = l.coerceIn(0f, 1f)
+    val c = (1f - abs(2f * lit - 1f)) * sat
+    val hue = h.mod(360f) / 60f
+    val x = c * (1f - abs(hue.mod(2f) - 1f))
+    val m = lit - c / 2f
+    val r: Float
+    val g: Float
+    val b: Float
+    when (hue.toInt()) {
+        0 -> {
+            r = c
+            g = x
+            b = 0f
+        }
+
+        1 -> {
+            r = x
+            g = c
+            b = 0f
+        }
+
+        2 -> {
+            r = 0f
+            g = c
+            b = x
+        }
+
+        3 -> {
+            r = 0f
+            g = x
+            b = c
+        }
+
+        4 -> {
+            r = x
+            g = 0f
+            b = c
+        }
+
+        else -> {
+            r = c
+            g = 0f
+            b = x
+        }
+    }
+    return ColorSpaces.argb(r + m, g + m, b + m)
 }
 
 /** ARGB → HSL：h 0..360，s、l 0..1 */
@@ -480,28 +597,50 @@ private fun LabeledSlider(
     accent: Color,
     onChange: (Float) -> Unit,
 ) {
+    // 遵守设计规范优先级：拖动中逐帧变化的读数直接等宽显示（不触发模糊叠层），外部/选色块改值时用计数器滚动
+    var dragging by remember { mutableStateOf(false) }
+    val footnote = MochiTheme.textStyles.footnote
+    val labelStyle = remember(footnote) { footnote.copy(fontWeight = FontWeight.SemiBold) }
+    val numStyle = remember(footnote) { footnote.copy(fontFeatureSettings = "tnum") }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 label,
-                style = MochiTheme.textStyles.footnote.copy(fontWeight = FontWeight.SemiBold),
+                style = labelStyle,
                 color = MochiTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.weight(1f))
-            MochiCounterText(
-                shown,
-                style = MochiTheme.textStyles.footnote,
-                color = MochiTheme.colorScheme.onSurfaceVariant,
-                format = { "$it$suffix" },
-            )
+            if (dragging) {
+                Text(
+                    "$shown$suffix",
+                    style = numStyle,
+                    color = MochiTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                MochiCounterText(
+                    shown,
+                    style = numStyle,
+                    color = MochiTheme.colorScheme.onSurfaceVariant,
+                    format = { "$it$suffix" },
+                )
+            }
         }
-        MochiSlider(value, onChange, Modifier.fillMaxWidth(), valueRange = range, colors = MochiSliderDefaults.colors(activeTrack = accent))
+        MochiSlider(
+            value,
+            onValueChange = {
+                dragging = true
+                onChange(it)
+            },
+            Modifier.fillMaxWidth(),
+            valueRange = range,
+            onValueChangeFinished = { dragging = false },
+            colors = MochiSliderDefaults.colors(activeTrack = accent),
+        )
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCheckerCircle(radius: Float) {
+private fun DrawScope.drawCheckerCircle(radius: Float, clip: Path) {
     // 格子裁进圆里：直接按格子中心判断会让方角伸出圆外
-    val clip = Path().apply { addOval(Rect(center, radius)) }
     clipPath(clip) {
         drawCircle(Color.White, radius)
         val cell = radius / 2f
@@ -514,15 +653,21 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCheckerCircle(r
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCheckerRect(corner: Float) {
-    drawRect(Color.White)
+private fun DrawScope.drawCheckerRect(inset: Float) {
+    val left = inset
+    val top = inset
+    val right = (size.width - inset).coerceAtLeast(left)
+    val bottom = (size.height - inset).coerceAtLeast(top)
+    if (right <= left || bottom <= top) return
+    drawRect(Color.White, Offset(left, top), Size(right - left, bottom - top))
     val cell = 8.dp.toPx()
-    var y = 0f
+    var y = top
     var row = 0
-    while (y < size.height) {
-        var x = if (row % 2 == 0) 0f else cell
-        while (x < size.width) {
-            drawRect(Color(0xFFCCCCCC), Offset(x, y), Size(cell.coerceAtMost(size.width - x), cell.coerceAtMost(size.height - y)))
+    while (y < bottom) {
+        var x = if (row % 2 == 0) left else left + cell
+        val h = cell.coerceAtMost(bottom - y)
+        while (x < right) {
+            drawRect(Color(0xFFCCCCCC), Offset(x, y), Size(cell.coerceAtMost(right - x), h))
             x += cell * 2
         }
         y += cell
@@ -531,6 +676,20 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCheckerRect(cor
 }
 
 private val MochiRoundedCorner = 12.dp
+
+private val PickerModeLabels = persistentListOf("网格", "色谱", "滑条")
+
+private val SpectrumModelLabels = persistentListOf("HSL", "HCT", "Lab", "LCH")
+
+private const val GridCols = 12
+private const val GridRows = 10
+
+private val StaticGridColors: List<Color> by lazy { gridColors(GridCols, GridRows) }
+
+private val StaticGridBitmap by lazy {
+    val pixels = IntArray(GridCols * GridRows) { i -> StaticGridColors[i].toArgb() }
+    android.graphics.Bitmap.createBitmap(pixels, GridCols, GridRows, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+}
 
 internal val RainbowStops = listOf(
     Color(0xFFFF0000),

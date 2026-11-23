@@ -5,6 +5,7 @@ package ui.feice.mochi.navigation
 
 import android.annotation.SuppressLint
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.layer.CompositingStrategy
@@ -17,7 +18,6 @@ import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
-import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.LayoutAwareModifierNode
 import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
@@ -27,7 +27,6 @@ import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import ui.feice.mochi.utils.smoothstep
 
 /**
  * 标记一个可以「打开成页面」的元素（卡片、图标）。`navigator.push(route, from = key)` 时，
@@ -71,14 +70,17 @@ private class NavSourceNode(key: String, private var radius: Dp, private var col
     DrawModifierNode {
     private val handle = SourceHandle(key)
     private var nav: MochiNavigator? = null
+    private var recorded: Boolean = false
+    private var recordedSize: Size = Size.Unspecified
+    private var recordedEntryId: Int = -1
+    private var recordedPhase: Int = -1
 
-    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够
+    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够；图层按需延迟创建，静止态零 GraphicsLayer
     @SuppressLint("SuspiciousCompositionLocalModifierRead")
     override fun onAttach() {
         nav = currentValueOf(LocalMochiNavigator)
         handle.entry = currentValueOf(LocalMochiNavEntry)
         handle.shown = currentValueOf(LocalMochiTabPageShown)
-        handle.layer = requireGraphicsContext().createGraphicsLayer()
         sync()
         nav?.registerSource(handle)
     }
@@ -89,9 +91,11 @@ private class NavSourceNode(key: String, private var radius: Dp, private var col
         handle.coords = null
         handle.layer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
         handle.layer = null
+        resetRecording()
     }
 
     fun update(key: String, radius: Dp, color: Color) {
+        val changed = key != handle.key || this.radius != radius || this.color != color
         this.radius = radius
         this.color = color
         if (key != handle.key) {
@@ -99,7 +103,24 @@ private class NavSourceNode(key: String, private var radius: Dp, private var col
             handle.key = key
             nav?.registerSource(handle)
         }
+        if (changed) resetRecording()
         if (isAttached) sync()
+    }
+
+    private fun resetRecording() {
+        recorded = false
+        recordedSize = Size.Unspecified
+        recordedEntryId = -1
+        recordedPhase = -1
+    }
+
+    private fun activeSourceEntry(): MochiNavEntry? {
+        val entries = nav?.entries ?: return null
+        for (i in entries.lastIndex downTo 0) {
+            val e = entries[i]
+            if (e.source == handle.key) return e
+        }
+        return null
     }
 
     private fun sync() {
@@ -112,19 +133,36 @@ private class NavSourceNode(key: String, private var radius: Dp, private var col
     }
 
     override fun ContentDrawScope.draw() {
-        val layer = handle.layer
-        if (layer == null) {
+        handle.size = size
+        val activeEntry = activeSourceEntry()
+        if (activeEntry == null) {
+            handle.layer?.let {
+                requireGraphicsContext().releaseGraphicsLayer(it)
+                handle.layer = null
+            }
+            resetRecording()
             drawContent()
             return
         }
-        // 录下来：转场时页面容器把它按容器大小缩放着画进去（和容器一起长大、一起缩回）
-        val active = nav?.isSourceActive(handle.key) == true
-        // 转场中这张卡片画进离屏纹理：容器每帧换缩放时只缩放这张图，卡片上的文字不随缩放每帧重新光栅化。
-        // 平时不开（几十张卡片各占一张纹理太费显存）
-        layer.compositingStrategy = if (active) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+        if (size.width < 1f || size.height < 1f) {
+            recorded = false
+            recordedSize = Size.Unspecified
+            return
+        }
+        // 转场中这张卡片按需录进离屏纹理：容器每帧换缩放时只缩放这张图，卡片上的文字不随缩放每帧重新光栅化。
+        // 同一捕获周期（同页、同阶段、同尺寸）仅录制一次，后续转场帧直接复用已录离屏层。
+        val phase = (if (activeEntry.closing) 1 else 0) or (if (activeEntry.backActive) 2 else 0)
+        val existing = handle.layer
+        if (existing != null && recorded && recordedSize == size && recordedEntryId == activeEntry.id && recordedPhase == phase) {
+            return
+        }
+        val layer = existing ?: requireGraphicsContext().createGraphicsLayer().also { handle.layer = it }
+        layer.compositingStrategy = CompositingStrategy.Offscreen
         layer.record { this@draw.drawContent() }
-        handle.size = size
-        if (!active) drawLayer(layer)
+        recorded = true
+        recordedSize = size
+        recordedEntryId = activeEntry.id
+        recordedPhase = phase
     }
 }
 
@@ -159,15 +197,18 @@ private class OccluderNode :
     DrawModifierNode {
     private val handle = OccluderHandle()
     private var nav: MochiNavigator? = null
+    private var recorded: Boolean = false
+    private var recordedSize: Size = Size.Unspecified
+    private var recordedAboveId: Int = -1
+    private var recordedPhase: Int = -1
 
-    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够
+    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够；图层仅在来源转场期间按需创建
     @SuppressLint("SuspiciousCompositionLocalModifierRead")
     override fun onAttach() {
         val n = currentValueOf(LocalMochiNavigator) ?: return
         handle.entry = currentValueOf(LocalMochiNavEntry) ?: return
         handle.shown = currentValueOf(LocalMochiTabPageShown)
         nav = n
-        handle.layer = requireGraphicsContext().createGraphicsLayer()
         n.registerOccluder(handle)
     }
 
@@ -177,6 +218,14 @@ private class OccluderNode :
         handle.layer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
         handle.layer = null
         handle.coords = null
+        resetRecording()
+    }
+
+    private fun resetRecording() {
+        recorded = false
+        recordedSize = Size.Unspecified
+        recordedAboveId = -1
+        recordedPhase = -1
     }
 
     override fun onPlaced(coordinates: LayoutCoordinates) {
@@ -184,16 +233,40 @@ private class OccluderNode :
     }
 
     override fun ContentDrawScope.draw() {
-        val layer = handle.layer
-        if (layer == null) {
+        val n = nav
+        val e = handle.entry
+        val above = if (n != null && e != null) n.above(e) else null
+        val needed = above != null && above.source != null && above.inTransition
+        if (!needed) {
+            handle.layer?.let {
+                requireGraphicsContext().releaseGraphicsLayer(it)
+                handle.layer = null
+            }
+            resetRecording()
+            drawContent()
+            return
+        }
+        if (size.width < 1f || size.height < 1f) {
+            recorded = false
+            recordedSize = Size.Unspecified
             drawContent()
             return
         }
         // 栏一直画在自己页里（和页面其他部分一样，转场前后不断档）。从来源打开 / 缩回时 MochiNavHost 另外把同一张图层
         // 画在变形的容器上面，只画在容器轮廓里（见 NavGeometry.drawOccluders），容器外面只有这一份，不会叠两层。
-        // 不能在这里跳过：没有任何父节点画它的那一帧，渲染线程会丢掉它的显示列表，之后宿主再画它就是空白，
-        // 要等这里下次重录（转场完全结束）才一下冒出来
+        // 同一捕获周期（同上层页、同阶段、同尺寸）仅录制一次，后续转场帧直接复用已录离屏层。
+        val phase = (if (above.closing) 1 else 0) or (if (above.backActive) 2 else 0)
+        val existing = handle.layer
+        if (existing != null && recorded && recordedSize == size && recordedAboveId == above.id && recordedPhase == phase) {
+            drawLayer(existing)
+            return
+        }
+        val layer = existing ?: requireGraphicsContext().createGraphicsLayer().also { handle.layer = it }
         layer.record { this@draw.drawContent() }
+        recorded = true
+        recordedSize = size
+        recordedAboveId = above.id
+        recordedPhase = phase
         drawLayer(layer)
     }
 }
@@ -224,18 +297,22 @@ private class HideWhenCoveredNode :
     Modifier.Node(),
     LayoutModifierNode,
     CompositionLocalConsumerModifierNode,
-    GlobalPositionAwareModifierNode,
+    LayoutAwareModifierNode,
     DrawModifierNode {
     private val handle = HideHandle()
     private var nav: MochiNavigator? = null
+    private var belowMeasured = false
+    private var recorded: Boolean = false
+    private var recordedSize: Size = Size.Unspecified
+    private var recordedAboveId: Int = -1
+    private var recordedPhase: Int = -1
 
-    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够
+    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够；图层仅在来源转场被宿主代画时按需创建
     @SuppressLint("SuspiciousCompositionLocalModifierRead")
     override fun onAttach() {
         nav = currentValueOf(LocalMochiNavigator)
         handle.entry = currentValueOf(LocalMochiNavEntry)
         handle.shown = currentValueOf(LocalMochiTabPageShown)
-        handle.layer = requireGraphicsContext().createGraphicsLayer()
         nav?.registerHidden(handle)
     }
 
@@ -245,43 +322,87 @@ private class HideWhenCoveredNode :
         handle.coords = null
         handle.layer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
         handle.layer = null
+        belowMeasured = false
+        resetRecording()
+    }
+
+    private fun resetRecording() {
+        recorded = false
+        recordedSize = Size.Unspecified
+        recordedAboveId = -1
+        recordedPhase = -1
     }
 
     // 从来源打开（或缩回）的转场中：这一页由 MochiNavHost 整页缓存着缩放，栏由它代画、照常往下滑；
     // 这里不画也不动，不然栏每帧一动，整页的缓存就作废了
-    private fun carried(): Boolean {
-        val e = handle.entry ?: return false
-        return nav?.isCarriedUnderSource(e) == true
+    private fun carriedAbove(): MochiNavEntry? {
+        val e = handle.entry ?: return null
+        val above = nav?.above(e) ?: return null
+        return if (above.source != null && above.inTransition) above else null
+    }
+
+    private fun carried(): Boolean = carriedAbove() != null
+
+    private fun refreshBelowIfUncovered() {
+        val coordinates = handle.coords?.takeIf { it.isAttached } ?: return
+        val e = handle.entry ?: return
+        if ((nav?.coverOf(e) ?: 0f) > 0f) return
+        val root = coordinates.findRootCoordinates()
+        if (root.size.height > 0) {
+            // 元素底边到屏幕底边的距离（没盖住时量的），滑出去要多走这一段
+            handle.below = (root.size.height - coordinates.positionInRoot().y - coordinates.size.height).coerceAtLeast(0f)
+            belowMeasured = true
+        }
     }
 
     override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
         val p = measurable.measure(constraints)
         handle.height = p.height.toFloat()
         return layout(p.width, p.height) {
-            p.placeWithLayer(0, 0) {
-                translationY = if (carried()) 0f else nav?.hideOffset(handle) ?: 0f
+            val dy = if (carried()) 0f else nav?.hideOffset(handle) ?: 0f
+            if (dy != 0f) {
+                p.placeWithLayer(0, 0) { translationY = dy }
+            } else {
+                p.place(0, 0)
             }
         }
     }
 
-    override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
+    override fun onPlaced(coordinates: LayoutCoordinates) {
+        belowMeasured = false
         handle.coords = coordinates
-        val e = handle.entry ?: return
-        if ((nav?.coverOf(e) ?: 0f) > 0f) return
-        val root = coordinates.findRootCoordinates()
-        // 元素底边到屏幕底边的距离（没盖住时量的），滑出去要多走这一段
-        handle.below = (root.size.height - coordinates.positionInRoot().y - coordinates.size.height).coerceAtLeast(0f)
+        refreshBelowIfUncovered()
     }
 
     override fun ContentDrawScope.draw() {
-        val layer = handle.layer
-        if (layer == null) {
+        val above = carriedAbove()
+        if (above == null) {
+            handle.layer?.let {
+                requireGraphicsContext().releaseGraphicsLayer(it)
+                handle.layer = null
+            }
+            resetRecording()
             drawContent()
             return
         }
-        // 录下来给 MochiNavHost 代画用；被代画时这里不画
+        if (!belowMeasured) refreshBelowIfUncovered()
+        if (size.width < 1f || size.height < 1f) {
+            recorded = false
+            recordedSize = Size.Unspecified
+            return
+        }
+        // 录下来给 MochiNavHost 代画用；被代画时这里不画。同一捕获周期内仅录制一次，避免转场每帧重录整棵栏子树。
+        val phase = (if (above.closing) 1 else 0) or (if (above.backActive) 2 else 0)
+        val existing = handle.layer
+        if (existing != null && recorded && recordedSize == size && recordedAboveId == above.id && recordedPhase == phase) {
+            return
+        }
+        val layer = existing ?: requireGraphicsContext().createGraphicsLayer().also { handle.layer = it }
         layer.record { this@draw.drawContent() }
-        if (!carried()) drawLayer(layer)
+        recorded = true
+        recordedSize = size
+        recordedAboveId = above.id
+        recordedPhase = phase
     }
 }
 

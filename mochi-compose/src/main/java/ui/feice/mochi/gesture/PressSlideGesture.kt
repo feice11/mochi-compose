@@ -3,144 +3,20 @@
 
 package ui.feice.mochi.gesture
 
-import android.os.Build
-import android.provider.Settings
-import android.view.View
-import android.view.ViewGroup
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCompositionContext
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
-import kotlin.math.sign
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotion
-import ui.feice.mochi.anim.MochiMotions
-import ui.feice.mochi.basic.MochiAlign
-import ui.feice.mochi.basic.MochiOpenMode
+import kotlinx.coroutines.withTimeoutOrNull
 import ui.feice.mochi.basic.MochiTrigger
-import ui.feice.mochi.effect.elastic.MochiRubberBandState
-import ui.feice.mochi.effect.elastic.jellyCrossScale
-import ui.feice.mochi.effect.elastic.jellyStretch
-import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
-import ui.feice.mochi.effect.elastic.rubberStretched
-import ui.feice.mochi.effect.glow.MochiGlowDefaults
-import ui.feice.mochi.effect.glow.MochiGlowSpec
-import ui.feice.mochi.effect.glow.MochiGlowState
-import ui.feice.mochi.effect.glow.mochiGlow
-import ui.feice.mochi.effect.glow.rememberMochiGlowState
-import ui.feice.mochi.effect.metaball.MochiBlob
-import ui.feice.mochi.effect.metaball.MochiMetaballColors
-import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
-import ui.feice.mochi.effect.metaball.drawMochiMetaball
-import ui.feice.mochi.effect.metaball.proximityFuse
-import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
-import ui.feice.mochi.overlay.InWindowOverlay
-import ui.feice.mochi.shape.G2PathCache
-import ui.feice.mochi.shape.G2RectClipShape
-import ui.feice.mochi.shape.addG2RoundRect
-import ui.feice.mochi.shape.continuityFor
-import ui.feice.mochi.theme.LocalContentColor
-import ui.feice.mochi.theme.MochiTheme
-import ui.feice.mochi.utils.MochiHapticProfile
-import ui.feice.mochi.utils.MochiHaptics
-import ui.feice.mochi.utils.lerp
-import ui.feice.mochi.utils.smoothstep
-import ui.feice.mochi.utils.windowOriginOnScreen
 
 // ───────────────────────── 交互状态 ─────────────────────────
 
@@ -159,6 +35,7 @@ internal class MochiController {
     /** 选项上面的说明文字（操作确认的标题）占的高度：手指在它上面不算任何选项 */
     var headerPx = 0f
     var contentReady: () -> Boolean = { false }
+    var isItemEnabled: (Int) -> Boolean = { true }
 
     /** 列表滚动量（像素，越界时带橡皮筋，可能 < 0 或 > maxScroll） */
     var scroll by mutableFloatStateOf(0f)
@@ -175,11 +52,12 @@ internal class MochiController {
 
     private fun hitTest(p: Offset): Int {
         val r = panelOnScreen
-        if (r == Rect.Zero || itemCount == 0 || !contentReady()) return -1
+        if (r == Rect.Zero || itemCount <= 0 || itemHeightPx <= 0f || !contentReady()) return -1
         if (p.x < r.left || p.x > r.right) return -1
         val y = p.y - r.top - paddingPx - headerPx
         if (y < 0f || y > r.height - paddingPx * 2f - headerPx) return -1
-        return ((y + scroll.coerceIn(0f, maxScroll)) / itemHeightPx).toInt().coerceIn(0, itemCount - 1)
+        val idx = ((y + scroll.coerceIn(0f, maxScroll.coerceAtLeast(0f))) / itemHeightPx).toInt().coerceIn(0, itemCount - 1)
+        return if (isItemEnabled(idx)) idx else -1
     }
 }
 
@@ -212,72 +90,87 @@ internal fun Modifier.mochiButtonGesture(
         val wasOpen = cb.isExpanded()
         val slop = viewConfiguration.touchSlop
         controller.touchOnScreen = topLeftOnScreen() + down.position
+        var pressActive = true
         cb.pressed(true)
         var opened = false
-
-        if (!wasOpen) {
-            if (trigger == MochiTrigger.Press) {
-                cb.open(false)
-                opened = true
-            } else {
-                val outcome = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                    var o = PressOutcome.Up
-                    while (true) {
-                        val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
-                        if (c == null || !c.pressed) {
-                            o = PressOutcome.Up
-                            break
-                        }
-                        controller.touchOnScreen = topLeftOnScreen() + c.position
-                        if ((c.position - down.position).getDistance() > slop) {
-                            o = PressOutcome.Moved
-                            break
-                        }
-                    }
-                    o
-                }
-                when (outcome) {
-                    null -> {
-                        cb.open(true)
-                        opened = true
-                    }
-
-                    // 没按满时长就松手 = 轻点
-                    PressOutcome.Up -> {
-                        cb.pressed(false)
-                        val tap = cb.tap
-                        if (tap != null) tap() else cb.open(false)
-                        return@awaitEachGesture
-                    }
-
-                    // 轻点也能开
-                    PressOutcome.Moved -> {
-                        cb.pressed(false)
-                        return@awaitEachGesture
-                    } // 滑走了，不是给我们的
-                }
-            }
-        }
-
         var moved = false
-        while (true) {
-            val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-            val onScreen = topLeftOnScreen() + c.position
-            controller.touchOnScreen = onScreen
-            if (!moved && (c.position - down.position).getDistance() > slop) {
-                moved = true
-                controller.autoScroll = true
+        var completed = false
+        try {
+            if (!wasOpen) {
+                if (trigger == MochiTrigger.Press) {
+                    cb.open(false)
+                    opened = true
+                } else {
+                    val outcome = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        var o = PressOutcome.Up
+                        while (true) {
+                            val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                            if (c == null || !c.pressed) {
+                                o = PressOutcome.Up
+                                break
+                            }
+                            controller.touchOnScreen = topLeftOnScreen() + c.position
+                            if ((c.position - down.position).getDistance() > slop) {
+                                o = PressOutcome.Moved
+                                break
+                            }
+                        }
+                        o
+                    }
+                    when (outcome) {
+                        null -> {
+                            cb.open(true)
+                            opened = true
+                        }
+
+                        // 没按满时长就松手 = 轻点
+                        PressOutcome.Up -> {
+                            pressActive = false
+                            cb.pressed(false)
+                            val tap = cb.tap
+                            if (tap != null) tap() else cb.open(false)
+                            completed = true
+                            return@awaitEachGesture
+                        }
+
+                        // 轻点也能开
+                        PressOutcome.Moved -> {
+                            pressActive = false
+                            cb.pressed(false)
+                            completed = true
+                            return@awaitEachGesture
+                        } // 滑走了，不是给我们的
+                    }
+                }
             }
-            // 先真的滑动才开始选：包裹模式下面板盖住按钮，轻点不能误选第一项
-            if (moved) controller.track(onScreen)
-            c.consume()
-            if (!c.pressed) break
+
+            while (true) {
+                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                val onScreen = topLeftOnScreen() + c.position
+                controller.touchOnScreen = onScreen
+                if (!moved && (c.position - down.position).getDistance() > slop) {
+                    moved = true
+                    controller.autoScroll = true
+                }
+                // 先真的滑动才开始选：包裹模式下面板盖住按钮，轻点不能误选第一项
+                if (moved) controller.track(onScreen)
+                c.consume()
+                if (!c.pressed) break
+            }
+            completed = true
+        } finally {
+            controller.autoScroll = false
+            controller.pointer = null
+            if (pressActive) {
+                pressActive = false
+                cb.pressed(false)
+            }
+            if (!completed) {
+                controller.hover = -1
+            }
         }
 
         val h = controller.hover
-        controller.autoScroll = false
-        controller.pointer = null
-        cb.pressed(false)
         when {
             cb.isExpanded() && h >= 0 && moved -> cb.select(h)
 

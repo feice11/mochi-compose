@@ -63,4 +63,22 @@ class ColorSpacesTest {
             assertEquals("$m y", 0.45f, p[1], 0.02f)
         }
     }
+
+    @Test
+    fun fastHslMatchesComposeHslAndReusesRenderBuffer() {
+        for (h in listOf(0f, 35f, 120f, 195f, 260f, 359.5f)) {
+            for (s in listOf(0f, 0.4f, 1f)) {
+                for (l in listOf(0f, 0.25f, 0.5f, 0.85f, 1f)) {
+                    val fast = androidx.compose.ui.graphics.Color(hslToArgb(h, s, l))
+                    val ref = androidx.compose.ui.graphics.Color.hsl(h, s, l)
+                    assertEquals(ref.red, fast.red, 0.01f)
+                    assertEquals(ref.green, fast.green, 0.01f)
+                    assertEquals(ref.blue, fast.blue, 0.01f)
+                }
+            }
+        }
+        val reusable = IntArray(16 * 12)
+        val rendered = SpectrumModel.LCH.render(0.5f, 16, 12, reusable) { true }
+        assertTrue(rendered === reusable)
+    }
 }

@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 /**
  * 预渲染：[content] 先正常画几帧，然后整块截成一张位图，之后只画这张图、不再组合和绘制 [content]。
@@ -32,6 +34,7 @@ import kotlinx.coroutines.delay
 @Composable
 public fun MochiPrerendered(key: Any, modifier: Modifier = Modifier, settleMillis: Long = 250L, content: @Composable BoxScope.() -> Unit) {
     var image by remember(key) { mutableStateOf<ImageBitmap?>(null) }
+    var hasDrawn by remember(key) { mutableStateOf(false) }
     val shot = image
     if (shot != null) {
         Image(shot, contentDescription = null, modifier = modifier, contentScale = ContentScale.FillBounds)
@@ -40,16 +43,27 @@ public fun MochiPrerendered(key: Any, modifier: Modifier = Modifier, settleMilli
     val layer = rememberGraphicsLayer()
     Box(
         modifier.drawWithContent {
-            layer.record { this@drawWithContent.drawContent() }
-            drawLayer(layer)
+            if (size.width >= 1f && size.height >= 1f) {
+                layer.record { this@drawWithContent.drawContent() }
+                drawLayer(layer)
+                if (!hasDrawn) {
+                    hasDrawn = true
+                }
+            } else {
+                drawContent()
+            }
         },
         content = content,
     )
     LaunchedEffect(key) {
+        // 在列表里被预取但还没画过（滚在屏幕外时只组合不绘制）时先挂起，不以 120Hz 空转轮询
+        snapshotFlow { hasDrawn }.first { it }
         repeat(4) { withFrameNanos { } }
         delay(settleMillis)
-        // 在列表里还没画过（滚在屏幕外时只组合不绘制）时图层是空的，截不了图：等它真的画出来
-        while (layer.size.width <= 0 || layer.size.height <= 0) withFrameNanos { }
-        image = layer.toImageBitmap()
+        while (layer.size.width <= 0 || layer.size.height <= 0) {
+            hasDrawn = false
+            snapshotFlow { hasDrawn }.first { it }
+        }
+        image = runCatching { layer.toImageBitmap() }.getOrNull()
     }
 }

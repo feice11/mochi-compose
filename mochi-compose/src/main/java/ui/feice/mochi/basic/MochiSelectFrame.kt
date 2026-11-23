@@ -5,18 +5,20 @@ package ui.feice.mochi.basic
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
@@ -27,7 +29,9 @@ import ui.feice.mochi.basic.parts.MochiGlyphs
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurTransitions
 import ui.feice.mochi.effect.elastic.mochiPressDeform
+import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.MochiRoundedRectangle
+import ui.feice.mochi.shape.mochiBorder
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -56,27 +60,37 @@ public fun MochiSelectFrame(
     cornerRadius: Dp = MochiSelectFrameDefaults.CornerRadius,
     content: @Composable () -> Unit,
 ) {
-    // 选中时带回弹弹起来（和卡片弹出同一种手感），没选中的收小一点
-    val sel by animateFloatAsState(if (selected) 1f else 0f, MochiMotionTokens.Bounce, label = "selectFrame")
+    // 选中时带回弹弹起来（和卡片弹出同一种手感），没选中的收小一点；状态仅在图层和绘制阶段读取，避免包裹的预览每帧重组
+    val selState = animateFloatAsState(if (selected) 1f else 0f, MochiMotionTokens.Bounce, label = "selectFrame")
     val cs = MochiTheme.colorScheme
-    val ring = lerp(cs.outlineVariant, cs.primary, sel.coerceIn(0f, 1f))
     val inset = MochiSelectFrameDefaults.Gap
+    val innerShape = remember(cornerRadius) { RoundedCornerShape((cornerRadius - inset).coerceAtLeast(0.dp)) }
+    val borderCache = remember { G2PathCache() }
     Box(
         modifier
             .mochiPressDeform()
             .graphicsLayer {
-                val s = 0.95f + 0.05f * sel
+                val s = 0.95f + 0.05f * selState.value
                 scaleX = s
                 scaleY = s
             }
-            // 没选中也有一圈细描边，选中时加粗并变成主色
-            .border(1.5.dp + 1.dp * sel.coerceIn(0f, 1f), ring, MochiRoundedRectangle(cornerRadius)),
+            // 连续圆角抗锯齿描边：没选中也有一圈细描边，选中时加粗并变成主色
+            .drawWithContent {
+                drawContent()
+                val t = selState.value.coerceIn(0f, 1f)
+                val w = (1.5.dp + 1.dp * t).toPx()
+                val ring = lerp(cs.outlineVariant, cs.primary, t)
+                val rect = Rect(w / 2f, w / 2f, (size.width - w / 2f).coerceAtLeast(w / 2f), (size.height - w / 2f).coerceAtLeast(w / 2f))
+                if (rect.width > 0f && rect.height > 0f) {
+                    val path = borderCache.get(rect, (cornerRadius.toPx() - w / 2f).coerceAtLeast(0f), 1f)
+                    drawPath(path, ring, style = Stroke(w))
+                }
+            },
     ) {
         Box(Modifier.fillMaxSize().padding(inset)) {
-            val inner = MochiRoundedRectangle(cornerRadius - inset)
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
-                    shape = inner
+                    shape = innerShape
                     clip = true
                 },
             ) { content() }
@@ -98,12 +112,12 @@ public fun MochiSelectFrame(
 @Composable
 public fun MochiSelectionCheck(selected: Boolean, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
+    val circle = remember { MochiRoundedRectangle(MochiSelectFrameDefaults.CheckSize / 2) }
     MochiBlurCrossfade(selected, modifier, transition = MochiBlurTransitions.Appear) { on ->
-        val circle = MochiRoundedRectangle(MochiSelectFrameDefaults.CheckSize / 2)
         Box(
             Modifier
                 .size(MochiSelectFrameDefaults.CheckSize)
-                .then(if (on) Modifier.background(cs.primary, circle) else Modifier.border(1.5.dp, cs.outlineVariant, circle)),
+                .then(if (on) Modifier.background(cs.primary, circle) else Modifier.mochiBorder(1.5.dp, cs.outlineVariant, circle)),
             contentAlignment = Alignment.Center,
         ) {
             if (on) MochiGlyphs.Check(cs.onPrimary, size = 16.dp)

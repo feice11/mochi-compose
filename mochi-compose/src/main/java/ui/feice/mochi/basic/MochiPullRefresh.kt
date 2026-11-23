@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +60,11 @@ public class MochiRefreshState internal constructor(
      * 布局里多占的高度（px）：内容回弹时最低停在转圈下面（越界位移大于停住高度时不占，内容照常跟着回弹走，
      * 回到停住高度后由它接住，所以不会跳）
      */
-    public fun hold(): Float = (holdPx - overscroll.offset.y.coerceAtLeast(0f)).coerceAtLeast(0f) * holding.value
+    public fun hold(): Float {
+        val hv = holding.value
+        if (hv <= 0f) return 0f
+        return (holdPx - overscroll.offset.y.coerceAtLeast(0f)).coerceAtLeast(0f) * hv
+    }
 
     /** 转圈所在的空隙高度（px）：越界位移 + 停住高度 */
     public fun gap(): Float = overscroll.offset.y.coerceAtLeast(0f) + hold()
@@ -160,6 +165,8 @@ public fun MochiRefreshIndicator(
     modifier: Modifier = Modifier,
     color: Color = MochiProgressDefaults.activityColor(),
 ) {
+    val active by remember(state) { derivedStateOf { state.isRefreshing || state.gap() > 0.5f } }
+    if (!active) return
     MochiActivityIndicator(
         modifier.graphicsLayer {
             val gap = state.gap()

@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,17 +65,30 @@ import ui.feice.mochi.utils.MochiHaptics
  */
 @Stable
 internal class MochiEngine(
-    val style: MochiStyle,
+    style: MochiStyle,
     val controller: MochiController,
     val progress: Animatable<Float, *>,
     val effects: Animatable<Float, *>,
     val press: Animatable<Float, *>,
     val glow: MochiGlowState,
     val callbacks: MochiCallbacks,
-    val elastic: Float,
+    val submenus: SubmenuStack,
+    val tickHaptic: () -> Unit,
+    val selectSubmenuLeaf: (MochiItem) -> Unit,
+    elastic: Float,
     /** 照 FlClash 从按钮长出来、收回按钮（见 DropdownMorph）；false = 长按预览菜单的旧编排 */
-    val morph: Boolean = true,
+    morph: Boolean = true,
 ) {
+    /** 样式、弹性系数、开合模式改为可变状态，主题/配色变化时原地同步，不重建引擎导致打开中的菜单蒸发或死锁 */
+    var style by mutableStateOf(style)
+        internal set
+
+    var elastic by mutableFloatStateOf(elastic)
+        internal set
+
+    var morph by mutableStateOf(morph)
+        internal set
+
     /** 开始收起时的进度（morph：收起按它折算时间）；null = 在打开 */
     var closeFrom by mutableStateOf<Float?>(null)
         internal set
@@ -85,6 +100,18 @@ internal class MochiEngine(
     /** 浮层已经接手画按钮（原按钮可以藏起来了） */
     var overlayReady by mutableStateOf(false)
         internal set
+
+    /** 一级菜单展开后，浮层挂上它的坐标换算，用来按触发行弹出二级菜单 */
+    var openRootSubmenu: ((index: Int, item: MochiItem) -> Unit)? = null
+        internal set
+
+    /** 每次展开递增会话号，防止旧的选中延迟关闭协程把重新打开的新菜单误关掉 */
+    var openSession: Int = 0
+        internal set
+
+    /** 当前打开会话是否已触发过叶子项选中并正在等待延迟关闭，防止 150ms 内连点重复触发 */
+    var closingScheduled: Boolean = false
+        internal set
 }
 
 /**
@@ -95,19 +122,21 @@ internal class MochiEngine(
 internal fun rememberMochiEngine(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    items: List<MochiItem>,
     onItemClick: (Int) -> Unit,
-    itemCount: Int,
     style: MochiStyle,
     motion: MochiMotion,
     dismissDelayMillis: Long,
     anchorSize: () -> Size,
     onTap: (() -> Unit)? = null,
     morph: Boolean = true,
+    allowSubmenuPanel: Boolean = false,
 ): MochiEngine {
     val progress = remember { Animatable(0f) }
     val effects = remember { Animatable(0f) }
     val press = remember { Animatable(1f) }
     val controller = remember { MochiController() }
+    val submenus = remember { SubmenuStack() }
     // 按压高光：光心追屏幕坐标的触点（按钮和浮层两处共享），颜色来自 colors.glowColor
     val glowSpec = remember(style.glowColor) { MochiGlowSpec(style.glowColor) }
     val glow = rememberMochiGlowState(glowSpec, pointer = { controller.touchOnScreen })
@@ -117,22 +146,48 @@ internal fun rememberMochiEngine(
     val haptics = remember(view, style.hapticProfile) { MochiHaptics(view, style.hapticProfile) }
     val reduceMotion = mochiReduceMotion()
 
-    controller.itemCount = itemCount
-    controller.itemHeightPx = with(density) { style.itemHeight.toPx() }
-    controller.paddingPx = with(density) { style.panelPadding.toPx() }
-    controller.contentReady = { effects.value > 0.3f }
-
     val currentExpanded by rememberUpdatedState(expanded)
     val currentOnExpandedChange by rememberUpdatedState(onExpandedChange)
+    val currentItems by rememberUpdatedState(items)
     val currentOnItemClick by rememberUpdatedState(onItemClick)
+    val currentAllowPanel by rememberUpdatedState(allowSubmenuPanel)
     val currentHaptics by rememberUpdatedState(haptics)
     val currentDismissDelay by rememberUpdatedState(dismissDelayMillis)
     val currentPressStyle by rememberUpdatedState(style.pressStyle)
     val currentOnTap by rememberUpdatedState(onTap)
     val currentAnchorSize by rememberUpdatedState(anchorSize)
+    val currentReduceMotion by rememberUpdatedState(reduceMotion)
+
+    controller.itemCount = items.size
+    controller.itemHeightPx = with(density) { style.itemHeight.toPx() }
+    controller.paddingPx = with(density) { style.panelPadding.toPx() }
+    controller.contentReady = { effects.value > 0.3f || currentReduceMotion }
+    controller.isItemEnabled = { i -> currentItems.getOrNull(i)?.itemEnabled != false }
+
     // 光的扩散范围跟着元素大小走（MochiGlowDefaults.radius）：按钮上按按钮算，面板里按面板算
     val anchorGlow = { MochiGlowDefaults.radius(currentAnchorSize(), density) }
     val panelGlowPx = { MochiGlowDefaults.radius(controller.panelOnScreen.size, density) }
+
+    val engineHolder = remember { arrayOfNulls<MochiEngine>(1) }
+    val tickHaptic = remember { { currentHaptics.tick() } }
+    val selectSubmenuLeaf = remember {
+        { item: MochiItem ->
+            val eng = engineHolder[0]
+            if (item.itemEnabled && eng?.closingScheduled != true) {
+                eng?.closingScheduled = true
+                val session = eng?.openSession ?: 0
+                currentHaptics.confirm()
+                item.onClick?.invoke()
+                scope.launch {
+                    if (!currentReduceMotion && currentDismissDelay > 0L) delay(currentDismissDelay)
+                    if (engineHolder[0]?.openSession == session && currentExpanded) {
+                        currentOnExpandedChange(false)
+                    }
+                }
+            }
+            Unit
+        }
+    }
 
     // 这些回调只读 State，所以被 pointerInput 长期持有也拿得到最新值
     val callbacks = remember {
@@ -144,11 +199,26 @@ internal fun rememberMochiEngine(
             },
             close = { currentOnExpandedChange(false) },
             select = { i ->
+                val item = currentItems.getOrNull(i) ?: return@MochiCallbacks
+                if (!item.itemEnabled) return@MochiCallbacks
+                if (item.submenu != null || (currentAllowPanel && item.panel != null)) {
+                    currentHaptics.tick()
+                    controller.hover = -1
+                    engineHolder[0]?.openRootSubmenu?.invoke(i, item)
+                    return@MochiCallbacks
+                }
+                val eng = engineHolder[0]
+                if (eng?.closingScheduled == true) return@MochiCallbacks
+                eng?.closingScheduled = true
+                val session = eng?.openSession ?: 0
                 currentHaptics.confirm()
+                item.onClick?.invoke()
                 currentOnItemClick(i)
                 scope.launch {
-                    delay(currentDismissDelay)
-                    currentOnExpandedChange(false)
+                    if (!currentReduceMotion && currentDismissDelay > 0L) delay(currentDismissDelay)
+                    if (engineHolder[0]?.openSession == session && currentExpanded) {
+                        currentOnExpandedChange(false)
+                    }
                 }
             },
             pressed = { down ->
@@ -178,13 +248,43 @@ internal fun rememberMochiEngine(
             tap = if (onTap == null) null else ({ currentOnTap?.invoke() }),
         )
     }
-    val engine = remember(style, callbacks) {
-        MochiEngine(style, controller, progress, effects, press, glow, callbacks, if (reduceMotion) 0f else 1f, morph)
+    val engine = remember(callbacks) {
+        MochiEngine(
+            style = style,
+            controller = controller,
+            progress = progress,
+            effects = effects,
+            press = press,
+            glow = glow,
+            callbacks = callbacks,
+            submenus = submenus,
+            tickHaptic = tickHaptic,
+            selectSubmenuLeaf = selectSubmenuLeaf,
+            elastic = if (reduceMotion) 0f else 1f,
+            morph = morph,
+        )
     }
+    val nextElastic = if (reduceMotion) 0f else 1f
+    SideEffect {
+        engine.style = style
+        engine.elastic = nextElastic
+        engine.morph = morph
+    }
+    engineHolder[0] = engine
 
     val framePeriod = rememberFramePeriodNanos()
-    LaunchedEffect(expanded, motion) {
+    LaunchedEffect(expanded, motion, reduceMotion) {
         if (expanded) {
+            engine.openSession++
+            engine.closingScheduled = false
+            if (reduceMotion) {
+                engine.closeFrom = null
+                if (!engine.overlayVisible) controller.hover = -1
+                engine.overlayVisible = true
+                progress.snapTo(1f)
+                effects.snapTo(1f)
+                return@LaunchedEffect
+            }
             // 收起途中又打开：从和此刻形状一样的打开时刻接着走（见 morphReopenProgress）
             val closing = engine.closeFrom
             if (engine.morph && closing != null && progress.value > 0f) progress.snapTo(morphReopenProgress(closing, progress.value))
@@ -217,6 +317,19 @@ internal fun rememberMochiEngine(
                 }
             }
         } else if (engine.overlayVisible) {
+            engine.closingScheduled = false
+            if (reduceMotion) {
+                engine.closeFrom = null
+                controller.hover = -1
+                controller.pointer = null
+                glow.markReleased()
+                effects.snapTo(0f)
+                progress.snapTo(0f)
+                engine.overlayVisible = false
+                engine.overlayReady = false
+                engine.submenus.clear()
+                return@LaunchedEffect
+            }
             if (engine.morph) {
                 engine.closeFrom = progress.value.coerceAtLeast(1e-3f)
                 controller.hover = -1
@@ -228,6 +341,7 @@ internal fun rememberMochiEngine(
                 }
                 engine.overlayVisible = false
                 engine.overlayReady = false
+                engine.submenus.clear()
                 return@LaunchedEffect
             }
             coroutineScope {
@@ -239,6 +353,7 @@ internal fun rememberMochiEngine(
             glow.markReleased()
             engine.overlayVisible = false
             engine.overlayReady = false
+            engine.submenus.clear()
         }
     }
 
@@ -261,8 +376,10 @@ internal fun rememberMochiEngine(
         snapshotFlow { controller.hover }.collect { if (it >= 0) currentHaptics.tick() }
     }
 
-    // 浮层挂在同一窗口里，不抢焦点（抢焦点可能打断正在进行的按住手势），返回键在这里处理
-    BackHandler(enabled = expanded) { currentOnExpandedChange(false) }
+    // 浮层挂在同一窗口里，不抢焦点（抢焦点可能打断正在进行的按住手势），返回键先收起子菜单再关主菜单
+    BackHandler(enabled = expanded) {
+        if (!submenus.popTop()) currentOnExpandedChange(false)
+    }
     return engine
 }
 
@@ -272,7 +389,7 @@ internal fun rememberMochiEngine(
  */
 @Composable
 internal fun MochiEngine.Overlay(
-    anchorOnScreen: Rect,
+    anchorOnScreen: () -> Rect,
     trigger: MochiTrigger,
     items: List<MochiItem>,
     selectedIndex: Int,
@@ -285,10 +402,17 @@ internal fun MochiEngine.Overlay(
     content: (@Composable ColumnScope.() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     group: BarGroupHandle? = null,
+    allowSubmenuPanel: Boolean = false,
+    detach: Boolean = false,
+    accessory: (@Composable () -> Unit)? = null,
     anchorContent: @Composable RowScope.() -> Unit,
 ) {
     if (!overlayVisible) return
-    PageOrWindowMenuOverlay(trigger, canUsePage = content == null, leaving = { !callbacks.isExpanded() }) { interactive ->
+    PageOrWindowMenuOverlay(
+        trigger,
+        canUsePage = content == null && accessory == null && !detach,
+        leaving = { !callbacks.isExpanded() },
+    ) { interactive ->
         MochiOverlay(
             anchorOnScreen = anchorOnScreen,
             progress = progress,
@@ -297,6 +421,10 @@ internal fun MochiEngine.Overlay(
             glow = glow,
             controller = controller,
             callbacks = callbacks,
+            submenus = submenus,
+            tickHaptic = tickHaptic,
+            selectSubmenuLeaf = selectSubmenuLeaf,
+            onAttachRootSubmenu = { openRootSubmenu = it },
             trigger = trigger,
             items = items,
             selectedIndex = selectedIndex,
@@ -309,10 +437,14 @@ internal fun MochiEngine.Overlay(
             matchAnchorWidth = matchAnchorWidth,
             morph = if (morph) ({ closeFrom }) else null,
             onReady = { overlayReady = true },
+            onDisposeOverlay = { overlayReady = false },
             header = header,
             content = content,
             contentPadding = contentPadding,
             group = group,
+            allowSubmenuPanel = allowSubmenuPanel,
+            detach = detach,
+            accessory = accessory,
             interactive = interactive,
             buttonContent = anchorContent,
         )

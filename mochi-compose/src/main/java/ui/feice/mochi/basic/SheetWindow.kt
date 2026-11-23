@@ -12,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -22,6 +21,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.distinctUntilChanged
+import ui.feice.mochi.theme.refreshMochiSystemBars
 
 /** 动画被别的动画 / 拖动打断时不往外抛（返回 false），协程真被取消时照常抛出 */
 internal suspend fun interruptible(block: suspend () -> Unit): Boolean = try {
@@ -81,6 +81,7 @@ internal object SheetNavigationBarWindows {
             window.navigationBarDividerColor = saved.divider ?: android.graphics.Color.TRANSPARENT
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = saved.contrast ?: false
+        refreshMochiSystemBars(window)
     }
 }
 
@@ -94,16 +95,31 @@ internal fun HideNavBarWhileFloating(state: MochiSheetState) {
         val oldBehavior = ctl.systemBarsBehavior
         ctl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         try {
-            // 半屏请求打开就隐藏，向下离开全屏也立即隐藏；不再等待弹簧停稳或反复跟随 isRunning。
-            // 内容已使用 ignoringVisibility 安全区，导航栏显隐不会改变面板内部的预留空间。
-            snapshotFlow { state.requested && MochiSheetDetent.Medium in state.detents && state.largeness < 0.999f }
+            // 拖动与弹簧运动中不触发 SystemUI Binder IPC，避免过顶/离顶临界点全局 requestApplyInsets() 掉帧；
+            // 推迟到 !state.inMotion 停稳后再统一切换导航栏显隐，内容已用 ignoringVisibility 安全区不会跳动。
+            var appliedHide = false
+            snapshotFlow {
+                if (state.inMotion) {
+                    null
+                } else {
+                    state.requested && MochiSheetDetent.Medium in state.detents && state.largeness < 0.999f
+                }
+            }
                 .distinctUntilChanged()
                 .collect { hide ->
-                    if (hide) ctl.hide(WindowInsetsCompat.Type.navigationBars()) else ctl.show(WindowInsetsCompat.Type.navigationBars())
+                    if (hide == null || hide == appliedHide) return@collect
+                    appliedHide = hide
+                    if (hide) {
+                        ctl.hide(WindowInsetsCompat.Type.navigationBars())
+                    } else {
+                        ctl.show(WindowInsetsCompat.Type.navigationBars())
+                        refreshMochiSystemBars(window)
+                    }
                 }
         } finally {
             ctl.show(WindowInsetsCompat.Type.navigationBars())
             ctl.systemBarsBehavior = oldBehavior
+            refreshMochiSystemBars(window)
         }
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
@@ -29,12 +31,17 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.exp
 import kotlin.math.roundToInt
+import ui.feice.mochi.effect.glass.GlassScrollWhile
 import ui.feice.mochi.effect.mask.MochiSmoothGradient
+import ui.feice.mochi.effect.mask.colorManagedGradient
+import ui.feice.mochi.effect.mask.gradientStopColor
 import ui.feice.mochi.effect.mask.mochiScrollFadeMask as maskScrollFade
 import ui.feice.mochi.theme.LocalMochiColorScheme
 import ui.feice.mochi.theme.LocalMochiMaterials
 import ui.feice.mochi.theme.MochiMaterials
+import ui.feice.mochi.theme.MochiTopBarStyle
 import ui.feice.mochi.utils.smoothstep
 
 /**
@@ -51,6 +58,7 @@ import ui.feice.mochi.utils.smoothstep
  * @param alpha 整体不透明度（在 draw 阶段读，比如跟着滚动距离从 0 到 1），不会触发重组
  * @param tone 保留兼容：底色固定是页面底色，栏上的文字不再跟着背后内容换色，[MochiScrollEdgeTone.darkText] 一直是 null
  */
+@Suppress("UNUSED_PARAMETER")
 public fun Modifier.mochiScrollEdgeFade(
     color: Color,
     bottom: Boolean = false,
@@ -76,11 +84,15 @@ private data class ScrollEdgeElement(val color: Color, val bottom: Boolean, val 
     override fun create(): ScrollEdgeNode = ScrollEdgeNode(color, bottom, extent, alpha)
 
     override fun update(node: ScrollEdgeNode) {
+        val changed = node.color != color ||
+            node.bottom != bottom ||
+            node.extent != extent ||
+            node.alpha != alpha
         node.color = color
         node.bottom = bottom
         node.extent = extent
         node.alpha = alpha
-        node.invalidateDraw()
+        if (changed) node.invalidateDraw()
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -93,6 +105,84 @@ private class ScrollEdgeNode(var color: Color, var bottom: Boolean, var extent: 
     DrawModifierNode,
     CompositionLocalConsumerModifierNode {
 
+    private var cachedSmoothColor: Color = Color.Unspecified
+    private var cachedSmoothStartY: Float = Float.NaN
+    private var cachedSmoothEndY: Float = Float.NaN
+    private var cachedSmoothReverse: Boolean = false
+    private var cachedSmoothBrush: Brush? = null
+
+    private var cachedMaskColor: Color = Color.Unspecified
+    private var cachedMaskAmount: Float = Float.NaN
+    private var cachedMaskLine: Float = Float.NaN
+    private var cachedMaskSoft: Float = Float.NaN
+    private var cachedMaskDir: Float = Float.NaN
+    private var cachedMaskTop: Float = Float.NaN
+    private var cachedMaskBottom: Float = Float.NaN
+    private var cachedMaskBrush: Brush? = null
+
+    private fun smoothVerticalBrush(base: Color, startY: Float, endY: Float, clearFirst: Boolean): Brush {
+        val existing = cachedSmoothBrush
+        if (existing != null &&
+            cachedSmoothColor == base &&
+            cachedSmoothStartY == startY &&
+            cachedSmoothEndY == endY &&
+            cachedSmoothReverse == clearFirst
+        ) {
+            return existing
+        }
+        val clear = base.copy(alpha = 0f)
+        return (
+            if (clearFirst) {
+                MochiSmoothGradient.vertical(clear, base, startY = startY, endY = endY)
+            } else {
+                MochiSmoothGradient.vertical(base, clear, startY = startY, endY = endY)
+            }
+            ).also {
+            cachedSmoothColor = base
+            cachedSmoothStartY = startY
+            cachedSmoothEndY = endY
+            cachedSmoothReverse = clearFirst
+            cachedSmoothBrush = it
+        }
+    }
+
+    private fun edgeMaskBrush(c: Color, baseAmount: Float, line: Float, soft: Float, dir: Float, top: Float, bottom: Float): Brush {
+        val existing = cachedMaskBrush
+        if (existing != null &&
+            cachedMaskColor == c &&
+            cachedMaskAmount == baseAmount &&
+            cachedMaskLine == line &&
+            cachedMaskSoft == soft &&
+            cachedMaskDir == dir &&
+            cachedMaskTop == top &&
+            cachedMaskBottom == bottom
+        ) {
+            return existing
+        }
+        val h = bottom - top
+        val stopBase = c.gradientStopColor()
+        val stops = Array(MaskStops) { i ->
+            val t = i / (MaskStops - 1f)
+            val y = top + h * t
+            t to stopBase.copy(alpha = stopBase.alpha * baseAmount * edgeMask(dir * (line - y) / soft))
+        }
+        return colorManagedGradient(stops, Offset(0f, top), Offset(0f, bottom)).also {
+            cachedMaskColor = c
+            cachedMaskAmount = baseAmount
+            cachedMaskLine = line
+            cachedMaskSoft = soft
+            cachedMaskDir = dir
+            cachedMaskTop = top
+            cachedMaskBottom = bottom
+            cachedMaskBrush = it
+        }
+    }
+
+    override fun onDetach() {
+        cachedSmoothBrush = null
+        cachedMaskBrush = null
+    }
+
     override fun ContentDrawScope.draw() {
         val a = alpha().coerceIn(0f, 1f)
         if (a > 0f) {
@@ -101,38 +191,87 @@ private class ScrollEdgeNode(var color: Color, var bottom: Boolean, var extent: 
         drawContent()
     }
 
-    /** 顶栏：有模糊时半透明底色盖满整个栏，下沿截断加一条细线；不模糊时实底 + 往下渐隐，不半透明、也不硬切 */
+    /**
+     * 顶栏，按主题的 [MochiTopBarStyle] 画（模糊本身由滚动容器的 mochiScrollEdgeBlur 做，这里只画底色）：
+     * 毛玻璃 = 半透明底色盖满、硬边细线；渐变模糊 = 半透明底色从栏顶渐隐到栏下沿外；
+     * 实心渐隐 = 实底往下渐隐；半透明渐隐 = 半透明底往下渐隐。模糊类样式在 Android 12 及以下按实心渐隐画
+     */
     private fun ContentDrawScope.drawBar(a: Float) {
         val edge = currentValueOf(LocalMochiMaterials).scrollEdge
         val dark = currentValueOf(LocalMochiColorScheme).isDark
-        val blurs = edge != null && edge.blur.value > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-        if (!blurs) {
-            val solid = color.copy(alpha = color.alpha * a)
-            val e = extent.toPx()
-            drawRect(solid, Offset.Zero, size)
-            drawRect(
-                MochiSmoothGradient.vertical(solid, solid.copy(alpha = 0f), startY = size.height, endY = size.height + e),
-                Offset(0f, size.height),
-                Size(size.width, e),
-            )
-            return
+        val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        val style = when {
+            edge == null -> MochiTopBarStyle.SolidFade
+            edge.style.blurs && (!canBlur || edge.blur.value <= 0f) -> MochiTopBarStyle.SolidFade
+            else -> edge.style
         }
-        val fill = if (dark) edge!!.fillDark else edge!!.fill
-        drawRect(color.copy(alpha = color.alpha * fill * a), Offset.Zero, size)
-        val line = if (dark) Color.White.copy(alpha = HairlineDark * a) else Color.Black.copy(alpha = Hairline * a)
-        val h = 1f.coerceAtLeast(MochiScrollEdgeDefaults.Hairline.toPx().roundToInt().toFloat())
-        drawRect(line, Offset(0f, size.height - h), Size(size.width, h))
+        val fill = edge?.let { if (dark) it.fillDark else it.fill } ?: 1f
+        val e = (edge?.extent ?: extent).toPx()
+        when (style) {
+            MochiTopBarStyle.Frosted -> {
+                drawRect(color.copy(alpha = color.alpha * fill * a), Offset.Zero, size)
+                val line = if (dark) Color.White.copy(alpha = HairlineDark * a) else Color.Black.copy(alpha = Hairline * a)
+                val h = 1f.coerceAtLeast(MochiScrollEdgeDefaults.Hairline.toPx().roundToInt().toFloat())
+                drawRect(line, Offset(0f, size.height - h), Size(size.width, h))
+            }
+
+            MochiTopBarStyle.GradientBlur -> {
+                // iOS 的阴影边遮罩：50% 线在栏下沿往上 inset，栏里几乎盖满，往下到线外 0.85 个柔和度完全透明（和容器里的变半径模糊同一条遮罩）
+                val e2 = edge!!
+                val soft = e2.softness.toPx().coerceAtLeast(0.5f)
+                val line = size.height - e2.inset.toPx()
+                val bottomY = line + soft * MaskReach
+                val h = bottomY
+                if (h > 0f && size.width > 0f && fill * a > 0.001f) {
+                    val brush = edgeMaskBrush(color, fill, line, soft, dir = 1f, top = 0f, bottom = bottomY)
+                    drawRect(brush, Offset.Zero, Size(size.width, h), alpha = a)
+                }
+            }
+
+            MochiTopBarStyle.SolidFade, MochiTopBarStyle.TranslucentFade -> {
+                val baseAlpha = if (style == MochiTopBarStyle.SolidFade) 1f else fill
+                val baseSolid = color.copy(alpha = color.alpha * baseAlpha)
+                drawRect(baseSolid, Offset.Zero, size, alpha = a)
+                if (e > 0f && size.width > 0f) {
+                    val brush = smoothVerticalBrush(baseSolid, startY = size.height, endY = size.height + e, clearFirst = false)
+                    drawRect(brush, Offset(0f, size.height), Size(size.width, e), alpha = a)
+                }
+            }
+        }
     }
 
-    /** 底栏：底色 + 朝内容一侧的渐变遮罩 */
+    /** 底栏：底色 + 朝内容一侧的渐变遮罩；主题是渐变模糊时用 iOS 底栏的阴影边遮罩（不模糊） */
     private fun ContentDrawScope.drawFade(a: Float) {
-        val solid = color.copy(alpha = color.alpha * a)
-        val clear = solid.copy(alpha = 0f)
+        val edge = currentValueOf(LocalMochiMaterials).scrollEdge
+        if (edge != null && edge.style == MochiTopBarStyle.GradientBlur) {
+            val dark = currentValueOf(LocalMochiColorScheme).isDark
+            val soft = edge.softnessBottom.toPx().coerceAtLeast(0.5f)
+            val line = edge.insetBottom.toPx()
+            val fill = if (dark) edge.fillDark else edge.fill
+            val topY = line - soft * MaskReach
+            val h = size.height - topY
+            if (h > 0f && size.width > 0f && fill * a > 0.001f) {
+                val brush = edgeMaskBrush(color, fill, line, soft, dir = -1f, top = topY, bottom = size.height)
+                drawRect(brush, Offset(0f, topY), Size(size.width, h), alpha = a)
+            }
+            return
+        }
         val e = extent.toPx()
-        drawRect(solid, Offset.Zero, Size(size.width, size.height))
-        drawRect(MochiSmoothGradient.vertical(clear, solid, startY = -e, endY = 0f), Offset(0f, -e), Size(size.width, e))
+        drawRect(color, Offset.Zero, Size(size.width, size.height), alpha = a)
+        if (e > 0f && size.width > 0f) {
+            val brush = smoothVerticalBrush(color, startY = -e, endY = 0f, clearFirst = true)
+            drawRect(brush, Offset(0f, -e), Size(size.width, e), alpha = a)
+        }
     }
 }
+
+/** 遮罩：阴影边（标准正态累积，用 logistic 近似）再按 1.25·a − 0.25 收紧；[z] 往栏里面为正 */
+private fun edgeMask(z: Float): Float = (1.25f / (1f + exp(-1.702f * z)) - 0.25f).coerceIn(0f, 1f)
+
+private const val MaskStops = 24
+
+/** 收紧前 0.2 以下收紧后就是 0：logistic 近似下 z ≈ −0.82 */
+private const val MaskReach = 0.85f
 
 // 栏下沿细线（照 iOS 27 截图估的）：浅色 10% 黑、深色 12% 白
 private const val Hairline = 0.1f
@@ -157,7 +296,11 @@ public object MochiScrollEdgeDefaults {
      */
     @Composable
     public fun textColor(tone: MochiScrollEdgeTone, default: Color, secondary: Boolean = false): Color {
-        val target = when (tone.darkText) {
+        var everCustom by remember(tone) { mutableStateOf(tone.darkText != null) }
+        val dark = tone.darkText
+        if (dark != null && !everCustom) everCustom = true
+        if (!everCustom) return default
+        val target = when (dark) {
             true -> Color.Black.copy(alpha = if (secondary) 0.6f else 0.88f)
             false -> Color.White.copy(alpha = if (secondary) 0.7f else 1f)
             null -> default
@@ -167,23 +310,31 @@ public object MochiScrollEdgeDefaults {
 
     @Composable
     public fun progress(state: ScrollState, extent: Dp = Extent): () -> Float {
+        GlassScrollWhile(state) { state.isScrollInProgress }
         val px = with(LocalDensity.current) { extent.toPx() }
-        return remember(state, px) { { smoothstep(0f, px, state.value.toFloat()) } }
+        val pastExtent = remember(state, px) { derivedStateOf { px > 0f && state.value.toFloat() >= px } }
+        return remember(state, px, pastExtent) {
+            { if (pastExtent.value) 1f else smoothstep(0f, px, state.value.toFloat()) }
+        }
     }
 
     @Composable
     public fun progress(state: LazyListState, extent: Dp = Extent): () -> Float {
+        GlassScrollWhile(state) { state.isScrollInProgress }
         val px = with(LocalDensity.current) { extent.toPx() }
-        return remember(state, px) {
-            { if (state.firstVisibleItemIndex > 0) 1f else smoothstep(0f, px, state.firstVisibleItemScrollOffset.toFloat()) }
+        val pastFirst = remember(state) { derivedStateOf { state.firstVisibleItemIndex > 0 } }
+        return remember(state, px, pastFirst) {
+            { if (pastFirst.value) 1f else smoothstep(0f, px, state.firstVisibleItemScrollOffset.toFloat()) }
         }
     }
 
     @Composable
     public fun progress(state: LazyGridState, extent: Dp = Extent): () -> Float {
+        GlassScrollWhile(state) { state.isScrollInProgress }
         val px = with(LocalDensity.current) { extent.toPx() }
-        return remember(state, px) {
-            { if (state.firstVisibleItemIndex > 0) 1f else smoothstep(0f, px, state.firstVisibleItemScrollOffset.toFloat()) }
+        val pastFirst = remember(state) { derivedStateOf { state.firstVisibleItemIndex > 0 } }
+        return remember(state, px, pastFirst) {
+            { if (pastFirst.value) 1f else smoothstep(0f, px, state.firstVisibleItemScrollOffset.toFloat()) }
         }
     }
 }

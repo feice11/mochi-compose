@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,11 +25,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextMotion
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ui.feice.mochi.anim.MochiMotionTokens
@@ -70,19 +74,23 @@ public fun MochiBadge(
     val presence = remember { Animatable(if (text != null) 1f else 0f) }
     val bump = remember { Animatable(1f) }
     var shown by remember { mutableStateOf(text) }
-    LaunchedEffect(text) {
-        if (text != null) {
-            val changed = shown != null && shown != text && presence.value > 0.5f
-            shown = text
-            if (changed) {
-                bump.snapTo(1.25f)
-                bump.animateTo(1f, MochiMotionTokens.Bounce)
+    if (text != null || shown != null) {
+        LaunchedEffect(text) {
+            if (text != null) {
+                val changed = shown != null && shown != text && presence.value > 0.5f
+                shown = text
+                if (changed) {
+                    bump.snapTo(1.25f)
+                    bump.animateTo(1f, MochiMotionTokens.Bounce)
+                } else if (presence.value != 1f) {
+                    presence.animateTo(1f, MochiMotionTokens.Bounce)
+                }
             } else {
-                presence.animateTo(1f, MochiMotionTokens.Bounce)
+                if (presence.value != 0f) {
+                    presence.animateTo(0f, MochiMotionTokens.Settle)
+                }
+                shown = null
             }
-        } else {
-            presence.animateTo(0f, MochiMotionTokens.Settle)
-            shown = null
         }
     }
     val value = shown ?: return
@@ -94,14 +102,24 @@ public fun MochiBadge(
         prev[0] = value
         if (a != null && b != null) b.compareTo(a) else 0
     }
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val footnoteStyle = MochiTheme.textStyles.footnote
+    val badgeStyle = remember(footnoteStyle) { footnoteStyle.merge(BadgeTextStyle) }
+    val animating by remember { derivedStateOf { presence.value != 1f || bump.value != 1f } }
     Box(
         modifier
-            .graphicsLayer {
-                val s = presence.value.coerceAtLeast(0f) * bump.value
-                scaleX = s
-                scaleY = s
-                transformOrigin = TransformOrigin(0f, 1f)
-            }
+            .then(
+                if (animating) {
+                    Modifier.graphicsLayer {
+                        val s = presence.value.coerceAtLeast(0f) * bump.value
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = TransformOrigin(if (rtl) 1f else 0f, 1f)
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .then(
                 if (dot) {
                     Modifier.size(MochiBadgeDefaults.DotSize)
@@ -121,7 +139,7 @@ public fun MochiBadge(
                 value,
                 direction = dir,
                 color = contentColor,
-                style = BadgeTextStyle,
+                style = badgeStyle,
                 modifier = Modifier.padding(horizontal = 5.dp),
             )
         }
@@ -155,7 +173,8 @@ private fun BoxScope.badgeAnchorModifier(dot: Boolean): Modifier = Modifier
     .layout { measurable, _ ->
         val p = measurable.measure(Constraints())
         val w = if (dot) p.width else MochiBadgeDefaults.Height.roundToPx()
-        layout(w, p.height) { p.place(0, 0) }
+        val x = if (layoutDirection == LayoutDirection.Rtl) w - p.width else 0
+        layout(w, p.height) { p.place(x, 0) }
     }
 
 @Composable
@@ -170,5 +189,6 @@ private val BadgeTextStyle = TextStyle(
     fontSize = 12.sp,
     lineHeight = 14.sp,
     fontWeight = FontWeight.SemiBold,
+    textMotion = TextMotion.Animated,
     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
 )

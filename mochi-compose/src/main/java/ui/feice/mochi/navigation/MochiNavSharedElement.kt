@@ -7,21 +7,18 @@ package ui.feice.mochi.navigation
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.shape.CornerBasedShape
-import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -40,8 +37,9 @@ import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import com.kyant.capsule.ContinuousRoundedRectangle
-import ui.feice.mochi.shape.MochiContinuity
+import androidx.compose.ui.unit.dp
+import ui.feice.mochi.shape.MochiRoundedRectangle
+import ui.feice.mochi.shape.addG2RoundRect
 import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.smoothstep
 
@@ -70,7 +68,7 @@ public fun Modifier.mochiNavSharedElement(
  */
 public val LocalMochiNavTitleSharedKey: ProvidableCompositionLocal<String?> = staticCompositionLocalOf { null }
 
-private val NoCorners = RoundedCornerShape(0)
+private val NoCorners: CornerBasedShape = MochiRoundedRectangle(0.dp)
 
 private data class SharedElementElement(val key: String, val shape: CornerBasedShape, val contentScale: ContentScale) :
     ModifierNodeElement<SharedElementNode>() {
@@ -102,7 +100,6 @@ private class SharedElementNode(key: String, shape: CornerBasedShape) :
         nav = currentValueOf(LocalMochiNavigator)
         handle.entry = currentValueOf(LocalMochiNavEntry)
         handle.density = requireDensity()
-        handle.layer = requireGraphicsContext().createGraphicsLayer()
         nav?.registerShared(handle)
     }
 
@@ -119,18 +116,23 @@ private class SharedElementNode(key: String, shape: CornerBasedShape) :
     }
 
     override fun ContentDrawScope.draw() {
-        val layer = handle.layer
-        if (layer == null) {
+        // 仅在共享元素飞行期间懒创建并录制离屏 GraphicsLayer，静止态零离屏层与零重录开销；
+        // 读 isSharedActive 订阅栈与转场状态，转场开始 / 结束时自动重画切换
+        val active = nav?.isSharedActive(handle) == true
+        handle.size = size
+        handle.layoutDirection = layoutDirection
+        if (!active) {
+            handle.layer?.let {
+                requireGraphicsContext().releaseGraphicsLayer(it)
+                handle.layer = null
+            }
             drawContent()
             return
         }
-        // 一直录着：转场一开始宿主就要拿到画面。读 isSharedActive 会订阅栈和转场状态，转场开始 / 结束时这里重画一次
-        val active = nav?.isSharedActive(handle) == true
-        layer.compositingStrategy = if (active) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+        if (size.width < 1f || size.height < 1f) return
+        val layer = handle.layer ?: requireGraphicsContext().createGraphicsLayer().also { handle.layer = it }
+        layer.compositingStrategy = CompositingStrategy.Offscreen
         layer.record { this@draw.drawContent() }
-        handle.size = size
-        handle.layoutDirection = layoutDirection
-        if (!active) drawLayer(layer)
     }
 }
 
@@ -145,7 +147,7 @@ internal class SharedHandle(var key: String, var shape: CornerBasedShape) {
     var layoutDirection: LayoutDirection = LayoutDirection.Ltr
 
     /** 四个角的半径（px，元素自己的大小下）：左上、右上、右下、左下 */
-    fun radii(): FloatArray {
+    fun radiiInto(out: FloatArray) {
         val s = size
         val d = density
         val rtl = layoutDirection == LayoutDirection.Rtl
@@ -153,9 +155,30 @@ internal class SharedHandle(var key: String, var shape: CornerBasedShape) {
         val te = shape.topEnd.toPx(s, d)
         val be = shape.bottomEnd.toPx(s, d)
         val bs = shape.bottomStart.toPx(s, d)
-        return if (rtl) floatArrayOf(te, ts, bs, be) else floatArrayOf(ts, te, be, bs)
+        if (rtl) {
+            out[0] = te
+            out[1] = ts
+            out[2] = bs
+            out[3] = be
+        } else {
+            out[0] = ts
+            out[1] = te
+            out[2] = be
+            out[3] = bs
+        }
     }
 }
+
+private val SharedRadiiA = FloatArray(4)
+private val SharedRadiiB = FloatArray(4)
+private val SharedFlightPath = Path()
+private val SharedFlightPaint = Paint()
+private var cachedFlightW = Float.NaN
+private var cachedFlightH = Float.NaN
+private var cachedFlightC0 = Float.NaN
+private var cachedFlightC1 = Float.NaN
+private var cachedFlightC2 = Float.NaN
+private var cachedFlightC3 = Float.NaN
 
 /**
  * 画转场中飞行的共享元素（屏幕坐标，画在所有页面上面）。[from] 是来源页里的元素（下层页坐标 → 屏幕要乘下层页缩放），
@@ -166,31 +189,42 @@ internal fun DrawScope.drawSharedFlight(from: SharedHandle, to: SharedHandle, r:
     val b = to.layer ?: return
     if (from.size.width <= 0f || to.size.width <= 0f) return
     if (r.width <= 0.5f || r.height <= 0.5f) return
-    val ra = from.radii()
-    val rb = to.radii()
-    val corners = FloatArray(4) { i -> lerp(ra[i] * fromScale, rb[i] * toScale, t.coerceIn(0f, 1f)) }
-    val continuity = (to.shape as? ContinuousRoundedRectangle)?.continuity
-        ?: (from.shape as? ContinuousRoundedRectangle)?.continuity
-        ?: MochiContinuity
-    val shape = ContinuousRoundedRectangle(
-        CornerSize(corners[0]),
-        CornerSize(corners[1]),
-        CornerSize(corners[2]),
-        CornerSize(corners[3]),
-        continuity,
-    )
-    val outline = shape.createOutline(r.size, LayoutDirection.Ltr, this)
-    val path = when (outline) {
-        is Outline.Generic -> outline.path
-        is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
-        is Outline.Rectangle -> Path().apply { addRect(outline.rect) }
-    }
+    val ra = SharedRadiiA.also { from.radiiInto(it) }
+    val rb = SharedRadiiB.also { to.radiiInto(it) }
+    val tc = t.coerceIn(0f, 1f)
+    val c0 = lerp(ra[0] * fromScale, rb[0] * toScale, tc)
+    val c1 = lerp(ra[1] * fromScale, rb[1] * toScale, tc)
+    val c2 = lerp(ra[2] * fromScale, rb[2] * toScale, tc)
+    val c3 = lerp(ra[3] * fromScale, rb[3] * toScale, tc)
     // 两边画面中途交叉淡化：同一张图时看不出交接，比例不同时也不会一下跳
-    val mix = smoothstep(0.3f, 0.7f, t.coerceIn(0f, 1f))
+    val mix = smoothstep(0.3f, 0.7f, tc)
     translate(r.left, r.top) {
-        clipPath(path) {
-            drawScaled(a, from.size, r.size, from.contentScale, 1f - mix)
-            drawScaled(b, to.size, r.size, to.contentScale, mix)
+        if (c0 <= 0.5f && c1 <= 0.5f && c2 <= 0.5f && c3 <= 0.5f) {
+            clipRect(0f, 0f, r.width, r.height) {
+                drawScaled(a, from.size, r.size, from.contentScale, 1f - mix)
+                drawScaled(b, to.size, r.size, to.contentScale, mix)
+            }
+        } else {
+            if (cachedFlightW != r.width ||
+                cachedFlightH != r.height ||
+                cachedFlightC0 != c0 ||
+                cachedFlightC1 != c1 ||
+                cachedFlightC2 != c2 ||
+                cachedFlightC3 != c3
+            ) {
+                cachedFlightW = r.width
+                cachedFlightH = r.height
+                cachedFlightC0 = c0
+                cachedFlightC1 = c1
+                cachedFlightC2 = c2
+                cachedFlightC3 = c3
+                SharedFlightPath.rewind()
+                SharedFlightPath.addG2RoundRect(Rect(Offset.Zero, r.size), c0, c1, c2, c3)
+            }
+            clipPath(SharedFlightPath) {
+                drawScaled(a, from.size, r.size, from.contentScale, 1f - mix)
+                drawScaled(b, to.size, r.size, to.contentScale, mix)
+            }
         }
     }
 }
@@ -202,8 +236,16 @@ private fun DrawScope.drawScaled(layer: GraphicsLayer, content: Size, box: Size,
     val dx = (box.width - content.width * f.scaleX) / 2f
     val dy = (box.height - content.height * f.scaleY) / 2f
     drawIntoCanvas { canvas ->
-        if (alpha < 0.996f) canvas.saveLayer(Rect(Offset.Zero, box), Paint().apply { this.alpha = alpha })
-        translate(dx, dy) { scale(f.scaleX, f.scaleY, pivot = Offset.Zero) { drawLayer(layer) } }
-        if (alpha < 0.996f) canvas.restore()
+        if (alpha < 0.996f) {
+            SharedFlightPaint.alpha = alpha
+            canvas.saveLayer(Rect(Offset.Zero, box), SharedFlightPaint)
+            try {
+                translate(dx, dy) { scale(f.scaleX, f.scaleY, pivot = Offset.Zero) { drawLayer(layer) } }
+            } finally {
+                canvas.restore()
+            }
+        } else {
+            translate(dx, dy) { scale(f.scaleX, f.scaleY, pivot = Offset.Zero) { drawLayer(layer) } }
+        }
     }
 }

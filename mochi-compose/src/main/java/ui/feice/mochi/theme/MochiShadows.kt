@@ -78,11 +78,11 @@ public fun lerp(start: MochiShadowLevel, stop: MochiShadowLevel, fraction: Float
 public data class MochiShadows(
     val contact: MochiShadowLevel = Contact,
     val contactPressed: MochiShadowLevel = ContactPressed,
-    val low: MochiShadowLevel = elevation(0.2f),
-    val raised: MochiShadowLevel = elevation(0.35f),
-    val lifted: MochiShadowLevel = elevation(0.6f),
+    val low: MochiShadowLevel = Low,
+    val raised: MochiShadowLevel = Raised,
+    val lifted: MochiShadowLevel = Lifted,
     val floating: MochiShadowLevel = Floating,
-    val rest: MochiShadowLevel = elevation(0f),
+    val rest: MochiShadowLevel = Rest,
 ) {
     public companion object {
         /** 没有阴影：放进 `MochiTheme(shadows = …)` 就是全平的外观 */
@@ -94,6 +94,10 @@ public data class MochiShadows(
 
 // 拇指静止：只有一层 3dp 的软影，颜色系数 0.5（拇指阴影色默认 22% 黑，乘出来 11%）
 private val Contact = MochiShadowLevel(0.dp, 0.dp, 0.dp, 0f, 0f, 1.5.dp, 3.dp, 0.5f, 0.5f)
+private val Low = elevation(0.2f)
+private val Raised = elevation(0.35f)
+private val Lifted = elevation(0.6f)
+private val Rest = elevation(0f)
 
 /**
  * 盖在页面上的面板：散开程度和 elevation(1) 一样，颜色比它深一截。浅色灰底上纯色菜单只靠阴影和页面分层，
@@ -107,6 +111,7 @@ private val Floating = elevation(1f).copy(
 )
 
 private val ContactPressed = MochiShadowLevel(0.dp, 0.dp, 0.dp, 0f, 0f, 3.5.dp, 7.dp, 0.8f, 0.8f)
+private val DefaultShadows = MochiShadows()
 
 /**
  * 浮起程度 0..1 的一档：越高越淡越散（大尺寸的玻璃投更大更柔的影子）。
@@ -127,4 +132,4 @@ internal fun elevation(e: Float): MochiShadowLevel {
     )
 }
 
-internal val LocalMochiShadows = staticCompositionLocalOf { MochiShadows() }
+internal val LocalMochiShadows = staticCompositionLocalOf { DefaultShadows }

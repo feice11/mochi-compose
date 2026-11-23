@@ -27,9 +27,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.MochiButtonDefaults
+import ui.feice.mochi.effect.glass.engine.DefaultGlassUnit
 import ui.feice.mochi.effect.glass.engine.GlassBody
 import ui.feice.mochi.effect.glass.engine.GlassGlowState
 import ui.feice.mochi.effect.glass.engine.GlassMerge
+import ui.feice.mochi.effect.glass.engine.GlassMergeBuffer
 import ui.feice.mochi.effect.glass.engine.outlineReach
 import ui.feice.mochi.effect.glass.engine.rememberGlassGlow
 import ui.feice.mochi.shape.MochiCapsule
@@ -74,7 +76,7 @@ public object MochiGlassContent {
      */
     public fun accent(color: Color, dark: Boolean): Color {
         if (dark) return color
-        val hsl = FloatArray(3)
+        val hsl = accentHslScratch.get()!!
         androidx.core.graphics.ColorUtils.colorToHSL(color.toArgb(), hsl)
         hsl[1] = 1f
         hsl[2] = (hsl[2] + AccentLift).coerceAtMost(0.72f)
@@ -83,6 +85,9 @@ public object MochiGlassContent {
 }
 
 private const val AccentLift = 0.12f
+private val accentHslScratch = object : ThreadLocal<FloatArray>() {
+    override fun initialValue(): FloatArray = FloatArray(3)
+}
 
 /** 不画外阴影，见 [LocalMochiGlassShadow] */
 public val MochiNoGlassShadow: () -> Float = { 0f }
@@ -96,7 +101,9 @@ public val MochiNoGlassShadow: () -> Float = { 0f }
 public fun mochiGlassOverflow(): Dp {
     val materials = MochiTheme.materials
     val dark = MochiTheme.colorScheme.isDark
-    return listOfNotNull(materials.bar, materials.controlGlass).maxOfOrNull { it.outlineReach(dark) } ?: 0.dp
+    val barReach = materials.bar?.outlineReach(dark) ?: 0.dp
+    val ctrlReach = materials.controlGlass?.outlineReach(dark) ?: 0.dp
+    return if (barReach >= ctrlReach) barReach else ctrlReach
 }
 
 /**
@@ -122,7 +129,7 @@ public fun MochiGlassSurface(
     if (fill == null) {
         val shape = remember(cornerRadius) { cornerRadius?.let { MochiRoundedRectangle(it) } ?: MochiCapsule }
         Box(
-            modifier.background(engine?.fallbackColor(MochiTheme.colorScheme.isDark) ?: MochiButtonDefaults.barColors().container, shape),
+            modifier.background(material?.fallbackColor(MochiTheme.colorScheme.isDark) ?: MochiButtonDefaults.barColors().container, shape),
             contentAlignment,
             content = content,
         )
@@ -134,7 +141,11 @@ public fun MochiGlassSurface(
 
 /** 一处玻璃要的东西：材质和取样的背景；任何一个没有就画纯色 */
 @Stable
-internal class GlassFill(val material: MochiGlass, val source: GlassSource)
+internal class GlassFill(val material: MochiGlass, val source: GlassSource) {
+    override fun equals(other: Any?): Boolean = other is GlassFill && material == other.material && source == other.source
+
+    override fun hashCode(): Int = 31 * material.hashCode() + source.hashCode()
+}
 
 @Composable
 internal fun rememberGlassFill(material: MochiGlass?, source: GlassSource?): GlassFill? =
@@ -151,15 +162,17 @@ internal fun GlassSurface(
     cornerRadius: Dp?,
     glow: GlassGlowState?,
     modifier: Modifier = Modifier,
-    scaleX: () -> Float = { 1f },
-    scaleY: () -> Float = { 1f },
-    alpha: () -> Float = { 1f },
+    scaleX: () -> Float = DefaultGlassUnit,
+    scaleY: () -> Float = DefaultGlassUnit,
+    alpha: () -> Float = DefaultGlassUnit,
     cornerRadiusPx: (() -> Float)? = null,
     merge: (() -> GlassMerge?)? = null,
     hold: (() -> Rect?)? = null,
     recipeSide: (() -> Float?)? = null,
     recipeThick: (() -> Float)? = null,
-    shadowScale: () -> Float = { 1f },
+    shadowScale: () -> Float = DefaultGlassUnit,
+    freezeBackdrop: (() -> Boolean)? = null,
+    fillMerge: ((GlassMergeBuffer) -> Boolean)? = null,
     contentAlignment: Alignment = Alignment.Center,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
@@ -179,6 +192,8 @@ internal fun GlassSurface(
         recipeSide = recipeSide,
         recipeThick = recipeThick,
         shadowScale = shadowScale,
+        freezeBackdrop = freezeBackdrop,
+        fillMerge = fillMerge,
     ) {
         Box(Modifier.matchParentSize(), contentAlignment, content = content)
     }
@@ -200,8 +215,16 @@ internal fun Modifier.glassGlowInput(glow: GlassGlowState?): Modifier = if (glow
             try {
                 while (true) {
                     val e = awaitPointerEvent(PointerEventPass.Initial)
-                    val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                    if (!c.pressed) break
+                    val changes = e.changes
+                    var c: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                    for (i in changes.indices) {
+                        val item = changes[i]
+                        if (item.id == down.id) {
+                            c = item
+                            break
+                        }
+                    }
+                    if (c == null || !c.pressed) break
                     if (!moved && (c.position - down.position).getDistance() > slop) moved = true
                     if (moved) glow.drag(c.position)
                 }

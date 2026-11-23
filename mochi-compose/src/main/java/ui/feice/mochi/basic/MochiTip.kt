@@ -49,9 +49,9 @@ public fun MochiTipCard(
         Box(
             Modifier
                 .fillMaxWidth()
-                .background(MochiDefaults.groupedContainer(), MochiRoundedRectangle(TipCorner)),
+                .background(MochiDefaults.groupedContainer(), TipShape),
         ) {
-            TipBody(title, message, icon, onDismiss, PaddingValues(16.dp))
+            TipBody(title, message, icon, onDismiss, TipCardPadding)
         }
     }
 }
@@ -97,18 +97,20 @@ public fun MochiTipPopover(
         physics = MochiDropdownDefaults.physics(),
         motion = MochiTheme.motionScheme.menu,
         menuWidth = MochiPopoverDefaults.Width,
-        buttonPadding = PaddingValues(0.dp),
+        buttonPadding = ZeroPadding,
         buttonMinWidth = size,
         buttonMinHeight = size,
         onClick = onClick,
-        content = { TipBody(title, message, icon, { onVisibleChange(false) }, PaddingValues(0.dp)) },
-        contentPadding = PaddingValues(MochiPopoverDefaults.ContentPadding),
+        content = { TipBody(title, message, icon, { onVisibleChange(false) }, ZeroPadding) },
+        contentPadding = TipPopoverPadding,
         panelCornerRadius = MochiPopoverDefaults.CornerRadius,
     ) { buttonContent() }
 }
 
 @Composable
 private fun TipBody(title: String, message: String?, icon: (@Composable () -> Unit)?, onDismiss: () -> Unit, padding: PaddingValues) {
+    val bodyStyle = MochiTheme.textStyles.body
+    val titleStyle = remember(bodyStyle) { bodyStyle.copy(fontWeight = FontWeight.SemiBold) }
     Row(Modifier.fillMaxWidth().padding(padding), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (icon != null) {
             CompositionLocalProvider(LocalContentColor provides MochiTheme.colorScheme.primary) {
@@ -116,7 +118,7 @@ private fun TipBody(title: String, message: String?, icon: (@Composable () -> Un
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MochiTheme.textStyles.body.copy(fontWeight = FontWeight.SemiBold), color = MochiTheme.colorScheme.onSurface)
+            Text(title, style = titleStyle, color = MochiTheme.colorScheme.onSurface)
             if (message != null) {
                 Text(message, style = MochiTheme.textStyles.subhead, color = MochiTheme.colorScheme.onSurfaceVariant)
             }
@@ -131,3 +133,7 @@ private fun TipBody(title: String, message: String?, icon: (@Composable () -> Un
 }
 
 private val TipCorner = 22.dp
+private val TipShape = MochiRoundedRectangle(TipCorner)
+private val TipCardPadding = PaddingValues(16.dp)
+private val ZeroPadding = PaddingValues(0.dp)
+private val TipPopoverPadding = PaddingValues(MochiPopoverDefaults.ContentPadding)

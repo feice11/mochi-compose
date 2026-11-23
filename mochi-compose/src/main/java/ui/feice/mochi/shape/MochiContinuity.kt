@@ -3,10 +3,12 @@
 
 package ui.feice.mochi.shape
 
+import android.os.Looper
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -16,13 +18,13 @@ import com.kyant.capsule.ContinuousCapsule
 import com.kyant.capsule.ContinuousRoundedRectangle
 import com.kyant.capsule.continuities.G2Continuity
 import com.kyant.capsule.continuities.G2ContinuityProfile
-import com.kyant.capsule.core.Point
 import com.kyant.capsule.path.PathSegment
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.tan
 
@@ -52,6 +54,18 @@ public object MochiContinuity : Continuity by Continuity.Default {
         return c.createRoundedRectanglePathSegments(width, height, topLeft, topRight, bottomRight, bottomLeft)
     }
 
+    // 主线程独占无锁 128 项 LRU + 64 槽 2-hit 晋升过滤器：动画形变的一次性尺寸不污染静态卡片缓存
+    private val mainOutlineCache = newOutlineLru(OutlineCacheCapacity)
+    private val mainProbation = LongArray(ProbationSize)
+
+    // 后台线程与纯 JVM 测试环境专用同步缓存（按需懒加载，与主线程快路径彻底隔离零数据竞争）
+    private val bgOutlineCache: LinkedHashMap<OutlineKey, Outline.Generic> by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        newOutlineLru(OutlineCacheCapacity)
+    }
+    private val bgProbation: LongArray by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        LongArray(ProbationSize)
+    }
+
     // 轮廓按 [toConvexPath] 拼：Kyant 默认拼出来的路径在 Skia 看来不是凸的，见那里的说明。胶囊也走这里（半径 = 短边一半）
     override fun createRoundedRectangleOutline(
         size: Size,
@@ -59,16 +73,71 @@ public object MochiContinuity : Continuity by Continuity.Default {
         topRight: Float,
         bottomRight: Float,
         bottomLeft: Float,
-    ): Outline = Outline.Generic(
-        createRoundedRectanglePathSegments(
-            size.width.toDouble(),
-            size.height.toDouble(),
-            topLeft.toDouble(),
-            topRight.toDouble(),
-            bottomRight.toDouble(),
-            bottomLeft.toDouble(),
-        ).toConvexPath(),
-    )
+    ): Outline {
+        if (topLeft <= 0f && topRight <= 0f && bottomRight <= 0f && bottomLeft <= 0f) {
+            return Outline.Rectangle(size.toRect())
+        }
+        val cacheable = size.width.isFinite() &&
+            size.height.isFinite() &&
+            size.width > 0f &&
+            size.height > 0f &&
+            size.width <= MaxCacheableExtentPx &&
+            size.height <= MaxCacheableExtentPx
+        if (!cacheable) {
+            return buildOutline(size, topLeft, topRight, bottomRight, bottomLeft)
+        }
+        // 尺寸与圆角按 0.5px 量化（误差 <= 0.25px 肉眼不可辨），提高静态元素缓存命中率
+        val wQ = (size.width * 2f).roundToInt().coerceAtLeast(1)
+        val hQ = (size.height * 2f).roundToInt().coerceAtLeast(1)
+        val tlQ = if (topLeft <= 0f) 0 else (topLeft * 2f).roundToInt()
+        val trQ = if (topRight <= 0f) 0 else (topRight * 2f).roundToInt()
+        val brQ = if (bottomRight <= 0f) 0 else (bottomRight * 2f).roundToInt()
+        val blQ = if (bottomLeft <= 0f) 0 else (bottomLeft * 2f).roundToInt()
+        if (tlQ == 0 && trQ == 0 && brQ == 0 && blQ == 0) {
+            return buildOutline(size, topLeft, topRight, bottomRight, bottomLeft)
+        }
+        val key = OutlineKey(wQ, hQ, tlQ, trQ, brQ, blQ)
+        val fp = outlineFingerprint(wQ, hQ, tlQ, trQ, brQ, blQ)
+        val slot = probationSlot(fp)
+        val qSize = Size(wQ * 0.5f, hQ * 0.5f)
+        val qTl = tlQ * 0.5f
+        val qTr = trQ * 0.5f
+        val qBr = brQ * 0.5f
+        val qBl = blQ * 0.5f
+        if (isShapeMainThread()) {
+            mainOutlineCache[key]?.let { return it }
+            val promote = mainProbation[slot] == fp
+            if (!promote) mainProbation[slot] = fp
+            val built = buildOutline(qSize, qTl, qTr, qBr, qBl)
+            if (promote) mainOutlineCache[key] = built
+            return built
+        }
+        val promote: Boolean
+        synchronized(bgOutlineCache) {
+            bgOutlineCache[key]?.let { return it }
+            promote = bgProbation[slot] == fp
+            if (!promote) bgProbation[slot] = fp
+        }
+        val built = buildOutline(qSize, qTl, qTr, qBr, qBl)
+        if (promote) {
+            synchronized(bgOutlineCache) {
+                bgOutlineCache[key] = built
+            }
+        }
+        return built
+    }
+
+    private fun buildOutline(size: Size, topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float): Outline.Generic =
+        Outline.Generic(
+            createRoundedRectanglePathSegments(
+                size.width.toDouble(),
+                size.height.toDouble(),
+                topLeft.toDouble(),
+                topRight.toDouble(),
+                bottomRight.toDouble(),
+                bottomLeft.toDouble(),
+            ).toConvexPath(),
+        )
 
     // 委托给 Continuity.Default 的默认方法不会回调上面的覆盖，胶囊要单独接过来
     override fun createCapsuleOutline(size: Size): Outline {
@@ -78,6 +147,50 @@ public object MochiContinuity : Continuity by Continuity.Default {
 
     override fun toString(): String = "MochiContinuity"
 }
+
+/** 轮廓 LRU 缓存上限 */
+private const val OutlineCacheCapacity = 128
+
+/** 2-hit 晋升过滤器槽位数（2 的幂） */
+internal const val ProbationSize = 64
+private const val ProbationMask = ProbationSize - 1
+
+/** 允许进入 0.5px 量化缓存的最大边长（px） */
+internal const val MaxCacheableExtentPx = 32768f
+
+private val ShapeMainLooper: Looper? = try {
+    Looper.getMainLooper()
+} catch (_: Throwable) {
+    null
+}
+
+internal fun isShapeMainThread(): Boolean {
+    val main = ShapeMainLooper ?: return false
+    return Looper.myLooper() === main
+}
+
+internal fun probationSlot(fp: Long): Int = (fp.toInt() xor (fp ushr 32).toInt()) and ProbationMask
+
+internal fun mixShapeLong(v: Long): Long {
+    var x = v
+    x = (x xor (x ushr 30)) * -4658895280553007687L
+    x = (x xor (x ushr 27)) * -7723592293110705685L
+    x = x xor (x ushr 31)
+    return if (x == 0L) 1L else x
+}
+
+private fun outlineFingerprint(wQ: Int, hQ: Int, tlQ: Int, trQ: Int, brQ: Int, blQ: Int): Long {
+    var h = (wQ.toLong() shl 32) xor (hQ.toLong() and 0xFFFFFFFFL)
+    h = mixShapeLong(h xor ((tlQ.toLong() shl 32) xor (trQ.toLong() and 0xFFFFFFFFL)))
+    return mixShapeLong(h xor ((brQ.toLong() shl 32) xor (blQ.toLong() and 0xFFFFFFFFL)))
+}
+
+private fun newOutlineLru(capacity: Int): LinkedHashMap<OutlineKey, Outline.Generic> =
+    object : LinkedHashMap<OutlineKey, Outline.Generic>(capacity, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<OutlineKey, Outline.Generic>?): Boolean = size > capacity
+    }
+
+private data class OutlineKey(val wQ: Int, val hQ: Int, val tlQ: Int, val trQ: Int, val brQ: Int, val blQ: Int)
 
 /** 连续圆角矩形（Kyant 默认曲线）：半径大到边长一半时平滑过渡成胶囊 */
 @Stable
@@ -100,35 +213,67 @@ public val MochiCapsule: Shape = ContinuousCapsule(MochiContinuity)
  * 每个接口两边的切线几乎共线时，把两边的控制点沿内法线挪 [JointNudge]（远小于一个像素），
  * 接口处的转角稳定落在凸的一侧，浮点误差翻不过来。长度近乎为 0 的段跳过，最后 close。整圈的 Circle 段直接加圆
  */
-internal fun List<PathSegment>.toConvexPath(): Path {
-    val path = Path()
-    if (isEmpty()) return path
+internal fun List<PathSegment>.toConvexPath(): Path = Path().also { buildConvexPathInto(it, 0f, 0f) }
+
+/**
+ * 直接把 G2 轮廓的分段写入 [path]（平移 [offsetX], [offsetY]），复用线程局部原生数组工作区，
+ * 避免每帧自绘圆角时创建临时 [Path]、[DoubleArray] 与装箱对象。
+ */
+internal fun List<PathSegment>.buildConvexPathInto(path: Path, offsetX: Float = 0f, offsetY: Float = 0f) {
+    if (isEmpty()) return
     first().let { s ->
         if (s is PathSegment.Circle) {
-            path.addOval(Rect(s.center.offset(), s.radius.toFloat()))
-            return path
+            path.addOval(Rect(Offset(s.center.x.toFloat() + offsetX, s.center.y.toFloat() + offsetY), s.radius.toFloat()))
+            return
         }
     }
-    // 每段 8 个数：起点、两个控制点、终点（直线的控制点 = 端点，标记在 lines 里）
-    val pts = ArrayList<DoubleArray>(size + 8)
-    val lines = ArrayList<Boolean>(size + 8)
+    val scratch = convexScratch.get()!!
+    var count = 0
     var x0 = first().from.x
     var y0 = first().from.y
+
+    fun pushLine(tx: Double, ty: Double) {
+        scratch.ensureCapacity(count)
+        val base = count * 8
+        val pts = scratch.pts
+        pts[base] = x0
+        pts[base + 1] = y0
+        pts[base + 2] = x0
+        pts[base + 3] = y0
+        pts[base + 4] = tx
+        pts[base + 5] = ty
+        pts[base + 6] = tx
+        pts[base + 7] = ty
+        scratch.lines[count] = true
+        count++
+        x0 = tx
+        y0 = ty
+    }
+
     fun cubic(x1: Double, y1: Double, x2: Double, y2: Double, x3: Double, y3: Double) {
         if (abs(x3 - x0) < Epsilon && abs(y3 - y0) < Epsilon && abs(x1 - x0) < Epsilon && abs(y1 - y0) < Epsilon) return
-        pts += doubleArrayOf(x0, y0, x1, y1, x2, y2, x3, y3)
-        lines += false
+        scratch.ensureCapacity(count)
+        val base = count * 8
+        val pts = scratch.pts
+        pts[base] = x0
+        pts[base + 1] = y0
+        pts[base + 2] = x1
+        pts[base + 3] = y1
+        pts[base + 4] = x2
+        pts[base + 5] = y2
+        pts[base + 6] = x3
+        pts[base + 7] = y3
+        scratch.lines[count] = false
+        count++
         x0 = x3
         y0 = y3
     }
-    for (s in this) {
-        when (s) {
+
+    for (i in indices) {
+        when (val s = this[i]) {
             is PathSegment.Line -> {
                 if (abs(s.to.x - x0) < Epsilon && abs(s.to.y - y0) < Epsilon) continue
-                pts += doubleArrayOf(x0, y0, x0, y0, s.to.x, s.to.y, s.to.x, s.to.y)
-                lines += true
-                x0 = s.to.x
-                y0 = s.to.y
+                pushLine(s.to.x, s.to.y)
             }
 
             is PathSegment.Cubic -> cubic(s.p1.x, s.p1.y, s.p2.x, s.p2.y, s.p3.x, s.p3.y)
@@ -138,16 +283,13 @@ internal fun List<PathSegment>.toConvexPath(): Path {
                 // 个别尺寸下 Kyant 给的圆弧起点和上一段终点对不上（只圆两个相邻角、半径 8dp 左右时见过），
                 // 和它自己用 arcTo 画的一样先连一段直线过去，形状保持原样（这种路径仍然不是凸的）
                 if (abs(s.from.x - x0) >= Epsilon || abs(s.from.y - y0) >= Epsilon) {
-                    pts += doubleArrayOf(x0, y0, x0, y0, s.from.x, s.from.y, s.from.x, s.from.y)
-                    lines += true
-                    x0 = s.from.x
-                    y0 = s.from.y
+                    pushLine(s.from.x, s.from.y)
                 }
                 val n = ceil(abs(s.sweepAngle) / (PI / 2) - 1e-9).toInt().coerceAtLeast(1)
                 val step = s.sweepAngle / n
                 val k = 4.0 / 3.0 * tan(step / 4) * s.radius
                 var a = s.startAngle
-                for (i in 0 until n) {
+                for (seg in 0 until n) {
                     val b = a + step
                     // 终点按角度算，和 Kyant 用 arcTo 画到的位置一致（下一段贝塞尔从当前点接着画，它自己记的起点不用）
                     val ex = s.center.x + s.radius * cos(b)
@@ -157,36 +299,116 @@ internal fun List<PathSegment>.toConvexPath(): Path {
                 }
             }
 
-            else -> return Path().also { p -> forEach { it.drawTo(p) } }
+            else -> {
+                if (offsetX == 0f && offsetY == 0f) {
+                    for (seg in this) seg.drawTo(path)
+                } else {
+                    val tmp = Path()
+                    for (seg in this) seg.drawTo(tmp)
+                    path.addPath(tmp, Offset(offsetX, offsetY))
+                }
+                return
+            }
         }
     }
-    if (pts.isEmpty()) return path
-    nudgeJoints(pts, lines)
-    path.moveTo(pts[0][0].toFloat(), pts[0][1].toFloat())
-    for (i in pts.indices) {
-        val p = pts[i]
-        if (lines[i]) {
-            path.lineTo(p[6].toFloat(), p[7].toFloat())
-        } else {
-            path.cubicTo(p[2].toFloat(), p[3].toFloat(), p[4].toFloat(), p[5].toFloat(), p[6].toFloat(), p[7].toFloat())
+    if (count == 0) return
+    val pts = scratch.pts
+    val lines = scratch.lines
+    nudgeJoints(pts, lines, count)
+    if (offsetX == 0f && offsetY == 0f) {
+        path.moveTo(pts[0].toFloat(), pts[1].toFloat())
+        for (i in 0 until count) {
+            val base = i * 8
+            if (lines[i]) {
+                path.lineTo(pts[base + 6].toFloat(), pts[base + 7].toFloat())
+            } else {
+                path.cubicTo(
+                    pts[base + 2].toFloat(),
+                    pts[base + 3].toFloat(),
+                    pts[base + 4].toFloat(),
+                    pts[base + 5].toFloat(),
+                    pts[base + 6].toFloat(),
+                    pts[base + 7].toFloat(),
+                )
+            }
+        }
+    } else {
+        path.moveTo(pts[0].toFloat() + offsetX, pts[1].toFloat() + offsetY)
+        for (i in 0 until count) {
+            val base = i * 8
+            if (lines[i]) {
+                path.lineTo(pts[base + 6].toFloat() + offsetX, pts[base + 7].toFloat() + offsetY)
+            } else {
+                path.cubicTo(
+                    pts[base + 2].toFloat() + offsetX,
+                    pts[base + 3].toFloat() + offsetY,
+                    pts[base + 4].toFloat() + offsetX,
+                    pts[base + 5].toFloat() + offsetY,
+                    pts[base + 6].toFloat() + offsetX,
+                    pts[base + 7].toFloat() + offsetY,
+                )
+            }
         }
     }
     path.close()
-    return path
+}
+
+private class ConvexScratch {
+    var pts = DoubleArray(32 * 8)
+    var lines = BooleanArray(32)
+
+    fun ensureCapacity(segIndex: Int) {
+        if (segIndex >= lines.size) {
+            val next = lines.size * 2
+            pts = pts.copyOf(next * 8)
+            lines = lines.copyOf(next)
+        }
+    }
+}
+
+private val convexScratch = object : ThreadLocal<ConvexScratch>() {
+    override fun initialValue(): ConvexScratch = ConvexScratch()
 }
 
 /** 接口两边切线几乎共线时，两边贝塞尔的控制点沿内法线挪一点（直线没有控制点，不动；Kyant 的直线都正好沿坐标轴，本身没有误差） */
-private fun nudgeJoints(pts: List<DoubleArray>, lines: List<Boolean>) {
+private fun nudgeJoints(pts: DoubleArray, lines: BooleanArray, count: Int) {
     // 走向：按控制多边形的有向面积，>0 是屏幕坐标里的顺时针，内法线 = 切线顺时针转 90°
     var area = 0.0
-    for (p in pts) for (j in 0 until 3) area += p[j * 2] * p[j * 2 + 3] - p[j * 2 + 2] * p[j * 2 + 1]
+    for (i in 0 until count) {
+        val base = i * 8
+        for (j in 0 until 3) {
+            val k = base + j * 2
+            area += pts[k] * pts[k + 3] - pts[k + 2] * pts[k + 1]
+        }
+    }
     val turn = if (area >= 0) 1.0 else -1.0
-    for (i in pts.indices) {
-        val a = pts[i]
-        val b = pts[(i + 1) % pts.size]
+    for (i in 0 until count) {
+        val next = (i + 1) % count
+        val aBase = i * 8
+        val bBase = next * 8
         // 进来的切线：终点减去最后一个不重合的控制点；出去的切线：第一个不重合的控制点减去起点
-        val (ux, uy) = tangentIn(a)
-        val (vx, vy) = tangentOut(b)
+        var ux = 0.0
+        var uy = 0.0
+        for (j in 2 downTo 0) {
+            val dx = pts[aBase + 6] - pts[aBase + j * 2]
+            val dy = pts[aBase + 7] - pts[aBase + j * 2 + 1]
+            if (abs(dx) >= Epsilon || abs(dy) >= Epsilon) {
+                ux = dx
+                uy = dy
+                break
+            }
+        }
+        var vx = 0.0
+        var vy = 0.0
+        for (j in 1..3) {
+            val dx = pts[bBase + j * 2] - pts[bBase]
+            val dy = pts[bBase + j * 2 + 1] - pts[bBase + 1]
+            if (abs(dx) >= Epsilon || abs(dy) >= Epsilon) {
+                vx = dx
+                vy = dy
+                break
+            }
+        }
         val lu = hypot(ux, uy)
         val lv = hypot(vx, vy)
         if (lu < Epsilon || lv < Epsilon) continue
@@ -199,36 +421,18 @@ private fun nudgeJoints(pts: List<DoubleArray>, lines: List<Boolean>) {
         val nx = -uy / lu * turn
         val ny = ux / lu * turn
         // 至少挪过几个 float 的最小间隔：坐标大、控制柄短时按比例挪的量会被 float 舍掉
-        val floor = JointUlps * Math.ulp(maxOf(abs(a[6]), abs(a[7])).toFloat()).toDouble()
+        val floor = JointUlps * Math.ulp(maxOf(abs(pts[aBase + 6]), abs(pts[aBase + 7])).toFloat()).toDouble()
         if (!lines[i]) {
             val d = maxOf(JointNudge * lu, floor)
-            a[4] += nx * d
-            a[5] += ny * d
+            pts[aBase + 4] += nx * d
+            pts[aBase + 5] += ny * d
         }
-        if (!lines[(i + 1) % pts.size]) {
+        if (!lines[next]) {
             val d = maxOf(JointNudge * lv, floor)
-            b[2] += nx * d
-            b[3] += ny * d
+            pts[bBase + 2] += nx * d
+            pts[bBase + 3] += ny * d
         }
     }
-}
-
-private fun tangentIn(p: DoubleArray): Pair<Double, Double> {
-    for (j in 2 downTo 0) {
-        val dx = p[6] - p[j * 2]
-        val dy = p[7] - p[j * 2 + 1]
-        if (abs(dx) >= Epsilon || abs(dy) >= Epsilon) return dx to dy
-    }
-    return 0.0 to 0.0
-}
-
-private fun tangentOut(p: DoubleArray): Pair<Double, Double> {
-    for (j in 1..3) {
-        val dx = p[j * 2] - p[0]
-        val dy = p[j * 2 + 1] - p[1]
-        if (abs(dx) >= Epsilon || abs(dy) >= Epsilon) return dx to dy
-    }
-    return 0.0 to 0.0
 }
 
 /** 接口两边切线夹角的正弦小于这个就算共线 */
@@ -242,5 +446,3 @@ private const val JointUlps = 8
 
 /** 小于这个距离（px）的点当成同一个点 */
 private const val Epsilon = 1e-3
-
-private fun Point.offset(): Offset = Offset(x.toFloat(), y.toFloat())

@@ -77,14 +77,22 @@ public fun MochiConfirmationDialogBox(
 ) {
     val main = remember(actions) { actions.filter { it.role != MochiDialogActionRole.Cancel } }
     val items = remember(main) {
-        main.map { MochiItem(it.label, destructive = it.role == MochiDialogActionRole.Destructive) }.toImmutableList()
+        main.map {
+            MochiItem(
+                it.label,
+                destructive = it.role == MochiDialogActionRole.Destructive,
+            ).also { item -> item.itemEnabled = it.enabled }
+        }.toImmutableList()
     }
-    val header = listOfNotNull(title, message).joinToString("\n").ifEmpty { null }
+    val header = remember(title, message) { listOfNotNull(title, message).joinToString("\n").ifEmpty { null } }
+    val onClickItem = remember(main) {
+        { i: Int -> main.getOrNull(i)?.takeIf { it.enabled }?.onClick?.invoke() ?: Unit }
+    }
     DropdownCore(
         expanded = expanded,
         onExpandedChange = onExpandedChange,
         items = items,
-        onItemClick = { i -> main.getOrNull(i)?.takeIf { it.enabled }?.onClick?.invoke() },
+        onItemClick = onClickItem,
         modifier = modifier,
         enabled = enabled,
         selectedIndex = -1,

@@ -9,6 +9,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ui.feice.mochi.basic.menu.growClose
+import ui.feice.mochi.basic.menu.growOpen
+import ui.feice.mochi.basic.menu.morphClose
+import ui.feice.mochi.basic.menu.morphOpen
 
 class PopoverGeometryTest {
     private val screen = Size(1080f, 2400f)
@@ -60,6 +64,37 @@ class PopoverGeometryTest {
         assertEquals(400f, popoverArrowX(Rect(380f, 400f, 420f, 440f), panel, 60f, 20f))
         assertEquals(180f, popoverArrowX(Rect(0f, 400f, 40f, 440f), panel, 60f, 20f))
         assertEquals(620f, popoverArrowX(Rect(900f, 400f, 940f, 440f), panel, 60f, 20f))
+    }
+
+    @Test
+    fun ultraNarrowContainerAndZeroCardStayFinite() {
+        val narrow = popoverPlacement(
+            anchor = Rect(0f, 10f, 20f, 30f),
+            container = Size(20f, 80f),
+            width = 300f,
+            contentHeight = 0f,
+            gap = 8f,
+            margin = 30f,
+            safeTop = 0f,
+            safeBottom = 0f,
+            cover = false,
+            align = MochiAlign.Center,
+        )
+        assertTrue(narrow.rect.width >= 1f)
+        assertFalse(narrow.rect.left.isNaN())
+
+        val anchor = Rect(10f, 10f, 90f, 50f)
+        val zeroCard = Rect(10f, 60f, 10f, 60f)
+        for (f in listOf(
+            morphOpen(0.1f, anchor, zeroCard, 20f, 2f),
+            morphClose(0.1f, null, anchor, zeroCard, 20f, 2f),
+            growOpen(0.1f, anchor, 16f, zeroCard, 20f),
+            growClose(0.1f, null, anchor, 16f, zeroCard, 20f),
+        )) {
+            assertTrue(f.contentScale.isFinite())
+            assertTrue(f.radius.isFinite())
+            assertTrue(f.platter.width.isFinite() && f.platter.height.isFinite())
+        }
     }
 }
 

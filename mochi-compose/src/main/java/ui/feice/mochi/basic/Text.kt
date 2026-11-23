@@ -7,13 +7,14 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextMotion
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
@@ -67,17 +68,22 @@ internal fun MochiMeasuredText(
     val c = color.takeOrElse { style.color.takeOrElse { LocalContentColor.current } }
     val size = style.fontSize
     val autoSize = if (minFontScale < 1f && size.isSpecified) {
-        TextAutoSize.StepBased(minFontSize = size * minFontScale.coerceIn(0.3f, 1f), maxFontSize = size, stepSize = 0.5.sp)
+        val minFontSize = size * minFontScale.coerceIn(0.3f, 1f)
+        remember(minFontSize, size) {
+            TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = size, stepSize = 0.5.sp)
+        }
     } else {
         null
     }
+    val colorProducer = remember(c) { ColorProducer { c } }
     if (LocalMochiFontCrossfade.current) {
         // 按排版属性比（去掉颜色）：配色插值每帧都在变颜色，不能每帧都触发一次替换
-        val font = style.copy(color = Color.Unspecified)
+        val font = if (style.color == Color.Unspecified) style else remember(style) { style.copy(color = Color.Unspecified) }
         MochiBlurCrossfade(font, modifier, contentAlignment = Alignment.TopStart) { s ->
             BasicText(
                 text = text,
-                style = s.merge(TextStyle(color = c, textMotion = s.textMotion ?: TextMotion.Animated)),
+                style = s,
+                color = colorProducer,
                 maxLines = maxLines,
                 overflow = overflow,
                 softWrap = softWrap,
@@ -90,8 +96,8 @@ internal fun MochiMeasuredText(
     BasicText(
         text = text,
         modifier = modifier,
-        // 没指定 textMotion 时用 Animated：见 MochiTextMotion
-        style = style.merge(TextStyle(color = c, textMotion = style.textMotion ?: TextMotion.Animated)),
+        style = style,
+        color = colorProducer,
         maxLines = maxLines,
         overflow = overflow,
         softWrap = softWrap,

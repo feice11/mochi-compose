@@ -3,10 +3,12 @@
 
 package ui.feice.mochi.basic.parts
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -33,21 +35,21 @@ internal object MochiGlyphs {
         key: String = "chevron-forward",
     ) {
         MochiIcon(key, modifier.size(size).graphicsLayer { rotationZ = rotation() }, tint = tint) { slot ->
-            Canvas(slot) {
-                val w = 2.dp.toPx()
-                run {
+            Spacer(
+                slot.drawWithCache {
+                    val stroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                     val cx = this.size.width / 2f
                     val cy = this.size.height / 2f
                     val hh = this.size.height * 0.36f
                     val hw = hh * 0.55f
-                    val p = Path().apply {
+                    val path = Path().apply {
                         moveTo(cx - hw, cy - hh)
                         lineTo(cx + hw, cy)
                         lineTo(cx - hw, cy + hh)
                     }
-                    drawPath(p, tint, style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
-                }
-            }
+                    onDrawBehind { drawPath(path, tint, style = stroke) }
+                },
+            )
         }
     }
 
@@ -55,25 +57,24 @@ internal object MochiGlyphs {
     @Composable
     fun UpDown(tint: Color, modifier: Modifier = Modifier, size: Dp = 14.dp) {
         MochiIcon("chevron.up.chevron.down", modifier.size(width = size * 0.7f, height = size), tint = tint) { slot ->
-            Canvas(slot) {
-                val w = 1.7.dp.toPx()
-                val cx = this.size.width / 2f
-                val hw = this.size.width / 2f - w / 2f
-                val h = this.size.height
-                val up = Path().apply {
-                    moveTo(cx - hw, h * 0.36f)
-                    lineTo(cx, h * 0.12f)
-                    lineTo(cx + hw, h * 0.36f)
-                }
-                val down = Path().apply {
-                    moveTo(cx - hw, h * 0.64f)
-                    lineTo(cx, h * 0.88f)
-                    lineTo(cx + hw, h * 0.64f)
-                }
-                val s = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                drawPath(up, tint, style = s)
-                drawPath(down, tint, style = s)
-            }
+            Spacer(
+                slot.drawWithCache {
+                    val w = 1.7.dp.toPx()
+                    val cx = this.size.width / 2f
+                    val hw = this.size.width / 2f - w / 2f
+                    val h = this.size.height
+                    val path = Path().apply {
+                        moveTo(cx - hw, h * 0.36f)
+                        lineTo(cx, h * 0.12f)
+                        lineTo(cx + hw, h * 0.36f)
+                        moveTo(cx - hw, h * 0.64f)
+                        lineTo(cx, h * 0.88f)
+                        lineTo(cx + hw, h * 0.64f)
+                    }
+                    val stroke = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    onDrawBehind { drawPath(path, tint, style = stroke) }
+                },
+            )
         }
     }
 
@@ -81,16 +82,19 @@ internal object MochiGlyphs {
     @Composable
     fun Check(tint: Color, modifier: Modifier = Modifier, size: Dp = 20.dp) {
         MochiIcon("checkmark", modifier.size(size), tint = tint) { slot ->
-            Canvas(slot) {
-                val w = this.size.width
-                val h = this.size.height
-                val p = Path().apply {
-                    moveTo(w * 0.18f, h * 0.52f)
-                    lineTo(w * 0.42f, h * 0.76f)
-                    lineTo(w * 0.84f, h * 0.26f)
-                }
-                drawPath(p, tint, style = Stroke((2f * size.value / 20f).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-            }
+            Spacer(
+                slot.drawWithCache {
+                    val w = this.size.width
+                    val h = this.size.height
+                    val path = Path().apply {
+                        moveTo(w * 0.18f, h * 0.52f)
+                        lineTo(w * 0.42f, h * 0.76f)
+                        lineTo(w * 0.84f, h * 0.26f)
+                    }
+                    val stroke = Stroke((2f * size.value / 20f).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    onDrawBehind { drawPath(path, tint, style = stroke) }
+                },
+            )
         }
     }
 
@@ -98,13 +102,15 @@ internal object MochiGlyphs {
     @Composable
     fun Close(tint: Color, modifier: Modifier = Modifier, size: Dp = 12.dp) {
         MochiIcon("close", modifier.size(size), tint = tint) { slot ->
-            Canvas(slot) {
-                val w = 2.dp.toPx()
-                val a = w / 2f
-                val b = this.size.width - w / 2f
-                drawLine(tint, Offset(a, a), Offset(b, b), w, StrokeCap.Round)
-                drawLine(tint, Offset(b, a), Offset(a, b), w, StrokeCap.Round)
-            }
+            Spacer(
+                slot.drawBehind {
+                    val w = 2.dp.toPx()
+                    val a = w / 2f
+                    val b = this.size.width - w / 2f
+                    drawLine(tint, Offset(a, a), Offset(b, b), w, StrokeCap.Round)
+                    drawLine(tint, Offset(b, a), Offset(a, b), w, StrokeCap.Round)
+                },
+            )
         }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,6 +34,8 @@ public fun MochiListStatusChip(
     containerColor: Color = MochiTheme.colorScheme.primary,
     contentColor: Color = MochiTheme.colorScheme.onPrimary,
 ) {
+    val footnote = MochiTheme.textStyles.footnote
+    val chipTextStyle = remember(footnote) { footnote.copy(fontWeight = FontWeight.SemiBold) }
     Row(
         modifier.mochiConcentricOutline().background(containerColor, MochiCapsule).padding(horizontal = 8.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -42,7 +45,7 @@ public fun MochiListStatusChip(
         Text(
             text,
             modifier = Modifier.weight(1f, fill = false),
-            style = MochiTheme.textStyles.footnote.copy(fontWeight = FontWeight.SemiBold),
+            style = chipTextStyle,
             color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

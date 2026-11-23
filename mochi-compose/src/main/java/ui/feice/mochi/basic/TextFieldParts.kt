@@ -8,7 +8,6 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +36,7 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,8 +44,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -68,6 +69,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -193,9 +195,22 @@ internal fun MochiSelectionColors(color: Color, content: @Composable () -> Unit)
 @Composable
 internal fun FieldPlaceholder(text: String, visible: Boolean, style: TextStyle, color: Color) {
     if (text.isEmpty()) return
-    val a by animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 180 else 90), label = "placeholder")
-    if (a > 0f) Text(text, style = style, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { alpha = a })
+    val aState = animateFloatAsState(if (visible) 1f else 0f, if (visible) PlaceholderInSpec else PlaceholderOutSpec, label = "placeholder")
+    val show by remember { derivedStateOf { visible || aState.value > 0.001f } }
+    val settled by remember { derivedStateOf { visible && aState.value >= 0.999f } }
+    if (show) {
+        Text(
+            text,
+            style = style,
+            color = color,
+            maxLines = 1,
+            modifier = if (settled) Modifier else Modifier.graphicsLayer { alpha = aState.value },
+        )
+    }
 }
+
+private val PlaceholderInSpec = tween<Float>(180)
+private val PlaceholderOutSpec = tween<Float>(90)
 
 /** 输入框里图标 / 按钮的位置：单行高度那么高，内容居中（多行时落在最后一行） */
 @Composable
@@ -209,7 +224,9 @@ internal fun FieldSlot(modifier: Modifier = Modifier, content: @Composable () ->
  */
 @Composable
 internal fun ClearSlot(visible: Boolean, onClear: () -> Unit, color: Color, hole: Color, modifier: Modifier = Modifier) {
-    val v by animateFloatAsState(if (visible) 1f else 0f, MochiMotionTokens.Settle, label = "clear")
+    val vState = animateFloatAsState(if (visible) 1f else 0f, MochiMotionTokens.Settle, label = "clear")
+    val showBadge by remember { derivedStateOf { visible || vState.value > 0.001f } }
+    val settled by remember { derivedStateOf { visible && vState.value >= 0.999f } }
     Box(
         modifier.then(
             if (visible) {
@@ -222,51 +239,75 @@ internal fun ClearSlot(visible: Boolean, onClear: () -> Unit, color: Color, hole
         ),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier.graphicsLayer {
-                mochiBlurAlpha(v.coerceIn(0f, 1f), mochiRevealBlur(v, 6.dp))
-                val sc = 0.8f + 0.2f * v.coerceIn(0f, 1f)
-                scaleX = sc
-                scaleY = sc
-            }.mochiBlur { mochiRevealBlur(v, 6.dp) },
-        ) { ClearBadge(color, hole) }
+        if (showBadge) {
+            Box(
+                if (settled) {
+                    Modifier
+                } else {
+                    Modifier.graphicsLayer {
+                        val v = vState.value
+                        mochiBlurAlpha(v.coerceIn(0f, 1f), mochiRevealBlur(v, 6.dp))
+                        val sc = 0.8f + 0.2f * v.coerceIn(0f, 1f)
+                        scaleX = sc
+                        scaleY = sc
+                    }.mochiBlur { mochiRevealBlur(vState.value, 6.dp) }
+                },
+            ) { ClearBadge(color, hole) }
+        }
     }
 }
 
 /** iOS 的清除按钮：灰色实心小圆，中间镂空的 ✕ */
 @Composable
 internal fun ClearBadge(color: Color, hole: Color) {
+    val crossColor = when {
+        hole.alpha >= 0.9f -> hole
+        MochiTheme.colorScheme.isDark -> MochiTheme.colorScheme.surface
+        else -> Color.White
+    }
     Box(Modifier.size(18.dp).background(color.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
-        ClearGlyph(if (hole.alpha < 0.9f) Color.White else hole)
+        ClearGlyph(crossColor)
     }
 }
 
 /** 小眼睛：[slash] 0 = 睁眼，1 = 斜杠画满（密码正在显示，点了会藏起来） */
 @Composable
-internal fun EyeGlyph(color: Color, slash: Float) {
+internal fun EyeGlyph(color: Color, slash: () -> Float) {
+    val needsOffscreen by remember(slash) { derivedStateOf { slash() > 0.01f } }
     MochiIcon("eye", Modifier.size(22.dp), tint = color) { slot ->
-        // 离屏画：斜杠旁边那道缝是真的挖空，透出输入框底色
-        Canvas(slot.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
-            val w = size.width
-            val h = size.height
-            val sw = w * 0.085f
-            val eye = Path().apply {
-                moveTo(w * 0.06f, h * 0.5f)
-                quadraticTo(w * 0.5f, h * 0.02f, w * 0.94f, h * 0.5f)
-                quadraticTo(w * 0.5f, h * 0.98f, w * 0.06f, h * 0.5f)
-                close()
-            }
-            drawPath(eye, color, style = Stroke(sw))
-            drawCircle(color, radius = w * 0.14f, center = Offset(w * 0.5f, h * 0.5f))
-            if (slash > 0.01f) {
-                val a = Offset(w * 0.16f, h * 0.14f)
-                val b = Offset(w * 0.84f, h * 0.86f)
-                val e = Offset(lerp(a.x, b.x, slash.coerceIn(0f, 1f)), lerp(a.y, b.y, slash.coerceIn(0f, 1f)))
-                // 先挖一道缝，斜杠和眼睛之间留白（SF Symbols 的 eye.slash）
-                drawLine(Color.Black, a, e, sw * 3f, StrokeCap.Round, blendMode = BlendMode.Clear)
-                drawLine(color, a, e, sw, StrokeCap.Round)
-            }
-        }
+        // 只有画斜杠挖缝时才开离屏，平时密码隐藏态零图层与零离屏开销
+        Spacer(
+            slot
+                .then(if (needsOffscreen) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier)
+                .drawWithCache {
+                    val w = size.width
+                    val h = size.height
+                    val sw = w * 0.085f
+                    val stroke = Stroke(sw)
+                    val eye = Path().apply {
+                        moveTo(w * 0.06f, h * 0.5f)
+                        quadraticTo(w * 0.5f, h * 0.02f, w * 0.94f, h * 0.5f)
+                        quadraticTo(w * 0.5f, h * 0.98f, w * 0.06f, h * 0.5f)
+                        close()
+                    }
+                    val pupilCenter = Offset(w * 0.5f, h * 0.5f)
+                    val pupilRadius = w * 0.14f
+                    val a = Offset(w * 0.16f, h * 0.14f)
+                    val b = Offset(w * 0.84f, h * 0.86f)
+                    onDrawBehind {
+                        drawPath(eye, color, style = stroke)
+                        drawCircle(color, radius = pupilRadius, center = pupilCenter)
+                        val s = slash()
+                        if (s > 0.01f) {
+                            val clamped = s.coerceIn(0f, 1f)
+                            val e = Offset(lerp(a.x, b.x, clamped), lerp(a.y, b.y, clamped))
+                            // 先挖一道缝，斜杠和眼睛之间留白（SF Symbols 的 eye.slash）
+                            drawLine(Color.Black, a, e, sw * 3f, StrokeCap.Round, blendMode = BlendMode.Clear)
+                            drawLine(color, a, e, sw, StrokeCap.Round)
+                        }
+                    }
+                },
+        )
     }
 }
 
@@ -295,7 +336,6 @@ internal fun FormRowShell(
     val press = info.press
     val scope = rememberCoroutineScope()
     val currentOnClick by rememberUpdatedState(onClick)
-    val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
     Row(
         modifier
             .layoutId(info)
@@ -324,10 +364,16 @@ internal fun FormRowShell(
                                     delay(70)
                                     press.snapTo(1f)
                                 }
-                                val released = tryAwaitRelease()
-                                lit.cancel()
-                                if (released) press.snapTo(1f)
-                                scope.launch { press.animateTo(0f, tween(if (released) 350 else 120)) }
+                                var released = false
+                                try {
+                                    released = tryAwaitRelease()
+                                } finally {
+                                    lit.cancel()
+                                    scope.launch {
+                                        if (released) press.snapTo(1f)
+                                        press.animateTo(0f, tween(if (released) 350 else 120))
+                                    }
+                                }
                             },
                             onTap = { currentOnClick() },
                         )
@@ -339,9 +385,9 @@ internal fun FormRowShell(
             .padding(start = MochiListDefaults.TextRowPadding, end = endPadding)
             .layout { measurable, constraints ->
                 val p = measurable.measure(constraints)
-                layout(p.width, p.height) { p.placeWithLayer(0, 0) { translationY = info.contentCenterOffset() } }
+                layout(p.width, p.height) { p.place(0, info.contentCenterOffset().roundToInt()) }
             }
-            .graphicsLayer { this.alpha = alpha },
+            .then(if (enabled) Modifier else Modifier.graphicsLayer { alpha = MochiDefaults.DisabledAlpha }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (label != null) {

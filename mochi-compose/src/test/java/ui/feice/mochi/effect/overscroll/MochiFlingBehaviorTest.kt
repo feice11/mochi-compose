@@ -5,6 +5,9 @@ package ui.feice.mochi.effect.overscroll
 
 import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.runtime.MonotonicFrameClock
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import kotlin.coroutines.resume
 import kotlin.math.abs
 import kotlinx.coroutines.CancellableContinuation
@@ -18,6 +21,7 @@ import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ui.feice.mochi.effect.overscroll.cresto.OffsetOverscrollEffect
 
 /** 保留与更换越界引擎无关的惯性减速检查。 */
 class MochiFlingBehaviorTest {
@@ -66,6 +70,27 @@ class MochiFlingBehaviorTest {
         assertTrue(remaining < -FlingStopVelocity.value)
         assertTrue(abs(remaining) <= 8_000f)
         assertTrue(clock.elapsedMillis < 100L)
+    }
+
+    @Test
+    fun initialZeroDeltaDoesNotLockHorizontalOverscrollToVerticalAxis() {
+        val effect = OffsetOverscrollEffect(
+            animationSpec = { OffsetOverscrollEffect.DefaultAnimationSpec },
+            maxFraction = { 0.65f },
+        )
+        effect.viewport = Size(300f, 100f)
+
+        effect.applyToScroll(Offset.Zero, NestedScrollSource.UserInput) { Offset.Zero }
+        assertEquals(Offset.Zero, effect.visibleOffset)
+
+        effect.applyToScroll(Offset(-60f, 0f), NestedScrollSource.UserInput) { Offset.Zero }
+        assertTrue("Horizontal overscroll must not be locked to vertical by an initial zero delta", effect.visibleOffset.x < 0f)
+        assertEquals(0f, effect.visibleOffset.y, 0f)
+
+        effect.reset()
+        effect.applyToScroll(Offset(0f, -40f), NestedScrollSource.UserInput) { Offset.Zero }
+        assertEquals(0f, effect.visibleOffset.x, 0f)
+        assertTrue(effect.visibleOffset.y < 0f)
     }
 
     private fun consumingScroll(): ScrollScope = object : ScrollScope {

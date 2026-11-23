@@ -3,8 +3,9 @@
 
 package ui.feice.mochi.effect.glass.engine
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.geometry.Offset
-import kotlin.math.abs
+import kotlin.math.expm1
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sign
@@ -23,6 +24,7 @@ import ui.feice.mochi.utils.lerp
  *   横向的 e 让宽变大、高变小，纵向反过来；控件朝手指方向挪 `e × 短边`（按宽挪的话宽按钮会一下滑出去几十 dp）。
  * - 弹簧：按住时用 tracking 那组，松手用另一组；放大、形变、挪动同一根弹簧。
  */
+@Immutable
 internal class GlassFlexSpec(
     val lift: Float,
     val threshold: Float,
@@ -52,6 +54,7 @@ internal fun glassFlexSpec(width: Float, height: Float): GlassFlexSpec {
 }
 
 /** 按住时的目标：x / y 方向的缩放和控件的挪动（[size]、[down]、[finger] 同一单位，挪动也是这个单位） */
+@Immutable
 internal class GlassFlexTarget(val scaleX: Float, val scaleY: Float, val drift: Offset)
 
 /** [size] 控件尺寸，[down] 按下处、[finger] 当前手指（控件坐标），[unit] 一个 pt 合多少这个单位（px 时传 density） */
@@ -74,8 +77,16 @@ internal fun glassFlexTarget(spec: GlassFlexSpec, width: Float, height: Float, d
 /** 一个方向的形变量：控件外的位移全额、控件里的 1/4，按平方除阈值，再软封顶到 [cap] */
 private fun flexAmount(t: Float, i: Float, threshold: Float, cap: Float): Float {
     val raw = (t * t - i * i).coerceAtLeast(0f) / threshold + i * i / (4f * threshold)
-    return cap * tanh(raw / cap)
+    val normalized = raw / cap
+    if (normalized <= Shoulder) return cap * tanh(normalized)
+    // Match the previous curve and its slope, then keep a gentler exponential tail.
+    return cap * (AtShoulder - ShoulderSlope * DecayLength * expm1(-(normalized - Shoulder) / DecayLength))
 }
+
+private const val Shoulder = 2f
+private const val DecayLength = 2f
+private val AtShoulder = tanh(Shoulder)
+private val ShoulderSlope = 1f - AtShoulder * AtShoulder
 
 /** 拖动形变的上限（[long] 长边，pt）：44 → 12%，160 及以上 → 2% */
 private fun flexCap(long: Float): Float = lerp(0.12f, 0.02f, ((long - 44f) / (160f - 44f)).coerceIn(0f, 1f))

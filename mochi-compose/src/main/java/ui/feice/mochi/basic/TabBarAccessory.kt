@@ -17,16 +17,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,19 +53,21 @@ import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.glow.MochiGlowState
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
+import ui.feice.mochi.effect.metaball.MochiMetaballShadow
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.LocalContentColor
-import ui.feice.mochi.theme.MochiShadowLevel
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.smoothstep
 
 /** 胶囊底板：柔和投影 + 底色（形状每帧按当前大小取，圆角永远是短边一半） */
-private fun Modifier.capsulePlate(path: G2PathCache, color: Color, shadow: Color, level: MochiShadowLevel, dark: Boolean): Modifier =
+private fun Modifier.capsulePlate(path: G2PathCache, color: Color, shadow: Color, resolvedShadow: MochiMetaballShadow): Modifier =
     drawBehind {
-        val p = path.get(size.toRect(), size.minDimension / 2f, 1f)
-        drawMochiShadow(size.toRect(), size.minDimension / 2f, level.resolve(this, dark), shadow)
+        val rect = size.toRect()
+        val radius = size.minDimension / 2f
+        val p = path.get(rect, radius, 1f)
+        drawMochiShadow(rect, radius, resolvedShadow, shadow, opaqueInterior = color.alpha >= 1f)
         drawPath(p, color)
     }
 
@@ -71,7 +75,12 @@ private fun Modifier.capsulePlate(path: G2PathCache, color: Color, shadow: Color
 @Composable
 internal fun solidPlate(colors: MochiTabBarColors, dark: Boolean): TabBarPlate {
     val path = remember { G2PathCache() }
-    return TabBarPlate(Modifier.capsulePlate(path, colors.container, colors.shadow, MochiTheme.shadows.raised, dark))
+    val level = MochiTheme.shadows.raised
+    val density = LocalDensity.current
+    val resolvedShadow = remember(level, density, dark) { level.resolve(density, dark) }
+    return remember(path, colors.container, colors.shadow, resolvedShadow) {
+        TabBarPlate(Modifier.capsulePlate(path, colors.container, colors.shadow, resolvedShadow))
+    }
 }
 
 /**
@@ -92,10 +101,12 @@ internal fun TabBarAccessory(
     content: @Composable (inline: Boolean) -> Unit,
 ) {
     val glow = rememberMochiGlowState()
+    val currentAlpha by rememberUpdatedState(alpha)
+    val translucent by remember { derivedStateOf { currentAlpha() < 0.999f } }
     Box(
         Modifier
             .placedAt(rect)
-            .graphicsLayer { this.alpha = alpha() }
+            .then(if (translucent) Modifier.graphicsLayer { this.alpha = currentAlpha() } else Modifier)
             .mochiPressDeform()
             .then(plate.modifier),
     ) {
@@ -126,7 +137,7 @@ private fun BoxScope.AccessoryContent(
                     Modifier
                 },
             )
-            .clip(MochiCapsule),
+            .clip(CircleShape),
         contentAlignment = Alignment.CenterStart,
     ) {
         CompositionLocalProvider(LocalContentColor provides colors.selectedContent) {
@@ -175,11 +186,14 @@ private fun BoxScope.SearchContent(
 ) {
     val cs = MochiTheme.colorScheme
     val currentSearch by rememberUpdatedState(search)
+    val currentProgress by rememberUpdatedState(progress)
+    val showInput by remember(search.active) { derivedStateOf { search.active || currentProgress() > 0.01f } }
+    val fadingInput by remember { derivedStateOf { currentProgress() < 0.999f } }
     Box(
         Modifier
             .matchParentSize()
             .mochiPressGlow(glow, MochiCapsule)
-            .clip(MochiCapsule)
+            .clip(CircleShape)
             .clickable(remember { MutableInteractionSource() }, indication = null) {
                 if (currentSearch.active) requester.requestFocus() else currentSearch.onActiveChange(true)
             }
@@ -193,32 +207,46 @@ private fun BoxScope.SearchContent(
                 if (icon != null) icon(colors.content) else MagnifierGlyph(colors.content, glyphSize = 22.dp)
             }
         }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(start = height - 8.dp, end = 20.dp)
-                .graphicsLayer { alpha = smoothstep(0.35f, 1f, progress()) },
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (search.query.isEmpty()) {
-                Text(
-                    search.placeholder,
-                    style = MochiTheme.textStyles.bodyLarge,
-                    color = colors.content,
-                    maxLines = 1,
+        if (showInput) {
+            val bodyLarge = MochiTheme.textStyles.bodyLarge
+            val inputStyle = remember(bodyLarge, cs.onSurface) { bodyLarge.copy(color = cs.onSurface) }
+            val cursorBrush = remember(cs.primary) { SolidColor(cs.primary) }
+            val keyboardActions = remember { KeyboardActions(onSearch = { currentSearch.onSearch(currentSearch.query) }) }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = height - 8.dp, end = 20.dp)
+                    .then(
+                        if (fadingInput) {
+                            Modifier.graphicsLayer { alpha = smoothstep(0.35f, 1f, currentProgress()) }
+                        } else {
+                            Modifier
+                        },
+                    ),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (search.query.isEmpty()) {
+                    Text(
+                        search.placeholder,
+                        style = bodyLarge,
+                        color = colors.content,
+                        maxLines = 1,
+                    )
+                }
+                BasicTextField(
+                    value = search.query,
+                    onValueChange = search.onQueryChange,
+                    enabled = search.active,
+                    singleLine = true,
+                    textStyle = inputStyle,
+                    cursorBrush = cursorBrush,
+                    keyboardOptions = TabBarSearchKeyboardOptions,
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier.fillMaxWidth().focusRequester(requester),
                 )
             }
-            BasicTextField(
-                value = search.query,
-                onValueChange = search.onQueryChange,
-                enabled = search.active,
-                singleLine = true,
-                textStyle = MochiTheme.textStyles.bodyLarge.copy(color = cs.onSurface),
-                cursorBrush = SolidColor(cs.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { currentSearch.onSearch(currentSearch.query) }),
-                modifier = Modifier.fillMaxWidth().focusRequester(requester),
-            )
         }
     }
 }
+
+private val TabBarSearchKeyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)

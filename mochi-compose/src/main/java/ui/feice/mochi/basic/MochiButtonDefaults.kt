@@ -116,7 +116,7 @@ public object MochiButtonDefaults {
         val cs = MochiTheme.colorScheme
         val m = MochiTheme.materials
         // 开了背景模糊、没开玻璃：顶栏按钮 75% 不透明，透出一点身后的模糊
-        val blurBar = m.scrollEdge != null && m.controlGlass == null
+        val blurBar = m.scrollEdge?.style?.let { it != ui.feice.mochi.theme.MochiTopBarStyle.SolidFade } == true && m.controlGlass == null
         return remember(cs, blurBar) {
             // 和分组样式的卡片同色（浅色下是白的）：浮在灰底上看得清，像 iOS 26 顶栏的圆按钮
             val solid = if (cs.isDark) cs.surfaceContainerHigh else cs.surfaceContainerLowest

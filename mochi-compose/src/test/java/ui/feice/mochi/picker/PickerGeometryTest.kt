@@ -74,6 +74,47 @@ class WheelGeometryTest {
         assertTrue(b < a && b > -250f)
         assertEquals(450f, WheelGeometry.rubberBand(450f, 0f, 900f, 250f))
     }
+
+    @Test
+    fun zeroItemHeightAndEmptyListNeverDivideByZeroOrCrash() {
+        assertEquals(0, WheelGeometry.centerIndex(0f, 0f))
+        assertEquals(0, WheelGeometry.centerIndex(100f, -5f))
+        assertEquals(0f, WheelGeometry.snap(100f, 0f, 10, cyclic = false))
+        assertEquals(0f, WheelGeometry.snap(100f, item, 0, cyclic = false))
+        assertEquals(0f, WheelGeometry.offsetFor(3, 0f, 0f, 10, cyclic = true))
+        assertEquals(0, WheelGeometry.hapticIndex(-200f, 0f, 10, cyclic = false, previous = 0))
+        assertEquals(0, WheelGeometry.hapticIndex(200f, item, 0, cyclic = false, previous = 0))
+    }
+
+    @Test
+    fun hapticIndexSuppressesOutOfBoundsAndMidpointJitter() {
+        // Non-cyclic rubber band below 0 and above max stays clamped: zero phantom ticks
+        var tick = WheelGeometry.hapticIndex(0f, item, 5, cyclic = false, previous = Int.MIN_VALUE)
+        assertEquals(0, tick)
+        assertEquals(0, WheelGeometry.hapticIndex(-80f, item, 5, cyclic = false, previous = tick))
+        tick = WheelGeometry.hapticIndex(400f, item, 5, cyclic = false, previous = tick)
+        assertEquals(4, tick)
+        assertEquals(4, WheelGeometry.hapticIndex(580f, item, 5, cyclic = false, previous = tick))
+
+        // Midpoint tremor around 0.5 * item does not machine-gun oscillate
+        var cur = 0
+        cur = WheelGeometry.hapticIndex(51f, item, 10, cyclic = false, previous = cur)
+        assertEquals(0, cur)
+        cur = WheelGeometry.hapticIndex(57f, item, 10, cyclic = false, previous = cur)
+        assertEquals(1, cur)
+        // Slight finger tremor back to 48f stays on 1 until crossing hysteresis back toward 0
+        cur = WheelGeometry.hapticIndex(48f, item, 10, cyclic = false, previous = cur)
+        assertEquals(1, cur)
+        cur = WheelGeometry.hapticIndex(40f, item, 10, cyclic = false, previous = cur)
+        assertEquals(0, cur)
+    }
+
+    @Test
+    fun cyclicHour23To0RollsForwardOneSlot() {
+        val at23 = 23 * item
+        assertEquals(24 * item, WheelGeometry.offsetFor(0, at23, item, 24, cyclic = true))
+        assertEquals(-1 * item, WheelGeometry.offsetFor(23, 0f, item, 24, cyclic = true))
+    }
 }
 
 class MochiDateTest {

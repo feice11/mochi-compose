@@ -10,50 +10,64 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
@@ -68,23 +82,35 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.mochiReduceMotion
+import ui.feice.mochi.effect.content.mochiBlur
+import ui.feice.mochi.effect.content.mochiBlurAlpha
+import ui.feice.mochi.effect.glass.GlassScroll
 import ui.feice.mochi.effect.glass.MochiBackdrop
 import ui.feice.mochi.effect.glass.engine.BackdropSampler
 import ui.feice.mochi.effect.glass.engine.GlassBody
+import ui.feice.mochi.effect.glass.engine.GlassGlowState
+import ui.feice.mochi.effect.glass.engine.GlassMergeBuffer
 import ui.feice.mochi.effect.glass.engine.rememberGlassGlowState
 import ui.feice.mochi.effect.glass.mochiLayerBackdrop
+import ui.feice.mochi.effect.glass.mochiWindowBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import ui.feice.mochi.effect.glass.rememberMochiCombinedBackdrop
 import ui.feice.mochi.navigation.LocalMochiNavEntry
 import ui.feice.mochi.navigation.LocalMochiNavigator
 import ui.feice.mochi.navigation.mochiNavOccluder
 import ui.feice.mochi.navigation.rememberMochiNavCarriedBackdrop
 import ui.feice.mochi.navigation.rememberMochiNavCoverBackdrop
+import ui.feice.mochi.overlay.hasMochiOverlay
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiGlass
+import ui.feice.mochi.theme.MochiGlassStyle
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHaptics
 import ui.feice.mochi.utils.lerp
@@ -124,6 +150,8 @@ internal fun MochiGlassTabBar(
     val n = items.size
     val view = LocalView.current
     val density = LocalDensity.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val reduce = mochiReduceMotion()
     val haptics = remember(view, behavior.hapticProfile) { MochiHaptics(view, behavior.hapticProfile) }
     val scope = rememberCoroutineScope()
     val selected by rememberUpdatedState(selectedIndex.coerceIn(0, n - 1))
@@ -131,13 +159,20 @@ internal fun MochiGlassTabBar(
     val currentOnReselect by rememberUpdatedState(onReselect)
     val state = remember(scope) { GlassTabState(scope, selected.toFloat()) }
     state.last = (n - 1).toFloat()
+    state.reduceMotion = reduce
     // 外部换了选中项（比如左右滑页面、程序里切标签）：选中块滑过去，不鼓起。
     // 在 MochiTabScaffold 里（有 TabBarLink）：等页面预热完、真正起步才出发，和页面同起同停；
     // 拖页面时跟着拖动进度走，松手接着页面的速度。按住标签栏时的透镜（按下、拖动、松手）照旧立刻跟手指
     val link = LocalTabBarLink.current
     LaunchedEffect(state, link, n) {
         var wasSwiping = false
-        snapshotFlow { (link?.swipe ?: Float.NaN) to (link?.shown(n) ?: selected) }.collect { (swipe, shown) ->
+        snapshotFlow {
+            val swipe = link?.swipe ?: Float.NaN
+            val shown = link?.shown(n) ?: selected
+            shown.toLong().and(0xFFFFFFFFL) or (swipe.toRawBits().toLong() shl 32)
+        }.collect { packed ->
+            val swipe = Float.fromBits((packed ushr 32).toInt())
+            val shown = packed.toInt()
             val swiping = !swipe.isNaN()
             val handoff = if (wasSwiping && !swiping) link?.takeHandoff() else null
             wasSwiping = swiping
@@ -159,11 +194,8 @@ internal fun MochiGlassTabBar(
     val faceSource = backdrop?.face ?: pageSource
     val faceAndCover = if (cover == null) faceSource else rememberMochiCombinedBackdrop(faceSource, cover)
     val pageFace = rememberMochiNavCarriedBackdrop(faceAndCover)
-    val tabsBackdrop = rememberLayerBackdrop()
-    // 底栏玻璃本身（不含图标）录一份：选中块、按下时留在原位的选中块读它来模糊、过矩阵
-    val barGlass = rememberLayerBackdrop()
-    // 玻璃泡读：页面 + 底栏玻璃 + 光斑和选中色图标（tabsBackdrop 里只录后两样；底栏玻璃直接读 barGlass，不再复制一份）
-    val glassBackdrop = rememberMochiCombinedBackdrop(page, barGlass, tabsBackdrop)
+    // 底栏玻璃本身（不含图标）仅在有背景来源且按压透镜活跃期按需录制：静止与滚动期间零离屏录制
+    val barGlass = if (backdrop != null) rememberMochiBackdrop(Color.Transparent) else null
     // 浅色 / 深色玻璃：默认跟 App 深浅色。自适应时每 50ms 取一次栏上方那条背景的平均色（平滑过、带死区），
     // 只有背后特别暗（浅色模式下 < 0.1）或特别亮（深色模式下 > 0.9）、并且连续几次采样都这样才翻到另一种，
     // 回来要越过 0.3 / 0.7；中等亮度的内容按 App 走（同一块内容，浅色模式是浅色玻璃、深色模式是深色玻璃，和 iOS 一致）。
@@ -176,6 +208,8 @@ internal fun MochiGlassTabBar(
     val sampler = remember(glass.adaptive, backdrop) { if (glass.adaptive && backdrop != null) BackdropSampler() else null }
     DisposableEffect(sampler) { onDispose { sampler?.release() } }
     val barBounds = remember { android.graphics.Rect() }
+    val sampleRect = remember { android.graphics.Rect() }
+    val sampleSignal = remember { Channel<Unit>(Channel.CONFLATED) }
     val sampleGap = with(density) { 8.dp.roundToPx() }
     val sampleHeight = with(density) { 16.dp.roundToPx() }
     val navigator = LocalMochiNavigator.current
@@ -190,12 +224,21 @@ internal fun MochiGlassTabBar(
         if (nav.above(e)?.source == null) return 0f
         return (nav.coverOf(e) / CoverFadeEnd).coerceIn(0f, 1f)
     }
+    val showCoverFallback by remember(navigator, navEntry) { derivedStateOf { coverFade() > 0f } }
     // 下面的取样循环和几个 derivedStateOf 只建一次，材质要从这里读最新的（深浅色切换、拖通透度都会换一份材质）。
     // 取样循环要是读启动时捕获的 glass，拖完通透度一滚动就又按旧材质生成配方，预览跳回旧的通透度
     val latestGlass by rememberUpdatedState(glass)
     fun pressProgress(): Float = state.pressProgress
     fun growProgress(): Float = state.growProgress
     fun lensStretch(): Float = state.stretch
+    if (glass.adaptive && backdrop != null) {
+        LaunchedEffect(selected) { sampleSignal.trySend(Unit) }
+        DisposableEffect(sampleSignal) {
+            val watcher: () -> Unit = { if (!GlassScroll.active) sampleSignal.trySend(Unit) }
+            GlassScroll.watch(watcher)
+            onDispose { GlassScroll.unwatch(watcher) }
+        }
+    }
     LaunchedEffect(dark, glass.adaptive, backdrop) {
         var flipped = false
         var flipVotes = 0
@@ -206,12 +249,14 @@ internal fun MochiGlassTabBar(
         }
         toneAnim.animateTo(if (dark) 0f else 1f, tween(ToneMillis))
         if (!glass.adaptive || backdrop == null) return@LaunchedEffect
-        while (isActive) {
-            delay(SampleMillis.toLong())
-            if (navEntry != null && navigator?.isMovingOrCovered(navEntry) == true) continue
+
+        fun sampleOnce(): Boolean {
+            if (GlassScroll.active || (navEntry != null && navigator?.isMovingOrCovered(navEntry) == true)) return false
+            if (view.hasMochiOverlay()) return false
             val top = (barBounds.top - sampleGap - sampleHeight).coerceAtLeast(0)
-            sampler?.request(view, android.graphics.Rect(barBounds.left, top, barBounds.right, top + sampleHeight))
-            val raw = sampler?.average ?: continue
+            sampleRect.set(barBounds.left, top, barBounds.right, top + sampleHeight)
+            sampler?.request(view, sampleRect)
+            val raw = sampler?.average ?: return false
             // 防抖：采样先做指数平滑，和当前目标差得不多就不重新起动画（内容滚动时平均色每次都在小幅跳）
             val avg = smooth?.let { androidx.compose.ui.graphics.lerp(it, raw, SampleSmoothing) } ?: raw
             smooth = avg
@@ -233,10 +278,22 @@ internal fun MochiGlassTabBar(
             }
             val target = if (dark != flipped) 0f else 1f
             if (toneAnim.targetValue != target) launch { toneAnim.animateTo(target, tween(ToneMillis)) }
+            return flipVotes > 0
+        }
+
+        // 事件驱动 + 低频兜底：挂载、切标签、滚动停稳、栏位置变化时立即连采几帧收敛，静止时仅 1Hz 低频兜底
+        sampleSignal.trySend(Unit)
+        while (isActive) {
+            withTimeoutOrNull(IdleSampleMillis) { sampleSignal.receive() }
+            var remaining = FlipSamples + 2
+            while (isActive && remaining-- > 0) {
+                delay(SampleMillis.toLong())
+                val voting = sampleOnce()
+                if (voting && remaining == 0) remaining = 1
+            }
         }
     }
     fun light(): Float = toneAnim.value
-    val tone by remember { derivedStateOf { light() } }
     fun indicatorColor(): Color = if (glass.adaptive) {
         androidx.compose.ui.graphics.lerp(
             Color.Black.copy(alpha = 0.3f),
@@ -252,451 +309,786 @@ internal fun MochiGlassTabBar(
     val bodyGlass = remember(glass) { glass.copy(adaptive = false) }
     val glassDark: () -> Boolean = { light() < 0.5f }
     val fallback = glass.fallbackColor(dark)
-    val contentColor by remember {
-        derivedStateOf {
-            if (latestGlass.adaptive) androidx.compose.ui.graphics.lerp(Color.White, Color.Black, tone) else latestColors.content
-        }
+    fun resolveContentColor(): Color = if (latestGlass.adaptive) {
+        androidx.compose.ui.graphics.lerp(Color.White, Color.Black, light())
+    } else {
+        latestColors.content
     }
     val accentColor = colors.selectedContent
     // 按压叠加层（矩阵层 + 手指处光晕）画在底栏玻璃里
     val barGlow = rememberGlassGlowState()
-    LaunchedEffect(state, barGlow) {
-        snapshotFlow { state.glowProgress > 0.001f && state.held }.collect { on ->
-            if (on) barGlow.press(Offset(state.glowX, 0f)) else barGlow.release()
-        }
-    }
-    LaunchedEffect(state, barGlow) { snapshotFlow { state.glowX }.collect { barGlow.drag(Offset(it, barGlow.center.y)) } }
 
     // 搜索展开进度：和纯色标签栏一样，和滚动收起同一种弹簧
     val searchActive = search?.active == true
     val searchProgress = remember { Animatable(if (searchActive) 1f else 0f) }
-    LaunchedEffect(searchActive) { searchProgress.animateTo(if (searchActive) 1f else 0f, MochiMotions.responseSpring(0.42f, 0.82f)) }
+    LaunchedEffect(searchActive, reduce) {
+        val target = if (searchActive) 1f else 0f
+        if (reduce) {
+            searchProgress.snapTo(target)
+        } else {
+            searchProgress.animateTo(target, MochiMotions.responseSpring(0.42f, 0.82f))
+        }
+    }
     if (search != null) BackHandler(enabled = searchActive) { search.onActiveChange(false) }
     val currentSearch by rememberUpdatedState(search)
-    // 搜索框、附件条也在玻璃上：里面的文字、图标用玻璃上的内容色（和未选中的标签同一种）
-    val plateColors = colors.copy(content = contentColor, selectedContent = contentColor)
+    val frameCache = remember { TabBarFrameCache() }
 
-    BoxWithConstraints(modifier.mochiNavOccluder().windowInsetsPadding(windowInsets).fillMaxWidth()) {
-        val maxPx = constraints.maxWidth.toFloat()
-        val hPx = with(density) { behavior.height.toPx() }
-        val insetPx = with(density) { BarInset.toPx() }
-        val gapPx = with(density) { SideGap.toPx() }
-        val accPx = with(density) { AccessoryHeight.toPx() }
-        val searchSlot = if (search != null) gapPx + hPx else 0f
-        // 只有图标、只在选中时显示标签：选中项的标签横排在图标右边，那一格按标签宽度变宽（同纯色标签栏）
-        val inlineLabel = !behavior.showLabels && behavior.selectedLabelOnly
-        val measurer = rememberTextMeasurer()
-        val extras = remember(items, inlineLabel, density) {
-            if (!inlineLabel) {
-                FloatArray(n)
-            } else {
-                val gap = with(density) { InlineLabelGap.toPx() }
-                FloatArray(n) { measurer.measure(items[it].label, InlineLabelStyle, maxLines = 1, density = density).size.width + gap }
+    val hPx = with(density) { behavior.height.toPx() }
+    val insetPx = with(density) { BarInset.toPx() }
+    val gapPx = with(density) { SideGap.toPx() }
+    val accPx = with(density) { AccessoryHeight.toPx() }
+    val searchSlot = if (search != null) gapPx + hPx else 0f
+    // 只有图标、只在选中时显示标签：选中项的标签横排在图标右边，那一格按标签宽度变宽（同纯色标签栏）
+    val inlineLabel = !behavior.showLabels && behavior.selectedLabelOnly
+    val inlineStyle = if (inlineLabel) rememberTabLabelStyle(inline = true) else null
+    val fontFamilyResolver = LocalFontFamilyResolver.current
+    val measurer = if (inlineLabel) rememberTextMeasurer() else null
+    val extras = remember(items, inlineLabel, density, fontFamilyResolver, inlineStyle, measurer) {
+        if (!inlineLabel || measurer == null || inlineStyle == null) {
+            FloatArray(n)
+        } else {
+            val gap = with(density) { InlineLabelGap.toPx() }
+            FloatArray(n) {
+                measurer.measure(items[it].label, inlineStyle, maxLines = 1, softWrap = false, density = density).size.width + gap
             }
         }
-        val maxExtra = extras.maxOrNull() ?: 0f
-        // 不算横排标签时的宽度：给最宽的标签留出位置
-        val fullPx = min(maxPx - searchSlot - maxExtra, with(density) { (behavior.itemWidth * n + BarInset * 2).toPx() })
-        // 有附件条时，标签栏那一行在附件条下面
-        val rowTop = if (accessory != null) accPx + gapPx else 0f
-        val tabPx = (fullPx - insetPx * 2f) / n
-        val indicatorHeight = behavior.height - BarInset * 2
-        val indicatorHeightPx = with(density) { indicatorHeight.toPx() }
-        val lensGrowPx = with(density) { LensGrow.toPx() }
-        state.unitDp = with(density) { tabPx.toDp().value }
+    }
+    val maxExtra = extras.maxOrNull() ?: 0f
+    val maxBarWidthPx = with(density) { (behavior.itemWidth * n + BarInset * 2).toPx() }
+    val minBarWidthPx = insetPx * 2f + n
+    // 有附件条时，标签栏那一行在附件条下面
+    val rowTop = if (accessory != null) accPx + gapPx else 0f
+    val indicatorHeight = behavior.height - BarInset * 2
+    val indicatorHeightPx = with(density) { indicatorHeight.toPx() }
+    val lensGrowPx = with(density) { LensGrow.toPx() }
+    // 普通 Layout 在测量闭包写入最大宽度状态，彻底消除 BoxWithConstraints 的 Subcomposition 开销
+    var maxPxState by remember { mutableFloatStateOf(0f) }
 
-        // 第 i 项此刻的选中程度（选中块经过时连续变化）
-        fun selectedness(i: Int): Float = (1f - abs(state.value - i)).coerceIn(0f, 1f)
+    // 不算横排标签时的宽度：给最宽的标签留出位置，窄屏下保底每格至少 1px
+    fun fullPx(): Float = min(maxPxState - searchSlot - maxExtra, maxBarWidthPx).coerceAtLeast(minBarWidthPx)
+    fun tabPx(): Float = (fullPx() - insetPx * 2f) / n
 
-        // 第 i 格的左边和宽度（横排标签时选中的格子变宽；否则等宽），底栏坐标
-        fun cellLeft(i: Int): Float {
-            var x = insetPx + i * tabPx
-            if (inlineLabel) for (j in 0 until i) x += extras[j] * selectedness(j)
-            return x
+    // 第 i 项此刻的选中程度（选中块经过时连续变化）
+    fun selectedness(i: Int): Float = (1f - abs(state.value - i)).coerceIn(0f, 1f)
+
+    // 第 i 格的左边和宽度（横排标签时选中的格子变宽；否则等宽），底栏坐标
+    fun cellLeft(i: Int): Float {
+        var x = insetPx + i * tabPx()
+        if (inlineLabel) for (j in 0 until i) x += extras[j] * selectedness(j)
+        return x
+    }
+
+    fun cellWidth(i: Int): Float = tabPx() + if (inlineLabel) extras[i] * selectedness(i) else 0f
+
+    // 展开时整条的宽度：横排标签时跟着选中块连续变化
+    fun barW(): Float {
+        val base = fullPx()
+        if (!inlineLabel) return base
+        var w = base
+        for (i in 0 until n) w += extras[i] * selectedness(i)
+        return w
+    }
+
+    // 选中块 / 玻璃泡停在第 x 项（可以是小数）时的宽度和中心：落在两格之间时按比例插值
+    fun slotWidth(x: Float): Float {
+        if (!inlineLabel) return tabPx()
+        val k = x.toInt().coerceIn(0, n - 1)
+        val f = (x - k).coerceIn(0f, 1f)
+        return if (k + 1 < n && f > 0f) lerp(cellWidth(k), cellWidth(k + 1), f) else cellWidth(k)
+    }
+
+    fun slotCenter(x: Float): Float {
+        if (!inlineLabel) return insetPx + (x + 0.5f) * tabPx()
+        val k = x.toInt().coerceIn(0, n - 1)
+        val f = (x - k).coerceIn(0f, 1f)
+        val a = cellLeft(k) + cellWidth(k) / 2f
+        return if (k + 1 < n && f > 0f) lerp(a, cellLeft(k + 1) + cellWidth(k + 1) / 2f, f) else a
+    }
+
+    fun collapse(): Float = scrollBehavior?.fraction?.value ?: 0f
+
+    // 标签栏收成小圆的程度：滚动收起、进入搜索都会收
+    fun barCollapse(): Float = max(collapse(), searchProgress.value)
+
+    fun frame(): TabBarFrame = frameCache.get(
+        maxPx = maxPxState,
+        barWidth = barW(),
+        searchSlot = searchSlot,
+        rowTop = rowTop,
+        height = hPx,
+        gap = gapPx,
+        accessoryHeight = accPx,
+        hasAccessory = accessory != null,
+        hasSearch = search != null,
+        collapse = collapse(),
+        search = searchProgress.value,
+    )
+
+    // 展开时的内容（各项图标、选中块、玻璃泡）：收起途中先淡掉，再换成只有当前图标的小圆
+    fun expandedAlpha(): Float = 1f - smoothstep(0f, 0.6f, barCollapse())
+
+    // 整条底栏跟着按压放大、被拖动的手指带着平移并略微横向拉长（iOS 26.5 实测：放大到 1.0355，
+    // 平移是拖动距离的 1.17%，每拖 1pt 横向 +0.0000206、纵向 −0.0000404）
+    fun barScaleX(): Float = 1f + BarPressScale * state.barProgress + BarDragStretchX * abs(state.panValue) / density.density
+    fun barScaleY(): Float = 1f + BarPressScale * state.barProgress - BarDragStretchY * abs(state.panValue) / density.density
+    fun barShift(): Float = BarDragShift * state.panValue
+
+    fun glowPhysX(localX: Float): Float {
+        val m = frame().main
+        val base = if (rtl) maxPxState - m.right else m.left
+        return base + localX + barShift()
+    }
+    LaunchedEffect(state, barGlow, rtl) {
+        snapshotFlow { state.glowProgress > 0.001f && state.held }.collect { on ->
+            if (on) barGlow.press(Offset(glowPhysX(state.glowX), 0f)) else barGlow.release()
         }
+    }
+    LaunchedEffect(state, barGlow, rtl) {
+        snapshotFlow { state.glowX }.collect { barGlow.drag(Offset(glowPhysX(it), barGlow.center.y)) }
+    }
 
-        fun cellWidth(i: Int): Float = tabPx + if (inlineLabel) extras[i] * selectedness(i) else 0f
+    val mainHoldCache = remember { MainHoldCache() }
+    val flexPadPx = with(density) { 8.dp.toPx() }
+    fun mainHold(): Rect? {
+        val maxW = maxPxState
+        if (maxW <= 0f) return null
+        val maxBarW = fullPx() + maxExtra
+        val rowW = maxBarW + searchSlot
+        val eLeft = ((maxW - rowW) * 0.5f).coerceAtLeast(0f)
+        val eRight = (eLeft + maxBarW).coerceAtMost(maxW)
+        val minLogicalLeft = if (search != null || accessory != null) 0f else eLeft
+        val maxLogicalRight = max(eRight, minLogicalLeft + hPx)
+        val physL = if (rtl) maxW - maxLogicalRight else minLogicalLeft
+        val physR = if (rtl) maxW - minLogicalLeft else maxLogicalRight
+        return mainHoldCache.get(physL - flexPadPx, -flexPadPx, physR + flexPadPx, hPx + flexPadPx)
+    }
 
-        // 展开时整条的宽度：横排标签时跟着选中块连续变化
-        fun barW(): Float {
-            if (!inlineLabel) return fullPx
-            var w = fullPx
-            for (i in 0 until n) w += extras[i] * selectedness(i)
-            return w
+    fun indexAt(x: Float, width: Float): Float {
+        val localX = if (rtl) width - x else x
+        val tp = tabPx()
+        if (!inlineLabel) return ((localX - insetPx) / tp - 0.5f).coerceIn(0f, n - 1f)
+        // 格子不等宽：找到手指所在的格子，按格内位置换算成小数的「第几项」
+        for (i in 0 until n) {
+            val l = cellLeft(i)
+            val w = cellWidth(i).coerceAtLeast(1f)
+            if (localX < l + w || i == n - 1) return (i + (localX - l) / w - 0.5f).coerceIn(0f, n - 1f)
         }
+        return n - 1f
+    }
 
-        // 选中块 / 玻璃泡停在第 x 项（可以是小数）时的宽度和中心：落在两格之间时按比例插值
-        fun slotWidth(x: Float): Float {
-            if (!inlineLabel) return tabPx
-            val k = x.toInt().coerceIn(0, n - 1)
-            val f = (x - k).coerceIn(0f, 1f)
-            return if (k + 1 < n && f > 0f) lerp(cellWidth(k), cellWidth(k + 1), f) else cellWidth(k)
-        }
+    val iconClip = remember { CapsuleClip() }
 
-        fun slotCenter(x: Float): Float {
-            if (!inlineLabel) return insetPx + (x + 0.5f) * tabPx
-            val k = x.toInt().coerceIn(0, n - 1)
-            val f = (x - k).coerceIn(0f, 1f)
-            val a = cellLeft(k) + cellWidth(k) / 2f
-            return if (k + 1 < n && f > 0f) lerp(a, cellLeft(k + 1) + cellWidth(k + 1) / 2f, f) else a
-        }
-
-        fun collapse(): Float = scrollBehavior?.fraction?.value ?: 0f
-
-        // 标签栏收成小圆的程度：滚动收起、进入搜索都会收
-        fun barCollapse(): Float = max(collapse(), searchProgress.value)
-
-        fun frame(): TabBarFrame = tabBarFrame(
-            maxPx = maxPx,
-            barWidth = barW(),
-            searchSlot = searchSlot,
-            rowTop = rowTop,
-            height = hPx,
-            gap = gapPx,
-            accessoryHeight = accPx,
-            hasAccessory = accessory != null,
-            hasSearch = search != null,
-            collapse = collapse(),
-            search = searchProgress.value,
+    // 各项的图标（和标签）：按 cellLeft / cellWidth 排在展开的底栏里，跟着底栏一起放大、平移
+    @Composable
+    fun Cells(tint: () -> Color, modifier: Modifier = Modifier, cellModifier: (Int) -> Modifier) {
+        GlassCells(
+            items = items,
+            tint = tint,
+            behavior = behavior,
+            inline = inlineLabel,
+            extras = extras,
+            colors = colors,
+            left = ::cellLeft,
+            width = ::cellWidth,
+            selectedness = ::selectedness,
+            cellModifier = cellModifier,
+            modifier = modifier.fillMaxSize().graphicsLayer {
+                translationX = barShift()
+                scaleX = barScaleX()
+                scaleY = barScaleY()
+            },
         )
+    }
 
-        // 展开时的内容（各项图标、选中块、玻璃泡）：收起途中先淡掉，再换成只有当前图标的小圆
-        fun expandedAlpha(): Float = 1f - smoothstep(0f, 0.6f, barCollapse())
-
-        // 整条底栏跟着按压放大、被拖动的手指带着平移并略微横向拉长（iOS 26.5 实测：放大到 1.0355，
-        // 平移是拖动距离的 1.17%，每拖 1pt 横向 +0.0000206、纵向 −0.0000404）
-        fun barScaleX(): Float = 1f + BarPressScale * state.barProgress + BarDragStretchX * abs(state.panValue) / density.density
-        fun barScaleY(): Float = 1f + BarPressScale * state.barProgress - BarDragStretchY * abs(state.panValue) / density.density
-        fun barShift(): Float = BarDragShift * state.panValue
-
-        fun indexAt(x: Float): Float {
-            if (!inlineLabel) return ((x - insetPx) / tabPx - 0.5f).coerceIn(0f, n - 1f)
-            // 格子不等宽：找到手指所在的格子，按格内位置换算成小数的「第几项」
-            for (i in 0 until n) {
-                val l = cellLeft(i)
-                val w = cellWidth(i)
-                if (x < l + w || i == n - 1) return (i + (x - l) / w - 0.5f).coerceIn(0f, n - 1f)
-            }
-            return n - 1f
-        }
-
-        val iconClip = remember { CapsuleClip() }
-
-        // 各项的图标（和标签）：按 cellLeft / cellWidth 排在展开的底栏里，跟着底栏一起放大、平移
-        @Composable
-        fun Cells(tint: () -> Color, modifier: Modifier = Modifier, cellModifier: (Int) -> Modifier) {
-            GlassCells(
-                items = items,
-                tint = tint,
-                behavior = behavior,
-                inline = inlineLabel,
-                extras = extras,
-                colors = colors,
-                left = ::cellLeft,
-                width = ::cellWidth,
-                selectedness = ::selectedness,
-                cellModifier = cellModifier,
-                modifier = modifier.fillMaxSize().graphicsLayer {
-                    translationX = barShift()
-                    scaleX = barScaleX()
-                    scaleY = barScaleY()
-                },
-            )
-        }
-
-        // 搜索框、附件条的底板：同一份配方、同一个背景来源的玻璃；被从来源打开的页盖上时一样退成备用色
-        val plate =
-            TabBarPlate(
-                under = {
-                    if (backdrop != null) {
+    // 搜索框、附件条的底板：同一份配方、同一个背景来源的玻璃；被从来源打开的页盖上时一样退成备用色
+    val plate = remember(backdrop, page, bodyGlass, pageFace, fallback) {
+        TabBarPlate(
+            under = {
+                if (backdrop != null) {
+                    if (showCoverFallback) {
                         Box(
                             Modifier
                                 .matchParentSize()
                                 .graphicsLayer { alpha = coverFade() }
                                 .background(fallback, MochiCapsule),
                         )
-                        GlassBody(
-                            backdrop = page,
-                            glass = bodyGlass,
-                            faceBackdrop = pageFace,
-                            modifier = Modifier.matchParentSize(),
-                            alpha = { 1f - coverFade() },
-                            dark = glassDark,
-                        )
-                    } else {
-                        Box(Modifier.matchParentSize().background(fallback, MochiCapsule))
                     }
-                },
-            )
-
-        Box(Modifier.fillMaxWidth().height(with(density) { (rowTop + hPx).toDp() })) {
-            if (accessory != null) {
-                TabBarAccessory(
-                    rect = { frame().accessory },
-                    alpha = { frame().accessoryAlpha },
-                    inline = scrollBehavior?.collapsed == true,
-                    blocked = searchActive,
-                    colors = plateColors,
-                    plate = plate,
-                    content = accessory,
-                )
-            }
-            if (search != null) {
-                TabBarSearchField(
-                    search = search,
-                    rect = { frame().search },
-                    progress = { searchProgress.value },
-                    height = behavior.height,
-                    colors = plateColors,
-                    plate = plate,
-                )
-            }
-            Box(
-                Modifier
-                    // 收起、进入搜索时宽度连续变窄（只重新布局，不重组）
-                    .placedAt { frame().main }
-                    .onGloballyPositioned {
-                        val b = it.boundsInWindow()
-                        barBounds.set(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
-                    }
-                    .pointerInput(enabled, n, tabPx, inlineLabel) {
-                        if (!enabled) return@pointerInput
-                        awaitEachGesture {
-                            val down = awaitFirstDown()
-                            if (barCollapse() > 0.5f) {
-                                // 收成小圆时点它：搜索中退出搜索，滚动收起时展开
-                                down.consume()
-                                if (waitForUpOrCancellation() != null) {
-                                    val s = currentSearch
-                                    if (s != null && s.active) s.onActiveChange(false) else scrollBehavior?.expand()
-                                }
-                                return@awaitEachGesture
-                            }
-                            state.press(indexAt(down.position.x), down.position.x)
-                            var tick = state.target.roundToInt()
-                            var dragging = false
-                            var released = false
-                            while (true) {
-                                val ch = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                if (!ch.pressed) {
-                                    released = true
-                                    break
-                                }
-                                val dx = ch.position.x - down.position.x
-                                if (!dragging && abs(dx) > viewConfiguration.touchSlop) dragging = true
-                                if (dragging) {
-                                    state.drag(indexAt(ch.position.x), dx, ch.position.x)
-                                    val t = state.target.roundToInt()
-                                    if (t != tick) {
-                                        tick = t
-                                        haptics.tick()
-                                    }
-                                }
-                                ch.consume()
-                            }
-                            val target = if (released) state.target.roundToInt().coerceIn(0, n - 1) else selected
-                            state.release(target.toFloat())
-                            if (released) {
-                                if (target != selected) currentOnSelect(target) else currentOnReselect?.invoke(target)
-                            }
-                        }
-                    },
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                // 被盖上来的页挡住时代替玻璃的备用色（见 coverFade）
-                if (backdrop != null) {
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .graphicsLayer {
-                                translationX = barShift()
-                                alpha = coverFade()
-                            }
-                            .background(fallback, MochiCapsule),
+                    GlassBody(
+                        backdrop = page,
+                        glass = bodyGlass,
+                        faceBackdrop = pageFace,
+                        modifier = Modifier.matchParentSize(),
+                        alpha = { 1f - coverFade() },
+                        dark = glassDark,
                     )
                 } else {
-                    Box(Modifier.matchParentSize().graphicsLayer { translationX = barShift() }.background(fallback, MochiCapsule))
+                    Box(Modifier.matchParentSize().background(fallback, MochiCapsule))
                 }
-                // 底栏玻璃：顺便录进 barGlass。录制范围比底栏大一圈（SampleMargin）：按下时底栏放大、玻璃泡外扩到两端外面，
-                // 录制范围只有底栏那么大的话，放大出去的两头会被录制边界切掉，玻璃泡在两端折射到的就是这条直边
-                Box(
-                    Modifier.matchParentSize().sampleOutset()
-                        .mochiLayerBackdrop(barGlass).graphicsLayer(),
-                ) {
-                    // 玻璃本体：重的部分降采样算，贴边的细节全分辨率（见 GlassBody）
-                    if (backdrop != null) {
-                        GlassBody(
-                            backdrop = page,
-                            glass = bodyGlass,
-                            faceBackdrop = pageFace,
-                            glow = barGlow,
-                            dark = glassDark,
-                            modifier = Modifier
-                                .padding(SampleMargin)
-                                .fillMaxSize()
-                                .graphicsLayer { translationX = barShift() },
-                            // 淡出交给 GlassBody：透明度挂在这里会按底栏矩形离屏，外阴影被切成直角
-                            alpha = { 1f - coverFade() },
-                            scaleX = { barScaleX() },
-                            scaleY = { barScaleY() },
+            },
+        )
+    }
+
+    Layout(
+        content = {
+            Box(Modifier.fillMaxWidth().height(with(density) { (rowTop + hPx).toDp() })) {
+                if (accessory != null || search != null) {
+                    val plateContentColor = resolveContentColor()
+                    val plateColors = remember(colors, plateContentColor) {
+                        colors.copy(content = plateContentColor, selectedContent = plateContentColor)
+                    }
+                    if (accessory != null) {
+                        TabBarAccessory(
+                            rect = { frame().accessory },
+                            alpha = { frame().accessoryAlpha },
+                            inline = scrollBehavior?.collapsed == true,
+                            blocked = searchActive,
+                            colors = plateColors,
+                            plate = plate,
+                            content = accessory,
+                        )
+                    }
+                    if (search != null) {
+                        TabBarSearchField(
+                            search = search,
+                            rect = { frame().search },
+                            progress = { searchProgress.value },
+                            height = behavior.height,
+                            colors = plateColors,
+                            plate = plate,
                         )
                     }
                 }
-
-                // 展开时的内容：按展开的宽度排版（不跟着变窄重排），收起途中淡掉、裁在变窄的玻璃里
+                // 仅在按下 / 放大 / 松手透镜活跃期捕获底栏玻璃与挂载玻璃泡 drawBackdrop；
+                // 静止与滚动期间零 barGlass 离屏录制、零隐藏 Cells 子树
+                val lensActiveState = remember { derivedStateOf { pressProgress() > 0f || growProgress() > 0f } }
+                // 主胶囊玻璃固定在行容器最大尺寸上，通过 hold + fillMerge 传入动态胶囊矩形，
+                // 避免滚动收起或搜索展开时每帧改变 GlassBody 布局宽反复撞穿 bucket64 重建 finishLayer 与 l0
+                if (backdrop != null && barGlass != null) {
+                    MainTabBarGlassLayer(
+                        rowTop = rowTop,
+                        height = behavior.height,
+                        heightPx = hPx,
+                        barGlass = barGlass,
+                        capture = { lensActiveState.value },
+                        backdrop = page,
+                        glass = bodyGlass,
+                        faceBackdrop = pageFace,
+                        glow = barGlow,
+                        dark = glassDark,
+                        alpha = { 1f - coverFade() },
+                        scaleX = { barScaleX() },
+                        scaleY = { barScaleY() },
+                        hold = ::mainHold,
+                        fillMerge = { buf ->
+                            val m = frame().main
+                            if (maxPxState <= 0f || m.width <= 0f || m.height <= 0f) {
+                                false
+                            } else {
+                                val shift = barShift()
+                                val physL = (if (rtl) maxPxState - m.right else m.left) + shift
+                                val physR = (if (rtl) maxPxState - m.left else m.right) + shift
+                                buf.setMain(physL, 0f, physR, hPx, hPx * 0.5f)
+                                true
+                            }
+                        },
+                    )
+                }
                 Box(
                     Modifier
-                        .wrapContentWidth(Alignment.Start, unbounded = true)
-                        .layout { measurable, constraints ->
-                            val w = barW().roundToInt()
-                            val p = measurable.measure(Constraints.fixed(w, constraints.maxHeight))
-                            layout(w, constraints.maxHeight) { p.place(0, 0) }
-                        }
-                        .graphicsLayer { alpha = expandedAlpha() }
-                        .drawWithContent {
-                            if (barCollapse() > 0f) {
-                                clipRect(right = frame().main.width) { this@drawWithContent.drawContent() }
+                        // 收起、进入搜索时宽度连续变窄（只重新布局，不重组）
+                        .placedAt { frame().main }
+                        .then(
+                            if (glass.adaptive && backdrop != null) {
+                                Modifier.onGloballyPositioned {
+                                    val b = it.boundsInWindow()
+                                    val l = b.left.toInt()
+                                    val t = b.top.toInt()
+                                    val r = b.right.toInt()
+                                    val bt = b.bottom.toInt()
+                                    if (barBounds.left != l || barBounds.top != t || barBounds.right != r || barBounds.bottom != bt) {
+                                        barBounds.set(l, t, r, bt)
+                                        sampleSignal.trySend(Unit)
+                                    }
+                                }
                             } else {
-                                drawContent()
+                                Modifier
+                            },
+                        )
+                        .pointerInput(enabled, n, inlineLabel, rtl) {
+                            if (!enabled) return@pointerInput
+                            awaitEachGesture {
+                                val down = awaitFirstDown()
+                                if (barCollapse() > 0.5f) {
+                                    // 收成小圆时点它：搜索中退出搜索，滚动收起时展开
+                                    down.consume()
+                                    if (waitForUpOrCancellation() != null) {
+                                        val s = currentSearch
+                                        if (s != null && s.active) s.onActiveChange(false) else scrollBehavior?.expand()
+                                    }
+                                    return@awaitEachGesture
+                                }
+                                state.press(indexAt(down.position.x, size.width.toFloat()), down.position.x)
+                                var tick = state.target.roundToInt()
+                                var dragging = false
+                                var released = false
+                                var target = selected
+                                try {
+                                    while (true) {
+                                        val ch = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!ch.pressed) {
+                                            released = true
+                                            break
+                                        }
+                                        val dx = ch.position.x - down.position.x
+                                        if (!dragging && abs(dx) > viewConfiguration.touchSlop) dragging = true
+                                        if (dragging) {
+                                            state.drag(indexAt(ch.position.x, size.width.toFloat()), dx, ch.position.x)
+                                            val t = state.target.roundToInt()
+                                            if (t != tick) {
+                                                tick = t
+                                                haptics.tick()
+                                            }
+                                        }
+                                        ch.consume()
+                                    }
+                                    if (released) target = state.target.roundToInt().coerceIn(0, n - 1)
+                                } finally {
+                                    state.release((if (released) target else selected).toFloat())
+                                }
+                                if (released) {
+                                    if (target != selected) currentOnSelect(target) else currentOnReselect?.invoke(target)
+                                }
                             }
                         },
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    // 未选中色的图标（和选中的一样用实心图标）
-                    Cells(
-                        tint = { contentColor },
-                        modifier = Modifier,
-                        cellModifier = { i ->
-                            Modifier
-                                // 只显示图标时标签文字不在树里，读屏要靠这里给名字；整格合成一个节点，选中时不读两遍
-                                .clearAndSetSemantics {
-                                    role = Role.Tab
-                                    contentDescription = items[i].label
-                                    this.selected = i == selected
-                                    onClick {
-                                        if (i != selected) currentOnSelect(i) else currentOnReselect?.invoke(i)
-                                        true
+                    // 被盖上来的页挡住时代替玻璃的备用色（见 coverFade）；平时不挂载备用色图层，避免滚动收起每帧重算胶囊轮廓
+                    if (backdrop != null) {
+                        if (showCoverFallback) {
+                            Box(
+                                Modifier
+                                    .matchParentSize()
+                                    .graphicsLayer {
+                                        translationX = barShift()
+                                        alpha = coverFade()
                                     }
-                                }
-                                .graphicsLayer {
-                                    val s = 1f + IconPressScale * pressProgress()
-                                    scaleX = s
-                                    scaleY = s
-                                }
-                        },
-                    )
+                                    .background(fallback, MochiCapsule),
+                            )
+                        }
+                    } else {
+                        Box(Modifier.matchParentSize().graphicsLayer { translationX = barShift() }.background(fallback, MochiCapsule))
+                    }
+                    val lensActive = lensActiveState.value
+                    val settled by remember { derivedStateOf { !lensActiveState.value && abs(state.value - selected) < 0.001f } }
 
-                    // 给玻璃泡看的光斑 + 选中色图标（底栏玻璃本身玻璃泡直接读 barGlass）；本身不可见，只录进 tabsBackdrop。
-                    // 选中色图标按按压进度淡入：平时选中块读到的只有底栏玻璃（它要先模糊），选中色图标另画在选中块上面
+                    // 展开时的内容：按展开的宽度排版（不跟着变窄重排），收起途中淡掉、裁在变窄的玻璃里
                     Box(
                         Modifier
-                            .matchParentSize()
-                            .sampleOutset()
-                            .clearAndSetSemantics {}
-                            .alpha(0f)
-                            .mochiLayerBackdrop(tabsBackdrop),
+                            .wrapContentWidth(Alignment.Start, unbounded = true)
+                            .layout { measurable, constraints ->
+                                val w = barW().roundToInt().coerceAtLeast(0)
+                                val p = measurable.measure(Constraints.fixed(w, constraints.maxHeight.coerceAtLeast(0)))
+                                layout(w, constraints.maxHeight) { p.place(0, 0) }
+                            }
+                            .graphicsLayer { alpha = expandedAlpha() }
+                            .drawWithContent {
+                                if (expandedAlpha() <= 0.001f) return@drawWithContent
+                                if (barCollapse() > 0f) {
+                                    val visibleW = frame().main.width
+                                    if (layoutDirection == LayoutDirection.Rtl) {
+                                        clipRect(left = size.width - visibleW) { this@drawWithContent.drawContent() }
+                                    } else {
+                                        clipRect(right = visibleW) { this@drawWithContent.drawContent() }
+                                    }
+                                } else {
+                                    drawContent()
+                                }
+                            },
+                        contentAlignment = Alignment.CenterStart,
                     ) {
-                        Box(Modifier.padding(SampleMargin).fillMaxSize()) {
+                        fun tabSemantics(i: Int): Modifier = Modifier.clearAndSetSemantics {
+                            role = Role.Tab
+                            contentDescription = items[i].label
+                            this.selected = i == selected
+                            if (!enabled) {
+                                disabled()
+                            } else {
+                                onClick {
+                                    if (i != selected) currentOnSelect(i) else currentOnReselect?.invoke(i)
+                                    true
+                                }
+                            }
+                        }
+
+                        // 选中块 / 玻璃泡：平时是选中块；按下时四边各外扩 LensGrow，里面的选中块按 1 − p 淡掉。
+                        // 玻璃泡本身照 Kyant catalog 的 LiquidBottomTabs：透镜折射 10 / 14 带色散、默认高光、外阴影、内阴影，都乘按压进度 p。
+                        // 它在底栏里面，跟着底栏一起放大、平移；自己再按速度拉伸。横排标签时宽度跟着所在的格子
+                        val indicatorModifier = Modifier
+                            .graphicsLayer {
+                                val bp = barW()
+                                val w = slotWidth(state.value) + lensGrowPx * 2f * growProgress()
+                                val rawCenter = slotCenter(state.value)
+                                val x0 = if (rtl) bp - rawCenter else rawCenter
+                                val cx = bp / 2f + (x0 - bp / 2f) * barScaleX() + barShift()
+                                val baseCenter = if (rtl) bp - w / 2f else w / 2f
+                                translationX = cx - baseCenter
+                                if (!lensActive) {
+                                    val u = lensStretch()
+                                    scaleX = barScaleX() * (1f + LensStretchX * u)
+                                    scaleY = barScaleY() * (1f - LensStretchY * u)
+                                }
+                            }
+                            .layout { measurable, _ ->
+                                val g = lensGrowPx * growProgress()
+                                val w = (slotWidth(state.value) + g * 2f).roundToInt().coerceAtLeast(0)
+                                val h = (indicatorHeightPx + g * 2f).roundToInt().coerceAtLeast(0)
+                                val placeable = measurable.measure(Constraints.fixed(w, h))
+                                layout(w, h) { placeable.place(0, 0) }
+                            }
+
+                        if (settled) {
+                            // 静止态单树快路径：选中块在底、仅渲染一棵 SettledGlassCells（选中项直接用选中色），
+                            // 彻底消除重复 Cells 子树与每帧 clipPath(capsulePath)
+                            Box(
+                                indicatorModifier.drawWithCache {
+                                    val outline = MochiCapsule.createOutline(size, layoutDirection, this)
+                                    onDrawBehind { drawOutline(outline, indicatorColor()) }
+                                },
+                            )
+                            SettledGlassCells(
+                                items = items,
+                                selectedIndex = selected,
+                                selectedTint = { accentColor },
+                                unselectedTint = ::resolveContentColor,
+                                behavior = behavior,
+                                inline = inlineLabel,
+                                extras = extras,
+                                colors = colors,
+                                left = ::cellLeft,
+                                width = ::cellWidth,
+                                selectedness = ::selectedness,
+                                cellModifier = ::tabSemantics,
+                                modifier = Modifier.fillMaxSize().graphicsLayer {
+                                    translationX = barShift()
+                                    scaleX = barScaleX()
+                                    scaleY = barScaleY()
+                                },
+                            )
+                        } else {
+                            // 未选中色的图标（和选中的一样用实心图标）
                             Cells(
-                                // 选中块会把下面这份图标也过一遍它的矩阵（平时全强度，按下时渐渐没有），先反过来抵消
-                                tint = { accentColor },
+                                tint = ::resolveContentColor,
                                 modifier = Modifier,
+                                cellModifier = { i ->
+                                    tabSemantics(i).graphicsLayer {
+                                        val s = 1f + IconPressScale * pressProgress()
+                                        scaleX = s
+                                        scaleY = s
+                                    }
+                                },
+                            )
+
+                            if (lensActive) {
+                                // 仅在按压透镜活跃期按需分配 tabsBackdrop / glassBackdrop，静止与滚动期间零闲置 GraphicsLayer
+                                val tabsBackdrop = rememberLayerBackdrop()
+                                val glassBackdrop = if (barGlass != null) {
+                                    rememberMochiCombinedBackdrop(page, barGlass.layer, tabsBackdrop)
+                                } else {
+                                    rememberMochiCombinedBackdrop(page, tabsBackdrop)
+                                }
+                                Box(
+                                    Modifier
+                                        .matchParentSize()
+                                        .sampleOutset()
+                                        .clearAndSetSemantics {}
+                                        .alpha(0f)
+                                        .mochiLayerBackdrop(tabsBackdrop),
+                                ) {
+                                    Box(Modifier.padding(SampleMargin).fillMaxSize()) {
+                                        Cells(
+                                            // 选中块会把下面这份图标也过一遍它的矩阵（平时全强度，按下时渐渐没有），先反过来抵消
+                                            tint = { accentColor },
+                                            modifier = Modifier,
+                                            cellModifier = {
+                                                Modifier.graphicsLayer {
+                                                    val s = 1f + IconPressScale * pressProgress()
+                                                    scaleX = s
+                                                    scaleY = s
+                                                    alpha = pressProgress()
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                                Box(
+                                    indicatorModifier.drawBackdrop(
+                                        backdrop = glassBackdrop,
+                                        shape = { MochiCapsule },
+                                        effects = {
+                                            val p = pressProgress()
+                                            if (p > 0.002f && glass.style != MochiGlassStyle.Frosted) {
+                                                lens(
+                                                    LensRefractionHeight.toPx() * p,
+                                                    LensRefractionAmount.toPx() * p,
+                                                    chromaticAberration = true,
+                                                )
+                                            }
+                                        },
+                                        highlight = {
+                                            val p = pressProgress()
+                                            if (p > 0.002f) Highlight.Default.copy(alpha = p) else null
+                                        },
+                                        shadow = {
+                                            val p = pressProgress()
+                                            if (p > 0.002f) Shadow(alpha = p) else null
+                                        },
+                                        innerShadow = {
+                                            val p = pressProgress()
+                                            if (p > 0.002f) InnerShadow(radius = LensInnerShadow * p, alpha = p) else null
+                                        },
+                                        layerBlock = {
+                                            val u = lensStretch()
+                                            scaleX = barScaleX() * (1f + LensStretchX * u)
+                                            scaleY = barScaleY() * (1f - LensStretchY * u)
+                                        },
+                                        onDrawSurface = {
+                                            val p = pressProgress()
+                                            if (p < 0.999f) drawRect(indicatorColor(), alpha = 1f - p)
+                                            if (p > 0.001f) drawRect(Color.Black.copy(alpha = 0.03f * p))
+                                        },
+                                    ),
+                                )
+                            } else {
+                                Box(
+                                    indicatorModifier.drawWithCache {
+                                        val outline = MochiCapsule.createOutline(size, layoutDirection, this)
+                                        onDrawBehind { drawOutline(outline, indicatorColor()) }
+                                    },
+                                )
+                            }
+
+                            // 平时的选中色图标：画在选中块上面、按选中块（玻璃泡）当前的轮廓裁着。iOS 的选中块模糊在图标后面，图标本身是清楚的；
+                            // 按下时淡掉，换成玻璃泡里那份（会被折射）
+                            Cells(
+                                tint = { accentColor },
+                                modifier = Modifier
+                                    .clearAndSetSemantics {}
+                                    .drawWithContent {
+                                        if (pressProgress() >= 0.999f) return@drawWithContent
+                                        val bp = barW()
+                                        val g = lensGrowPx * growProgress()
+                                        val w = (slotWidth(state.value) + g * 2f) * barScaleX() * (1f + LensStretchX * lensStretch())
+                                        val h = (indicatorHeightPx + g * 2f) * barScaleY() * (1f - LensStretchY * lensStretch())
+                                        val rawCenter = slotCenter(state.value)
+                                        val x0 = if (layoutDirection == LayoutDirection.Rtl) bp - rawCenter else rawCenter
+                                        val cx = bp / 2f + (x0 - bp / 2f) * barScaleX() + barShift()
+                                        val clip = iconClip.get(w, h, cx - w / 2f, size.height / 2f - h / 2f)
+                                        clipPath(clip) { this@drawWithContent.drawContent() }
+                                    }
+                                    .graphicsLayer { alpha = 1f - pressProgress() },
                                 cellModifier = {
                                     Modifier.graphicsLayer {
                                         val s = 1f + IconPressScale * pressProgress()
                                         scaleX = s
                                         scaleY = s
-                                        alpha = pressProgress()
                                     }
                                 },
                             )
                         }
                     }
 
-                    // At rest the selection is entirely inside the opaque glass body: reading
-                    // the page and invisible pressed icons again only repeats offscreen work.
-                    // Keep the combined source for the lens while it is growing/pressed/releasing.
-                    val lensActive by remember { derivedStateOf { pressProgress() > 0f || growProgress() > 0f } }
-                    val selectionBackdrop = if (lensActive) glassBackdrop else barGlass
-
-                    // 选中块 / 玻璃泡：平时是选中块；按下时四边各外扩 LensGrow，里面的选中块按 1 − p 淡掉。
-                    // 玻璃泡本身照 Kyant catalog 的 LiquidBottomTabs：透镜折射 10 / 14 带色散、默认高光、外阴影、内阴影，都乘按压进度 p。
-                    // 它在底栏里面，跟着底栏一起放大、平移；自己再按速度拉伸。横排标签时宽度跟着所在的格子
-                    Box(
-                        Modifier
-                            .graphicsLayer {
-                                val bp = barW()
-                                val w = slotWidth(state.value) + lensGrowPx * 2f * growProgress()
-                                translationX = bp / 2f + (slotCenter(state.value) - bp / 2f) * barScaleX() + barShift() - w / 2f
-                            }
-                            .layout { measurable, _ ->
-                                val g = lensGrowPx * growProgress()
-                                val w = (slotWidth(state.value) + g * 2f).roundToInt()
-                                val h = (indicatorHeightPx + g * 2f).roundToInt()
-                                val placeable = measurable.measure(Constraints.fixed(w, h))
-                                layout(w, h) { placeable.place(0, 0) }
-                            }
-                            .drawBackdrop(
-                                backdrop = selectionBackdrop,
-                                shape = { MochiCapsule },
-                                effects = {
-                                    val p = pressProgress()
-                                    if (p > 0.002f) {
-                                        lens(LensRefractionHeight.toPx() * p, LensRefractionAmount.toPx() * p, chromaticAberration = true)
-                                    }
-                                },
-                                highlight = { Highlight.Default.copy(alpha = pressProgress()) },
-                                shadow = { Shadow(alpha = pressProgress()) },
-                                innerShadow = { InnerShadow(radius = LensInnerShadow * pressProgress(), alpha = pressProgress()) },
-                                layerBlock = {
-                                    val u = lensStretch()
-                                    scaleX = barScaleX() * (1f + LensStretchX * u)
-                                    scaleY = barScaleY() * (1f - LensStretchY * u)
-                                },
-                                onDrawSurface = {
-                                    drawRect(indicatorColor(), alpha = 1f - pressProgress())
-                                    drawRect(Color.Black.copy(alpha = 0.03f * pressProgress()))
-                                },
-                            ),
-                    )
-
-                    // 平时的选中色图标：画在选中块上面、按选中块（玻璃泡）当前的轮廓裁着。iOS 的选中块模糊在图标后面，图标本身是清楚的；
-                    // 按下时淡掉，换成玻璃泡里那份（会被折射）
-                    Cells(
-                        tint = { accentColor },
-                        modifier = Modifier
-                            .clearAndSetSemantics {}
-                            .drawWithContent {
-                                if (pressProgress() >= 0.999f) return@drawWithContent
-                                val bp = barW()
-                                val g = lensGrowPx * growProgress()
-                                val w = (slotWidth(state.value) + g * 2f) * barScaleX() * (1f + LensStretchX * lensStretch())
-                                val h = (indicatorHeightPx + g * 2f) * barScaleY() * (1f - LensStretchY * lensStretch())
-                                val cx = bp / 2f + (slotCenter(state.value) - bp / 2f) * barScaleX() + barShift()
-                                val clip = iconClip.get(w, h, cx - w / 2f, size.height / 2f - h / 2f, this)
-                                clipPath(clip) { this@drawWithContent.drawContent() }
-                            }
-                            .graphicsLayer { alpha = 1f - pressProgress() },
-                        cellModifier = {
-                            Modifier.graphicsLayer {
-                                val s = 1f + IconPressScale * pressProgress()
-                                scaleX = s
-                                scaleY = s
-                            }
-                        },
-                    )
+                    // 收成小圆后：只剩当前项的图标，在圆心
+                    val showCollapsed by remember { derivedStateOf { barCollapse() > 0f } }
+                    if (showCollapsed) {
+                        Box(
+                            Modifier
+                                .size(behavior.height)
+                                .graphicsLayer { alpha = smoothstep(0.4f, 1f, barCollapse()) },
+                            contentAlignment = Alignment.Center,
+                        ) { (items[selected].selectedIcon ?: items[selected].icon)(accentColor) }
+                    }
                 }
+            }
+        },
+        modifier = modifier.mochiNavOccluder().windowInsetsPadding(windowInsets).fillMaxWidth(),
+    ) { measurables, constraints ->
+        val w = constraints.maxWidth.toFloat()
+        if (maxPxState != w) maxPxState = w
+        state.unitDp = tabPx() / density.density
+        val p = measurables[0].measure(constraints.copy(minWidth = 0, minHeight = 0))
+        layout(max(constraints.minWidth, p.width), max(constraints.minHeight, p.height)) {
+            p.place(0, 0)
+        }
+    }
+}
 
-                // 收成小圆后：只剩当前项的图标，在圆心
-                if (barCollapse() > 0f) {
-                    Box(
-                        Modifier
-                            .size(behavior.height)
-                            .graphicsLayer { alpha = smoothstep(0.4f, 1f, barCollapse()) },
-                        contentAlignment = Alignment.Center,
-                    ) { (items[selected].selectedIcon ?: items[selected].icon)(accentColor) }
+/** 静止态单树标签格子：选中项直接着 [selectedTint]，其余项着 [unselectedTint]，避免双树重复组合与胶囊裁切 */
+@Composable
+private fun SettledGlassCells(
+    items: ImmutableList<MochiTabItem>,
+    selectedIndex: Int,
+    selectedTint: () -> Color,
+    unselectedTint: () -> Color,
+    behavior: MochiTabBarBehavior,
+    inline: Boolean,
+    extras: FloatArray,
+    colors: MochiTabBarColors,
+    left: (Int) -> Float,
+    width: (Int) -> Float,
+    selectedness: (Int) -> Float,
+    cellModifier: (Int) -> Modifier,
+    modifier: Modifier = Modifier,
+) {
+    val labelStyle = rememberTabLabelStyle(inline)
+    val shift = if (behavior.showLabels && behavior.selectedLabelOnly) LabelShift else 0.dp
+    Layout(
+        content = {
+            items.forEachIndexed { i, item ->
+                val tint = if (i == selectedIndex) selectedTint else unselectedTint
+                val icon = @Composable {
+                    Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+                        (item.selectedIcon ?: item.icon)(tint())
+                        MochiBadge(item.badge, badgeAnchor(item.badge), colors.badge, colors.onBadge)
+                    }
                 }
+                if (inline) {
+                    Box(cellModifier(i).fillMaxSize(), contentAlignment = Alignment.Center) {
+                        InlineTabCell(width = { width(i) }, selectedness = { selectedness(i) }, extra = extras[i], icon = icon) {
+                            BasicText(
+                                item.label,
+                                style = labelStyle,
+                                color = tint,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        cellModifier(i).fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (shift > 0.dp) {
+                            Box(Modifier.graphicsLayer { translationY = shift.toPx() * (1f - selectedness(i)) }) { icon() }
+                        } else {
+                            icon()
+                        }
+                        if (behavior.showLabels) {
+                            BasicText(
+                                item.label,
+                                style = labelStyle,
+                                color = tint,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
+                                modifier = if (shift > 0.dp) {
+                                    Modifier
+                                        .graphicsLayer {
+                                            val s = selectedness(i)
+                                            mochiBlurAlpha(labelAlpha(s), labelBlur(s))
+                                            translationY = shift.toPx() * (1f - s)
+                                        }
+                                        .mochiBlur { labelBlur(selectedness(i)) }
+                                } else {
+                                    Modifier
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val h = constraints.maxHeight
+        val isRtl = layoutDirection == LayoutDirection.Rtl
+        val placeables = measurables.mapIndexed { i, m ->
+            m.measure(Constraints.fixed(width(i).roundToInt().coerceAtLeast(0), h.coerceAtLeast(0)))
+        }
+        layout(constraints.maxWidth, h) {
+            placeables.forEachIndexed { i, p ->
+                val lx = left(i).roundToInt()
+                val x = if (isRtl) constraints.maxWidth - lx - p.width else lx
+                p.place(x, 0)
             }
         }
     }
 }
+
+/**
+ * 主胶囊玻璃独立叶组合：使用稳定最大宽度行容器 + [hold] + [fillMerge] 绘制动态胶囊，
+ * 且把 [capture] 读取隔离在叶节点内，避免按压透镜状态切换引起外层附件条或搜索框重组。
+ */
+@Composable
+private fun MainTabBarGlassLayer(
+    rowTop: Float,
+    height: Dp,
+    heightPx: Float,
+    barGlass: MochiBackdrop,
+    capture: () -> Boolean,
+    backdrop: Backdrop,
+    glass: MochiGlass,
+    faceBackdrop: Backdrop,
+    glow: GlassGlowState,
+    dark: () -> Boolean,
+    alpha: () -> Float,
+    scaleX: () -> Float,
+    scaleY: () -> Float,
+    hold: () -> Rect?,
+    fillMerge: (GlassMergeBuffer) -> Boolean,
+) {
+    Box(
+        Modifier
+            .offset { IntOffset(0, rowTop.roundToInt()) }
+            .fillMaxWidth()
+            .height(height),
+    ) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .sampleOutset()
+                .mochiWindowBackdropSource(barGlass, capture = capture()),
+        ) {
+            GlassBody(
+                backdrop = backdrop,
+                glass = glass,
+                faceBackdrop = faceBackdrop,
+                glow = glow,
+                dark = dark,
+                modifier = Modifier
+                    .padding(SampleMargin)
+                    .fillMaxSize(),
+                // 淡出交给 GlassBody：透明度挂在外部会按矩形离屏，外阴影被切成直角
+                alpha = alpha,
+                scaleX = scaleX,
+                scaleY = scaleY,
+                hold = hold,
+                recipeSide = { heightPx },
+                fillMerge = fillMerge,
+            )
+        }
+    }
+}
+
+private class MainHoldCache {
+    private var l = Float.NaN
+    private var t = Float.NaN
+    private var r = Float.NaN
+    private var b = Float.NaN
+    private var cached: Rect? = null
+
+    fun get(left: Float, top: Float, right: Float, bottom: Float): Rect {
+        val prev = cached
+        if (prev != null && left == l && top == t && right == r && bottom == b) return prev
+        l = left
+        t = top
+        r = right
+        b = bottom
+        return Rect(left, top, right, bottom).also { cached = it }
+    }
+}
+
+/** 自适应亮度静止时的低频兜底间隔（事件触发时按 SampleMillis 立即收敛） */
+private const val IdleSampleMillis = 1000L

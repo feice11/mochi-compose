@@ -3,9 +3,12 @@
 
 package ui.feice.mochi.navigation
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -14,6 +17,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.animateToSteady
+import ui.feice.mochi.anim.awaitFrameSettle
+import ui.feice.mochi.anim.mochiSpring
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -104,5 +111,58 @@ class NavTransitionRenderingTest {
         assertTrue(geometry.needsCover(page))
         home.coverReaderCount--
         assertFalse(geometry.needsCover(page))
+    }
+
+    @Test
+    fun mochiSpringClampsMaxBounceSoDampingStaysPositive() {
+        val atOne = mochiSpring<Float>(durationMillis = 300, bounce = 1.0)
+        val overOne = mochiSpring<Float>(durationMillis = 300, bounce = 1.5)
+        assertTrue(atOne.dampingRatio > 0f)
+        assertTrue(overOne.dampingRatio > 0f)
+        assertTrue(atOne.stiffness.isFinite())
+    }
+
+    @Test
+    fun zeroMotionDurationScaleCompletesSettleAndSteadyAnimationImmediately() = runBlocking {
+        val zeroScale = object : MotionDurationScale {
+            override val scaleFactor: Float = 0f
+        }
+        val anim = Animatable(0.2f)
+        var reportedVelocity = 5f
+        withContext(zeroScale) {
+            awaitFrameSettle(16_666_667L)
+            anim.animateToSteady(1f, MochiMotionTokens.Page, initialVelocity = 3f, framePeriodNanos = 16_666_667L) {
+                reportedVelocity = it
+            }
+        }
+        assertEquals(1f, anim.value, 0f)
+        assertEquals(0f, reportedVelocity, 0f)
+    }
+
+    @Test
+    fun topFrameCacheInvalidatesWhenProgressOrBackChanges() = runBlocking {
+        val nav = MochiNavigator("home", restored = null, nextId = 0)
+        val geometry = NavGeometry(nav).apply {
+            size = Size(320f, 640f)
+            spec = MochiNavSpec(MochiMotionTokens.Page, MochiMotionTokens.Page, MochiMotionTokens.Page)
+            defaultCorners = MochiScreenCorners(20f, 20f, 20f, 20f)
+        }
+        nav.push("detail", from = "missing-source")
+        val page = nav.entries.last()
+        val atZero = geometry.frame(page)
+        val cachedZero = geometry.frame(page)
+        assertTrue(atZero === cachedZero)
+
+        page.progress.snapTo(0.5f)
+        val atHalf = geometry.frame(page)
+        assertTrue(atHalf.rect.width > atZero.rect.width)
+
+        page.progress.snapTo(1f)
+        val atFull = geometry.frame(page)
+        assertEquals(320f, atFull.rect.width, 0.01f)
+
+        page.back.snapTo(0.5f)
+        val withBack = geometry.frame(page)
+        assertTrue(withBack.rect.width < atFull.rect.width)
     }
 }

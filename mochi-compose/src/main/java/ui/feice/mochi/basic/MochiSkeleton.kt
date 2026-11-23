@@ -3,6 +3,9 @@
 
 package ui.feice.mochi.basic
 
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Shader
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -12,16 +15,21 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiDefaults
 
@@ -41,25 +49,75 @@ public fun MochiSkeleton(
     color: Color = MochiDefaults.fill(),
     content: @Composable () -> Unit,
 ) {
-    val shown by animateFloatAsState(if (loading) 1f else 0f, tween(260), label = "skeleton")
-    val sweep = rememberInfiniteTransition(label = "sweep")
-    val x by sweep.animateFloat(-0.4f, 1.4f, infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart), label = "x")
-    Box(
-        modifier.drawWithContent {
-            // 内容在下面淡入，骨架盖在上面淡出
-            drawContent()
-            if (shown <= 0.001f) return@drawWithContent
+    val shownState = animateFloatAsState(if (loading) 1f else 0f, SkeletonFadeSpec, label = "skeleton")
+    val visible by remember { derivedStateOf { loading || shownState.value > 0.001f } }
+    val shimmerModifier = if (visible) {
+        val reduce = mochiReduceMotion()
+        val phase = if (!reduce) {
+            rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, ShimmerRepeatSpec, label = "phase")
+        } else {
+            null
+        }
+        val matrix = remember { Matrix() }
+        Modifier.drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
-            drawOutline(outline, color, alpha = shown)
-            val w = size.width
-            val band = Brush.linearGradient(
-                listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
-                start = Offset(w * x - w * 0.3f, 0f),
-                end = Offset(w * x + w * 0.3f, size.height),
-            )
-            drawOutline(outline, band, alpha = shown)
-        },
-    ) {
-        Box(Modifier.graphicsLayer { alpha = 1f - shown }) { content() }
+            // Project the full outline onto the sweep axis so both ends of the loop are clear, even on tall placeholders.
+            val dirX = if (layoutDirection == LayoutDirection.Rtl) -SweepDirX else SweepDirX
+            val extent = size.width * SweepDirX + size.height * SweepDirY
+            val halfWidth = extent * 0.3f
+            val startX = if (layoutDirection == LayoutDirection.Rtl) size.width + halfWidth * SweepDirX else -halfWidth * SweepDirX
+            val endX = if (layoutDirection == LayoutDirection.Rtl) size.width - halfWidth * SweepDirX else halfWidth * SweepDirX
+            val shader = if (extent > 0f) {
+                LinearGradient(
+                    startX,
+                    -halfWidth * SweepDirY,
+                    endX,
+                    halfWidth * SweepDirY,
+                    ShimmerStops,
+                    null,
+                    Shader.TileMode.CLAMP,
+                )
+            } else {
+                null
+            }
+            val brush = shader?.let(::StaticShaderBrush)
+            onDrawWithContent {
+                // 内容在下面淡入，骨架盖在上面淡出
+                drawContent()
+                val s = shownState.value
+                if (s <= 0.001f) return@onDrawWithContent
+                drawOutline(outline, color, alpha = s)
+                if (phase != null && shader != null && brush != null) {
+                    val center = phase.value * (extent + 2f * halfWidth) - halfWidth
+                    matrix.setTranslate(dirX * center, SweepDirY * center)
+                    shader.setLocalMatrix(matrix)
+                    drawOutline(outline, brush, alpha = s)
+                }
+            }
+        }
+    } else {
+        Modifier
+    }
+    Box(modifier.then(shimmerModifier)) {
+        // 加载完成后卸载 graphicsLayer，保持槽位结构不变以保留 content 内部 remember 状态
+        Box(if (visible) Modifier.graphicsLayer { alpha = 1f - shownState.value } else Modifier) { content() }
     }
 }
+
+private val SkeletonFadeSpec = tween<Float>(260)
+private val ShimmerRepeatSpec = infiniteRepeatable<Float>(tween(1500, easing = LinearEasing), RepeatMode.Restart)
+
+private class StaticShaderBrush(private val shader: Shader) : ShaderBrush() {
+    override fun createShader(size: Size): Shader = shader
+}
+
+private const val SweepDirX = 0.98f
+private const val SweepDirY = 0.2f
+
+private val ShimmerStops = intArrayOf(
+    Color.White.copy(alpha = 0f).toArgb(),
+    Color.White.copy(alpha = 0.06f).toArgb(),
+    Color.White.copy(alpha = 0.22f).toArgb(),
+    Color.White.copy(alpha = 0.06f).toArgb(),
+    Color.White.copy(alpha = 0f).toArgb(),
+)

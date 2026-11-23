@@ -5,46 +5,56 @@ package ui.feice.mochi.basic
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextMotion
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.first
 import ui.feice.mochi.effect.content.MochiBlurTransitions
 import ui.feice.mochi.effect.content.mochiBlur
 import ui.feice.mochi.effect.content.mochiBlurAlpha
+import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.smoothstep
 
 /**
  * 标签一格的读屏语义：整格是一个「标签页」节点，名字是标签文字。只显示图标、或标签宽度还是 0 时，
  * 文字不可见，读屏和测试都靠这里找到它；整格合成一个节点，选中时不会把图标和文字读两遍
  */
-internal fun Modifier.tabSemantics(label: String, selected: Boolean, onClick: () -> Unit): Modifier = clearAndSetSemantics {
-    role = Role.Tab
-    contentDescription = label
-    this.selected = selected
-    onClick {
-        onClick()
-        true
+internal fun Modifier.tabSemantics(label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit): Modifier =
+    clearAndSetSemantics {
+        role = Role.Tab
+        contentDescription = label
+        this.selected = selected
+        if (!enabled) {
+            disabled()
+        } else {
+            onClick {
+                onClick()
+                true
+            }
+        }
     }
-}
 
 /**
  * 横排标签的一格：图标在左、标签在右，整体在 [width] 给的格宽里居中。
@@ -60,25 +70,46 @@ internal fun InlineTabCell(
     modifier: Modifier = Modifier,
     label: @Composable () -> Unit,
 ) {
+    val currentSelectedness by rememberUpdatedState(selectedness)
+    val settledVisible by remember { derivedStateOf { currentSelectedness() >= 0.999f } }
+    val settledHidden by remember { derivedStateOf { currentSelectedness() <= 0.001f } }
     Layout(
         contents = listOf(icon, {
             Box(
-                Modifier.graphicsLayer {
-                    mochiBlurAlpha(inlineLabelAlpha(selectedness()), labelBlur(selectedness()))
-                }.mochiBlur { labelBlur(selectedness()) },
+                when {
+                    settledVisible -> Modifier
+
+                    settledHidden -> Modifier.drawWithContent {}
+
+                    else ->
+                        Modifier
+                            .graphicsLayer {
+                                val s = currentSelectedness()
+                                mochiBlurAlpha(inlineLabelAlpha(s), labelBlur(s))
+                            }
+                            .mochiBlur { labelBlur(currentSelectedness()) }
+                },
             ) { label() }
         }),
         modifier = modifier.fillMaxHeight(),
     ) { (iconM, labelM), c ->
-        val w = width().roundToInt()
+        val w = width().roundToInt().coerceAtLeast(0)
         val h = c.maxHeight
         val ip = iconM.first().measure(Constraints())
         val lp = labelM.first().measure(Constraints())
+        val isRtl = layoutDirection == LayoutDirection.Rtl
+        val gapPx = InlineLabelGap.roundToPx()
         layout(w, h) {
             val group = ip.width + extra * selectedness()
-            val x = ((w - group) / 2f).roundToInt()
-            ip.place(x, (h - ip.height) / 2)
-            lp.place(x + ip.width + InlineLabelGap.roundToPx(), (h - lp.height) / 2)
+            if (isRtl) {
+                val iconX = ((w + group) / 2f).roundToInt() - ip.width
+                ip.place(iconX, (h - ip.height) / 2)
+                lp.place(iconX - gapPx - lp.width, (h - lp.height) / 2)
+            } else {
+                val iconX = ((w - group) / 2f).roundToInt()
+                ip.place(iconX, (h - ip.height) / 2)
+                lp.place(iconX + ip.width + gapPx, (h - lp.height) / 2)
+            }
         }
     }
 }
@@ -109,6 +140,7 @@ internal val InlineLabelStyle = TextStyle(
     fontSize = 13.sp,
     lineHeight = 16.sp,
     fontWeight = FontWeight.SemiBold,
+    textMotion = TextMotion.Animated,
     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
 )
 
@@ -116,5 +148,87 @@ internal val TabLabelStyle = TextStyle(
     fontSize = 10.sp,
     lineHeight = 12.sp,
     fontWeight = FontWeight.SemiBold,
+    textMotion = TextMotion.Animated,
     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
 )
+
+@Composable
+internal fun rememberTabLabelStyle(inline: Boolean): TextStyle {
+    val base = MochiTheme.textStyles.footnote
+    return remember(base, inline) {
+        base.merge(if (inline) InlineLabelStyle else TabLabelStyle)
+    }
+}
+
+/** 单帧缓存 [TabBarFrame]：同一帧内多个布局/绘制修饰符读取相同输入时零对象分配 */
+internal class TabBarFrameCache {
+    private var cached: TabBarFrame? = null
+    private var lastMaxPx = Float.NaN
+    private var lastBarW = Float.NaN
+    private var lastSearchSlot = Float.NaN
+    private var lastRowTop = Float.NaN
+    private var lastHeight = Float.NaN
+    private var lastGap = Float.NaN
+    private var lastAccH = Float.NaN
+    private var lastHasAcc = false
+    private var lastHasSearch = false
+    private var lastCollapse = Float.NaN
+    private var lastSearch = Float.NaN
+
+    fun get(
+        maxPx: Float,
+        barWidth: Float,
+        searchSlot: Float,
+        rowTop: Float,
+        height: Float,
+        gap: Float,
+        accessoryHeight: Float,
+        hasAccessory: Boolean,
+        hasSearch: Boolean,
+        collapse: Float,
+        search: Float,
+    ): TabBarFrame {
+        val existing = cached
+        if (existing != null &&
+            maxPx == lastMaxPx &&
+            barWidth == lastBarW &&
+            searchSlot == lastSearchSlot &&
+            rowTop == lastRowTop &&
+            height == lastHeight &&
+            gap == lastGap &&
+            accessoryHeight == lastAccH &&
+            hasAccessory == lastHasAcc &&
+            hasSearch == lastHasSearch &&
+            collapse == lastCollapse &&
+            search == lastSearch
+        ) {
+            return existing
+        }
+        val next = tabBarFrame(
+            maxPx = maxPx,
+            barWidth = barWidth,
+            searchSlot = searchSlot,
+            rowTop = rowTop,
+            height = height,
+            gap = gap,
+            accessoryHeight = accessoryHeight,
+            hasAccessory = hasAccessory,
+            hasSearch = hasSearch,
+            collapse = collapse,
+            search = search,
+        )
+        cached = next
+        lastMaxPx = maxPx
+        lastBarW = barWidth
+        lastSearchSlot = searchSlot
+        lastRowTop = rowTop
+        lastHeight = height
+        lastGap = gap
+        lastAccH = accessoryHeight
+        lastHasAcc = hasAccessory
+        lastHasSearch = hasSearch
+        lastCollapse = collapse
+        lastSearch = search
+        return next
+    }
+}

@@ -13,9 +13,11 @@ import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorizedFiniteAnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -29,11 +31,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -141,6 +150,9 @@ private class BlurSlot<T>(val key: T, initial: Float) {
     /** 正在退场（缩放按 [MochiBlurTransition.exitScale] 算）。 */
     var leaving by mutableStateOf(false)
     var job: Job? = null
+
+    /** 只在「是否处于过渡中」切换时变化，静止态 p == 1 时不挂载硬件图层 */
+    val active: Boolean by derivedStateOf { p.isRunning || p.value != 1f }
 }
 
 /** 先等 [delayMs] 毫秒（停在起点）再按 [inner] 走：景深切换里新内容等旧的先让开。 */
@@ -192,6 +204,11 @@ private const val DepthExitMs = 140
  *   只有 [MochiBlurTransition.slide] 不为 0 时才有位移
  * @param contentAlignment 新旧内容大小不同时，各自在占位里怎么对齐
  */
+private class CrossfadeActivation {
+    var active: Boolean = false
+}
+
+@Suppress("ktlint:compose:content-slot-reused") // 静态快路径与动态交叉淡化单向切换（首次变化后永不回退），无状态反复迁移问题
 @Composable
 public fun <T> MochiBlurCrossfade(
     targetState: T,
@@ -201,7 +218,21 @@ public fun <T> MochiBlurCrossfade(
     contentAlignment: Alignment = Alignment.Center,
     content: @Composable (T) -> Unit,
 ) {
-    val slots = remember { mutableStateListOf(BlurSlot(targetState, 1f)) }
+    // 静态快速路径：targetState 从未变化时直接渲染内容，零 Animatable / LaunchedEffect / 模糊层开销；
+    // 首次发生变化时才挂载完整的交叉淡化机制，并以 initialState 作为退出槽无缝过渡到 targetState
+    val initialState = remember { targetState }
+    val activation = remember { CrossfadeActivation() }
+    if (!activation.active && targetState != initialState) {
+        activation.active = true
+    }
+    if (!activation.active) {
+        Box(modifier, contentAlignment = contentAlignment) {
+            content(targetState)
+        }
+        return
+    }
+
+    val slots = remember { mutableStateListOf(BlurSlot(initialState, 1f)) }
     val scope = rememberCoroutineScope()
     val dir by rememberUpdatedState(direction)
     val spec by rememberUpdatedState(transition)
@@ -330,29 +361,67 @@ private fun <T> layerBlur(s: BlurSlot<T>, transition: MochiBlurTransition): Dp {
 
 @Composable
 private fun <T> BlurLayer(s: BlurSlot<T>, transition: MochiBlurTransition, content: @Composable () -> Unit) {
+    val blurRadius = remember(s, transition) { { layerBlur(s, transition) } }
     Layout(
         content = content,
-        modifier = Modifier.graphicsLayer {
-            val p = s.p.value.coerceIn(0f, 1f)
-            val hidden = 1f - p
-            // 透明度走 smoothstep：淡到一半时已经糊开了，不会看到两份清楚的字叠在一起
-            val a = smoothstep(0f, 1f, p)
-            mochiBlurAlpha(a, layerBlur(s, transition))
-            // 内容画出边界（玻璃阴影）时，半透明也不开按自身范围的离屏层：那一层会把阴影切成直角，透明度直接乘到每一笔上
-            if (transition.overflow > 0.dp && a < 1f) compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-            // 缩放和位移用没截断的进度：snappy 弹簧收尾那一点点回弹在这里看得到（透明度、模糊照样截断）
-            val raw = s.p.value
-            val hiddenScale = if (s.leaving) transition.exitScale else transition.scale
-            val k = hiddenScale + (1f - hiddenScale) * raw
-            scaleX = k
-            scaleY = k
-            translationY = s.sign * (1f - raw) * transition.slide * size.height
-        }.mochiBlur(overflow = transition.overflow) { layerBlur(s, transition) },
+        modifier = Modifier
+            .then(BlurSlotTransformElement(s, transition))
+            .mochiBlur(overflow = transition.overflow, radius = blurRadius),
     ) { measurables, constraints ->
         val pls = measurables.map { it.measure(constraints) }
         val w = pls.maxOfOrNull { it.width } ?: 0
         val h = pls.maxOfOrNull { it.height } ?: 0
         layout(w, h) { pls.forEach { it.place(0, 0) } }
+    }
+}
+
+private class BlurSlotTransformElement<T>(val slot: BlurSlot<T>, val transition: MochiBlurTransition) :
+    ModifierNodeElement<BlurSlotTransformNode<T>>() {
+    override fun create(): BlurSlotTransformNode<T> = BlurSlotTransformNode(slot, transition)
+
+    override fun update(node: BlurSlotTransformNode<T>) {
+        node.slot = slot
+        node.transition = transition
+    }
+
+    override fun hashCode(): Int = slot.hashCode() * 31 + transition.hashCode()
+
+    override fun equals(other: Any?): Boolean =
+        other is BlurSlotTransformElement<*> && other.slot === slot && other.transition == transition
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiBlurSlotTransform"
+    }
+}
+
+private class BlurSlotTransformNode<T>(var slot: BlurSlot<T>, var transition: MochiBlurTransition) :
+    Modifier.Node(),
+    LayoutModifierNode {
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val pl = measurable.measure(constraints)
+        return layout(pl.width, pl.height) {
+            val s = slot
+            if (!s.active) {
+                pl.place(0, 0)
+            } else {
+                pl.placeWithLayer(0, 0) {
+                    val tr = transition
+                    val p = s.p.value.coerceIn(0f, 1f)
+                    // 透明度走 smoothstep：淡到一半时已经糊开了，不会看到两份清楚的字叠在一起
+                    val a = smoothstep(0f, 1f, p)
+                    mochiBlurAlpha(a, layerBlur(s, tr))
+                    // 内容画出边界（玻璃阴影）时，半透明也不开按自身范围的离屏层：那一层会把阴影切成直角，透明度直接乘到每一笔上
+                    if (tr.overflow > 0.dp && a < 1f) compositingStrategy = CompositingStrategy.ModulateAlpha
+                    // 缩放和位移用没截断的进度：snappy 弹簧收尾那一点点回弹在这里看得到（透明度、模糊照样截断）
+                    val raw = s.p.value
+                    val hiddenScale = if (s.leaving) tr.exitScale else tr.scale
+                    val k = hiddenScale + (1f - hiddenScale) * raw
+                    scaleX = k
+                    scaleY = k
+                    translationY = s.sign * (1f - raw) * tr.slide * size.height
+                }
+            }
+        }
     }
 }
 

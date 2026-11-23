@@ -102,6 +102,12 @@ public final class ui/feice/mochi/anim/MochiTransition$Companion {
 	public final fun getDefault ()Lui/feice/mochi/anim/MochiTransition;
 }
 
+public final class ui/feice/mochi/basic/ComposableSingletons$MochiMorphBoxKt {
+	public static final field INSTANCE Lui/feice/mochi/basic/ComposableSingletons$MochiMorphBoxKt;
+	public fun <init> ()V
+	public final fun getLambda$1012868836$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
 public final class ui/feice/mochi/basic/ComposableSingletons$MochiTipKt {
 	public static final field INSTANCE Lui/feice/mochi/basic/ComposableSingletons$MochiTipKt;
 	public fun <init> ()V
@@ -350,7 +356,7 @@ public final class ui/feice/mochi/basic/MochiConfirmationDialogKt {
 }
 
 public final class ui/feice/mochi/basic/MochiContextMenuKt {
-	public static final fun MochiContextMenu-9_eDJkQ (Ljava/util/List;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;ZLandroidx/compose/ui/graphics/Shape;FLui/feice/mochi/basic/MochiDropdownColors;Lui/feice/mochi/basic/MochiDropdownBehavior;Lui/feice/mochi/basic/MochiDropdownPhysics;Lui/feice/mochi/anim/MochiMotion;FLkotlin/jvm/functions/Function2;Landroidx/compose/runtime/Composer;III)V
+	public static final fun MochiContextMenu-FdO7Sx8 (Ljava/util/List;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;ZLandroidx/compose/ui/graphics/Shape;FLui/feice/mochi/basic/MochiDropdownColors;Lui/feice/mochi/basic/MochiDropdownBehavior;Lui/feice/mochi/basic/MochiDropdownPhysics;Lui/feice/mochi/anim/MochiMotion;FLkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function2;Landroidx/compose/runtime/Composer;III)V
 }
 
 public final class ui/feice/mochi/basic/MochiDialogAction {
@@ -687,11 +693,16 @@ public final class ui/feice/mochi/basic/MochiIntensitySliderKt {
 
 public final class ui/feice/mochi/basic/MochiItem {
 	public static final field $stable I
-	public fun <init> (Ljava/lang/String;ZLkotlin/jvm/functions/Function3;)V
-	public synthetic fun <init> (Ljava/lang/String;ZLkotlin/jvm/functions/Function3;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;ZLkotlin/jvm/functions/Function3;ZLkotlinx/collections/immutable/ImmutableList;ZLkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function4;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLkotlin/jvm/functions/Function3;ZLkotlinx/collections/immutable/ImmutableList;ZLkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function4;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getChecked ()Z
 	public final fun getDestructive ()Z
+	public final fun getDivider ()Z
 	public final fun getIcon ()Lkotlin/jvm/functions/Function3;
 	public final fun getLabel ()Ljava/lang/String;
+	public final fun getOnClick ()Lkotlin/jvm/functions/Function0;
+	public final fun getPanel ()Lkotlin/jvm/functions/Function4;
+	public final fun getSubmenu ()Lkotlinx/collections/immutable/ImmutableList;
 }
 
 public final class ui/feice/mochi/basic/MochiItemLayout : java/lang/Enum {
@@ -710,6 +721,64 @@ public final class ui/feice/mochi/basic/MochiListTextFieldDefaults {
 
 public final class ui/feice/mochi/basic/MochiMiniatureKt {
 	public static final fun MochiMiniature (FLandroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function2;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class ui/feice/mochi/basic/MochiMorphBoxColors {
+	public static final field $stable I
+	public synthetic fun <init> (JJJJJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBorderColor-0d7_KjU ()J
+	public final fun getContainerColor-0d7_KjU ()J
+	public final fun getContentColor-0d7_KjU ()J
+	public final fun getSelectedContainerColor-0d7_KjU ()J
+	public final fun getSelectedContentColor-0d7_KjU ()J
+	public fun hashCode ()I
+}
+
+public final class ui/feice/mochi/basic/MochiMorphBoxDefaults {
+	public static final field $stable I
+	public static final field INSTANCE Lui/feice/mochi/basic/MochiMorphBoxDefaults;
+	public final fun colors-zjMxDiM (JJJJJLandroidx/compose/runtime/Composer;II)Lui/feice/mochi/basic/MochiMorphBoxColors;
+	public final fun getPressedShape ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getRestShape ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSelectedShape ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSize-D9Ej5fM ()F
+}
+
+public final class ui/feice/mochi/basic/MochiMorphBoxKt {
+	public static final fun MochiMorphBox-8u0NR3k (Lui/feice/mochi/shape/MochiPolygon;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function0;ZLui/feice/mochi/shape/MochiPolygon;Lui/feice/mochi/basic/MochiMorphBoxColors;FFZLandroidx/compose/animation/core/AnimationSpec;Landroidx/compose/ui/Alignment;Lkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;III)V
+	public static final fun MochiMorphBox-TCVpFMg (Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function0;ZZLui/feice/mochi/shape/MochiPolygon;Lui/feice/mochi/shape/MochiPolygon;Lui/feice/mochi/shape/MochiPolygon;Lui/feice/mochi/basic/MochiMorphBoxColors;FFZLandroidx/compose/ui/Alignment;Lkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;III)V
+}
+
+public final class ui/feice/mochi/basic/MochiMorphIndicatorColors {
+	public static final field $stable I
+	public synthetic fun <init> (JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContainerColor-0d7_KjU ()J
+	public final fun getIndicatorColor-0d7_KjU ()J
+	public fun hashCode ()I
+}
+
+public final class ui/feice/mochi/basic/MochiMorphIndicatorDefaults {
+	public static final field $stable I
+	public static final field ActiveIndicatorScale F
+	public static final field INSTANCE Lui/feice/mochi/basic/MochiMorphIndicatorDefaults;
+	public final fun colors-dgg9oW8 (JJLandroidx/compose/runtime/Composer;II)Lui/feice/mochi/basic/MochiMorphIndicatorColors;
+	public final fun containedColors-dgg9oW8 (JJLandroidx/compose/runtime/Composer;II)Lui/feice/mochi/basic/MochiMorphIndicatorColors;
+	public final fun getContainedIndicatorSize-D9Ej5fM ()F
+	public final fun getContainedSize-D9Ej5fM ()F
+	public final fun getContainerShape ()Landroidx/compose/ui/graphics/Shape;
+	public final fun getContainerSize-D9Ej5fM ()F
+	public final fun getDeterminatePolygons ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getIndeterminatePolygons ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getSize-D9Ej5fM ()F
+}
+
+public final class ui/feice/mochi/basic/MochiMorphIndicatorKt {
+	public static final fun MochiContainedMorphIndicator-ZUYZQmM (Landroidx/compose/ui/Modifier;FFLui/feice/mochi/basic/MochiMorphIndicatorColors;Landroidx/compose/ui/graphics/Shape;Lkotlinx/collections/immutable/ImmutableList;Landroidx/compose/runtime/Composer;II)V
+	public static final fun MochiContainedMorphIndicator-aC-nel8 (Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;FFLui/feice/mochi/basic/MochiMorphIndicatorColors;Landroidx/compose/ui/graphics/Shape;Lkotlinx/collections/immutable/ImmutableList;Landroidx/compose/runtime/Composer;II)V
+	public static final fun MochiMorphIndicator-EOp_iR4 (Landroidx/compose/ui/Modifier;FJLui/feice/mochi/basic/MochiMorphIndicatorColors;Landroidx/compose/ui/graphics/Shape;Lkotlinx/collections/immutable/ImmutableList;Landroidx/compose/runtime/Composer;II)V
+	public static final fun MochiMorphIndicator-FkIzlsw (Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;FJLui/feice/mochi/basic/MochiMorphIndicatorColors;Landroidx/compose/ui/graphics/Shape;Lkotlinx/collections/immutable/ImmutableList;Landroidx/compose/runtime/Composer;II)V
 }
 
 public final class ui/feice/mochi/basic/MochiOpenMode : java/lang/Enum {
@@ -875,7 +944,7 @@ public final class ui/feice/mochi/basic/MochiSearchBarDefaults {
 }
 
 public final class ui/feice/mochi/basic/MochiSearchBarKt {
-	public static final fun MochiSearchBar (Ljava/lang/String;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
+	public static final fun MochiSearchBar-egy_3UM (Ljava/lang/String;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;FLandroidx/compose/runtime/Composer;II)V
 }
 
 public final class ui/feice/mochi/basic/MochiSegmentedBehavior {
@@ -1221,7 +1290,7 @@ public final class ui/feice/mochi/basic/MochiTextFieldKt {
 	public static final fun MochiInlineTextField-3G8rlPA (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ZLkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;JIZZJJLandroidx/compose/runtime/Composer;III)V
 	public static final fun MochiListFormRow-0vH8DBg (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Ljava/lang/String;ZFLui/feice/mochi/list/MochiListColors;Landroidx/compose/runtime/Composer;II)V
 	public static final fun MochiListTextFieldRow-ULtc_mU (Ljava/lang/String;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Ljava/lang/String;Ljava/lang/String;ZZIZFLandroidx/compose/foundation/text/KeyboardOptions;Landroidx/compose/foundation/text/KeyboardActions;Lui/feice/mochi/list/MochiListColors;Landroidx/compose/runtime/Composer;III)V
-	public static final fun MochiTextField-C0-YBfs (Ljava/lang/String;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Ljava/lang/String;ZZIZLjava/lang/String;Ljava/lang/String;Ljava/lang/Integer;ZLandroidx/compose/foundation/text/KeyboardOptions;Landroidx/compose/foundation/text/KeyboardActions;Ljava/lang/Object;Landroidx/compose/ui/graphics/Shape;Landroidx/compose/ui/text/TextStyle;Lui/feice/mochi/basic/MochiTextFieldColors;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;ZFLandroidx/compose/runtime/Composer;IIII)V
+	public static final fun MochiTextField-Ies8JzA (Ljava/lang/String;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Ljava/lang/String;ZZIZLjava/lang/String;Ljava/lang/String;Ljava/lang/Integer;ZLandroidx/compose/foundation/text/KeyboardOptions;Landroidx/compose/foundation/text/KeyboardActions;Ljava/lang/Object;Landroidx/compose/ui/graphics/Shape;Landroidx/compose/ui/text/TextStyle;Lui/feice/mochi/basic/MochiTextFieldColors;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;ZFLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;IIII)V
 }
 
 public final class ui/feice/mochi/basic/MochiTipKt {
@@ -1301,7 +1370,8 @@ public final class ui/feice/mochi/basic/TextKt {
 public final class ui/feice/mochi/basic/menu/ComposableSingletons$MenuListKt {
 	public static final field INSTANCE Lui/feice/mochi/basic/menu/ComposableSingletons$MenuListKt;
 	public fun <init> ()V
-	public final fun getLambda$1308383844$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1812617968$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$3801841$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class ui/feice/mochi/effect/content/MochiAnimateHeightKt {
@@ -1469,7 +1539,7 @@ public final class ui/feice/mochi/effect/glass/ComposableSingletons$MochiGlassGr
 public final class ui/feice/mochi/effect/glass/ComposableSingletons$MochiGlassSurfaceKt {
 	public static final field INSTANCE Lui/feice/mochi/effect/glass/ComposableSingletons$MochiGlassSurfaceKt;
 	public fun <init> ()V
-	public final fun getLambda$1317642226$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1087012103$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class ui/feice/mochi/effect/glass/MochiBackdrop {
@@ -1569,7 +1639,7 @@ public final class ui/feice/mochi/effect/glass/MochiVibrantKt {
 public final class ui/feice/mochi/effect/glass/engine/ComposableSingletons$GlassBodyKt {
 	public static final field INSTANCE Lui/feice/mochi/effect/glass/engine/ComposableSingletons$GlassBodyKt;
 	public fun <init> ()V
-	public final fun getLambda$-427676858$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$636517279$mochi_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class ui/feice/mochi/effect/glow/MochiGlowDefaults {
@@ -1914,6 +1984,7 @@ public final class ui/feice/mochi/list/MochiListColors {
 	public static final field $stable I
 	public synthetic fun <init> (JJJJJJJJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (JJJJJJJJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAccent-0d7_KjU ()J
 	public final fun getChevron-0d7_KjU ()J
 	public final fun getContainer-0d7_KjU ()J
@@ -1922,6 +1993,7 @@ public final class ui/feice/mochi/list/MochiListColors {
 	public final fun getDivider-0d7_KjU ()J
 	public final fun getHighlight-0d7_KjU ()J
 	public final fun getSecondary-0d7_KjU ()J
+	public fun hashCode ()I
 }
 
 public final class ui/feice/mochi/list/MochiListDefaults {
@@ -2034,7 +2106,7 @@ public final class ui/feice/mochi/list/MochiSwipeRowKt {
 public final class ui/feice/mochi/navigation/ComposableSingletons$MochiBackButtonKt {
 	public static final field INSTANCE Lui/feice/mochi/navigation/ComposableSingletons$MochiBackButtonKt;
 	public fun <init> ()V
-	public final fun getLambda$1343151959$mochi_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-825318698$mochi_compose_release ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class ui/feice/mochi/navigation/MochiBackButtonKt {
@@ -2552,6 +2624,161 @@ public final class ui/feice/mochi/shape/MochiContinuityKt {
 	public static final fun getMochiCapsule ()Landroidx/compose/ui/graphics/Shape;
 }
 
+public final class ui/feice/mochi/shape/MochiCornerScaleInfo {
+	public static final field $stable I
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getKeywords ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getRadiusDp ()I
+	public final fun getTitleZh ()Ljava/lang/String;
+	public final fun getUsageZh ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ui/feice/mochi/shape/MochiExpressiveShapes {
+	public static final field $stable I
+	public static final field INSTANCE Lui/feice/mochi/shape/MochiExpressiveShapes;
+	public static final field Version Ljava/lang/String;
+	public final fun byId (Ljava/lang/String;)Lui/feice/mochi/shape/MochiShapeInfo;
+	public final fun get (Ljava/lang/String;)Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getArch ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getArrow ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getBoom ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getBun ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getBurst ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getCatalog ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getCircle ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getClamShell ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getClover4Leaf ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getClover8Leaf ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getCookie12Sided ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getCookie4Sided ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getCookie6Sided ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getCookie7Sided ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getCookie9Sided ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getCornerScaleCatalog ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getDiamond ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getDrop ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getFan ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getFlower ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getGem ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getGhostish ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getHeart ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getHexagon ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getMaterialCatalog ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getOctagon ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getOval ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getPentagon ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getPill ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getPixelCircle ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getPixelTriangle ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getPuffy ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getPuffyDiamond ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSemiCircle ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getShield ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSlanted ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSoftBoom ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSoftBurst ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSquare ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSquircle ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getSunny ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getTriangle ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getVerySunny ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun search (Ljava/lang/String;Lui/feice/mochi/shape/MochiShapeCategory;Ljava/util/List;)Ljava/util/List;
+	public static synthetic fun search$default (Lui/feice/mochi/shape/MochiExpressiveShapes;Ljava/lang/String;Lui/feice/mochi/shape/MochiShapeCategory;Ljava/util/List;ILjava/lang/Object;)Ljava/util/List;
+	public final fun searchCorners (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class ui/feice/mochi/shape/MochiPolygon : androidx/compose/ui/graphics/Shape {
+	public static final field $stable I
+	public static final field Companion Lui/feice/mochi/shape/MochiPolygon$Companion;
+	public final fun aspectFitted (Z)Lui/feice/mochi/shape/MochiPolygon;
+	public static synthetic fun aspectFitted$default (Lui/feice/mochi/shape/MochiPolygon;ZILjava/lang/Object;)Lui/feice/mochi/shape/MochiPolygon;
+	public fun createOutline-Pq9zytI (JLandroidx/compose/ui/unit/LayoutDirection;Landroidx/compose/ui/unit/Density;)Landroidx/compose/ui/graphics/Outline;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAspectFit ()Z
+	public final fun getRotationDegrees ()F
+	public fun hashCode ()I
+	public final fun rotated (F)Lui/feice/mochi/shape/MochiPolygon;
+	public fun toString ()Ljava/lang/String;
+	public final fun writePath-eZhPAX0 (Landroidx/compose/ui/graphics/Path;JFFZ)V
+	public static synthetic fun writePath-eZhPAX0$default (Lui/feice/mochi/shape/MochiPolygon;Landroidx/compose/ui/graphics/Path;JFFZILjava/lang/Object;)V
+}
+
+public final class ui/feice/mochi/shape/MochiPolygon$Companion {
+	public final fun circle (I)Lui/feice/mochi/shape/MochiPolygon;
+	public static synthetic fun circle$default (Lui/feice/mochi/shape/MochiPolygon$Companion;IILjava/lang/Object;)Lui/feice/mochi/shape/MochiPolygon;
+	public final fun pill (FFF)Lui/feice/mochi/shape/MochiPolygon;
+	public static synthetic fun pill$default (Lui/feice/mochi/shape/MochiPolygon$Companion;FFFILjava/lang/Object;)Lui/feice/mochi/shape/MochiPolygon;
+	public final fun regular (IFFF)Lui/feice/mochi/shape/MochiPolygon;
+	public static synthetic fun regular$default (Lui/feice/mochi/shape/MochiPolygon$Companion;IFFFILjava/lang/Object;)Lui/feice/mochi/shape/MochiPolygon;
+	public final fun star (IFFFFFF)Lui/feice/mochi/shape/MochiPolygon;
+	public static synthetic fun star$default (Lui/feice/mochi/shape/MochiPolygon$Companion;IFFFFFFILjava/lang/Object;)Lui/feice/mochi/shape/MochiPolygon;
+	public final fun vertices (Ljava/util/List;FF)Lui/feice/mochi/shape/MochiPolygon;
+	public final fun vertices ([FFF)Lui/feice/mochi/shape/MochiPolygon;
+	public static synthetic fun vertices$default (Lui/feice/mochi/shape/MochiPolygon$Companion;Ljava/util/List;FFILjava/lang/Object;)Lui/feice/mochi/shape/MochiPolygon;
+	public static synthetic fun vertices$default (Lui/feice/mochi/shape/MochiPolygon$Companion;[FFFILjava/lang/Object;)Lui/feice/mochi/shape/MochiPolygon;
+}
+
+public final class ui/feice/mochi/shape/MochiShapeCategory : java/lang/Enum {
+	public static final field BurstAndStar Lui/feice/mochi/shape/MochiShapeCategory;
+	public static final field CookieAndOrganic Lui/feice/mochi/shape/MochiShapeCategory;
+	public static final field Geometric Lui/feice/mochi/shape/MochiShapeCategory;
+	public static final field PlayfulAndSymbol Lui/feice/mochi/shape/MochiShapeCategory;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getTitleEn ()Ljava/lang/String;
+	public final fun getTitleZh ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lui/feice/mochi/shape/MochiShapeCategory;
+	public static fun values ()[Lui/feice/mochi/shape/MochiShapeCategory;
+}
+
+public final class ui/feice/mochi/shape/MochiShapeInfo {
+	public static final field $stable I
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCategory ()Lui/feice/mochi/shape/MochiShapeCategory;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getKebabName ()Ljava/lang/String;
+	public final fun getKeywordsZh ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getShape ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getTags ()Lkotlinx/collections/immutable/ImmutableList;
+	public final fun getTitleEn ()Ljava/lang/String;
+	public final fun getTitleZh ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isMaterialExpressive ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ui/feice/mochi/shape/MochiShapeMorph {
+	public static final field $stable I
+	public fun <init> (Lui/feice/mochi/shape/MochiPolygon;Lui/feice/mochi/shape/MochiPolygon;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()Lui/feice/mochi/shape/MochiPolygon;
+	public final fun getStart ()Lui/feice/mochi/shape/MochiPolygon;
+	public fun hashCode ()I
+	public final fun shape (FFZ)Landroidx/compose/ui/graphics/Shape;
+	public static synthetic fun shape$default (Lui/feice/mochi/shape/MochiShapeMorph;FFZILjava/lang/Object;)Landroidx/compose/ui/graphics/Shape;
+	public final fun writePath-cwzpYnM (FLandroidx/compose/ui/graphics/Path;JFFZ)V
+	public static synthetic fun writePath-cwzpYnM$default (Lui/feice/mochi/shape/MochiShapeMorph;FLandroidx/compose/ui/graphics/Path;JFFZILjava/lang/Object;)V
+}
+
+public final class ui/feice/mochi/shape/MochiShapeMorphDefaults {
+	public static final field $stable I
+	public static final field INSTANCE Lui/feice/mochi/shape/MochiShapeMorphDefaults;
+	public final fun getCornerSpring ()Landroidx/compose/animation/core/AnimationSpec;
+	public final fun getPressDownSpring ()Landroidx/compose/animation/core/FiniteAnimationSpec;
+	public final fun getPressReleaseSpring ()Landroidx/compose/animation/core/FiniteAnimationSpec;
+	public final fun getSelectSpring ()Landroidx/compose/animation/core/FiniteAnimationSpec;
+	public final fun getSpring ()Landroidx/compose/animation/core/FiniteAnimationSpec;
+}
+
+public final class ui/feice/mochi/shape/MochiShapeMorphKt {
+	public static final fun rememberMochiAnimatedCornerShape--orJrPs (FLandroidx/compose/animation/core/AnimationSpec;Landroidx/compose/runtime/Composer;II)Landroidx/compose/ui/graphics/Shape;
+	public static final fun rememberMochiAnimatedCornerShape-Y9O4PVA (FFFFLandroidx/compose/animation/core/AnimationSpec;Landroidx/compose/runtime/Composer;II)Landroidx/compose/ui/graphics/Shape;
+	public static final fun rememberMochiInteractivePolygonShape (ZZLui/feice/mochi/shape/MochiPolygon;Lui/feice/mochi/shape/MochiPolygon;Lui/feice/mochi/shape/MochiPolygon;FZLandroidx/compose/runtime/Composer;II)Landroidx/compose/ui/graphics/Shape;
+	public static final fun rememberMochiMorphShape (Lui/feice/mochi/shape/MochiPolygon;Landroidx/compose/animation/core/AnimationSpec;FZLandroidx/compose/runtime/Composer;II)Landroidx/compose/ui/graphics/Shape;
+}
+
 public final class ui/feice/mochi/shape/MochiSuperellipse : androidx/compose/ui/graphics/Shape {
 	public static final field $stable I
 	public static final field Segments I
@@ -2756,6 +2983,7 @@ public final class ui/feice/mochi/theme/MochiGlassKt {
 }
 
 public final class ui/feice/mochi/theme/MochiGlassStyle : java/lang/Enum {
+	public static final field Frosted Lui/feice/mochi/theme/MochiGlassStyle;
 	public static final field Regular Lui/feice/mochi/theme/MochiGlassStyle;
 	public static final field Thick Lui/feice/mochi/theme/MochiGlassStyle;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
@@ -2879,23 +3107,36 @@ public final class ui/feice/mochi/theme/MochiMotionSchemeKt {
 public final class ui/feice/mochi/theme/MochiScrollEdge {
 	public static final field $stable I
 	public static final field Companion Lui/feice/mochi/theme/MochiScrollEdge$Companion;
-	public synthetic fun <init> (FFFILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (FFFLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (FFFLui/feice/mochi/theme/MochiTopBarStyle;FFFFFILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (FFFLui/feice/mochi/theme/MochiTopBarStyle;FFFFFLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1-D9Ej5fM ()F
 	public final fun component2 ()F
 	public final fun component3 ()F
-	public final fun copy-8Feqmps (FFF)Lui/feice/mochi/theme/MochiScrollEdge;
-	public static synthetic fun copy-8Feqmps$default (Lui/feice/mochi/theme/MochiScrollEdge;FFFILjava/lang/Object;)Lui/feice/mochi/theme/MochiScrollEdge;
+	public final fun component4 ()Lui/feice/mochi/theme/MochiTopBarStyle;
+	public final fun component5-D9Ej5fM ()F
+	public final fun component6-D9Ej5fM ()F
+	public final fun component7-D9Ej5fM ()F
+	public final fun component8-D9Ej5fM ()F
+	public final fun component9-D9Ej5fM ()F
+	public final fun copy-N9wVLo8 (FFFLui/feice/mochi/theme/MochiTopBarStyle;FFFFF)Lui/feice/mochi/theme/MochiScrollEdge;
+	public static synthetic fun copy-N9wVLo8$default (Lui/feice/mochi/theme/MochiScrollEdge;FFFLui/feice/mochi/theme/MochiTopBarStyle;FFFFFILjava/lang/Object;)Lui/feice/mochi/theme/MochiScrollEdge;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBlur-D9Ej5fM ()F
+	public final fun getExtent-D9Ej5fM ()F
 	public final fun getFill ()F
 	public final fun getFillDark ()F
+	public final fun getInset-D9Ej5fM ()F
+	public final fun getInsetBottom-D9Ej5fM ()F
+	public final fun getSoftness-D9Ej5fM ()F
+	public final fun getSoftnessBottom-D9Ej5fM ()F
+	public final fun getStyle ()Lui/feice/mochi/theme/MochiTopBarStyle;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
 public final class ui/feice/mochi/theme/MochiScrollEdge$Companion {
 	public final fun getDefault ()Lui/feice/mochi/theme/MochiScrollEdge;
+	public final fun of (Lui/feice/mochi/theme/MochiTopBarStyle;)Lui/feice/mochi/theme/MochiScrollEdge;
 }
 
 public final class ui/feice/mochi/theme/MochiShadowLevel {
@@ -3076,6 +3317,17 @@ public final class ui/feice/mochi/theme/MochiThemeKt {
 	public static final fun animateMochiColorScheme (Lui/feice/mochi/theme/MochiColorScheme;ZLandroidx/compose/runtime/Composer;II)Lui/feice/mochi/theme/MochiColorScheme;
 	public static final fun getLocalContentColor ()Landroidx/compose/runtime/ProvidableCompositionLocal;
 	public static final fun getLocalTextStyle ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
+public final class ui/feice/mochi/theme/MochiTopBarStyle : java/lang/Enum {
+	public static final field Frosted Lui/feice/mochi/theme/MochiTopBarStyle;
+	public static final field GradientBlur Lui/feice/mochi/theme/MochiTopBarStyle;
+	public static final field SolidFade Lui/feice/mochi/theme/MochiTopBarStyle;
+	public static final field TranslucentFade Lui/feice/mochi/theme/MochiTopBarStyle;
+	public final fun getBlurs ()Z
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lui/feice/mochi/theme/MochiTopBarStyle;
+	public static fun values ()[Lui/feice/mochi/theme/MochiTopBarStyle;
 }
 
 public final class ui/feice/mochi/theme/PaletteStyle : java/lang/Enum {

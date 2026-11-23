@@ -17,21 +17,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.coroutineScope
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import ui.feice.mochi.anim.MochiMotionTokens
-import ui.feice.mochi.shape.drawG2RoundRect
+import ui.feice.mochi.basic.parts.drawG2Capsule
+import ui.feice.mochi.basic.parts.mochiPointerInput
+import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
@@ -89,24 +95,52 @@ public fun MochiPageControl(
     maxVisible: Int = MochiPageControlDefaults.MaxVisible,
     colors: MochiPageControlColors = MochiPageControlDefaults.colors(),
 ) {
+    PageControlImpl(
+        pageCount = pageCount,
+        position = position,
+        onTapSelect = onPageSelect,
+        onScrubSelect = onPageSelect,
+        modifier = modifier,
+        maxVisible = maxVisible,
+        colors = colors,
+    )
+}
+
+@Composable
+private fun PageControlImpl(
+    pageCount: Int,
+    position: () -> Float,
+    onTapSelect: (Int) -> Unit,
+    onScrubSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    maxVisible: Int = MochiPageControlDefaults.MaxVisible,
+    colors: MochiPageControlColors = MochiPageControlDefaults.colors(),
+) {
+    if (pageCount <= 0) return
+    val safeMaxVisible = maxVisible.coerceAtLeast(1)
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
-    val select by rememberUpdatedState(onPageSelect)
+    val tapSelect by rememberUpdatedState(onTapSelect)
+    val scrubSelect by rememberUpdatedState(onScrubSelect)
     val scrub = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val visible = minOf(pageCount, maxVisible)
-    val scratch = remember { Path() }
+    val visible = minOf(pageCount, safeMaxVisible)
+    val trackCache = remember { G2PathCache() }
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val width = MochiPageControlDefaults.Pitch * visible + 16.dp
     Canvas(
         modifier
             .width(width)
             .height(MochiPageControlDefaults.Height)
-            .semantics { contentDescription = "第 ${position().toInt() + 1} 页，共 $pageCount 页" }
+            .semantics {
+                val cur = position().takeUnless(Float::isNaN)?.roundToInt()?.coerceIn(0, pageCount - 1) ?: 0
+                contentDescription = "第 ${cur + 1} 页，共 $pageCount 页"
+            }
             .graphicsLayer {
                 val s = 1f + 0.08f * scrub.value
                 scaleX = s
                 scaleY = s
             }
-            .pointerInput(pageCount, maxVisible) {
+            .mochiPointerInput(pageCount, safeMaxVisible, rtl) {
                 val pitch = MochiPageControlDefaults.Pitch.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown()
@@ -124,56 +158,70 @@ public fun MochiPageControl(
                         }
                     }
                     if (up == true) {
-                        val cur = position().let { kotlin.math.round(it).toInt() }
-                        val next = if (down.position.x < size.width / 2f) cur - 1 else cur + 1
+                        val cur = position().takeUnless(Float::isNaN)?.roundToInt()?.coerceIn(0, pageCount - 1) ?: 0
+                        val forward = if (rtl) down.position.x < size.width / 2f else down.position.x >= size.width / 2f
+                        val next = if (forward) cur + 1 else cur - 1
                         if (next in 0 until pageCount) {
                             haptics.tick()
-                            select(next)
+                            tapSelect(next)
                         }
                         return@awaitEachGesture
                     }
                     if (up == false) return@awaitEachGesture
                     scope.launch { scrub.animateTo(1f, MochiMotionTokens.PressDown) }
                     haptics.longPress()
-                    var last = kotlin.math.round(position()).toInt()
-                    while (true) {
-                        val e = awaitPointerEvent()
-                        val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!c.pressed) break
-                        c.consume()
-                        val i = PageControlGeometry.indexAt(c.position.x - size.width / 2f, position(), pageCount, maxVisible, pitch)
-                        if (i != last) {
-                            last = i
-                            haptics.tick()
-                            select(i)
+                    var last = position().takeUnless(Float::isNaN)?.roundToInt()?.coerceIn(0, pageCount - 1) ?: 0
+                    try {
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!c.pressed) break
+                            c.consume()
+                            val dx = if (rtl) size.width / 2f - c.position.x else c.position.x - size.width / 2f
+                            val curPos = position().takeUnless(Float::isNaN) ?: 0f
+                            val i = PageControlGeometry.indexAt(dx, curPos, pageCount, safeMaxVisible, pitch)
+                            if (i != last) {
+                                last = i
+                                haptics.tick()
+                                scrubSelect(i)
+                            }
                         }
+                    } finally {
+                        scope.launch { scrub.animateTo(0f, MochiMotionTokens.Settle) }
                     }
-                    scope.launch { scrub.animateTo(0f, MochiMotionTokens.Settle) }
                 }
             },
     ) {
-        val pos = position().coerceIn(0f, (pageCount - 1).coerceAtLeast(0).toFloat())
+        val rawPos = position().takeUnless(Float::isNaN) ?: 0f
+        val pos = rawPos.coerceIn(0f, (pageCount - 1).coerceAtLeast(0).toFloat())
         val dot = MochiPageControlDefaults.DotSize.toPx()
         val active = MochiPageControlDefaults.ActiveWidth.toPx()
         val pitch = MochiPageControlDefaults.Pitch.toPx()
         val sc = scrub.value
         if (sc > 0f) {
-            drawG2RoundRect(scratch, Rect(Offset.Zero, size), size.height / 2f, colors.track, alpha = sc.coerceIn(0f, 1f))
+            drawG2Capsule(trackCache, Rect(Offset.Zero, size), colors.track, alpha = sc.coerceIn(0f, 1f))
         }
-        val start = PageControlGeometry.windowStart(pos, pageCount, maxVisible)
+        val start = PageControlGeometry.windowStart(pos, pageCount, safeMaxVisible)
         val cx = size.width / 2f
         val cy = size.height / 2f
         val first = (start - 1f).toInt().coerceAtLeast(0)
         val last = (start + visible + 1f).toInt().coerceAtMost(pageCount - 1)
+        val isRtl = layoutDirection == LayoutDirection.Rtl
         for (i in first..last) {
-            val s = PageControlGeometry.dotScale(i, pos, pageCount, maxVisible)
+            val s = PageControlGeometry.dotScale(i, pos, pageCount, safeMaxVisible)
             if (s <= 0f) continue
             val w = PageControlGeometry.dotWidth(i, pos, dot, active) * s
             val h = dot * s
-            val x = cx + (i - start - (visible - 1) / 2f) * pitch
-            val t = (1f - kotlin.math.abs(i - pos)).coerceIn(0f, 1f)
+            val dx = (i - start - (visible - 1) / 2f) * pitch
+            val x = if (isRtl) cx - dx else cx + dx
+            val t = (1f - abs(i - pos)).coerceIn(0f, 1f)
             val color = androidx.compose.ui.graphics.lerp(colors.inactive, colors.active, t)
-            drawG2RoundRect(scratch, Rect(x - w / 2f, cy - h / 2f, x + w / 2f, cy + h / 2f), h / 2f, color)
+            if (abs(w - h) < 0.25f) {
+                drawCircle(color, radius = h / 2f, center = Offset(x, cy))
+            } else {
+                val r = h / 2f
+                drawRoundRect(color, topLeft = Offset(x - w / 2f, cy - r), size = Size(w, h), cornerRadius = CornerRadius(r, r))
+            }
         }
     }
 }
@@ -187,10 +235,18 @@ public fun MochiPageControl(
     colors: MochiPageControlColors = MochiPageControlDefaults.colors(),
 ) {
     val scope = rememberCoroutineScope()
-    MochiPageControl(
+    val scrollJob = remember { arrayOfNulls<Job>(1) }
+    PageControlImpl(
         pageCount = state.pageCount,
         position = { state.currentPage + state.currentPageOffsetFraction },
-        onPageSelect = { scope.launch { coroutineScope { state.animateScrollToPage(it) } } },
+        onTapSelect = { page ->
+            scrollJob[0]?.cancel()
+            scrollJob[0] = scope.launch { state.animateScrollToPage(page) }
+        },
+        onScrubSelect = { page ->
+            scrollJob[0]?.cancel()
+            scrollJob[0] = scope.launch { state.scrollToPage(page) }
+        },
         modifier = modifier,
         maxVisible = maxVisible,
         colors = colors,

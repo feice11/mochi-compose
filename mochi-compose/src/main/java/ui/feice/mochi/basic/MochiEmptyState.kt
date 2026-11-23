@@ -52,6 +52,17 @@ public fun MochiEmptyState(
 ) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
+    val bodyStyle = MochiTheme.textStyles.body
+    val subheadStyle = MochiTheme.textStyles.subhead
+    val titleStyle = remember(bodyStyle) {
+        bodyStyle.copy(
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+    }
+    val messageStyle = remember(subheadStyle) { subheadStyle.copy(textAlign = TextAlign.Center) }
     MochiBlurVisibility(shown, modifier.fillMaxWidth()) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 24.dp),
@@ -66,18 +77,13 @@ public fun MochiEmptyState(
             }
             Text(
                 title,
-                style = MochiTheme.textStyles.body.copy(
-                    fontSize = 22.sp,
-                    lineHeight = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                ),
+                style = titleStyle,
                 color = MochiTheme.colorScheme.onSurface,
             )
             if (message != null) {
                 Text(
                     message,
-                    style = MochiTheme.textStyles.subhead.copy(textAlign = TextAlign.Center),
+                    style = messageStyle,
                     color = MochiTheme.colorScheme.onSurfaceVariant,
                 )
             }

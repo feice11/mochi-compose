@@ -3,146 +3,25 @@
 
 package ui.feice.mochi.basic.menu
 
-import android.os.Build
-import android.provider.Settings
-import android.view.View
-import android.view.ViewGroup
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCompositionContext
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
-import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sign
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotion
-import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.MochiAlign
 import ui.feice.mochi.basic.MochiOpenMode
 import ui.feice.mochi.basic.MochiStyle
-import ui.feice.mochi.effect.elastic.MochiRubberBandState
-import ui.feice.mochi.effect.elastic.jellyCrossScale
 import ui.feice.mochi.effect.elastic.jellyStretch
-import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
 import ui.feice.mochi.effect.elastic.rubberStretched
-import ui.feice.mochi.effect.glow.MochiGlowDefaults
-import ui.feice.mochi.effect.glow.MochiGlowSpec
-import ui.feice.mochi.effect.glow.MochiGlowState
-import ui.feice.mochi.effect.glow.mochiGlow
-import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.effect.metaball.MochiBlob
-import ui.feice.mochi.effect.metaball.MochiMetaballColors
 import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
-import ui.feice.mochi.effect.metaball.drawMochiMetaball
 import ui.feice.mochi.effect.metaball.proximityFuse
-import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
-import ui.feice.mochi.gesture.MochiCallbacks
-import ui.feice.mochi.gesture.MochiController
-import ui.feice.mochi.gesture.mochiButtonGesture
-import ui.feice.mochi.overlay.InWindowOverlay
-import ui.feice.mochi.shape.G2PathCache
-import ui.feice.mochi.shape.G2RectClipShape
-import ui.feice.mochi.shape.addG2RoundRect
-import ui.feice.mochi.shape.continuityFor
-import ui.feice.mochi.theme.LocalContentColor
-import ui.feice.mochi.theme.MochiTheme
-import ui.feice.mochi.utils.MochiHapticProfile
-import ui.feice.mochi.utils.MochiHaptics
 import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.smoothstep
-import ui.feice.mochi.utils.windowOriginOnScreen
 
 // ───────────────────────── 几何 ─────────────────────────
 
@@ -214,8 +93,9 @@ internal fun computeTarget(
     safeBottom: Float = 0f,
     headerPx: Float = 0f,
 ): Pair<Rect, Boolean> {
-    // 锚点是按钮时面板至少和按钮一样宽；锚点是大卡片（长按预览）时按菜单自己的宽度
-    val w = if (matchAnchorWidth) max(px.menuWidth, button.width) else px.menuWidth
+    // 锚点是按钮时面板至少和按钮一样宽；锚点是大卡片（长按预览）时按菜单自己的宽度；窄屏或分屏下不超过容器可用宽度
+    val maxW = (container.width - px.margin * 2f).coerceAtLeast(1f)
+    val w = min(if (matchAnchorWidth) max(px.menuWidth, button.width) else px.menuWidth, maxW)
     val wanted = itemCount * px.itemHeight + px.panelPadding * 2f + headerPx
     val cover = mode == MochiOpenMode.Cover
     // 长列表最多伸到状态栏下面一点、导航栏上面一点（safeTop / safeBottom 是系统栏占的高度）

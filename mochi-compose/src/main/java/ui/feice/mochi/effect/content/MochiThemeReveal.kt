@@ -7,13 +7,18 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.BlurMaskFilter
+import android.graphics.RuntimeShader
+import android.graphics.Shader as AndroidShader
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.PixelCopy
 import android.view.View
+import android.view.Window
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -29,18 +34,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.scale
@@ -50,10 +53,10 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.resume
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -62,8 +65,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.navigation.MochiScreenCorners
 import ui.feice.mochi.navigation.rememberMochiScreenCorners
+import ui.feice.mochi.shape.addG2RoundRect
 import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.utils.smoothstep
 
@@ -72,11 +77,12 @@ import ui.feice.mochi.utils.smoothstep
  * 用 [rememberMochiThemeRevealState] 创建，交给 [MochiThemeRevealHost]。
  */
 @Stable
-public class MochiThemeRevealState internal constructor(private val scope: CoroutineScope, private val animate: Boolean) {
+public class MochiThemeRevealState internal constructor(private val scope: CoroutineScope) {
     internal var view: View? = null
     internal var bounds: Rect = Rect.Zero
     internal var lastPress: Offset? = null
     internal var corners: MochiScreenCorners = MochiScreenCorners.None
+    internal var reduceMotion: Boolean = false
 
     internal var frozen by mutableStateOf<ImageBitmap?>(null)
     internal var origin by mutableStateOf(Offset.Zero)
@@ -89,6 +95,7 @@ public class MochiThemeRevealState internal constructor(private val scope: Corou
     // 每次点一下 +1；拍照回来时已经有更新的点击，就把自己的改动交给最新的那次一起做
     private var generation = 0
     private val pending = mutableListOf<() -> Unit>()
+    private var capturing: Job? = null
     private var running: Job? = null
 
     /**
@@ -118,11 +125,27 @@ public class MochiThemeRevealState internal constructor(private val scope: Corou
         start(null, fade = true, change)
     }
 
+    internal fun abortOnResize() {
+        generation++
+        capturing?.cancel()
+        capturing = null
+        running?.cancel()
+        running = null
+        frozen = null
+        isRevealing = false
+        flush()
+    }
+
+    private fun shouldAnimate(v: View): Boolean {
+        if (reduceMotion) return false
+        return Settings.Global.getFloat(v.context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+    }
+
     private fun start(origin: Offset?, fade: Boolean, change: () -> Unit) {
         val view = view
         val b = bounds
-        if (!animate || (!fade && !MochiGraphics.reveal) || view == null || b.width < 1f || b.height < 1f ||
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+        if (view == null || !shouldAnimate(view) || (!fade && !MochiGraphics.reveal) ||
+            b.width < 1f || b.height < 1f || Build.VERSION.SDK_INT < Build.VERSION_CODES.O
         ) {
             flush()
             change()
@@ -131,9 +154,16 @@ public class MochiThemeRevealState internal constructor(private val scope: Corou
         val from = origin ?: lastPress ?: Offset(b.width / 2f, b.height / 2f)
         val gen = ++generation
         pending += change
-        scope.launch {
+        // 立刻取消上一轮尚未完成的截屏请求，避免连点时排队积压多张整屏位图
+        capturing?.cancel()
+        capturing = scope.launch {
             val shot = captureWindow(view, b)
-            if (gen != generation) return@launch
+            if (gen != generation) {
+                // 这张截图已被更新的点击取代且从未赋给 frozen 上屏，安全立即回收底层硬件缓冲
+                shot?.recycleSafely()
+                return@launch
+            }
+            capturing = null
             running?.cancel()
             running = coroutineContext[Job]
             if (shot == null) {
@@ -145,17 +175,17 @@ public class MochiThemeRevealState internal constructor(private val scope: Corou
             val chained = frozen != null
             crossfading = fade
             // 两种转场期间配色都一步到位：新画面盖在截图下面，不需要再插值；
-            // 插值时整棵树每帧都要重组，正是模糊转场「顿一下」的来源
-            isRevealing = true
-            frozen = shot
-            this@MochiThemeRevealState.origin = from
-            fromScale = if (chained) ChainScale else StartScale
-            progress.snapTo(0f)
-            withFrameNanos { }
-            flush()
-            withFrameNanos { }
-            withFrameNanos { }
+            // try/finally 包住整个上屏与等待阶段，确保任何协程取消都不会永久残留 frozen 或漏掉待执行变更
             try {
+                isRevealing = true
+                frozen = shot
+                this@MochiThemeRevealState.origin = from
+                fromScale = if (chained) ChainScale else StartScale
+                progress.snapTo(0f)
+                withFrameNanos { }
+                flush()
+                withFrameNanos { }
+                withFrameNanos { }
                 val millis = if (fade) {
                     FadeMillis
                 } else if (chained) {
@@ -166,6 +196,7 @@ public class MochiThemeRevealState internal constructor(private val scope: Corou
                 progress.animateTo(1f, tween(millis, easing = if (fade) FadeEasing else RevealEasing))
             } finally {
                 if (gen == generation) {
+                    flush()
                     frozen = null
                     isRevealing = false
                 }
@@ -174,10 +205,15 @@ public class MochiThemeRevealState internal constructor(private val scope: Corou
     }
 
     private fun flush() {
+        if (pending.isEmpty()) return
         val changes = pending.toList()
         pending.clear()
         changes.forEach { it() }
     }
+}
+
+private fun ImageBitmap.recycleSafely() {
+    runCatching { asAndroidBitmap().recycle() }
 }
 
 /**
@@ -195,24 +231,40 @@ private suspend fun captureWindow(view: View, bounds: Rect): ImageBitmap? {
         bounds.bottom.roundToInt(),
     )
     if (src.width() <= 0 || src.height() <= 0) return null
-    val bitmap = runCatching { Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888) }.getOrNull() ?: return null
-    val ok = suspendCancellableCoroutine { cont ->
-        try {
-            PixelCopy.request(
-                window,
-                src,
-                bitmap,
-                { result -> if (cont.isActive) cont.resume(result == PixelCopy.SUCCESS) },
-                Handler(Looper.getMainLooper()),
-            )
-        } catch (e: IllegalArgumentException) {
-            if (cont.isActive) cont.resume(false)
+    return Api26PixelCopy.capture(window, src)
+}
+
+@RequiresApi(26)
+private object Api26PixelCopy {
+    suspend fun capture(window: Window, src: android.graphics.Rect): ImageBitmap? {
+        val bitmap = runCatching { Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888) }.getOrNull() ?: return null
+        val ok = suspendCancellableCoroutine { cont ->
+            try {
+                PixelCopy.request(
+                    window,
+                    src,
+                    bitmap,
+                    { result ->
+                        if (cont.isActive && result == PixelCopy.SUCCESS) {
+                            cont.resume(true)
+                        } else {
+                            // PixelCopy 底层已写完：失败或等待期间被取消都立即回收整屏软件位图，不留给 GC
+                            bitmap.recycle()
+                            if (cont.isActive) cont.resume(false)
+                        }
+                    },
+                    Handler(Looper.getMainLooper()),
+                )
+            } catch (_: IllegalArgumentException) {
+                bitmap.recycle()
+                if (cont.isActive) cont.resume(false)
+            }
         }
+        if (!ok) return null
+        val hardware = runCatching { bitmap.copy(Bitmap.Config.HARDWARE, false) }.getOrNull()
+        if (hardware != null) bitmap.recycle()
+        return (hardware ?: bitmap).asImageBitmap()
     }
-    if (!ok) return null
-    val hardware = runCatching { bitmap.copy(Bitmap.Config.HARDWARE, false) }.getOrNull()
-    if (hardware != null) bitmap.recycle()
-    return (hardware ?: bitmap).asImageBitmap()
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
@@ -242,15 +294,11 @@ public fun MochiThemeRevealState?.crossfadeOrChange(change: () -> Unit) {
     if (this == null) change() else crossfade(change)
 }
 
-/** 创建揭开转场的状态。系统关掉动画时 [MochiThemeRevealState.reveal] 直接执行改动。 */
+/** 创建揭开转场的状态。系统关掉动画或开启减弱动态效果时 [MochiThemeRevealState.reveal] 直接执行改动。 */
 @Composable
 public fun rememberMochiThemeRevealState(): MochiThemeRevealState {
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    return remember(scope) {
-        val animate = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
-        MochiThemeRevealState(scope, animate)
-    }
+    return remember(scope) { MochiThemeRevealState(scope) }
 }
 
 /**
@@ -268,13 +316,26 @@ public fun rememberMochiThemeRevealState(): MochiThemeRevealState {
 public fun MochiThemeRevealHost(state: MochiThemeRevealState, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     state.view = LocalView.current
     state.corners = rememberMochiScreenCorners()
-    val layerPaint = remember { Paint() }
-    val holePaint = remember { Paint().apply { blendMode = BlendMode.DstOut } }
-    val glowPaint = remember { Paint().apply { style = PaintingStyle.Stroke } }
-    val hole = remember { Path() }
+    state.reduceMotion = mochiReduceMotion()
+    val revealShader = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            runCatching { Api33RevealShader() }.getOrNull()
+        } else {
+            null
+        }
+    }
+    val fallbackPainter = remember { FallbackRevealPainter() }
     Box(
         modifier
-            .onGloballyPositioned { state.bounds = it.boundsInWindow() }
+            .onGloballyPositioned { coords ->
+                val nextBounds = coords.boundsInWindow()
+                val shot = state.frozen
+                // 旋转屏幕、折叠屏展开或分屏调整大小时旧截图坐标已失配，立即结束残影防半屏撕裂
+                if (shot != null && (abs(nextBounds.width - shot.width) > 2f || abs(nextBounds.height - shot.height) > 2f)) {
+                    state.abortOnResize()
+                }
+                state.bounds = nextBounds
+            }
             .pointerInput(state) {
                 // 只记住按下的位置，不消费：揭开的中心默认就在手指那里
                 awaitPointerEventScope {
@@ -284,22 +345,18 @@ public fun MochiThemeRevealHost(state: MochiThemeRevealState, modifier: Modifier
                     }
                 }
             }
-            // 模糊交叉淡化：底下的新画面从模糊里清晰起来（半径逐帧连续，不用分级缓存，免得一级一级跳）
-            .graphicsLayer {
-                val r = if (state.frozen != null && state.crossfading) {
-                    (1f - state.progress.value) * FadeInBlur.toPx() * MochiGraphics.blurScale
-                } else {
-                    0f
-                }
-                renderEffect = if (MochiGraphics.blur && r > 0.5f) BlurEffect(r, r, TileMode.Clamp) else null
-            }
             .drawWithContent {
                 val shot = state.frozen
-                if (shot == null) {
+                if (shot == null || state.crossfading) {
+                    if (shot == null && revealShader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        revealShader.clearShot()
+                    }
                     drawContent()
                     return@drawWithContent
                 }
-                if (state.crossfading) {
+                val w = size.width
+                val h = size.height
+                if (abs(w - shot.width) > 2f || abs(h - shot.height) > 2f) {
                     drawContent()
                     return@drawWithContent
                 }
@@ -308,8 +365,6 @@ public fun MochiThemeRevealHost(state: MochiThemeRevealState, modifier: Modifier
                 scale(s, s) { this@drawWithContent.drawContent() }
 
                 val o = state.origin
-                val w = size.width
-                val h = size.height
                 val c = state.corners
                 val dTl = hypot(o.x, o.y)
                 val dTr = hypot(w - o.x, o.y)
@@ -319,72 +374,215 @@ public fun MochiThemeRevealHost(state: MochiThemeRevealState, modifier: Modifier
                 val r = far * p
                 // 圆的外接方框，碰到屏幕边就贴边
                 val rect = Rect(max(0f, o.x - r), max(0f, o.y - r), min(w, o.x + r), min(h, o.y + r))
+                if (rect.width <= 0.5f || rect.height <= 0.5f) {
+                    drawImage(shot)
+                    return@drawWithContent
+                }
+
+                val halfMin = min(rect.width, rect.height) / 2f
 
                 // 每个角：洞还没够到那个屏幕角时是圆（半径 r），越接近越收成屏幕的圆角
-                fun corner(d: Float, screen: Float): CornerRadius {
+                fun cornerPx(d: Float, screen: Float): Float {
                     val k = smoothstep(0f, 1f, (r - d * 0.55f) / (d * 0.45f + 1f))
-                    val v = (r + (screen - r) * k).coerceIn(0f, min(rect.width, rect.height) / 2f)
-                    return CornerRadius(v)
+                    return (r + (screen - r) * k).coerceIn(0f, halfMin)
                 }
-                hole.reset()
-                if (rect.width > 0f && rect.height > 0f) {
-                    hole.addRoundRect(
-                        RoundRect(
-                            rect,
-                            topLeft = corner(dTl, c.topLeft),
-                            topRight = corner(dTr, c.topRight),
-                            bottomRight = corner(dBr, c.bottomRight),
-                            bottomLeft = corner(dBl, c.bottomLeft),
-                        ),
-                    )
-                }
-                // 羽化随进度收掉：最后一刻边缘是清楚的，正好就是屏幕的轮廓
-                // 图形档位「中」：清楚的硬边，没有光晕
+
+                val tl = cornerPx(dTl, c.topLeft)
+                val tr = cornerPx(dTr, c.topRight)
+                val br = cornerPx(dBr, c.bottomRight)
+                val bl = cornerPx(dBl, c.bottomLeft)
+                // 羽化随进度收掉：最后一刻边缘是清楚的，正好就是屏幕的轮廓；图形档位「中」是硬边无光晕
                 val soft = MochiGraphics.softReveal
                 val feather = if (soft) 20.dp.toPx() * (1f - p) else 0f
-                drawIntoCanvas { canvas ->
-                    canvas.saveLayer(Rect(0f, 0f, w, h), layerPaint)
-                    drawImage(shot)
-                    if (!hole.isEmpty) {
-                        holePaint.asFrameworkPaint().maskFilter =
-                            if (feather > 0.5f) BlurMaskFilter(feather, BlurMaskFilter.Blur.NORMAL) else null
-                        canvas.drawPath(hole, holePaint)
-                    }
-                    canvas.restore()
-                    // 洞口一圈淡光，揭到后面慢慢淡掉
-                    val glow = 0.16f * (1f - p)
-                    if (!hole.isEmpty && glow > 0.005f && feather > 1f) {
-                        glowPaint.color = Color.White.copy(alpha = glow)
-                        glowPaint.strokeWidth = feather
-                        glowPaint.asFrameworkPaint().maskFilter = BlurMaskFilter(feather, BlurMaskFilter.Blur.NORMAL)
-                        canvas.drawPath(hole, glowPaint)
-                    }
+                val glow = if (soft && feather > 1f) 0.16f * (1f - p) else 0f
+
+                if (MochiGraphics.shaders && revealShader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    revealShader.update(shot, rect, tl, tr, br, bl, feather, glow)
+                    drawRect(brush = revealShader.brush)
+                } else {
+                    fallbackPainter.draw(this, shot, w, h, rect, tl, tr, br, bl, feather, glow)
                 }
             },
     ) {
         content()
-        // 模糊交叉淡化：旧画面盖在上面，变糊、淡出
+        // 模糊交叉淡化：底层新主题直接显现（零全屏实时模糊）；
+        // 顶层旧截图仅烘焙 1 次静态低清模糊纹理（continuous = false），剩余帧纯 GPU alpha + 微缩放淡出
         val shot = state.frozen
         if (shot != null && state.crossfading) {
-            Canvas(
-                Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        val p = state.progress.value
-                        alpha = 1f - p
-                        // 半径逐帧连续变化，不用按 1.5 倍分级缓存的模糊，否则会一级一级地跳（之前「顿一下」的来源）
-                        val r = p * FadeOutBlur.toPx() * MochiGraphics.blurScale
-                        renderEffect = if (MochiGraphics.blur && r > 0.5f) BlurEffect(r, r, TileMode.Decal) else null
-                    },
-            ) { drawImage(shot) }
+            if (MochiGraphics.blur) {
+                Canvas(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            val p = state.progress.value
+                            val s = 1f + CrossfadeScaleDelta * p
+                            scaleX = s
+                            scaleY = s
+                            val blurIn = smoothstep(0f, CrossfadeBlurInEnd, p)
+                            mochiBlurAlpha((1f - p) * blurIn, FadeOutBlur)
+                        }
+                        .mochiBlur(continuous = false) { FadeOutBlur },
+                ) { drawImage(shot) }
+                Canvas(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            val p = state.progress.value
+                            val s = 1f + CrossfadeScaleDelta * p
+                            scaleX = s
+                            scaleY = s
+                            val blurIn = smoothstep(0f, CrossfadeBlurInEnd, p)
+                            alpha = (1f - p) * (1f - blurIn)
+                        },
+                ) { drawImage(shot) }
+            } else {
+                Canvas(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            val p = state.progress.value
+                            val s = 1f + CrossfadeScaleDelta * p
+                            scaleX = s
+                            scaleY = s
+                            alpha = 1f - p
+                        },
+                ) { drawImage(shot) }
+            }
+        }
+    }
+}
+
+/**
+ * API 33+ 单遍 AGSL 揭开着色器：直接在单次 GPU Pass 内采样截图、按四角圆角矩形解析距离场平滑挖洞并叠加洞口柔光，
+ * 省掉整屏 `saveLayer` 离屏缓冲与每帧两次 CPU `BlurMaskFilter` 全屏光栅化。
+ */
+@RequiresApi(33)
+private class Api33RevealShader {
+    private val shader = RuntimeShader(REVEAL_HOLE_AGSL)
+    val brush = ShaderBrush(shader)
+    private var boundShot: ImageBitmap? = null
+
+    fun update(shot: ImageBitmap, rect: Rect, tl: Float, tr: Float, br: Float, bl: Float, feather: Float, glow: Float) {
+        if (boundShot !== shot) {
+            boundShot = shot
+            val shotShader = BitmapShader(shot.asAndroidBitmap(), AndroidShader.TileMode.CLAMP, AndroidShader.TileMode.CLAMP).apply {
+                filterMode = BitmapShader.FILTER_MODE_LINEAR
+            }
+            shader.setInputShader("uShot", shotShader)
+        }
+        shader.setFloatUniform("uRect", rect.left, rect.top, rect.right, rect.bottom)
+        shader.setFloatUniform("uCorners", tl, tr, br, bl)
+        shader.setFloatUniform("uFeatherGlow", feather, glow)
+    }
+
+    fun clearShot() {
+        if (boundShot != null) {
+            boundShot = null
+            shader.setInputShader("uShot", EmptyShotShader)
+        }
+    }
+
+    private companion object {
+        val EmptyShotShader: BitmapShader by lazy(LazyThreadSafetyMode.PUBLICATION) {
+            val px = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8)
+            BitmapShader(px, AndroidShader.TileMode.CLAMP, AndroidShader.TileMode.CLAMP)
+        }
+    }
+}
+
+private const val REVEAL_HOLE_AGSL = """
+uniform shader uShot;
+uniform float4 uRect;
+uniform float4 uCorners;
+uniform float2 uFeatherGlow;
+
+half4 main(float2 fragCoord) {
+    float2 center = 0.5 * (uRect.xy + uRect.zw);
+    float2 halfSize = 0.5 * (uRect.zw - uRect.xy);
+    float2 rel = fragCoord - center;
+    float r = rel.x > 0.0
+        ? (rel.y > 0.0 ? uCorners.z : uCorners.y)
+        : (rel.y > 0.0 ? uCorners.w : uCorners.x);
+    float2 q = abs(rel) - halfSize + r;
+    float d = min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+
+    float feather = uFeatherGlow.x;
+    float halfBand = max(feather * 1.15, 0.5);
+    float shotMask = smoothstep(-halfBand, halfBand, d);
+
+    float glowPeak = uFeatherGlow.y;
+    float glowA = 0.0;
+    if (glowPeak > 0.005 && feather > 1.0) {
+        float t = clamp(1.0 - abs(d) / (feather * 1.35), 0.0, 1.0);
+        glowA = glowPeak * 0.65 * t * t * (3.0 - 2.0 * t);
+    }
+    if (shotMask <= 0.0005 && glowA <= 0.0005) {
+        return half4(0.0);
+    }
+    half4 base = uShot.eval(fragCoord) * half(shotMask);
+    half ga = half(glowA);
+    return half4(ga) + base * (half(1.0) - ga);
+}
+"""
+
+/** API 26~32 或中档图形档位的回退画法：使用 G2 连续圆角路径，单帧共享并按量化半径复用同一个 BlurMaskFilter */
+private class FallbackRevealPainter {
+    private val layerPaint = Paint()
+    private val holePaint = Paint().apply { blendMode = BlendMode.DstOut }
+    private val glowPaint = Paint().apply { style = PaintingStyle.Stroke }
+    private val hole = Path()
+    private var cachedMaskRadius = -1f
+    private var cachedMaskFilter: BlurMaskFilter? = null
+
+    private fun maskFilterFor(feather: Float): BlurMaskFilter? {
+        if (feather <= 0.5f) return null
+        val quantized = (feather * 4f).roundToInt() / 4f
+        if (quantized != cachedMaskRadius) {
+            cachedMaskRadius = quantized
+            cachedMaskFilter = BlurMaskFilter(quantized, BlurMaskFilter.Blur.NORMAL)
+        }
+        return cachedMaskFilter
+    }
+
+    fun draw(
+        scope: androidx.compose.ui.graphics.drawscope.DrawScope,
+        shot: ImageBitmap,
+        w: Float,
+        h: Float,
+        rect: Rect,
+        tl: Float,
+        tr: Float,
+        br: Float,
+        bl: Float,
+        feather: Float,
+        glow: Float,
+    ) {
+        hole.reset()
+        hole.addG2RoundRect(rect, tl, tr, br, bl)
+        val filter = maskFilterFor(feather)
+        scope.drawIntoCanvas { canvas ->
+            canvas.saveLayer(Rect(0f, 0f, w, h), layerPaint)
+            scope.drawImage(shot)
+            if (!hole.isEmpty) {
+                holePaint.asFrameworkPaint().maskFilter = filter
+                canvas.drawPath(hole, holePaint)
+            }
+            canvas.restore()
+            if (!hole.isEmpty && glow > 0.005f && filter != null) {
+                glowPaint.color = Color.White.copy(alpha = glow)
+                glowPaint.strokeWidth = feather
+                glowPaint.asFrameworkPaint().maskFilter = filter
+                canvas.drawPath(hole, glowPaint)
+            }
         }
     }
 }
 
 private const val RevealMillis = 640
 private const val FadeMillis = 500
-private val FadeInBlur = 12.dp
 private val FadeOutBlur = 18.dp
+private const val CrossfadeBlurInEnd = 0.35f
+private const val CrossfadeScaleDelta = 0.015f
 
 // 模糊交叉淡化：和配色插值（420ms FastOutSlowIn）差不多的节奏
 private val FadeEasing = CubicBezierEasing(0.33f, 0f, 0.2f, 1f)

@@ -14,15 +14,26 @@ import ui.feice.mochi.shape.MochiRoundedRectangle
  */
 @Immutable
 public data class MochiShapes(
-    val extraSmall: Shape = MochiRoundedRectangle(4.dp),
-    val small: Shape = MochiRoundedRectangle(8.dp),
-    val medium: Shape = MochiRoundedRectangle(12.dp),
-    val large: Shape = MochiRoundedRectangle(16.dp),
-    val largeIncreased: Shape = MochiRoundedRectangle(20.dp),
-    val extraLarge: Shape = MochiRoundedRectangle(28.dp),
-    val extraLargeIncreased: Shape = MochiRoundedRectangle(32.dp),
-    val extraExtraLarge: Shape = MochiRoundedRectangle(48.dp),
+    val extraSmall: Shape = ShapeExtraSmall,
+    val small: Shape = ShapeSmall,
+    val medium: Shape = ShapeMedium,
+    val large: Shape = ShapeLarge,
+    val largeIncreased: Shape = ShapeLargeIncreased,
+    val extraLarge: Shape = ShapeExtraLarge,
+    val extraLargeIncreased: Shape = ShapeExtraLargeIncreased,
+    val extraExtraLarge: Shape = ShapeExtraExtraLarge,
     val full: Shape = MochiCapsule,
 )
 
-public fun defaultShapes(): MochiShapes = MochiShapes()
+private val ShapeExtraSmall: Shape = MochiRoundedRectangle(4.dp)
+private val ShapeSmall: Shape = MochiRoundedRectangle(8.dp)
+private val ShapeMedium: Shape = MochiRoundedRectangle(12.dp)
+private val ShapeLarge: Shape = MochiRoundedRectangle(16.dp)
+private val ShapeLargeIncreased: Shape = MochiRoundedRectangle(20.dp)
+private val ShapeExtraLarge: Shape = MochiRoundedRectangle(28.dp)
+private val ShapeExtraLargeIncreased: Shape = MochiRoundedRectangle(32.dp)
+private val ShapeExtraExtraLarge: Shape = MochiRoundedRectangle(48.dp)
+
+private val DefaultShapes = MochiShapes()
+
+public fun defaultShapes(): MochiShapes = DefaultShapes

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -36,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -45,8 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -54,17 +52,23 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
+import androidx.compose.ui.unit.isSpecified
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotionTokens
-import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.MochiRefreshIndicator
+import ui.feice.mochi.basic.MochiRefreshState
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.basic.mochiRefreshHold
 import ui.feice.mochi.basic.rememberMochiRefreshState
@@ -72,15 +76,14 @@ import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.mochiBlur
 import ui.feice.mochi.effect.content.mochiBlurAlpha
 import ui.feice.mochi.effect.content.mochiRevealBlur
-import ui.feice.mochi.effect.glass.GlassScrollWhile
-import ui.feice.mochi.effect.glass.GlassSource
+import ui.feice.mochi.effect.glass.GlassScroll
 import ui.feice.mochi.effect.glass.LocalGlassSources
 import ui.feice.mochi.effect.glass.LocalMochiBackdrop
 import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
 import ui.feice.mochi.effect.glass.MochiNoGlassShadow
-import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
-import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
+import ui.feice.mochi.effect.glass.rememberSolidBackdrop
+import ui.feice.mochi.effect.mask.mochiScrollEdgeBlurSource
 import ui.feice.mochi.effect.overscroll.MochiOverscrollEffect
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
@@ -89,7 +92,6 @@ import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.withMochiItemAnimation
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
-import ui.feice.mochi.theme.mochiOpticalLeading
 import ui.feice.mochi.utils.smoothstep
 
 /**
@@ -139,7 +141,7 @@ public fun MochiLargeTitleScaffold(
         barHeight = barHeight,
         contentSpacing = contentSpacing,
         onRefresh = onRefresh,
-        body = columnBody(scrollState, content),
+        body = { b -> ColumnBody(scrollState, b, content) },
     )
 }
 
@@ -180,7 +182,7 @@ public fun MochiCompactTitleScaffold(
         barHeight = barHeight,
         contentSpacing = contentSpacing,
         onRefresh = onRefresh,
-        body = columnBody(scrollState, content),
+        body = { b -> ColumnBody(scrollState, b, content) },
     )
 }
 
@@ -205,6 +207,7 @@ public fun MochiLazyLargeTitleScaffold(
     onRefresh: (suspend () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
+    val currentContent by rememberUpdatedState(content)
     MochiTitleScaffold(
         largeTitle = true,
         title = title,
@@ -218,7 +221,7 @@ public fun MochiLazyLargeTitleScaffold(
         barHeight = barHeight,
         contentSpacing = contentSpacing,
         onRefresh = onRefresh,
-        body = lazyBody(listState, content),
+        body = { b -> LazyBody(listState, b, currentContent) },
     )
 }
 
@@ -238,6 +241,7 @@ public fun MochiLazyCompactTitleScaffold(
     onRefresh: (suspend () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
+    val currentContent by rememberUpdatedState(content)
     MochiTitleScaffold(
         largeTitle = false,
         title = title,
@@ -251,11 +255,12 @@ public fun MochiLazyCompactTitleScaffold(
         barHeight = barHeight,
         contentSpacing = contentSpacing,
         onRefresh = onRefresh,
-        body = lazyBody(listState, content),
+        body = { b -> LazyBody(listState, b, currentContent) },
     )
 }
 
 /** 标题骨架读滚动位置：[value] 是滚过的距离（px），懒加载列表滚过第 0 项（标题区）以后按很远算 */
+@Stable
 private class TitleScroll(
     val key: Any,
     val list: LazyListState?,
@@ -271,17 +276,19 @@ private fun rememberTitleScroll(state: ScrollState): TitleScroll = remember(stat
 
 @Composable
 private fun rememberTitleScroll(state: LazyListState): TitleScroll = remember(state) {
+    val pastFirst = derivedStateOf { state.firstVisibleItemIndex > 0 }
     TitleScroll(
         state,
         state,
-        { if (state.firstVisibleItemIndex > 0) Float.MAX_VALUE / 4f else state.firstVisibleItemScrollOffset.toFloat() },
+        { if (pastFirst.value) Float.MAX_VALUE / 4f else state.firstVisibleItemScrollOffset.toFloat() },
         { state.isScrollInProgress },
         { state.animateScrollToItem(0, it) },
     )
 }
 
 /** 正文容器拿到的东西：容器自己的修饰（铺满 + 顶栏下的模糊）、越界效果、紧凑页的刷新留白、顶部留白、分组间距、标题区（没有时 null） */
-private class TitleBodyParams(
+@Stable
+private data class TitleBodyParams(
     val modifier: Modifier,
     val overscroll: MochiOverscrollEffect,
     val fling: FlingBehavior,
@@ -294,16 +301,32 @@ private class TitleBodyParams(
 
 private typealias TitleBody = @Composable (TitleBodyParams) -> Unit
 
-private fun columnBody(state: ScrollState, content: @Composable ColumnScope.() -> Unit): TitleBody = { b ->
+@Composable
+private fun ColumnBody(state: ScrollState, b: TitleBodyParams, content: @Composable ColumnScope.() -> Unit) {
     // 内容不满一屏时也要能拉（iOS 的 alwaysBounceVertical）：Compose 只在能滚时才把拖动交给越界效果，
-    // 所以内容至少比视口高 1px，下拉刷新、回弹在短页面上照常工作
-    var viewport by remember { mutableIntStateOf(0) }
+    // 所以内容至少比视口高 1px，下拉刷新、回弹在短页面上照常工作；外层 layout 同步记下视口高度供内层首帧直读，消除二次布局
+    val viewportHolder = remember { IntArray(2) }
+    var viewportVersion by remember { mutableIntStateOf(0) }
     Column(
         b.modifier
-            .onSizeChanged { viewport = it.height }
+            .layout { m, c ->
+                if (c.hasBoundedHeight) viewportHolder[0] = c.maxHeight
+                val p = m.measure(c)
+                viewportHolder[0] = p.height
+                layout(p.width, p.height) { p.place(0, 0) }
+            }
+            .onSizeChanged {
+                if (viewportHolder[1] != it.height) {
+                    viewportHolder[0] = it.height
+                    viewportVersion++
+                }
+            }
             .verticalScroll(state, overscrollEffect = b.overscroll, flingBehavior = b.fling)
             .layout { m, c ->
-                val min = if (viewport > 0) maxOf(c.minHeight, viewport + 1) else c.minHeight
+                viewportVersion
+                val viewport = viewportHolder[0]
+                viewportHolder[1] = viewport
+                val min = if (viewport > 0 && viewport != Constraints.Infinity) maxOf(c.minHeight, viewport + 1) else c.minHeight
                 val p = m.measure(c.copy(minHeight = min.coerceAtMost(c.maxHeight)))
                 layout(p.width, p.height) { p.place(0, 0) }
             }
@@ -318,7 +341,8 @@ private fun columnBody(state: ScrollState, content: @Composable ColumnScope.() -
     }
 }
 
-private fun lazyBody(state: LazyListState, content: LazyListScope.() -> Unit): TitleBody = { b ->
+@Composable
+private fun LazyBody(state: LazyListState, b: TitleBodyParams, content: LazyListScope.() -> Unit) {
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = MochiTabScaffoldDefaults.contentBottomPadding()
     // mochiListSection 的各行要跨过项间距连成一张卡片
@@ -327,12 +351,24 @@ private fun lazyBody(state: LazyListState, content: LazyListScope.() -> Unit): T
     // Compose 只在能滚时才把拖动交给越界效果，不补的话短列表拉不出回弹、也触发不了下拉刷新
     val fill by remember(state, spacingPx) {
         derivedStateOf {
+            // 滚离首项时列表已必然超出视口，不再读取 layoutInfo，避免每次滚动都触发计算与扫描
+            if (state.firstVisibleItemIndex > 0) return@derivedStateOf 0
             val info = state.layoutInfo
             val items = info.visibleItemsInfo
-            val first = items.firstOrNull() ?: return@derivedStateOf 0
+            if (items.isEmpty()) return@derivedStateOf 0
+            val first = items[0]
             if (first.index != 0) return@derivedStateOf 0
-            val lastReal = items.lastOrNull { it.key != BounceFillKey } ?: return@derivedStateOf 0
-            if (lastReal.index < info.totalItemsCount - 2) return@derivedStateOf 0
+            val count = info.totalItemsCount
+            val lastItem = items[items.lastIndex]
+            if (lastItem.index < count - 2) return@derivedStateOf 0
+            val lastReal = if (lastItem.key != BounceFillKey) {
+                lastItem
+            } else if (items.size >= 2) {
+                items[items.lastIndex - 1]
+            } else {
+                return@derivedStateOf 0
+            }
+            if (lastReal.index < count - 2) return@derivedStateOf 0
             val realEnd = lastReal.offset + lastReal.size - first.offset
             val room = info.viewportSize.height - info.beforeContentPadding - info.afterContentPadding
             (room - realEnd - spacingPx + 1).coerceAtLeast(0)
@@ -392,147 +428,178 @@ private fun MochiTitleScaffold(
     var headerPx by remember { mutableIntStateOf(0) }
     var titlePx by remember { mutableIntStateOf(0) }
     // 大标题还露着多少：往上滚进顶栏下面时从 1 降到 0（绘制阶段读，不重组）
-    val titleVisible = {
-        val t = titlePx.toFloat()
-        if (t <= 0f) 1f else 1f - smoothstep(t * 0.3f, t, scroll.value())
+    val titleVisible = remember(scroll) {
+        {
+            val t = titlePx.toFloat()
+            if (t <= 0f) 1f else 1f - smoothstep(t * 0.3f, t, scroll.value())
+        }
     }
     val refresh = rememberMochiRefreshState(overscroll, scroll.list, onRefresh = onRefresh)
     // 顶栏下沿离屏幕顶多远：正文在这一段自己均匀模糊（主题有滚动边缘效果时）
     val barBottom = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + barHeight
     val edgeFade = with(density) { 8.dp.toPx() }
-    // 一拖动内容就收起键盘（iOS 的 scrollDismissesKeyboard）：只收键盘、不清焦点，搜索框和 ✕ 还在
-    val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(scroll.key) {
-        snapshotFlow { scroll.scrolling() }.collect { if (it) keyboard?.hide() }
+    val pastEdge = remember(scroll, edgeFade) { derivedStateOf { edgeFade > 0f && scroll.value() >= edgeFade } }
+    val scrollEdgeProgress: () -> Float = remember(scroll, edgeFade, pastEdge) {
+        { if (pastEdge.value) 1f else smoothstep(0f, edgeFade, scroll.value()) }
     }
-    // 滚动期间玻璃（底栏、顶栏按钮）降一档取样分辨率，停下后按全分辨率重画（见 GlassScroll）
-    GlassScrollWhile(scroll.key) { scroll.scrolling() }
-    // 放在 MochiTabScaffold 的标签页里时：再点一次当前标签，平滑回到顶部
-    MochiTabReselectHandler { scroll.snap(0) }
-
     // 吸附到展开（0）还是收起（整个标题区，含搜索栏）：分界取顶栏小标题交接的中点（和 titleProgress 同一把尺），
     // 小标题已淡入一半、大标题基本退进顶栏时停下就收起，否则展开；看起来已收起却弹回展开的情况不再出现
-    val snapTarget = { landing: Float ->
-        val limit = headerPx.toFloat()
-        val t = titlePx.toFloat()
-        val mid = if (t > 0f) (t * (BarTitleFadeFrom + 1f) / 2f).coerceAtMost(limit) else limit / 2f
-        if (landing < mid) 0f else limit
+    val snapTarget = remember {
+        { landing: Float ->
+            val limit = headerPx.toFloat()
+            val t = titlePx.toFloat()
+            val mid = if (t > 0f) (t * (BarTitleFadeFrom + 1f) / 2f).coerceAtMost(limit) else limit / 2f
+            if (landing < mid) 0f else limit
+        }
     }
     // 惯性阶段就改落点：滑动松手时预判惯性停在哪，落在标题区半中间就让惯性直接停到展开或收起，不先停住再起一段动画
     val baseFling = MochiScrollDefaults.flingBehavior()
     val fling = if (largeTitle) {
-        remember(baseFling, scroll) { TitleSnapFling(baseFling, scroll.value, { headerPx }, snapTarget) }
+        remember(baseFling, scroll, snapTarget) { TitleSnapFling(baseFling, scroll.value, { headerPx }, snapTarget) }
     } else {
         baseFling
     }
-    // 兜底：惯性没接管到的停顿（懒加载列表从标题区以外滑回来、代码滚动）停在半中间时再吸附
-    LaunchedEffect(scroll.key, largeTitle) {
-        if (!largeTitle) return@LaunchedEffect
-        snapshotFlow { scroll.scrolling() }.collect { scrolling ->
-            val limit = headerPx
-            val v = scroll.value()
-            if (!scrolling && limit > 0 && v >= 1f && v < limit) {
-                scroll.snap(snapTarget(v).roundToInt())
+    // 合并滚动状态单一监听：仅在键盘实际可见时收键盘（零无效 Binder IPC）、滚动期间玻璃降采样、大标题停在半中间时兜底吸附
+    val view = LocalView.current
+    val currentKeyboard by rememberUpdatedState(LocalSoftwareKeyboardController.current)
+    val currentAnyGlass by rememberUpdatedState(MochiTheme.materials.anyGlass)
+    val currentLargeTitle by rememberUpdatedState(largeTitle)
+    LaunchedEffect(scroll.key) {
+        var glassOn = false
+        var settleJob: Job? = null
+        var snapJob: Job? = null
+        try {
+            snapshotFlow { scroll.scrolling() }.collect { scrolling ->
+                if (scrolling) {
+                    if (ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) == true) {
+                        currentKeyboard?.hide()
+                    }
+                    settleJob?.cancel()
+                    settleJob = null
+                    if (currentAnyGlass && !glassOn) {
+                        glassOn = true
+                        GlassScroll.begin()
+                    }
+                } else {
+                    if (glassOn) {
+                        settleJob?.cancel()
+                        settleJob = launch {
+                            delay(GlassScroll.SettleMs)
+                            glassOn = false
+                            GlassScroll.end()
+                        }
+                    }
+                    if (currentLargeTitle) {
+                        val limit = headerPx
+                        val v = scroll.value()
+                        if (limit > 0 && v >= 1f && v < limit && snapJob?.isActive != true) {
+                            snapJob = launch { scroll.snap(snapTarget(v).roundToInt()) }
+                        }
+                    }
+                }
+            }
+        } finally {
+            settleJob?.cancel()
+            snapJob?.cancel()
+            if (glassOn) GlassScroll.end()
+        }
+    }
+    // 放在 MochiTabScaffold 的标签页里时：再点一次当前标签，平滑回到顶部
+    MochiTabReselectHandler { scroll.snap(0) }
+
+    // 顶栏按钮是玻璃且页顶栏实际存在按钮时，正文才录下来给它们取样；无顶栏按钮时零全屏录制
+    val hasBarContent = navigationIcon != null || actions != null
+    val barBackdrop = rememberMochiBarBackdrop(background)
+    // 正文里的玻璃（标题区的搜索框、正文里的栏控件）不能取样包含它自己的来源：外面标签页 / 导航主机录的整页里就有它，
+    // 每画一帧都要把自己连同整个列表再画进自己的背景，列表越长越卡。它背后只有页面底色，取样一块同色的纯色画布，看起来一样；
+    // 纯色主题完全跳过创建 canvasBackdrop
+    val bodySource = if (MochiTheme.materials.anyGlass) {
+        val bodyColor = rememberUpdatedState(background)
+        rememberSolidBackdrop { bodyColor.value }.source
+    } else {
+        null
+    }
+    val currentGlassSources = LocalGlassSources.current
+    val providedGlassSources = remember(currentGlassSources, barBackdrop, bodySource) {
+        if (barBackdrop == null && bodySource == null) {
+            currentGlassSources
+        } else {
+            currentGlassSources.copy(page = barBackdrop ?: currentGlassSources.page, bar = bodySource ?: currentGlassSources.bar)
+        }
+    }
+    val titleProgress = remember(scroll, largeTitle) {
+        {
+            val t = titlePx.toFloat()
+            if (!largeTitle) {
+                1f
+            } else if (t <= 0f) {
+                0f
+            } else {
+                smoothstep(t * BarTitleFadeFrom, t, scroll.value())
             }
         }
     }
-
-    // 顶栏按钮是玻璃时（主题有 controlGlass），正文录下来给它们取样；顶栏和正文是兄弟，玻璃不会取样到自己
-    val barBackdrop = rememberMochiBarBackdrop(background)
-    // 正文里的玻璃（标题区的搜索框、正文里的栏控件）不能取样包含它自己的来源：外面标签页 / 导航主机录的整页里就有它，
-    // 每画一帧都要把自己连同整个列表再画进自己的背景，列表越长越卡。它背后只有页面底色，取样一块同色的纯色画布，看起来一样
-    val bodyColor = rememberUpdatedState(background)
-    val bodyCanvas = rememberCanvasBackdrop {
-        val pad = BodyCanvasPad.toPx()
-        drawRect(bodyColor.value, Offset(-pad, -pad), Size(size.width + pad * 2f, size.height + pad * 2f))
-    }
-    val bodySource = remember(bodyCanvas) { GlassSource(bodyCanvas, bodyCanvas) }
     Box(
         modifier
             .fillMaxSize()
             .background(background),
     ) {
-        val header: (@Composable () -> Unit)? = if (largeTitle || searchBar != null) {
-            {
-                Column(
-                    Modifier
-                        // 刷新中内容停在转圈下面：标题区往下让出这段高度（摆放阶段读，不重组）
-                        .layout { m, c ->
-                            val p = m.measure(c)
-                            val h = if (largeTitle) refresh.hold().roundToInt() else 0
-                            layout(p.width, p.height + h) { p.place(0, h) }
-                        }
-                        .onSizeChanged { headerPx = it.height },
-                ) {
-                    if (largeTitle) {
-                        Text(
-                            title,
-                            style = MochiTheme.textStyles.largeTitle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            minFontScale = 0.7f,
-                            // 不额外缩进：大标题和下面卡片、搜索栏的外边在同一条竖线上
-                            modifier = Modifier
-                                .mochiOpticalLeading(MochiTheme.textStyles.largeTitle)
-                                .onSizeChanged { titlePx = it.height }
-                                .graphicsLayer {
-                                    // 往上滚进顶栏下面时模糊淡出（和顶栏小标题的模糊淡入交接），跟着滚动位置走
-                                    mochiBlurAlpha(titleVisible(), mochiRevealBlur(titleVisible(), 4.dp))
-                                    // 往下拉：以左边为原点放大，最多 1.12 倍
-                                    val pull = overscroll.offset.y.coerceAtLeast(0f)
-                                    val s = 1f + (pull / 160.dp.toPx()).coerceAtMost(1f) * 0.12f
-                                    scaleX = s
-                                    scaleY = s
-                                    transformOrigin = TransformOrigin(0f, 1f)
-                                }
-                                // 模糊结果缓存着：跟着滚动、下拉放大时不重新模糊
-                                .mochiBlur { mochiRevealBlur(titleVisible(), 4.dp) },
-                        )
-                        if (subtitle != null) {
-                            MochiBlurText(
-                                subtitle,
-                                style = MochiTheme.textStyles.subhead,
-                                color = MochiTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                // 紧贴大标题
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                    }
-                    if (searchBar != null) {
-                        if (largeTitle) Spacer(Modifier.height(12.dp))
-                        // 搜索栏在正文的标题区里，背后只有页面底色：玻璃不画外阴影
-                        CompositionLocalProvider(LocalMochiGlassShadow provides MochiNoGlassShadow) { searchBar() }
-                    }
+        val hasHeader = largeTitle || searchBar != null
+        val header: (@Composable () -> Unit)? = remember(
+            hasHeader,
+            largeTitle,
+            title,
+            subtitle,
+            searchBar,
+            refresh,
+            titleVisible,
+            overscroll,
+        ) {
+            if (!hasHeader) {
+                null
+            } else {
+                {
+                    TitleHeader(
+                        largeTitle = largeTitle,
+                        title = title,
+                        subtitle = subtitle,
+                        searchBar = searchBar,
+                        refresh = refresh,
+                        titleVisible = titleVisible,
+                        overscroll = overscroll,
+                        onHeaderHeight = { headerPx = it },
+                        onTitleHeight = { titlePx = it },
+                    )
                 }
             }
-        } else {
-            null
+        }
+        val activeBarBackdrop = if (hasBarContent) barBackdrop else null
+        val bodyModifier = remember(activeBarBackdrop, barBottom, scrollEdgeProgress) {
+            Modifier
+                .fillMaxSize()
+                // 融合「滚动边缘模糊 + 玻璃背景来源」为单次全屏录制与单次顶带 Offscreen 烘焙；无顶栏按钮时零全屏录制
+                .mochiScrollEdgeBlurSource(barBottom, scrollEdgeProgress, backdrop = activeBarBackdrop)
+        }
+        val bodyHold = remember(largeTitle, refresh) {
+            // 紧凑页没有标题占位；刷新留白由整个正文一次性承担。
+            if (largeTitle) Modifier else Modifier.mochiRefreshHold(refresh)
+        }
+        val bodyTop = if (largeTitle) 0.dp else 12.dp
+        val bodyParams = remember(bodyModifier, overscroll, fling, bodyHold, barHeight, bodyTop, contentSpacing, header) {
+            TitleBodyParams(
+                modifier = bodyModifier,
+                overscroll = overscroll,
+                fling = fling,
+                hold = bodyHold,
+                barHeight = barHeight,
+                top = bodyTop,
+                spacing = contentSpacing,
+                header = header,
+            )
         }
         // 正文里打开的菜单、面板：导航主机不录整页时取样这份正文
-        CompositionLocalProvider(
-            LocalGlassSources provides LocalGlassSources.current.let {
-                it.copy(page = barBackdrop ?: it.page, bar = bodySource)
-            },
-        ) {
-            body(
-                TitleBodyParams(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // 录的是模糊之后的样子：栏里的玻璃取样的和眼睛看到的一致（录原样的话贴边那圈会露出清晰的内容）
-                        .mochiBackdropSource(barBackdrop)
-                        .mochiScrollEdgeBlur(barBottom) { smoothstep(0f, edgeFade, scroll.value()) },
-                    overscroll = overscroll,
-                    fling = fling,
-                    // 紧凑页没有标题占位；刷新留白由整个正文一次性承担。
-                    hold = if (largeTitle) Modifier else Modifier.mochiRefreshHold(refresh),
-                    barHeight = barHeight,
-                    top = if (largeTitle) 0.dp else 12.dp,
-                    spacing = contentSpacing,
-                    header = header,
-                ),
-            )
+        CompositionLocalProvider(LocalGlassSources provides providedGlassSources) {
+            body(bodyParams)
         }
 
         if (onRefresh != null) {
@@ -548,7 +615,6 @@ private fun MochiTitleScaffold(
 
         // 顶栏
         // 不画分隔线：底色往下多延一段渐隐（iOS 26 的滚动边缘效果），内容滚进顶栏下面时被柔和地盖住
-        val fade = with(density) { 8.dp.toPx() }
         CompositionLocalProvider(LocalMochiBackdrop provides (barBackdrop ?: LocalMochiBackdrop.current)) {
             MochiTitleBar(
                 title,
@@ -557,25 +623,87 @@ private fun MochiTitleScaffold(
                 actions = actions,
                 background = background,
                 barHeight = barHeight,
-                titleProgress = {
-                    val t = titlePx.toFloat()
-                    if (!largeTitle) {
-                        1f
-                    } else if (t <= 0f) {
-                        0f
-                    } else {
-                        smoothstep(t * BarTitleFadeFrom, t, scroll.value())
-                    }
-                },
+                titleProgress = titleProgress,
                 // 大标题、紧凑两种都跟着滚动：停在顶部时栏下面没有内容，渐隐不出现，不会盖住第一行
-                backgroundProgress = { smoothstep(0f, fade, scroll.value()) },
+                backgroundProgress = scrollEdgeProgress,
             )
         }
     }
 }
 
-/** 正文玻璃取样的纯色画布往外多铺的宽度（同正文玻璃按钮） */
-private val BodyCanvasPad = 32.dp
+/** 大号粗体文字的光学左偏移比例（同 mochiOpticalLeading，合并入同一 graphicsLayer） */
+private const val LargeTitleOpticalLeadingEm = 0.04f
+
+@Composable
+private fun TitleHeader(
+    largeTitle: Boolean,
+    title: String,
+    subtitle: String?,
+    searchBar: (@Composable () -> Unit)?,
+    refresh: MochiRefreshState,
+    titleVisible: () -> Float,
+    overscroll: MochiOverscrollEffect,
+    onHeaderHeight: (Int) -> Unit,
+    onTitleHeight: (Int) -> Unit,
+) {
+    Column(
+        Modifier
+            // 刷新中内容停在转圈下面：标题区往下让出这段高度（摆放阶段读，不重组）
+            .layout { m, c ->
+                val p = m.measure(c)
+                val h = if (largeTitle) refresh.hold().roundToInt() else 0
+                layout(p.width, p.height + h) { p.place(0, h) }
+            }
+            .onSizeChanged { onHeaderHeight(it.height) },
+    ) {
+        if (largeTitle) {
+            val largeTitleStyle = MochiTheme.textStyles.largeTitle
+            val titleBlurRadius = remember(titleVisible) { { mochiRevealBlur(titleVisible(), 4.dp) } }
+            Text(
+                title,
+                style = largeTitleStyle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                minFontScale = 0.7f,
+                // 不额外缩进：大标题和下面卡片、搜索栏的外边在同一条竖线上；光学左偏移合并进同一层 graphicsLayer 避免堆叠硬件层
+                modifier = Modifier
+                    .onSizeChanged { onTitleHeight(it.height) }
+                    .graphicsLayer {
+                        // 往上滚进顶栏下面时模糊淡出（和顶栏小标题的模糊淡入交接），跟着滚动位置走
+                        val vis = titleVisible()
+                        mochiBlurAlpha(vis, mochiRevealBlur(vis, 4.dp))
+                        if (largeTitleStyle.fontSize.isSpecified) {
+                            translationX = -largeTitleStyle.fontSize.toPx() * LargeTitleOpticalLeadingEm
+                        }
+                        // 往下拉：以左边为原点放大，最多 1.12 倍
+                        val pull = overscroll.offset.y.coerceAtLeast(0f)
+                        val s = 1f + (pull / 160.dp.toPx()).coerceAtMost(1f) * 0.12f
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = TransformOrigin(0f, 1f)
+                    }
+                    // 模糊结果缓存着：跟着滚动、下拉放大时不重新模糊
+                    .mochiBlur(radius = titleBlurRadius),
+            )
+            if (subtitle != null) {
+                MochiBlurText(
+                    subtitle,
+                    style = MochiTheme.textStyles.subhead,
+                    color = MochiTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    // 紧贴大标题
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+        if (searchBar != null) {
+            if (largeTitle) Spacer(Modifier.height(12.dp))
+            // 搜索栏在正文的标题区里，背后只有页面底色：玻璃不画外阴影
+            CompositionLocalProvider(LocalMochiGlassShadow provides MochiNoGlassShadow) { searchBar() }
+        }
+    }
+}
 
 /** 顶栏小标题从大标题滚过这个比例开始淡入，到整个大标题滚进去时完全显出 */
 private const val BarTitleFadeFrom = 0.5f

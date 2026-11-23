@@ -21,7 +21,11 @@ public data class MochiDate(val year: Int, val month: Int, val day: Int) : Compa
         require(day in 1..daysInMonth(year, month)) { "day $day out of range for $year-$month" }
     }
 
-    override fun compareTo(other: MochiDate): Int = compareValuesBy(this, other, { it.year }, { it.month }, { it.day })
+    override fun compareTo(other: MochiDate): Int {
+        if (year != other.year) return year.compareTo(other.year)
+        if (month != other.month) return month.compareTo(other.month)
+        return day.compareTo(other.day)
+    }
 
     /** 自 1970-01-01 起的天数 */
     public val epochDay: Long get() = toEpochDay(year, month, day)
@@ -113,7 +117,11 @@ public data class MochiTime(val hour: Int, val minute: Int, val second: Int = 0)
         require(hour in 0..23 && minute in 0..59 && second in 0..59) { "invalid time $hour:$minute:$second" }
     }
 
-    override fun compareTo(other: MochiTime): Int = compareValuesBy(this, other, { it.hour }, { it.minute }, { it.second })
+    override fun compareTo(other: MochiTime): Int {
+        if (hour != other.hour) return hour.compareTo(other.hour)
+        if (minute != other.minute) return minute.compareTo(other.minute)
+        return second.compareTo(other.second)
+    }
 
     /** 12 小时制的钟点：1..12 */
     public val hour12: Int get() = ((hour + 11) % 12) + 1

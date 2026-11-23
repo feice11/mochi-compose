@@ -14,9 +14,12 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalView
+import java.lang.ref.WeakReference
 
 /**
  * 震动策略。
@@ -33,27 +36,21 @@ public enum class MochiHapticProfile { IosLike, Rich, Off }
  * 设备不支持原语、没声明 VIBRATE 权限、或者更老的系统，就退回 View.performHapticFeedback。
  * 不用 createOneShot / vibrate(ms)：官方明确说这种整段马达驱动会发闷发麻。
  */
+@Stable
 public class MochiHaptics internal constructor(private val view: View, private val profile: MochiHapticProfile) {
-    private val vibrator: Vibrator? = view.context.vibratorOrNull()
-    private val canCompose: Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            vibrator?.hasVibrator() == true &&
-            view.context.checkSelfPermission(Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED
-    private val lowTickOk = canCompose && vibrator.supports(VibrationEffect.Composition.PRIMITIVE_LOW_TICK)
-    private val tickOk = canCompose && vibrator.supports(VibrationEffect.Composition.PRIMITIVE_TICK)
-    private val clickOk = canCompose && vibrator.supports(VibrationEffect.Composition.PRIMITIVE_CLICK)
+    private val caps: VibratorCaps = VibratorCaps.of(view.context)
     private var lastTickAt = 0L
 
     /** 轻点打开：IosLike 不震 */
     public fun tapOpen() {
         if (profile != MochiHapticProfile.Rich) return
-        if (!primitive(VibrationEffect.Composition.PRIMITIVE_TICK, 0.5f, tickOk)) perform(HapticFeedbackConstants.VIRTUAL_KEY)
+        if (!primitive(HapticsApi30.PRIMITIVE_TICK, 0.5f, caps.tickOk)) perform(HapticFeedbackConstants.VIRTUAL_KEY)
     }
 
     /** 长按打开：一下 click，像 iOS 的 Haptic Touch */
     public fun longPress() {
         if (profile == MochiHapticProfile.Off) return
-        if (!primitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.8f, clickOk)) perform(HapticFeedbackConstants.LONG_PRESS)
+        if (!primitive(HapticsApi30.PRIMITIVE_CLICK, 0.8f, caps.clickOk)) perform(HapticFeedbackConstants.LONG_PRESS)
     }
 
     /**
@@ -65,8 +62,8 @@ public class MochiHaptics internal constructor(private val view: View, private v
         val now = SystemClock.uptimeMillis()
         if (now - lastTickAt < TickGapMillis) return
         lastTickAt = now
-        val played = primitive(VibrationEffect.Composition.PRIMITIVE_TICK, 0.7f, tickOk) ||
-            primitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, 1f, lowTickOk)
+        val played = primitive(HapticsApi30.PRIMITIVE_TICK, 0.7f, caps.tickOk) ||
+            primitive(HapticsApi31.PRIMITIVE_LOW_TICK, 1f, caps.lowTickOk)
         if (!played) {
             perform(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -81,7 +78,7 @@ public class MochiHaptics internal constructor(private val view: View, private v
     /** 确认一个选择（开关拨动、松手选中、选中一个选项）：一下轻 click。IosLike 和 Rich 都震 */
     public fun confirm() {
         if (profile == MochiHapticProfile.Off) return
-        if (!primitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.55f, clickOk)) {
+        if (!primitive(HapticsApi30.PRIMITIVE_CLICK, 0.55f, caps.clickOk)) {
             perform(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     HapticFeedbackConstants.CONFIRM
@@ -98,7 +95,7 @@ public class MochiHaptics internal constructor(private val view: View, private v
      */
     public fun threshold() {
         if (profile == MochiHapticProfile.Off) return
-        if (!primitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.6f, clickOk)) {
+        if (!primitive(HapticsApi30.PRIMITIVE_CLICK, 0.6f, caps.clickOk)) {
             perform(
                 when {
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE
@@ -111,14 +108,8 @@ public class MochiHaptics internal constructor(private val view: View, private v
 
     private fun primitive(id: Int, scale: Float, supported: Boolean): Boolean {
         if (!supported || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
-        val v = vibrator ?: return false
-        return try {
-            val effect = VibrationEffect.startComposition().addPrimitive(id, scale).compose()
-            v.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
-            true
-        } catch (_: RuntimeException) {
-            false
-        }
+        val v = caps.vibrator ?: return false
+        return HapticsApi33.vibratePrimitive(v, id, scale)
     }
 
     private fun perform(constant: Int) {
@@ -130,17 +121,94 @@ public class MochiHaptics internal constructor(private val view: View, private v
 
 private const val TickGapMillis = 24L
 
+/** 进程级缓存马达能力与权限探测结果，避免滚动列表中每个控件构造 MochiHaptics 时重复触发 Binder IPC。 */
+private class VibratorCaps(
+    val vibrator: Vibrator?,
+    val canCompose: Boolean,
+    val lowTickOk: Boolean,
+    val tickOk: Boolean,
+    val clickOk: Boolean,
+) {
+    companion object {
+        @Volatile
+        private var cachedApp: WeakReference<Context>? = null
+
+        @Volatile
+        private var cachedCaps: VibratorCaps? = null
+
+        fun of(context: Context): VibratorCaps {
+            val app = context.applicationContext ?: context
+            val existing = cachedCaps
+            if (existing != null && cachedApp?.get() === app) return existing
+            return synchronized(this) {
+                val again = cachedCaps
+                if (again != null && cachedApp?.get() === app) {
+                    again
+                } else {
+                    query(app).also {
+                        cachedApp = WeakReference(app)
+                        cachedCaps = it
+                    }
+                }
+            }
+        }
+
+        private fun query(context: Context): VibratorCaps {
+            val vibrator = runCatching { context.vibratorOrNull() }.getOrNull()
+            val canCompose = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                runCatching { vibrator?.hasVibrator() == true }.getOrDefault(false) &&
+                runCatching {
+                    context.checkSelfPermission(Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED
+                }.getOrDefault(false)
+            val lowTickOk = canCompose && HapticsApi31.supportsLowTick(vibrator)
+            val tickOk = canCompose && HapticsApi30.supports(vibrator, HapticsApi30.PRIMITIVE_TICK)
+            val clickOk = canCompose && HapticsApi30.supports(vibrator, HapticsApi30.PRIMITIVE_CLICK)
+            return VibratorCaps(vibrator, canCompose, lowTickOk, tickOk, clickOk)
+        }
+    }
+}
+
 private fun Context.vibratorOrNull(): Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-    getSystemService(VibratorManager::class.java)?.defaultVibrator
+    HapticsApi31.defaultVibrator(this)
 } else {
     @Suppress("DEPRECATION")
     getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 }
 
-private fun Vibrator?.supports(primitive: Int): Boolean {
-    if (this == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
-    return try {
-        areAllPrimitivesSupported(primitive)
+@RequiresApi(30)
+private object HapticsApi30 {
+    const val PRIMITIVE_CLICK = VibrationEffect.Composition.PRIMITIVE_CLICK
+    const val PRIMITIVE_TICK = VibrationEffect.Composition.PRIMITIVE_TICK
+
+    fun supports(vibrator: Vibrator?, primitive: Int): Boolean {
+        if (vibrator == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        return try {
+            vibrator.areAllPrimitivesSupported(primitive)
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
+}
+
+@RequiresApi(31)
+private object HapticsApi31 {
+    const val PRIMITIVE_LOW_TICK = VibrationEffect.Composition.PRIMITIVE_LOW_TICK
+
+    fun defaultVibrator(context: Context): Vibrator? = context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+
+    fun supportsLowTick(vibrator: Vibrator?): Boolean = HapticsApi30.supports(vibrator, PRIMITIVE_LOW_TICK)
+}
+
+@RequiresApi(33)
+private object HapticsApi33 {
+    private val TouchUsage: VibrationAttributes by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH)
+    }
+
+    fun vibratePrimitive(vibrator: Vibrator, id: Int, scale: Float): Boolean = try {
+        val effect = VibrationEffect.startComposition().addPrimitive(id, scale).compose()
+        vibrator.vibrate(effect, TouchUsage)
+        true
     } catch (_: RuntimeException) {
         false
     }

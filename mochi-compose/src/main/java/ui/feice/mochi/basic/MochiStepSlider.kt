@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -25,13 +26,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.parts.ControlSmoothing
@@ -73,7 +79,9 @@ public object MochiStepSliderDefaults {
         thumb: Color = Color.White,
         tick: Color = MochiTheme.colorScheme.onSurface.copy(alpha = 0.18f),
         tickOnFill: Color = Color.White.copy(alpha = 0.28f),
-    ): MochiStepSliderColors = MochiStepSliderColors(container, fill, thumb, tick, tickOnFill)
+    ): MochiStepSliderColors = remember(container, fill, thumb, tick, tickOnFill) {
+        MochiStepSliderColors(container, fill, thumb, tick, tickOnFill)
+    }
 }
 
 /**
@@ -99,30 +107,35 @@ public fun MochiStepSlider(
     colors: MochiStepSliderColors = MochiStepSliderDefaults.colors(),
 ) {
     val n = count.coerceAtLeast(2)
+    val density = LocalDensity.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val haptics = rememberMochiHaptics()
     val scope = rememberCoroutineScope()
     val pos = remember { Animatable(value.coerceIn(0, n - 1).toFloat()) }
     val press = remember { Animatable(0f) }
     var dragging by remember { mutableStateOf(false) }
+    var dragPos by remember { mutableFloatStateOf(Float.NaN) }
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onValueChange)
-    LaunchedEffect(value) {
-        if (!dragging) pos.animateTo(value.coerceIn(0, n - 1).toFloat(), SnapSpring)
+    LaunchedEffect(value, n) {
+        val target = value.coerceIn(0, n - 1).toFloat()
+        if (!dragging && pos.value != target) pos.animateTo(target, SnapSpring)
     }
     val containerPath = remember { G2PathCache() }
     val fillPath = remember { G2PathCache() }
     val dark = MochiTheme.colorScheme.isDark
     val shadowColor = MochiTheme.colorScheme.shadow
     val shadow = MochiTheme.shadows.low
+    val resolvedShadow = remember(shadow, density, dark) { shadow.resolve(density, dark) }
     Box(
         modifier
             .fillMaxWidth()
             .height(MochiStepSliderDefaults.Height)
             .semantics {
-                progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 0f..(n - 1).toFloat(), n - 2)
+                progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(0, n - 1).toFloat(), 0f..(n - 1).toFloat(), n - 2)
                 if (enabled) {
                     setProgress { target ->
-                        change(target.roundToInt().coerceIn(0, n - 1))
+                        if (!target.isNaN()) change(target.roundToInt().coerceIn(0, n - 1))
                         true
                     }
                 }
@@ -131,40 +144,89 @@ public fun MochiStepSlider(
                 if (!enabled) {
                     Modifier
                 } else {
-                    Modifier.pointerInput(n) {
+                    Modifier.pointerInput(n, rtl) {
                         val pad = MochiStepSliderDefaults.Padding.toPx()
                         fun fraction(x: Float): Float {
                             val h = size.height - pad * 2f
                             val travel = (size.width - pad * 2f - h).coerceAtLeast(1f)
-                            return ((x - pad - h / 2f) / travel * (n - 1)).coerceIn(0f, (n - 1).toFloat())
+                            val localX = if (rtl) size.width - x else x
+                            return ((localX - pad - h / 2f) / travel * (n - 1)).coerceIn(0f, (n - 1).toFloat())
                         }
                         awaitEachGesture {
-                            val down = awaitFirstDown()
-                            dragging = true
+                            val down = awaitFirstDown(requireUnconsumed = false)
                             scope.launch { press.animateTo(1f, MochiMotionTokens.PressDown) }
-                            var last = pos.value.roundToInt()
-                            // 按下：直接滑到手指那里（不吸附），跟手开始
-                            scope.launch { pos.animateTo(fraction(down.position.x), spring(dampingRatio = 1f, stiffness = 900f)) }
-                            while (true) {
-                                val e = awaitPointerEvent()
-                                val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!c.pressed) break
-                                val f = fraction(c.position.x)
-                                scope.launch { pos.snapTo(f) }
-                                val near = f.roundToInt()
-                                if (near != last) {
-                                    last = near
-                                    haptics.tick()
-                                    // 拖动中实时换档，不等松手
-                                    if (near != current) change(near)
+                            var claimed = false
+                            var released = false
+                            var lastPos = down.position
+                            var lastDrag = Float.NaN
+                            var lastStep = pos.value.roundToInt()
+                            try {
+                                while (true) {
+                                    val e = awaitPointerEvent()
+                                    val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                                    lastPos = c.position
+                                    if (!c.pressed) {
+                                        released = true
+                                        c.consume()
+                                        break
+                                    }
+                                    if (!claimed) {
+                                        if (c.isConsumed) break
+                                        val dx = c.position.x - down.position.x
+                                        val dy = c.position.y - down.position.y
+                                        if (abs(dy) > viewConfiguration.touchSlop && abs(dy) > abs(dx)) {
+                                            // 纵向滑动让给外层列表，不误改档位
+                                            break
+                                        }
+                                        if (abs(dx) > viewConfiguration.touchSlop) {
+                                            claimed = true
+                                            dragging = true
+                                        }
+                                    }
+                                    if (claimed) {
+                                        val f = fraction(c.position.x)
+                                        lastDrag = f
+                                        dragPos = f
+                                        val near = f.roundToInt().coerceIn(0, n - 1)
+                                        if (near != lastStep) {
+                                            lastStep = near
+                                            haptics.tick()
+                                            if (near != current) change(near)
+                                        }
+                                        c.consume()
+                                    }
                                 }
-                                c.consume()
+                            } finally {
+                                dragging = false
+                                scope.launch { press.animateTo(0f, MochiMotionTokens.PressRelease) }
+                                if (claimed && !released) {
+                                    val start = lastDrag
+                                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                        if (!start.isNaN()) pos.snapTo(start)
+                                        dragPos = Float.NaN
+                                        pos.animateTo(current.coerceIn(0, n - 1).toFloat(), SnapSpring)
+                                    }
+                                }
                             }
-                            dragging = false
-                            val target = pos.value.roundToInt().coerceIn(0, n - 1)
-                            scope.launch { press.animateTo(0f, MochiMotionTokens.PressRelease) }
-                            scope.launch { pos.animateTo(target.toFloat(), SnapSpring) }
-                            if (target != current) change(target)
+                            if (released) {
+                                val target = (
+                                    if (claimed &&
+                                        !lastDrag.isNaN()
+                                    ) {
+                                        lastDrag
+                                    } else {
+                                        fraction(lastPos.x)
+                                    }
+                                    ).roundToInt().coerceIn(0, n - 1)
+                                if (!claimed && target != lastStep) haptics.tick()
+                                val start = if (claimed) lastDrag else Float.NaN
+                                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                    if (!start.isNaN()) pos.snapTo(start)
+                                    dragPos = Float.NaN
+                                    pos.animateTo(target.toFloat(), SnapSpring)
+                                }
+                                if (target != current) change(target)
+                            }
                         }
                     }
                 },
@@ -173,30 +235,46 @@ public fun MochiStepSlider(
                 val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
                 val pad = MochiStepSliderDefaults.Padding.toPx()
                 val ring = MochiStepSliderDefaults.ThumbRing.toPx()
-                val h = size.height - pad * 2f
+                val h = (size.height - pad * 2f).coerceAtLeast(0f)
+                if (h <= 0f) return@drawBehind
                 val travel = (size.width - pad * 2f - h).coerceAtLeast(1f)
-                fun cx(i: Float) = pad + h / 2f + travel * i / (n - 1)
+                val isRtl = layoutDirection == LayoutDirection.Rtl
+                fun cx(i: Float): Float {
+                    val off = pad + h / 2f + travel * i / (n - 1)
+                    return if (isRtl) size.width - off else off
+                }
                 // 外胶囊 + 一层很淡的柔和投影
                 val outer = Rect(0f, 0f, size.width, size.height)
                 val outerPath = containerPath.get(outer, size.height / 2f, ControlSmoothing)
-                drawMochiShadow(outer, size.height / 2f, shadow.resolve(this, dark), shadowColor)
+                drawMochiShadow(
+                    outer,
+                    size.height / 2f,
+                    resolvedShadow,
+                    shadowColor,
+                    opaqueInterior = enabled && colors.container.alpha >= 1f,
+                )
                 drawPath(outerPath, colors.container, alpha = alpha)
                 // 刻度点
                 val dot = h * 0.11f
-                val p = pos.value
+                val p = if (dragPos.isNaN()) pos.value else dragPos
                 val thumbX = cx(p.coerceIn(0f, (n - 1).toFloat()))
                 for (i in 0 until n) {
                     drawCircle(colors.tick, dot, Offset(cx(i.toFloat()), size.height / 2f), alpha = alpha)
                 }
-                // 主色段：从左端铺到拇指右边，拖出两端时不超出
-                val fill = Rect(pad, pad, thumbX + h / 2f, pad + h)
+                // 主色段：从起点铺到拇指外沿，拖出两端时不超出
+                val fill = if (isRtl) {
+                    Rect(thumbX - h / 2f, pad, size.width - pad, pad + h)
+                } else {
+                    Rect(pad, pad, thumbX + h / 2f, pad + h)
+                }
                 drawPath(fillPath.get(fill, h / 2f, ControlSmoothing), colors.fill, alpha = alpha)
                 // 拇指
                 val r = (h / 2f - ring) * (1f + 0.06f * press.value)
                 // 铺过的点画在主色上（被拇指盖住的不画）
                 for (i in 0 until n) {
                     val x = cx(i.toFloat())
-                    if (x < thumbX - r - dot) drawCircle(colors.tickOnFill, dot, Offset(x, size.height / 2f), alpha = alpha)
+                    val covered = if (isRtl) x > thumbX + r + dot else x < thumbX - r - dot
+                    if (covered) drawCircle(colors.tickOnFill, dot, Offset(x, size.height / 2f), alpha = alpha)
                 }
                 drawCircle(colors.thumb, r, Offset(thumbX, size.height / 2f), alpha = alpha)
             },

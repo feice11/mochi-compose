@@ -5,6 +5,7 @@
 
 package ui.feice.mochi.effect.glass.engine
 
+import androidx.compose.runtime.Stable
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -17,6 +18,7 @@ internal typealias Matrix34 = FloatArray
  * 一块玻璃这一帧的配方（GlassBackgroundUniforms），长度单位 pt（dp）。由 [liquidRecipe] 按样式、深浅和最小短边 h 算出，
  * 字段名对应网页版 recipe() 和 setRecipeUniforms() 里的 uniform。
  */
+@Stable
 internal data class LiquidRecipe(
     val clear: Boolean,
     val dark: Boolean,
@@ -65,11 +67,66 @@ internal data class LiquidRecipe(
     /** 取样要往玻璃外多看多远（pt）：外折射、边缘渗色的位移，加上最粗那一路模糊的半径 */
     fun sampleReach(): Float = max(max(outerAmt, bleedAmt), 0f) + max(blurPt, max(bleedBlurPt, bfRadiusPt)) + 2f
 
-    override fun equals(other: Any?): Boolean = other is LiquidRecipe && key == other.key
+    private var cachedHash: Int = 0
 
-    override fun hashCode(): Int = key.hashCode()
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is LiquidRecipe) return false
+        return clear == other.clear &&
+            dark == other.dark &&
+            innerAmt == other.innerAmt &&
+            innerInvH == other.innerInvH &&
+            outerAmt == other.outerAmt &&
+            outerInvH == other.outerInvH &&
+            refrOpacity == other.refrOpacity &&
+            blurPt == other.blurPt &&
+            bleedAmt == other.bleedAmt &&
+            bleedInvH == other.bleedInvH &&
+            bleedBlurPt == other.bleedBlurPt &&
+            bleedOpacity == other.bleedOpacity &&
+            shadowRadius == other.shadowRadius &&
+            shadowOpacity == other.shadowOpacity &&
+            ringOpacity == other.ringOpacity &&
+            bfEnabled == other.bfEnabled &&
+            bfRadiusPt == other.bfRadiusPt &&
+            bfDarken == other.bfDarken &&
+            bfLighten == other.bfLighten &&
+            bfNormal == other.bfNormal &&
+            lumaComp == other.lumaComp &&
+            clampLimit == other.clampLimit &&
+            kfSpread == other.kfSpread &&
+            kfAmount == other.kfAmount &&
+            kfBias == other.kfBias &&
+            highlight == other.highlight &&
+            blurAlpha.contentEquals(other.blurAlpha) &&
+            blurDist.contentEquals(other.blurDist) &&
+            bleedDarken.contentEquals(other.bleedDarken) &&
+            bleed.contentEquals(other.bleed) &&
+            face.contentEquals(other.face)
+    }
 
-    private val key: List<Any> get() = listOf(clear, dark, innerAmt, outerAmt, bleedAmt, shadowOpacity, blurAlpha.toList(), bleedOpacity, lumaComp, blurPt, face.toList())
+    override fun hashCode(): Int {
+        var h = cachedHash
+        if (h != 0) return h
+        h = if (clear) 1231 else 1237
+        h = 31 * h + (if (dark) 1231 else 1237)
+        h = 31 * h + innerAmt.toBits()
+        h = 31 * h + outerAmt.toBits()
+        h = 31 * h + blurPt.toBits()
+        h = 31 * h + bleedAmt.toBits()
+        h = 31 * h + bleedOpacity.toBits()
+        h = 31 * h + shadowRadius.toBits()
+        h = 31 * h + shadowOpacity.toBits()
+        h = 31 * h + ringOpacity.toBits()
+        h = 31 * h + lumaComp.toBits()
+        h = 31 * h + highlight.toBits()
+        h = 31 * h + blurAlpha.contentHashCode()
+        h = 31 * h + blurDist.contentHashCode()
+        h = 31 * h + face.contentHashCode()
+        if (h == 0) h = 1
+        cachedHash = h
+        return h
+    }
 
     companion object {
         const val ShadowOffsetY = 8f
@@ -111,12 +168,25 @@ private val HighlightClear =
     floatArrayOf(1.3193f, -0.047791f, -0.0046997f, 0.19995f, -0.014198f, 1.2852f, -0.0047989f, 0.19995f, -0.014198f, -0.047607f, 1.3281f, 0.19995f)
 private val HighlightRegular =
     floatArrayOf(1.1201f, -0.18945f, -0.018997f, 0.14709f, -0.056305f, 0.9873f, -0.019104f, 0.14709f, -0.056305f, -0.18933f, 1.1572f, 0.14709f)
+private val BlurAlphaFrosted = floatArrayOf(1f, 0f, 0f, 0f)
+private val BleedDarkenDark = floatArrayOf(-1f, 1f)
+private val BleedDarkenLight = floatArrayOf(1f, 0f)
 
 /**
  * 网页版 recipe(style, dark, h)：[h] 是玻璃组里最小那块的短边（pt）
  */
 internal fun liquidRecipe(style: MochiGlassStyle, dark: Boolean, h: Float, thick: Float = 1f): LiquidRecipe {
     val regular = regularRecipe(dark, h)
+    if (style == MochiGlassStyle.Frosted) {
+        return regular.copy(
+            innerAmt = 0f,
+            outerAmt = 0f,
+            refrOpacity = 0f,
+            bleedAmt = 0f,
+            bleedOpacity = 0f,
+            blurAlpha = BlurAlphaFrosted,
+        )
+    }
     if (style == MochiGlassStyle.Thick) {
         // 厚实：折射、渗色、投影、边光都沿用标准，只把磨砂加厚、面色换成更实的那套。
         // [thick] < 1：从标准过渡到厚实（菜单从标准玻璃的按钮组里长出来，材质跟着展开程度变厚，不在接手那一帧突然变实）
@@ -138,7 +208,7 @@ private fun regularRecipe(dark: Boolean, h: Float): LiquidRecipe {
         blurPt = 8f, blurAlpha = floatArrayOf(a0, a0 / 2f, a0 / 2f - 0.5f, -0.5f), blurDist = floatArrayOf(-h / 2f, -1f, 0f, 0f),
         bleedAmt = 0.35f * h, bleedInvH = 1f / (0.35f * h), bleedBlurPt = 0.28f * h,
         bleedOpacity = if (full) (if (dark) a0 else 0.625f * a0) else 0f,
-        bleedDarken = if (dark) floatArrayOf(-1f, 1f) else floatArrayOf(1f, 0f),
+        bleedDarken = if (dark) BleedDarkenDark else BleedDarkenLight,
         bleed = if (dark) BleedRegularDark else BleedRegularLight,
         shadowRadius = ((5f * h - 224f) / 24f).coerceIn(1f, 24f),
         shadowOpacity = if (!full) {
@@ -231,9 +301,18 @@ internal const val SuperK = 1.5286649465560913f
 /**
  * 网页版 cornerK(halfW, halfH, r)：SdfFragmentUniforms.arg2 里每个轴的圆角混合。返回 (r, kx, ky)
  */
-internal fun cornerK(halfW: Float, halfH: Float, r: Float): FloatArray {
-    if (r <= 0f) return floatArrayOf(0.01f, 1f, 1f)
+internal fun cornerK(halfW: Float, halfH: Float, r: Float): FloatArray = FloatArray(3).also { cornerKInto(halfW, halfH, r, it, 0) }
+
+internal fun cornerKInto(halfW: Float, halfH: Float, r: Float, out: FloatArray, offset: Int) {
+    if (r <= 0f) {
+        out[offset] = 0.01f
+        out[offset + 1] = 1f
+        out[offset + 2] = 1f
+        return
+    }
     val big = r * SuperK
     val den = big - r
-    return floatArrayOf(r, ((big - halfW) / den).coerceIn(0f, 1f), ((big - halfH) / den).coerceIn(0f, 1f))
+    out[offset] = r
+    out[offset + 1] = ((big - halfW) / den).coerceIn(0f, 1f)
+    out[offset + 2] = ((big - halfH) / den).coerceIn(0f, 1f)
 }

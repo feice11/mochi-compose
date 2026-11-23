@@ -29,7 +29,7 @@ internal fun popoverPlacement(
     cover: Boolean,
     align: MochiAlign,
 ): PopoverPlacement {
-    val w = min(width, container.width - margin * 2f)
+    val w = min(width, (container.width - margin * 2f).coerceAtLeast(1f))
     val floor = container.height - safeBottom - margin
     val ceil = safeTop + margin
     val below = if (cover) floor - anchor.top else floor - anchor.bottom - gap

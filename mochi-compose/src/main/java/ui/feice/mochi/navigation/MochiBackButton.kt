@@ -4,17 +4,20 @@
 package ui.feice.mochi.navigation
 
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -23,7 +26,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.toImmutableList
+import ui.feice.mochi.basic.BarFlex
 import ui.feice.mochi.basic.LocalBarControlGlass
+import ui.feice.mochi.basic.LocalBarFlex
 import ui.feice.mochi.basic.MochiAlign
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiButtonColors
@@ -58,60 +63,110 @@ public fun MochiBackButton(
     onClick: (() -> Unit)? = null,
 ) {
     val nav = MochiNavigator.current
-    val earlier = if (history != null && nav != null) nav.backStack.dropLast(1) else emptyList()
-    val chevron: @Composable () -> Unit = {
-        val color = LocalContentColor.current
-        MochiIcon("chevron-back", Modifier.size(22.dp), tint = color) { slot ->
-            Canvas(slot) {
-                val p = Path().apply {
-                    // 「‹」按视觉重心居中：包围盒居中时开口那侧显得空、整体看着偏右，
-                    // 按两笔围成的三角形取重心（在包围盒中心往开口方向 1/6 宽处），整体朝尖端挪回这么多（22dp 里约 1.1dp）
-                    moveTo(size.width * 0.607f, size.height * 0.16f)
-                    lineTo(size.width * 0.287f, size.height * 0.5f)
-                    lineTo(size.width * 0.607f, size.height * 0.84f)
-                }
-                drawPath(p, color, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    val currentHistory by rememberUpdatedState(history)
+    val hasHistory by remember(nav, history != null) {
+        derivedStateOf {
+            if (history == null || nav == null) return@derivedStateOf false
+            var open = 0
+            val entries = nav.entries
+            for (i in 0 until entries.size) {
+                if (!entries[i].closing && ++open > 1) return@derivedStateOf true
+            }
+            false
+        }
+    }
+    val chevron: @Composable () -> Unit = remember {
+        {
+            val color = LocalContentColor.current
+            MochiIcon("chevron-back", Modifier.size(22.dp), tint = color) { slot ->
+                Spacer(
+                    slot.drawWithCache {
+                        val p = Path().apply {
+                            // 「‹」按视觉重心居中：包围盒居中时开口那侧显得空、整体看着偏右，
+                            // 按两笔围成的三角形取重心（在包围盒中心往开口方向 1/6 宽处），整体朝尖端挪回这么多（22dp 里约 1.1dp）
+                            moveTo(size.width * 0.607f, size.height * 0.16f)
+                            lineTo(size.width * 0.287f, size.height * 0.5f)
+                            lineTo(size.width * 0.607f, size.height * 0.84f)
+                        }
+                        val stroke = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        onDrawBehind {
+                            drawPath(p, color, style = stroke)
+                        }
+                    },
+                )
             }
         }
     }
     val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-    val back = {
-        when {
-            onClick != null -> onClick()
-            nav?.pop() == true -> Unit
-            else -> dispatcher?.onBackPressed()
+    val currentOnClick by rememberUpdatedState(onClick)
+    val back: () -> Unit = remember(nav, dispatcher) {
+        {
+            val cb = currentOnClick
+            when {
+                cb != null -> cb()
+
+                nav?.pop() == true -> Unit
+
+                else -> {
+                    dispatcher?.onBackPressed()
+                }
+            }
         }
     }
     // 一层层往里推时返回按钮留在原位，不跟着页面滑（见 MochiNavBarItem.kt）
-    val shared = modifier.navBarShape(BackBarItemId, colors.container, glass = barGlass(colors))
-    val sharedChevron: @Composable () -> Unit = {
-        Box(Modifier.mochiNavBarItem(BackBarItemId, contentKey = BackBarItemId), contentAlignment = Alignment.Center) { chevron() }
-    }
-    if (earlier.isEmpty() || history == null || nav == null) {
+    if (!hasHistory || nav == null) {
         MochiBarIconButton(
-            onClick = { back() },
-            modifier = shared.semantics { contentDescription = "返回" },
+            onClick = back,
+            modifier = modifier.semantics { contentDescription = "返回" },
             colors = colors,
-            content = sharedChevron,
+            navId = BackBarItemId,
+            contentKey = BackBarItemId,
+            content = chevron,
         )
         return
     }
-    // 最近的一页在最上面
-    val items = remember(earlier, history) { earlier.reversed().map { MochiItem(history(it)) }.toImmutableList() }
+    // 最近的一页在最上面；用 derivedStateOf 隔离 nav.entries / closing 变化，无关栈转场不触发重组
+    val earlierRoutes by remember(nav) {
+        derivedStateOf {
+            val entries = nav.entries
+            val out = ArrayList<String>((entries.size - 1).coerceAtLeast(0))
+            var skippedTop = false
+            for (i in entries.size - 1 downTo 0) {
+                val e = entries[i]
+                if (e.closing) continue
+                if (!skippedTop) {
+                    skippedTop = true
+                } else {
+                    out += e.route
+                }
+            }
+            out
+        }
+    }
+    val items = remember(earlierRoutes, currentHistory) {
+        val mapper = currentHistory ?: return@remember emptyList<MochiItem>().toImmutableList()
+        earlierRoutes.map { MochiItem(mapper(it)) }.toImmutableList()
+    }
     var open by remember { mutableStateOf(false) }
-    // 和不带历史时的 MochiBarIconButton 一样，按钮本身画成栏的玻璃
-    CompositionLocalProvider(LocalBarControlGlass provides barGlass(colors)) {
+    val glass = barGlass(colors)
+    val flex = remember { BarFlex() }
+    // 和不带历史时的 MochiBarIconButton 一样，按钮本身画成栏的玻璃，并把按压形变交给共享顶栏
+    CompositionLocalProvider(LocalBarControlGlass provides glass, LocalBarFlex provides flex) {
         MochiIconDropdown(
             expanded = open,
             onExpandedChange = { open = it },
             items = items,
-            onItemClick = { i -> nav.popTo(earlier.size - 1 - i) },
-            modifier = shared.semantics { contentDescription = "返回" },
+            onItemClick = { i -> nav.popTo(earlierRoutes.size - 1 - i) },
+            modifier = modifier
+                .navBarShape(BackBarItemId, colors.container, glass = glass)
+                .semantics { contentDescription = "返回" },
             colors = MochiDropdownDefaults.iconDropdownColors(buttonColor = colors.container, buttonContentColor = colors.content),
             behavior = MochiDropdownBehavior(openMode = MochiOpenMode.Cover, trigger = MochiTrigger.LongPress, align = MochiAlign.Start),
             size = MochiButtonDefaults.BarItemSize,
-            onClick = { back() },
-            icon = sharedChevron,
+            onClick = back,
+            icon = {
+                Box(Modifier.mochiNavBarItem(BackBarItemId, contentKey = BackBarItemId), contentAlignment = Alignment.Center) { chevron() }
+            },
         )
     }
 }

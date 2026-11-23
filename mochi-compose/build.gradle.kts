@@ -40,6 +40,10 @@ kotlin {
     }
 }
 
+composeCompiler {
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("gradle/compose-stability.conf"))
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     api(libs.androidx.compose.ui)
@@ -47,6 +51,8 @@ dependencies {
     api(libs.androidx.compose.foundation)
     // 形状：iOS 式连续曲率圆角 https://github.com/Kyant0/Capsule
     api(libs.kyant.capsule)
+    // 多边形与特征对齐变形几何底层（不引 material3）
+    implementation(libs.androidx.graphics.shapes)
     // 玻璃材质抓背后的内容 https://github.com/Kyant0/AndroidLiquidGlass
     implementation(libs.kyant.backdrop)
     // 公开 API 里用到 ImmutableList

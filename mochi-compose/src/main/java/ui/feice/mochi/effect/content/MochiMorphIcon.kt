@@ -11,15 +11,16 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -35,6 +36,7 @@ import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.sqrt
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.theme.LocalContentColor
 
 /** 图标原位变形的默认参数 */
@@ -67,16 +69,19 @@ public fun MochiMorphIcon(
 ) {
     val target = remember(icon) { MorphShape.of(icon) }
     val state = remember { MorphState(target) }
-    LaunchedEffect(target) { state.morphTo(target, spec) }
-    Canvas(
-        modifier
-            .size(size)
-            .graphicsLayer {
-                val t = state.t.value
-                val r = if (state.settled) 0f else blur.toPx() * sin(PI.toFloat() * t.coerceIn(0f, 1f))
-                renderEffect = mochiCachedBlur(r)
-            },
-    ) {
+    val reduceMotion by rememberUpdatedState(mochiReduceMotion())
+    LaunchedEffect(target) { state.morphTo(target, spec, reduceMotion) }
+    val settled by remember(state) { derivedStateOf { state.settled } }
+    val blurModifier = if (settled) {
+        Modifier
+    } else {
+        Modifier.graphicsLayer {
+            val t = state.t.value
+            val r = blur.toPx() * sin(PI.toFloat() * t.coerceIn(0f, 1f))
+            renderEffect = mochiCachedBlur(r)
+        }
+    }
+    Canvas(modifier.size(size).then(blurModifier)) {
         state.draw(this, tint)
     }
 }
@@ -116,8 +121,13 @@ private class Contour(
 private class MorphShape(val contours: List<Contour>, val viewportWidth: Float, val viewportHeight: Float, val fillType: PathFillType) {
     companion object {
         const val N = 96
+        private const val CacheSize = 32
+        private val cache = object : LinkedHashMap<ImageVector, MorphShape>(CacheSize, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ImageVector, MorphShape>?): Boolean = size > CacheSize
+        }
 
         fun of(icon: ImageVector): MorphShape {
+            synchronized(cache) { cache[icon]?.let { return it } }
             val out = ArrayList<Contour>()
             var evenOdd = false
             fun walk(g: VectorGroup, parent: Matrix) {
@@ -149,6 +159,7 @@ private class MorphShape(val contours: List<Contour>, val viewportWidth: Float, 
             }
             walk(icon.root, Matrix())
             return MorphShape(out, icon.viewportWidth, icon.viewportHeight, if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero)
+                .also { synchronized(cache) { cache[icon] = it } }
         }
 
         private fun sample(
@@ -182,6 +193,21 @@ private class MorphShape(val contours: List<Contour>, val viewportWidth: Float, 
 /** 一对正在互相变形的轮廓。每帧插值写进自己的缓冲和 Path，变形期间每帧不分配新对象 */
 private class Pair2(val a: Contour, val b: Contour, val ghost: Boolean) {
     val path = Path()
+    private var cachedStroke: Stroke? = null
+    private var cachedWidth = -1f
+    private var cachedCap: StrokeCap? = null
+    private var cachedJoin: StrokeJoin? = null
+
+    fun stroke(width: Float, cap: StrokeCap, join: StrokeJoin): Stroke {
+        val cur = cachedStroke
+        if (cur != null && cachedWidth == width && cachedCap == cap && cachedJoin == join) return cur
+        return Stroke(width = width, cap = cap, join = join).also {
+            cachedStroke = it
+            cachedWidth = width
+            cachedCap = cap
+            cachedJoin = join
+        }
+    }
 }
 
 private class MorphState(initial: MorphShape) {
@@ -189,11 +215,22 @@ private class MorphState(initial: MorphShape) {
     var target: MorphShape = initial
     private var pairs: List<Pair2> = initial.contours.map { Pair2(it, it, false) }
 
+    private var cachedSettledTarget: MorphShape? = null
+    private var cachedSettledK: Float = Float.NaN
+    private var cachedHasFill: Boolean = false
+
     /** 变完了：直接画目标形状，不再模糊 */
     val settled: Boolean get() = !t.isRunning && t.value == 1f
 
-    suspend fun morphTo(next: MorphShape, spec: AnimationSpec<Float>) {
+    suspend fun morphTo(next: MorphShape, spec: AnimationSpec<Float>, reduceMotion: Boolean) {
         if (next === target) return
+        cachedSettledTarget = null
+        if (reduceMotion) {
+            pairs = next.contours.map { Pair2(it, it, false) }
+            target = next
+            t.snapTo(1f)
+            return
+        }
         // 从当前画面接着变：先把此刻的形状定下来（已经缩没的笔画丢掉）
         val now = t.value
         val current = pairs.filter { !(it.ghost && now >= 1f) }.map { lerp(it.a, it.b, now) }
@@ -205,8 +242,38 @@ private class MorphState(initial: MorphShape) {
 
     private val fill = Path()
 
-    fun draw(scope: DrawScope, tint: Color) = with(scope) {
+    fun draw(scope: DrawScope, tint: Color): Unit = with(scope) {
         val k = minOf(size.width / target.viewportWidth, size.height / target.viewportHeight)
+        if (settled) {
+            if (cachedSettledTarget !== target || cachedSettledK != k) {
+                fill.rewind()
+                fill.fillType = target.fillType
+                var hasFill = false
+                for (pr in pairs) {
+                    if (pr.ghost) continue
+                    val b = pr.b
+                    b.writeFullPath(pr.path, k)
+                    if (b.filled) {
+                        fill.addPath(pr.path)
+                        hasFill = true
+                    }
+                }
+                cachedSettledTarget = target
+                cachedSettledK = k
+                cachedHasFill = hasFill
+            }
+            for (pr in pairs) {
+                if (pr.ghost) continue
+                val b = pr.b
+                if (!b.filled) {
+                    val w = b.width * k
+                    if (w > 0f) drawPath(pr.path, tint, style = pr.stroke(w, b.cap, b.join))
+                }
+            }
+            if (cachedHasFill) drawPath(fill, tint)
+            return
+        }
+        cachedSettledTarget = null
         val tt = t.value
         fill.rewind()
         fill.fillType = target.fillType
@@ -230,7 +297,9 @@ private class MorphState(initial: MorphShape) {
             } else {
                 val w = (a.width + (b.width - a.width) * tt) * k
                 if (w > 0f) {
-                    drawPath(path, tint, style = Stroke(width = w, cap = if (half) b.cap else a.cap, join = if (half) b.join else a.join))
+                    val cap = if (half) b.cap else a.cap
+                    val join = if (half) b.join else a.join
+                    drawPath(path, tint, style = pr.stroke(w, cap, join))
                 }
             }
         }
@@ -238,10 +307,11 @@ private class MorphState(initial: MorphShape) {
     }
 }
 
-private fun Contour.toPath(k: Float): Path = Path().apply {
-    moveTo(xs[0] * k, ys[0] * k)
-    for (i in 1 until xs.size) lineTo(xs[i] * k, ys[i] * k)
-    if (closed) close()
+private fun Contour.writeFullPath(out: Path, k: Float) {
+    out.rewind()
+    out.moveTo(xs[0] * k, ys[0] * k)
+    for (i in 1 until xs.size) out.lineTo(xs[i] * k, ys[i] * k)
+    if (closed) out.close()
 }
 
 private fun lerp(a: Contour, b: Contour, t: Float): Contour {
@@ -359,45 +429,72 @@ public fun MochiDrawIcon(
 ) {
     val shape = remember(icon) { MorphShape.of(icon) }
     val p = remember { Animatable(if (initiallyDrawn) 1f else 0f) }
-    LaunchedEffect(drawn) { p.animateTo(if (drawn) 1f else 0f, spec) }
+    val reduceMotion by rememberUpdatedState(mochiReduceMotion())
+    val cache = remember(shape) { DrawIconCache(shape.contours.size) }
+    LaunchedEffect(drawn) {
+        val target = if (drawn) 1f else 0f
+        if (reduceMotion) p.snapTo(target) else p.animateTo(target, spec)
+    }
     Canvas(modifier.size(size)) {
         val k = minOf(this.size.width / shape.viewportWidth, this.size.height / shape.viewportHeight)
         val n = shape.contours.size
         if (n == 0) return@Canvas
         val st = stagger.coerceIn(0f, 0.9f / n.coerceAtLeast(1))
         val span = 1f - st * (n - 1)
-        val fill = Path().apply { fillType = shape.fillType }
+        val fill = cache.fill.apply {
+            rewind()
+            fillType = shape.fillType
+        }
         var fillAlpha = 0f
-        shape.contours.forEachIndexed { i, c ->
+        for (i in 0 until n) {
+            val c = shape.contours[i]
             val local = ((p.value - st * i) / span).coerceIn(0f, 1f)
-            if (local <= 0f) return@forEachIndexed
+            if (local <= 0f) continue
+            val contourPath = cache.paths[i]
             if (c.filled) {
-                fill.addPath(c.toPath(k))
+                c.writeFullPath(contourPath, k)
+                fill.addPath(contourPath)
                 fillAlpha = maxOf(fillAlpha, local)
             } else {
-                drawPath(c.partialPath(k, local), tint, style = Stroke(width = c.width * k, cap = StrokeCap.Round, join = c.join))
+                c.writePartialPath(contourPath, k, local)
+                drawPath(contourPath, tint, style = cache.stroke(i, c.width * k, c.join))
             }
         }
         if (fillAlpha > 0f) drawPath(fill, tint, alpha = fillAlpha)
     }
 }
 
-/** 沿轮廓从起点画到 t（0..1）处的那一段 */
-private fun Contour.partialPath(k: Float, t: Float): Path {
+private class DrawIconCache(count: Int) {
+    val fill = Path()
+    val paths = Array(count) { Path() }
+    private val strokes = arrayOfNulls<Stroke>(count)
+    private val widths = FloatArray(count) { -1f }
+
+    fun stroke(index: Int, width: Float, join: StrokeJoin): Stroke {
+        val cur = strokes[index]
+        if (cur != null && widths[index] == width && cur.join == join) return cur
+        return Stroke(width = width, cap = StrokeCap.Round, join = join).also {
+            strokes[index] = it
+            widths[index] = width
+        }
+    }
+}
+
+/** 沿轮廓从起点画到 t（0..1）处的那一段，复写进 [out] 零分配 */
+private fun Contour.writePartialPath(out: Path, k: Float, t: Float) {
+    out.rewind()
     val count = if (closed) xs.size else xs.size - 1
     val pos = t * count
     val whole = pos.toInt().coerceAtMost(count)
-    return Path().apply {
-        moveTo(xs[0] * k, ys[0] * k)
-        for (i in 1..whole) {
-            val j = i % xs.size
-            lineTo(xs[j] * k, ys[j] * k)
-        }
-        val frac = pos - whole
-        if (whole < count && frac > 0f) {
-            val a = whole % xs.size
-            val b = (whole + 1) % xs.size
-            lineTo((xs[a] + (xs[b] - xs[a]) * frac) * k, (ys[a] + (ys[b] - ys[a]) * frac) * k)
-        }
+    out.moveTo(xs[0] * k, ys[0] * k)
+    for (i in 1..whole) {
+        val j = i % xs.size
+        out.lineTo(xs[j] * k, ys[j] * k)
+    }
+    val frac = pos - whole
+    if (whole < count && frac > 0f) {
+        val a = whole % xs.size
+        val b = (whole + 1) % xs.size
+        out.lineTo((xs[a] + (xs[b] - xs[a]) * frac) * k, (ys[a] + (ys[b] - ys[a]) * frac) * k)
     }
 }

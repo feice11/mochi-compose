@@ -3,12 +3,15 @@
 
 package ui.feice.mochi.effect.glow
 
+import android.graphics.Matrix
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,21 +25,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asComposePath
-import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.isSpecified
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
 import androidx.compose.ui.node.DelegatingNode
 import androidx.compose.ui.node.ModifierNodeElement
@@ -48,6 +47,7 @@ import androidx.compose.ui.unit.toSize
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -55,9 +55,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.effect.elastic.MochiFollowSpring
-import ui.feice.mochi.effect.hdr.hdrRadialBrush
 import ui.feice.mochi.effect.hdr.linearLong
-import ui.feice.mochi.effect.hdr.linearRadialBrush
 import ui.feice.mochi.gesture.awaitMochiPress
 import ui.feice.mochi.gesture.isInScrollContainer
 import ui.feice.mochi.theme.MochiHdr
@@ -120,13 +118,19 @@ public object MochiGlowDefaults {
  * 通常用 [rememberMochiGlowState] 创建；跨窗口共享触点时可以给 pointer，让光心追它。
  */
 @Stable
-public class MochiGlowState internal constructor(spec: MochiGlowSpec, private val pointer: (() -> Offset)?) {
+public class MochiGlowState internal constructor(
+    spec: MochiGlowSpec,
+    private val pointer: (() -> Offset)?,
+    private val followScope: CoroutineScope? = null,
+) {
     public var spec: MochiGlowSpec by mutableStateOf(spec)
         internal set
 
     private val intensityAnim = Animatable(0f)
     private val radiusAnim = Animatable(0f)
     private var targetState by mutableStateOf(Offset.Zero)
+    private val followSpring = MochiFollowSpring(spec.followResponse, spec.followDamping)
+    private var followJob: Job? = null
 
     /** 当前亮度 0..1 */
     public val intensity: Float get() = intensityAnim.value
@@ -151,12 +155,22 @@ public class MochiGlowState internal constructor(spec: MochiGlowSpec, private va
     /** 手指移动：光心带阻尼地追过去 */
     public fun moveTo(p: Offset) {
         targetState = p
+        if (held || intensityAnim.value > 0.001f) {
+            ensureFollowLoop()
+        }
     }
 
     /** 按下：光从 radius 的 35% 长到 radius，亮度到 intensity */
     public suspend fun press(at: Offset? = null, radius: Float, intensity: Float = 1f) {
-        if (at != null) moveTo(at)
+        if (at != null) targetState = at
+        val wasIdle = intensityAnim.value <= 0.001f
         held = true
+        if (wasIdle) {
+            val t = target
+            followSpring.snapTo(t)
+            center = t
+        }
+        ensureFollowLoop()
         coroutineScope {
             radiusAnim.snapTo(radius * 0.35f)
             launch { radiusAnim.animateTo(radius, MochiMotions.responseSpring(0.6f, 1f)) }
@@ -170,6 +184,7 @@ public class MochiGlowState internal constructor(spec: MochiGlowSpec, private va
      */
     public suspend fun grow(radius: Float, intensity: Float) {
         if (!held) return
+        ensureFollowLoop()
         coroutineScope {
             launch { radiusAnim.animateTo(max(radiusAnim.targetValue, radius), MochiMotions.responseSpring(0.5f, 1f)) }
             launch { intensityAnim.animateTo(intensity, MochiMotions.responseSpring(0.3f, 1f)) }
@@ -184,6 +199,9 @@ public class MochiGlowState internal constructor(spec: MochiGlowSpec, private va
     /** 松手：光淡出 */
     public suspend fun release() {
         held = false
+        if (intensityAnim.value > 0.001f) {
+            ensureFollowLoop()
+        }
         intensityAnim.animateTo(0f, MochiMotions.responseSpring(0.5f, 1f))
     }
 
@@ -191,22 +209,52 @@ public class MochiGlowState internal constructor(spec: MochiGlowSpec, private va
     internal suspend fun snapTo(intensity: Float, radius: Float, center: Offset) {
         intensityAnim.snapTo(intensity)
         radiusAnim.snapTo(radius)
+        followSpring.snapTo(center)
         this.center = center
     }
 
-    /** 光心的阻尼跟随。按下时光心直接放在手指处；每帧积分同一根弹簧，手指一直动也连续 */
-    internal suspend fun runFollow() {
-        val spring = MochiFollowSpring(spec.followResponse, spec.followDamping)
-        while (true) {
-            if (intensityAnim.value <= 0.001f) {
-                snapshotFlow { intensityAnim.value }.first { it > 0.001f }
-                spring.snapTo(target)
-                center = target
-            }
-            spring.response = spec.followResponse
-            spring.dampingRatio = spec.followDamping
-            center = spring.stepFrame(target)
+    /** 触发节点在按住中途被卸载或禁用时释放高光，避免状态残留常亮 */
+    internal fun cancelFromDetach() {
+        if (held || intensityAnim.value > 0f) {
+            held = false
+            followJob?.cancel()
+            followJob = null
+            followScope?.launch { intensityAnim.snapTo(0f) }
         }
+    }
+
+    /**
+     * 惰性启动光心跟随协程：仅在按下 / 移动 / 淡出期间运行，收敛或淡出到 0 后立刻退出，
+     * 静止态 0 协程、0 全局 Snapshot ApplyObserver。
+     */
+    private fun ensureFollowLoop() {
+        if (followJob?.isActive == true) return
+        val scope = followScope ?: return
+        var launched: Job? = null
+        launched = scope.launch {
+            try {
+                while (held || intensityAnim.value > 0.001f) {
+                    followSpring.response = spec.followResponse
+                    followSpring.dampingRatio = spec.followDamping
+                    val t = target
+                    val next = followSpring.stepFrame(t)
+                    center = next
+                    if ((next - t).getDistance() < 0.3f && followSpring.velocity.getDistance() < 5f) {
+                        followSpring.snapTo(t)
+                        center = t
+                        if (pointer == null) {
+                            if (target == t) break
+                        } else {
+                            if (!held && intensityAnim.value <= 0.001f) break
+                            snapshotFlow { target != t || (!held && intensityAnim.value <= 0.001f) }.first { it }
+                        }
+                    }
+                }
+            } finally {
+                if (followJob === launched) followJob = null
+            }
+        }
+        followJob = launched
     }
 }
 
@@ -216,9 +264,9 @@ public class MochiGlowState internal constructor(spec: MochiGlowSpec, private va
  */
 @Composable
 public fun rememberMochiGlowState(spec: MochiGlowSpec = MochiGlowDefaults.spec(), pointer: (() -> Offset)? = null): MochiGlowState {
-    val state = remember { MochiGlowState(spec, pointer) }
+    val scope = rememberCoroutineScope()
+    val state = remember(scope) { MochiGlowState(spec, pointer, scope) }
     state.spec = spec
-    LaunchedEffect(state) { state.runFollow() }
     return state
 }
 
@@ -264,6 +312,7 @@ private data class PressGlowElement(val state: MochiGlowState, val radius: Dp?) 
 private class PressGlowNode(var state: MochiGlowState, var radius: Dp?) : DelegatingNode() {
     private var release: Job? = null
     private var pressJob: Job? = null
+    private var activePress = false
 
     val pointer = delegate(
         SuspendingPointerInputModifierNode {
@@ -273,6 +322,7 @@ private class PressGlowNode(var state: MochiGlowState, var radius: Dp?) : Delega
                 awaitMochiPress(
                     inScrollContainer = inScroll,
                     onPress = { p ->
+                        activePress = true
                         release?.cancel()
                         pressJob?.cancel()
                         pressJob = coroutineScope.launch { state.press(p, r) }
@@ -283,6 +333,7 @@ private class PressGlowNode(var state: MochiGlowState, var radius: Dp?) : Delega
                         release = coroutineScope.launch {
                             if (hold > 0L) delay(hold)
                             pressJob?.cancel()
+                            activePress = false
                             state.release()
                         }
                     },
@@ -290,6 +341,18 @@ private class PressGlowNode(var state: MochiGlowState, var radius: Dp?) : Delega
             }
         },
     )
+
+    override fun onDetach() {
+        val wasActive = activePress || pressJob?.isActive == true || release?.isActive == true
+        activePress = false
+        pressJob?.cancel()
+        pressJob = null
+        release?.cancel()
+        release = null
+        if (wasActive) {
+            state.cancelFromDetach()
+        }
+    }
 }
 
 /**
@@ -309,9 +372,11 @@ internal fun DrawScope.drawGlow(
     val color = state.spec.color
     val gr = state.radius.coerceAtLeast(1f)
     drawGlowBody(outline, color, color.alpha * a, center, gr)
-    if (base.isSpecified) {
-        val path = (outline as? Outline.Generic)?.path ?: Path().apply { addOutline(outline) }
-        drawHdrSheen(path, a, center, gr, base)
+    if (base.isSpecified && base.alpha > 0.5f && Build.VERSION.SDK_INT >= 29) {
+        val peak = MochiHdr.boost
+        if (peak > 1.001f) {
+            Api29GlowSheen.drawOutline(this, outline, a, center, gr, base, peak)
+        }
     }
 }
 
@@ -321,27 +386,69 @@ internal fun DrawScope.drawGlow(
  * 不用 Modulate 乘法：HDR 窗口的画布不是线性编码，乘法会把底色压暗，按下去反而变灰
  */
 internal fun DrawScope.drawHdrSheen(path: Path, intensity: Float, center: Offset, radius: Float, base: Color) {
+    if (intensity <= 0.01f || Build.VERSION.SDK_INT < 29 || base.alpha <= 0.5f) return
     val peak = MochiHdr.boost
-    if (peak <= 1.001f || intensity <= 0.01f || Build.VERSION.SDK_INT < 29 || base.alpha <= 0.5f) return
-    val k = intensity.coerceIn(0f, 1f)
-    val n = SpecPos.size
-    val lit = base.copy(alpha = 1f).hdrLift(1f + (peak - 1f) * 0.6f)
-    val sheen = LongArray(n) { i ->
-        val r = SpecPos[i] * SpecEnd
-        val al = if (i == n - 1) 0f else (k * exp(-r * r * r * 1.6f)).coerceIn(0f, 1f)
-        linearLong(lit.red, lit.green, lit.blue, al)
-    }
-    drawPath(path, linearRadialBrush(SpecPos, sheen, center, radius * SpecEnd))
+    if (peak <= 1.001f) return
+    Api29GlowSheen.drawPath(this, path, intensity, center, radius, base, peak)
 }
 
 private const val SpecEnd = 3f
 private val SpecPos = FloatArray(13) { it / 12f }
+private val SpecWeights = FloatArray(13) { i ->
+    if (i == 12) 0f else exp(-(SpecPos[i] * SpecEnd).let { r -> r * r * r } * 1.6f)
+}
+
+@RequiresApi(29)
+private object Api29GlowSheen {
+    private class Cache {
+        val colors = LongArray(SpecPos.size)
+        val matrix = Matrix()
+        var lastLit = Color.Unspecified
+        var shader: RadialGradient? = null
+        val brush = object : ShaderBrush() {
+            override fun createShader(size: Size): androidx.compose.ui.graphics.Shader = shader!!
+        }
+
+        fun prepare(center: Offset, radius: Float, base: Color, peak: Float): ShaderBrush {
+            val lit = base.copy(alpha = 1f).hdrLift(1f + (peak - 1f) * 0.6f)
+            if (shader == null || lit != lastLit) {
+                lastLit = lit
+                for (i in SpecPos.indices) {
+                    colors[i] = linearLong(lit.red, lit.green, lit.blue, SpecWeights[i])
+                }
+                shader = RadialGradient(0f, 0f, 1f, colors, SpecPos, Shader.TileMode.CLAMP)
+            }
+            val r = (radius * SpecEnd).coerceAtLeast(0.01f)
+            matrix.setScale(r, r)
+            matrix.postTranslate(center.x, center.y)
+            shader!!.setLocalMatrix(matrix)
+            return brush
+        }
+    }
+
+    private val cache = object : ThreadLocal<Cache>() {
+        override fun initialValue(): Cache = Cache()
+    }
+
+    fun drawOutline(scope: DrawScope, outline: Outline, intensity: Float, center: Offset, radius: Float, base: Color, peak: Float) {
+        val brush = cache.get()!!.prepare(center, radius, base, peak)
+        scope.drawOutline(outline, brush, alpha = intensity.coerceIn(0f, 1f))
+    }
+
+    fun drawPath(scope: DrawScope, path: Path, intensity: Float, center: Offset, radius: Float, base: Color, peak: Float) {
+        val brush = cache.get()!!.prepare(center, radius, base, peak)
+        scope.drawPath(path, brush, alpha = intensity.coerceIn(0f, 1f))
+    }
+}
 
 /**
  * 柔光本体：相加（plus）一层光。不用颜色减淡：浅色底上很容易冲成一片白，浅色按钮上的字就看不清了
  */
 internal fun DrawScope.drawGlowBody(outline: Outline, color: Color, alpha: Float, center: Offset, radius: Float) {
-    drawOutline(outline, glowBrush(color, alpha * GlowPlusWeight, center, radius, BodyStops), blendMode = BlendMode.Plus)
+    val a = (alpha * GlowPlusWeight).coerceIn(0f, 1f)
+    if (a <= 1e-4f) return
+    val brush = glowBodyCache.get()!!.prepare(color, center, radius)
+    drawOutline(outline, brush, alpha = a, blendMode = BlendMode.Plus)
 }
 
 /** 柔光本体相加的量 */
@@ -350,29 +457,56 @@ internal const val GlowPlusWeight = 0.28f
 /** 把轮廓绕中心缩进 inset（按包围盒等比缩，1～2dp 的缩进里圆角的变化看不出来） */
 internal fun insetPath(path: Path, b: Rect, inset: Float): Path {
     if (b.width <= 2f * inset || b.height <= 2f * inset) return path
-    val m = android.graphics.Matrix()
+    val m = Matrix()
     m.setScale((b.width - 2f * inset) / b.width, (b.height - 2f * inset) / b.height, b.center.x, b.center.y)
     val out = android.graphics.Path()
     path.asAndroidPath().transform(m, out)
     return out.asComposePath()
 }
 
-/** 按 shader 的曲线取的色标：(r, 亮度)，r 以光半径为单位，最后一个点亮度几乎为 0 */
-private val BodyStops = FloatArray(12) { it * 0.16f }.let { rs -> rs to FloatArray(12) { 0.85f * exp(-rs[it] * rs[it] * rs[it] * 1.6f) } }
-
-private fun glowBrush(
-    color: Color,
-    alpha: Float,
-    center: Offset,
-    radius: Float,
-    stops: Pair<FloatArray, FloatArray>,
-    boost: Float = 1f,
-): Brush {
-    val (rs, vs) = stops
-    val end = rs.last()
-    val pairs = Array(rs.size) { i ->
-        val v = if (i == rs.lastIndex) 0f else vs[i]
-        rs[i] / end to color.copy(alpha = (alpha * v).coerceIn(0f, 1f))
+private const val BodyStopCount = 12
+private const val BodyEnd = (BodyStopCount - 1) * 0.16f
+private val BodyPositions = FloatArray(BodyStopCount) { (it * 0.16f) / BodyEnd }
+private val BodyWeights = FloatArray(BodyStopCount) { i ->
+    if (i == BodyStopCount - 1) {
+        0f
+    } else {
+        val r = i * 0.16f
+        (0.85f * exp(-r * r * r * 1.6f)).coerceIn(0f, 1f)
     }
-    return hdrRadialBrush(pairs, center, radius * end, boost)
+}
+
+/**
+ * 柔光本体画刷缓存：单位圆 RadialGradient 按颜色 RGB 只建一次，手指移动和半径变化只改 localMatrix，
+ * 亮度变化通过 Paint.alpha 传入，按压与拖拽全程零堆分配、零 JNI Shader 重建。
+ */
+private class GlowBodyBrushCache {
+    private val colors = IntArray(BodyStopCount)
+    private val matrix = Matrix()
+    private var lastRgb = -1
+    private var shader: RadialGradient? = null
+    val brush = object : ShaderBrush() {
+        override fun createShader(size: Size): androidx.compose.ui.graphics.Shader = shader!!
+    }
+
+    fun prepare(color: Color, center: Offset, radius: Float): ShaderBrush {
+        val rgb = color.copy(alpha = 1f).toArgb() and 0x00FFFFFF
+        if (shader == null || rgb != lastRgb) {
+            lastRgb = rgb
+            for (i in 0 until BodyStopCount) {
+                val al = (BodyWeights[i] * 255f + 0.5f).toInt().coerceIn(0, 255)
+                colors[i] = (al shl 24) or rgb
+            }
+            shader = RadialGradient(0f, 0f, 1f, colors, BodyPositions, Shader.TileMode.CLAMP)
+        }
+        val r = (radius * BodyEnd).coerceAtLeast(0.01f)
+        matrix.setScale(r, r)
+        matrix.postTranslate(center.x, center.y)
+        shader!!.setLocalMatrix(matrix)
+        return brush
+    }
+}
+
+private val glowBodyCache = object : ThreadLocal<GlowBodyBrushCache>() {
+    override fun initialValue(): GlowBodyBrushCache = GlowBodyBrushCache()
 }

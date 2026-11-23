@@ -6,6 +6,7 @@
 package ui.feice.mochi.basic
 
 import androidx.activity.BackEventCompat
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -31,6 +32,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -49,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -61,6 +65,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,14 +75,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.awaitFrameSettle
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.effect.content.mochiTrackAnimatedHeight
 import ui.feice.mochi.effect.glass.GlassMotionWhile
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.glass.MochiGlassContent
+import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.effect.shadow.drawMochiShadow
+import ui.feice.mochi.navigation.LocalMochiPredictiveBack
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.shape.MochiConcentricContainer
 import ui.feice.mochi.shape.MochiRoundedRectangle
@@ -193,48 +201,67 @@ public fun MochiDialog(
 ) {
     val currentOnDismiss by rememberUpdatedState(onDismissRequest)
     val currentVisible by rememberUpdatedState(visible)
+    val hasIcon by rememberUpdatedState(icon != null)
+    val reduceMotion = mochiReduceMotion()
     val presence = remember { Animatable(0f) }
     val back = remember { Animatable(0f) }
     // 图标的描绘进度：每次弹出从头画（LocalMochiIconDraw），关闭途中又打开时接着画完
     val iconDraw = remember { Animatable(if (visible) 0f else 1f) }
     var composed by remember { mutableStateOf(visible) }
     var closing by remember { mutableStateOf(false) }
+    var settled by remember { mutableStateOf(false) }
     var edge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
     val hostFocus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
 
     val framePeriod = rememberFramePeriodNanos()
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, reduceMotion) {
         if (visible) {
             val fresh = !composed || presence.value == 0f
             // 页面上原来聚焦的输入框先放掉：不然对话框关掉后焦点会回到它身上、键盘又弹出来
             hostFocus.clearFocus(force = true)
             composed = true
             closing = false
+            settled = false
             back.snapTo(0f)
+            if (reduceMotion) {
+                iconDraw.snapTo(1f)
+                presence.snapTo(1f)
+                settled = true
+                return@LaunchedEffect
+            }
             // 新弹出的对话框：先等它组合、排版、画完、帧率回稳再动，开头几帧不被排版吞掉（关闭途中又打开不等）
             if (fresh) {
-                iconDraw.snapTo(0f)
+                if (hasIcon) iconDraw.snapTo(0f)
                 awaitFrameSettle(framePeriod)
             }
-            // 卡片放大到位的同时，图标一笔一笔画出来（比卡片稍晚起笔，卡片还在缩时看不清细节）
-            launch {
-                delay(IconDrawDelayMillis)
-                iconDraw.animateTo(1f, tween(IconDrawMillis, easing = LinearEasing))
+            // 卡片放大到位的同时，图标一笔一笔画出来（仅在有图标时启动，无图标对话框不空跑 720ms 动画）
+            if (hasIcon) {
+                launch {
+                    delay(IconDrawDelayMillis)
+                    iconDraw.animateTo(1f, tween(IconDrawMillis, easing = LinearEasing))
+                }
             }
             presence.animateTo(1f, MochiMotionTokens.Pop)
+            settled = true
         } else if (composed) {
             // 对话框里有输入框时，关掉的同时收起键盘（iOS）
             keyboard?.hide()
             closing = true
-            presence.animateTo(0f, MochiMotionTokens.Settle)
+            settled = false
+            if (reduceMotion) {
+                presence.snapTo(0f)
+            } else {
+                presence.animateTo(0f, MochiMotionTokens.Settle)
+            }
             composed = false
             back.snapTo(0f)
         }
     }
     if (!composed) return
 
-    InWindowOverlay(leaving = { closing || !currentVisible }) {
+    val needsBackdrop = glassOn(GlassRole.Alert) || glassOn(GlassRole.Control)
+    InWindowOverlay(leaving = { closing || !currentVisible }, needsBackdrop = needsBackdrop) {
         val scope = rememberCoroutineScope()
         var backActive by remember { mutableStateOf(false) }
         var resizing by remember { mutableStateOf(false) }
@@ -249,14 +276,19 @@ public fun MochiDialog(
                     ime.getBottom(density) == imeTarget.getBottom(density)
             }
         }
-        PredictiveBackHandler(enabled = visible) { events ->
+        val predictiveBack = LocalMochiPredictiveBack.current
+        val currentDismissOnBack by rememberUpdatedState(dismissOnBack)
+        BackHandler(enabled = !predictiveBack && visible) {
+            if (currentDismissOnBack) currentOnDismiss()
+        }
+        PredictiveBackHandler(enabled = predictiveBack && visible) { events ->
             backActive = true
             try {
                 events.collect { e ->
                     edge = e.swipeEdge
                     back.snapTo(e.progress)
                 }
-                if (dismissOnBack) {
+                if (currentDismissOnBack) {
                     currentOnDismiss()
                 } else {
                     scope.launch { back.animateTo(0f, MochiMotionTokens.Control) }
@@ -289,10 +321,11 @@ public fun MochiDialog(
                 .pointerInput(dismissOnOutsideTap) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        val measured = card[2] > card[0] && card[3] > card[1]
                         val p = down.position
-                        val outside = p.x < card[0] || p.y < card[1] || p.x > card[2] || p.y > card[3]
+                        val outside = measured && (p.x < card[0] || p.y < card[1] || p.x > card[2] || p.y > card[3])
                         val up = waitForUpOrCancellation()
-                        if (up != null && outside && dismissOnOutsideTap && visible) currentOnDismiss()
+                        if (up != null && outside && dismissOnOutsideTap && currentVisible) currentOnDismiss()
                     }
                 }
                 .systemBarsPadding()
@@ -303,20 +336,31 @@ public fun MochiDialog(
             MochiConcentricContainer(corner, inset) {
                 // 主题有警告框玻璃（alertGlass）且浮层底下有页面录制时，卡片画成玻璃；否则纯色
                 val glass = rememberGlassFill(GlassRole.Alert)
-                // 弹出 / 收起途中按运动档画玻璃（同菜单开合、页面转场），停住后全分辨率重画一次
-                if (glass != null) GlassMotionWhile(presence.isRunning)
+                // 弹出 / 收起途中（含首帧回稳阶段）保持运动档画玻璃，避免 3 次金字塔分辨率切换；隔离在独立叶组合里不引起对话框正文重组
+                if (glass != null) {
+                    DialogGlassMotion(
+                        presence = presence,
+                        back = back,
+                        isSettled = { settled },
+                        isBackActive = { backActive },
+                    )
+                }
                 // 玻璃卡片上的字照网页的 label 色（浅玻璃黑 86%、深玻璃白 94%）；调用方自己给了配色就不动
-                val defaults = MochiDialogDefaults.colors()
-                val colors = if (glass != null && colors == defaults) {
-                    val label = MochiGlassContent.label(dark)
-                    remember(colors, label, dark) {
-                        // 普通按钮在玻璃卡片上用纯色半透明（不叠第二层玻璃）；强调按钮仍是染色玻璃
-                        colors.copy(
-                            title = label,
-                            message = label,
-                            buttonContent = label,
-                            button = label.copy(alpha = if (dark) 0.14f else 0.08f),
-                        )
+                val colors = if (glass != null) {
+                    val defaults = MochiDialogDefaults.colors()
+                    if (colors == defaults) {
+                        val label = MochiGlassContent.label(dark)
+                        remember(colors, label, dark) {
+                            // 普通按钮在玻璃卡片上用纯色半透明（不叠第二层玻璃）；强调按钮仍是染色玻璃
+                            colors.copy(
+                                title = label,
+                                message = label,
+                                buttonContent = label,
+                                button = label.copy(alpha = if (dark) 0.14f else 0.08f),
+                            )
+                        }
+                    } else {
+                        colors
                     }
                 } else {
                     colors
@@ -361,6 +405,7 @@ public fun MochiDialog(
                                         corner.toPx(),
                                         shadow.resolve(this, dark, presence.value.coerceIn(0f, 1f)),
                                         shadowColor,
+                                        opaqueInterior = colors.container.alpha >= 1f,
                                     )
                                 }
                             } else {
@@ -371,10 +416,30 @@ public fun MochiDialog(
                         .mochiTrackAnimatedHeight(shape, setResizing),
                     // 边缘接按钮的环境光
                 ) {
-                    if (glass != null) GlassSurface(glass, corner, null, Modifier.matchParentSize())
+                    if (glass != null) {
+                        GlassSurface(
+                            glass,
+                            corner,
+                            null,
+                            Modifier.matchParentSize(),
+                            hold = {
+                                if (card[2] <= card[0] || card[3] <= card[1]) {
+                                    null
+                                } else {
+                                    Rect(0f, 0f, card[2] - card[0], card[3] - card[1])
+                                }
+                            },
+                            freezeBackdrop = {
+                                val measured = card[2] > card[0] && card[3] > card[1]
+                                measured && !settled
+                            },
+                        )
+                    }
                     Column {
                         Column(
-                            Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp),
+                            Modifier
+                                .weight(1f, fill = false)
+                                .padding(start = 24.dp, end = 24.dp, top = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             if (icon != null) {
@@ -390,21 +455,31 @@ public fun MochiDialog(
                                 )
                             }
                             if (message != null) {
-                                Text(
-                                    message,
-                                    style = MochiTheme.textStyles.bodyLarge.copy(
-                                        fontSize = 15.sp,
-                                        lineHeight = 20.sp,
-                                        letterSpacing = 0.sp,
-                                    ),
-                                    color = colors.message,
-                                )
+                                val msgModifier = if (content == null) {
+                                    Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                                } else {
+                                    Modifier
+                                }
+                                Box(msgModifier) {
+                                    Text(
+                                        message,
+                                        style = MochiTheme.textStyles.bodyLarge.copy(
+                                            fontSize = 15.sp,
+                                            lineHeight = 20.sp,
+                                            letterSpacing = 0.sp,
+                                        ),
+                                        color = colors.message,
+                                    )
+                                }
                             }
                             if (content != null) {
                                 // 调用方的内容单独一层：弹出 / 收起途中卡片的玻璃、缩放每帧都在变，内容和它们同一层的话
                                 // 每帧整段重录（长更新日志几千字、每一行都重画，主线程一帧十几毫秒，对话框开合明显卡）。
                                 // 单独一层后内容自己不变就只回放
-                                Column(Modifier.graphicsLayer(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(
+                                    Modifier.weight(1f, fill = false).graphicsLayer(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
                                     CompositionLocalProvider(LocalMochiDialogCaretVisible provides caretVisible) { content() }
                                 }
                             }
@@ -448,8 +523,9 @@ private fun DialogButtons(
             actions.sortedBy { if (it.role == MochiDialogActionRole.Cancel) 1 else 0 }
         }
     }
-    val handles = remember(ordered) { List(ordered.size) { ButtonSlideHandle() } }
-    val slots = remember(ordered) { arrayOfNulls<LayoutCoordinates>(ordered.size) }
+    val handles = remember(ordered.size) { List(ordered.size) { ButtonSlideHandle() } }
+    val slots = remember(ordered.size) { arrayOfNulls<LayoutCoordinates>(ordered.size) }
+    val cachedBounds = remember(ordered.size) { Array(ordered.size) { Rect.Zero } }
     val currentOrdered by rememberUpdatedState(ordered)
     val currentOnAction by rememberUpdatedState(onAction)
     val haptics = rememberMochiHaptics()
@@ -461,31 +537,40 @@ private fun DialogButtons(
         .pointerInput(handles) {
             val reach = gap.toPx() / 2f
 
+            fun refreshBounds(): Boolean {
+                val a = area?.takeIf { it.isAttached } ?: return false
+                for (i in slots.indices) {
+                    val c = slots[i]?.takeIf { it.isAttached }
+                    cachedBounds[i] = if (c != null) a.localBoundingBoxOf(c, clipBounds = false) else Rect.Zero
+                }
+                return true
+            }
+
             // 手指在按钮区坐标里落在哪个可滑选的按钮上（按钮之间的空隙各分一半，不会在缝里闪灭）；-1 = 不在任何按钮上
             fun hit(p: Offset): Int {
-                val a = area?.takeIf { it.isAttached } ?: return -1
-                for (i in slots.indices) {
+                for (i in cachedBounds.indices) {
                     val act = currentOrdered.getOrNull(i) ?: continue
                     if (!act.enabled || act.holdToConfirm) continue
-                    val c = slots[i]?.takeIf { it.isAttached } ?: continue
-                    val r = a.localBoundingBoxOf(c, clipBounds = false)
+                    val r = cachedBounds[i]
+                    if (r == Rect.Zero) continue
                     if (p.x >= r.left - reach && p.x <= r.right + reach && p.y >= r.top - reach && p.y <= r.bottom + reach) return i
                 }
                 return -1
             }
             fun light(i: Int, p: Offset) {
-                handles.forEachIndexed { j, h ->
+                for (j in handles.indices) {
+                    val h = handles[j]
                     val on = j == i
                     if (on) {
-                        val a = area?.takeIf { it.isAttached }
-                        val c = slots[j]?.takeIf { it.isAttached }
-                        h.finger = if (a != null && c != null) c.localPositionOf(a, p) else p
+                        val r = cachedBounds[j]
+                        h.finger = Offset(p.x - r.left, p.y - r.top)
                     }
                     if (h.held != on) h.held = on
                 }
             }
             awaitEachGesture {
                 val down = awaitFirstDown()
+                if (!refreshBounds()) return@awaitEachGesture
                 var current = hit(down.position)
                 if (current < 0) return@awaitEachGesture
                 down.consume()
@@ -515,7 +600,7 @@ private fun DialogButtons(
                     light(-1, Offset.Zero)
                 }
                 if (released) {
-                    currentOrdered.getOrNull(current)?.let {
+                    currentOrdered.getOrNull(current)?.takeIf { it.enabled && !it.holdToConfirm }?.let {
                         haptics.confirm()
                         currentOnAction(it)
                     }
@@ -577,7 +662,13 @@ private fun DialogButton(
                 progress = c.content.copy(alpha = if (primary) 0.24f else 0.14f),
             ),
         ) {
-            Text(action.label, style = MochiTheme.textStyles.navTitle, maxLines = 1)
+            Text(
+                action.label,
+                style = MochiTheme.textStyles.navTitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                minFontScale = 0.8f,
+            )
         }
         return
     }
@@ -607,6 +698,8 @@ private fun DialogButton(
                     // iOS 26 alert 按钮：17 Semibold
                     style = MochiTheme.textStyles.navTitle,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    minFontScale = 0.8f,
                 )
             }
         }
@@ -615,3 +708,18 @@ private fun DialogButton(
 
 /** 对话框按钮按下时每边最多长出多少 */
 private val DialogButtonMaxGrow = 3.dp
+
+@Composable
+private fun DialogGlassMotion(
+    presence: Animatable<Float, *>,
+    back: Animatable<Float, *>,
+    isSettled: () -> Boolean,
+    isBackActive: () -> Boolean,
+) {
+    val currentSettled by rememberUpdatedState(isSettled)
+    val currentBackActive by rememberUpdatedState(isBackActive)
+    val active by remember(presence, back) {
+        derivedStateOf { !currentSettled() || presence.isRunning || currentBackActive() || back.value > 0f }
+    }
+    GlassMotionWhile(active)
+}

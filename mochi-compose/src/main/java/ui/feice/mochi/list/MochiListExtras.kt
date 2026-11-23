@@ -6,33 +6,31 @@
 package ui.feice.mochi.list
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import ui.feice.mochi.anim.MochiMotionTokens
@@ -69,7 +67,7 @@ public fun MochiListDisclosure(
     colors: MochiListColors = MochiListDefaults.colors(),
     content: @Composable () -> Unit,
 ) {
-    val angle by animateFloatAsState(if (expanded) 90f else 0f, MochiTransition.current.spatial, label = "disclosure")
+    val angleState = animateFloatAsState(if (expanded) 90f else 0f, MochiTransition.current.spatial, label = "disclosure")
     MochiListRow(
         title,
         modifier,
@@ -77,7 +75,7 @@ public fun MochiListDisclosure(
         subtitle = subtitle,
         value = value,
         leading = leading,
-        trailing = { MochiGlyphs.Chevron(colors.chevron, size = 14.dp, rotation = { angle }) },
+        trailing = { MochiGlyphs.Chevron(colors.chevron, size = 14.dp, rotation = { angleState.value }) },
         colors = colors,
     )
     // 子行展开时淡入；收起时先淡出（FadeOut，120ms）再移除，卡片高度随后用同一档收起，不露出一块空白卡片面
@@ -86,7 +84,8 @@ public fun MochiListDisclosure(
         if (expanded) MochiMotionTokens.Fade else MochiMotionTokens.FadeOut,
         label = "disclosureFade",
     )
-    if (expanded || fade.value > 0f) {
+    val showChildren by remember(fade) { derivedStateOf { fade.value > 0f } }
+    if (expanded || showChildren) {
         // 只在绘制阶段读透明度，淡入淡出不让子行重组
         val read: () -> Float = remember(fade) { { fade.value } }
         CompositionLocalProvider(LocalListDisclosureFade provides read) { content() }
@@ -102,24 +101,38 @@ public class MochiListEditState internal constructor(editing: Boolean, selected:
     /** 在编辑：行首出现勾选圈，点行 = 勾选 */
     public var editing: Boolean by mutableStateOf(editing)
 
-    private val keys: SnapshotStateList<Any> = selected.toMutableStateList()
+    private val keys: SnapshotStateList<Any> = selected.distinct().toMutableStateList()
+    private val keySet: SnapshotStateMap<Any, Unit> = mutableStateMapOf()
+
+    init {
+        for (k in keys) keySet[k] = Unit
+    }
 
     /** 选中的 key（按勾选顺序） */
     public val selected: List<Any> get() = keys
 
-    public fun isSelected(key: Any): Boolean = key in keys
+    public fun isSelected(key: Any): Boolean = keySet.containsKey(key)
 
     public fun toggle(key: Any) {
-        if (!keys.remove(key)) keys.add(key)
+        if (keySet.remove(key) != null) {
+            keys.remove(key)
+        } else {
+            keySet[key] = Unit
+            keys.add(key)
+        }
     }
 
     public fun selectAll(all: Collection<Any>) {
         keys.clear()
-        keys.addAll(all)
+        keySet.clear()
+        for (k in all) {
+            if (keySet.put(k, Unit) == null) keys.add(k)
+        }
     }
 
     public fun clear() {
         keys.clear()
+        keySet.clear()
     }
 }
 
@@ -144,9 +157,13 @@ public fun MochiSelectableRow(
     colors: MochiListColors = MochiListDefaults.colors(),
 ) {
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
-    val edit by animateFloatAsState(if (state.editing) 1f else 0f, MochiMotionTokens.Control, label = "edit")
-    val checked = state.isSelected(key)
-    val check by animateFloatAsState(if (checked) 1f else 0f, MochiMotionTokens.Settle, label = "check")
+    val editState = animateFloatAsState(if (state.editing) 1f else 0f, MochiMotionTokens.Control, label = "edit")
+    val showPrefix by remember(state, editState) { derivedStateOf { state.editing || editState.value > 0.001f } }
+    val checked = if (showPrefix) state.isSelected(key) else false
+    val checkState = animateFloatAsState(if (checked) 1f else 0f, MochiMotionTokens.Settle, label = "check")
+    val checkColors = remember(colors.accent, colors.secondary) {
+        MochiCheckboxColors(colors.accent, Color.White, colors.secondary.copy(alpha = 0.45f))
+    }
     ListRowImpl(
         title,
         modifier,
@@ -163,14 +180,28 @@ public fun MochiSelectableRow(
         leading = leading,
         colors = colors,
         prefixWidth = if (state.editing) CheckSlot else 0.dp,
-        prefix = {
-            Box(Modifier.width(CheckSlot * edit).clipToBounds(), contentAlignment = Alignment.CenterStart) {
-                MochiCheckCircle(
-                    check,
-                    MochiCheckboxColors(colors.accent, Color.White, colors.secondary.copy(alpha = 0.45f)),
-                    Modifier.graphicsLayer { alpha = edit },
-                )
+        prefix = if (showPrefix) {
+            {
+                Box(
+                    Modifier
+                        .layout { measurable, constraints ->
+                            val w = (CheckSlot.toPx() * editState.value).roundToInt().coerceAtLeast(0)
+                            val p = measurable.measure(constraints.copy(minWidth = 0))
+                            val h = p.height.coerceAtLeast(constraints.minHeight)
+                            layout(w, h) { p.place(0, (h - p.height) / 2) }
+                        }
+                        .clipToBounds(),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    MochiCheckCircle(
+                        { checkState.value },
+                        checkColors,
+                        Modifier.graphicsLayer { alpha = editState.value },
+                    )
+                }
             }
+        } else {
+            null
         },
     )
 }

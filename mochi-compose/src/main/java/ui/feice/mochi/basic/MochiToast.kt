@@ -3,6 +3,7 @@
 
 package ui.feice.mochi.basic
 
+import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.spring
@@ -10,7 +11,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -48,16 +48,24 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import ui.feice.mochi.anim.MochiMotionTokens
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.elastic.mochiPressDeform
@@ -151,34 +159,49 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
     val drag = remember { Animatable(0f) }
     var held by remember { mutableStateOf(false) }
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
-    val dark = MochiTheme.colorScheme.isDark
-    val shadowColor = MochiTheme.colorScheme.shadow
-    val shadow = MochiTheme.shadows.lifted
+    val reduceMotion = mochiReduceMotion()
 
-    LaunchedEffect(state.current) {
+    LaunchedEffect(state.current, reduceMotion) {
         val t = state.current
         if (t != null) {
             shown = t
             haptics.tick()
-            coroutineScope {
-                launch { drag.animateTo(0f, spring(dampingRatio = 1f, stiffness = 500f, visibilityThreshold = 0.5f)) }
-                launch { departure.animateTo(0f, tween(160)) }
-                launch { presence.animateTo(1f, MochiMotionTokens.Present) }
+            if (reduceMotion) {
+                drag.snapTo(0f)
+                departure.snapTo(0f)
+                presence.snapTo(1f)
+            } else {
+                coroutineScope {
+                    launch { drag.animateTo(0f, ToastDragResetSpring) }
+                    launch { departure.animateTo(0f, tween(160)) }
+                    launch { presence.animateTo(1f, MochiMotionTokens.Present) }
+                }
             }
-            // 停留：按住时不计时
+            // 停留：按住时不计时；无按住时单次超时完成，零 100ms 轮询唤醒
             var left = t.durationMillis
-            while (left > 0) {
+            var done = false
+            while (!done && left > 0L) {
                 if (held) {
                     snapshotFlow { held }.first { !it }
-                    left = left.coerceAtLeast(800)
+                    left = left.coerceAtLeast(800L)
                 }
-                delay(100)
-                left -= 100
+                val startMs = SystemClock.uptimeMillis()
+                val interrupted = withTimeoutOrNull(left) {
+                    snapshotFlow { held }.first { it }
+                }
+                if (interrupted == null) {
+                    done = true
+                } else {
+                    val elapsed = (SystemClock.uptimeMillis() - startMs).coerceAtLeast(0L)
+                    left = (left - elapsed).coerceAtLeast(800L)
+                }
             }
             if (state.current?.id == t.id) state.current = null
         } else if (shown != null) {
             // 收起独立于展开：不把完整文字挤回小岛，不留一颗空胶囊等待弹簧尾巴。
-            departure.animateTo(1f, tween(190, easing = FastOutLinearInEasing))
+            if (!reduceMotion) {
+                departure.animateTo(1f, tween(190, easing = FastOutLinearInEasing))
+            }
             shown = null
             presence.snapTo(0f)
             departure.snapTo(0f)
@@ -187,13 +210,23 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
     }
 
     val toast = shown ?: return
-    InWindowOverlay(leaving = { state.current?.id != toast.id }) {
+    InWindowOverlay(leaving = { state.current?.id != toast.id }, needsBackdrop = false) {
         DisposableEffect(toast.id) { onDispose { held = false } }
         val density = LocalDensity.current
+        val dark = MochiTheme.colorScheme.isDark
+        val shadowColor = MochiTheme.colorScheme.shadow
+        val shadow = MochiTheme.shadows.lifted
+        val resolvedShadow = remember(shadow, density, dark) { shadow.resolve(density, dark) }
+        val snapDrag = remember { Channel<Float>(Channel.CONFLATED) }
+        LaunchedEffect(snapDrag) {
+            for (y in snapDrag) drag.snapTo(y)
+        }
         val scope = rememberCoroutineScope()
         val glow = rememberMochiGlowState(remember(colors.glow) { MochiGlowSpec(colors.glow) })
         val islandW = with(density) { MochiToastDefaults.IslandWidth.toPx() }
         val islandH = with(density) { MochiToastDefaults.IslandHeight.toPx() }
+        val titleBase = MochiTheme.textStyles.labelLarge
+        val titleStyle = remember(titleBase) { titleBase.copy(fontWeight = FontWeight.SemiBold) }
         Box(
             modifier
                 .fillMaxSize()
@@ -237,7 +270,7 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
                             // 同一个提示原地更新内容时模糊替换
                             MochiBlurText(
                                 toast.title,
-                                style = MochiTheme.textStyles.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                style = titleStyle,
                                 color = colors.content,
                                 maxLines = 1,
                             )
@@ -251,56 +284,107 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
                 },
                 modifier = Modifier
                     // 形变包住整张表面及其裁切，不能让外面的静止胶囊裁掉里面放大、偏移的内容。
-                    .mochiPressDeform(scale = 1.04f, follow = 4.dp)
+                    .then(if (reduceMotion) Modifier else Modifier.mochiPressDeform(scale = 1.04f, follow = 4.dp))
                     .graphicsLayer {
                         val p = presence.value.coerceIn(0f, 1f)
                         val exit = departure.value.coerceIn(0f, 1f)
-                        val scale = lerp(0.98f, 1f, p) * (1f - 0.035f * exit)
+                        val scale = if (reduceMotion) 1f else lerp(0.98f, 1f, p) * (1f - 0.035f * exit)
                         scaleX = scale
                         scaleY = scale
                         transformOrigin = TransformOrigin(0.5f, 0f)
-                        translationY = drag.value - 10.dp.toPx() * (1f - p) - 18.dp.toPx() * exit
+                        translationY = drag.value - (if (reduceMotion) 0f else 10.dp.toPx() * (1f - p) + 18.dp.toPx() * exit)
                         alpha = smoothstep(0f, 0.2f, p) * (1f - exit)
                     }
                     // 柔和投影（和菜单同一套），不用系统按光源算的阴影：那个底边一道实影，又硬又重。画在裁切外面
                     .drawBehind {
-                        drawMochiShadow(size.toRect(), size.minDimension / 2f, shadow.resolve(this, dark), shadowColor)
+                        drawMochiShadow(
+                            size.toRect(),
+                            size.minDimension / 2f,
+                            resolvedShadow,
+                            shadowColor,
+                            opaqueInterior = colors.container.alpha >= 1f,
+                        )
                     }
                     .clip(MochiCapsule)
                     .background(colors.container)
                     .mochiPressGlow(glow, MochiCapsule)
-                    .pointerInput(toast.id) {
+                    .semantics(mergeDescendants = true) {
+                        liveRegion = LiveRegionMode.Polite
+                        val action = toast.onClick
+                        if (action != null) {
+                            role = Role.Button
+                            onClick {
+                                action()
+                                state.dismiss()
+                                true
+                            }
+                        } else {
+                            onClick(label = "关闭提示") {
+                                state.dismiss()
+                                true
+                            }
+                        }
+                    }
+                    .pointerInput(toast.id, reduceMotion) {
                         val dismissPx = 24.dp.toPx()
                         awaitEachGesture {
                             val down = awaitFirstDown()
                             held = true
                             val tracker = VelocityTracker()
-                            tracker.addPosition(down.uptimeMillis, down.position)
                             var dy = 0f
+                            var lastShownDy = 0f
                             var moved = false
-                            while (true) {
-                                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                tracker.addPosition(c.uptimeMillis, c.position)
-                                dy += c.position.y - c.previousPosition.y
-                                if (!moved && kotlin.math.abs(dy) > viewConfiguration.touchSlop) moved = true
-                                // 往上跟手，往下被橡皮筋拉住
-                                val shownDy = if (dy < 0f) dy else rubberBand(dy, size.height.coerceAtLeast(1) * 3f, 14.dp.toPx())
-                                scope.launch { drag.snapTo(shownDy) }
-                                c.consume()
-                                if (!c.pressed) break
+                            var completed = false
+                            try {
+                                tracker.addPosition(down.uptimeMillis, down.position)
+                                while (true) {
+                                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                    tracker.addPosition(c.uptimeMillis, c.position)
+                                    dy += c.position.y - c.previousPosition.y
+                                    if (!moved && kotlin.math.abs(dy) > viewConfiguration.touchSlop) moved = true
+                                    // 往上跟手，往下被橡皮筋拉住
+                                    val shownDy = if (dy < 0f) {
+                                        dy
+                                    } else if (reduceMotion) {
+                                        0f
+                                    } else {
+                                        rubberBand(dy, size.height.coerceAtLeast(1) * 3f, 14.dp.toPx())
+                                    }
+                                    lastShownDy = shownDy
+                                    snapDrag.trySend(shownDy)
+                                    c.consume()
+                                    if (!c.pressed) break
+                                }
+                                completed = true
+                            } finally {
+                                held = false
+                                if (!completed) {
+                                    scope.launch { drag.snapTo(0f) }
+                                }
                             }
-                            held = false
                             val v = tracker.calculateVelocity().y
                             if (moved && (dy < -dismissPx || v < -600f)) {
                                 // 往上甩走：接着手指的速度继续往上飞，和收起的淡出、缩小同时进行，不在原地停一下再收
-                                val away = drag.value - size.height * 1.5f
-                                scope.launch { drag.animateTo(away, MochiMotionTokens.Settle, initialVelocity = v.coerceAtMost(0f)) }
+                                if (!reduceMotion) {
+                                    val away = lastShownDy - size.height * 1.5f
+                                    scope.launch {
+                                        drag.snapTo(lastShownDy)
+                                        drag.animateTo(away, MochiMotionTokens.Settle, initialVelocity = v.coerceAtMost(0f))
+                                    }
+                                }
                                 state.dismiss()
                             } else if (!moved) {
                                 toast.onClick?.invoke()
                                 state.dismiss()
                             } else {
-                                scope.launch { drag.animateTo(0f, MochiMotionTokens.Control, initialVelocity = v) }
+                                scope.launch {
+                                    if (reduceMotion) {
+                                        drag.snapTo(0f)
+                                    } else {
+                                        drag.snapTo(lastShownDy)
+                                        drag.animateTo(0f, MochiMotionTokens.Control, initialVelocity = v)
+                                    }
+                                }
                             }
                         }
                     },
@@ -316,3 +400,5 @@ public fun MochiToastHost(state: MochiToastState, modifier: Modifier = Modifier,
         }
     }
 }
+
+private val ToastDragResetSpring = spring<Float>(dampingRatio = 1f, stiffness = 500f, visibilityThreshold = 0.5f)

@@ -5,24 +5,19 @@
 
 package ui.feice.mochi.basic
 
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.semantics.selected
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.channels.Channel
 import ui.feice.mochi.effect.elastic.MochiFollowSpring
 import ui.feice.mochi.effect.elastic.rubberBand
 import ui.feice.mochi.utils.MochiHaptics
@@ -37,14 +32,40 @@ import ui.feice.mochi.utils.MochiHaptics
  */
 @Stable
 internal class TabBarLink(initial: Int) {
+    private val startedState = mutableIntStateOf(initial)
+    private val pendingState = mutableIntStateOf(-1)
+    private val swipeState = mutableFloatStateOf(Float.NaN)
+    private val wakeListeners = ArrayList<() -> Unit>(2)
+
     /** 页面已经开始动向的那一页（预热结束、真正起步时才更新） */
-    var started by mutableIntStateOf(initial)
+    var started: Int
+        get() = startedState.intValue
+        set(value) {
+            if (startedState.intValue != value) {
+                startedState.intValue = value
+                notifyWake()
+            }
+        }
 
     /** 选中项已经变了、页面还在预热的那一页；-1 = 没有 */
-    var pending by mutableIntStateOf(-1)
+    var pending: Int
+        get() = pendingState.intValue
+        set(value) {
+            if (pendingState.intValue != value) {
+                pendingState.intValue = value
+                notifyWake()
+            }
+        }
 
     /** 左右拖页面时选中块该在的位置（以「第几项」为单位，拖出两端已经过橡皮筋）；NaN = 没在拖 */
-    var swipe by mutableFloatStateOf(Float.NaN)
+    var swipe: Float
+        get() = swipeState.floatValue
+        set(value) {
+            if (swipeState.floatValue.toRawBits() != value.toRawBits()) {
+                swipeState.floatValue = value
+                notifyWake()
+            }
+        }
 
     /** 松手时页面的速度（项 / 秒），玻璃标签栏的透镜从这个速度出发；取一次就清零（纯色标签栏的选中块本来就带着跟手时的速度） */
     private var handoff = 0f
@@ -57,6 +78,17 @@ internal class TabBarLink(initial: Int) {
 
     /** 标签栏此刻该指向的那一项：页面起步之前仍指着旧的一项 */
     fun shown(n: Int): Int = started.coerceIn(0, (n - 1).coerceAtLeast(0))
+
+    internal fun bind(onWake: () -> Unit): () -> Unit {
+        wakeListeners.add(onWake)
+        return { wakeListeners.remove(onWake) }
+    }
+
+    private fun notifyWake() {
+        for (i in 0 until wakeListeners.size) {
+            wakeListeners[i]()
+        }
+    }
 }
 
 /** [ui.feice.mochi.navigation.MochiTabScaffold] 给自己的标签栏的 [TabBarLink]；别处是 null */
@@ -65,6 +97,9 @@ internal val LocalTabBarLink = staticCompositionLocalOf<TabBarLink?> { null }
 /** 选中块的位置（以「第几项」为单位，可以是小数）、拖在后面的水滴、底栏的跟手位移，和它们的弹簧 */
 @Stable
 internal class TabBarState(initial: Float) {
+    private val wakeChannel = Channel<Unit>(Channel.CONFLATED)
+    private val heldState = mutableStateOf(false)
+
     var pos by mutableFloatStateOf(initial)
         private set
 
@@ -84,7 +119,14 @@ internal class TabBarState(initial: Float) {
     var offset by mutableStateOf(Offset.Zero)
         private set
 
-    var held by mutableStateOf(false)
+    var held: Boolean
+        get() = heldState.value
+        set(value) {
+            if (heldState.value != value) {
+                heldState.value = value
+                wake()
+            }
+        }
 
     /** 手指位置（以「第几项」为单位，没截断） */
     var finger by mutableFloatStateOf(initial)
@@ -92,15 +134,26 @@ internal class TabBarState(initial: Float) {
     /** 手指相对按下点的位移（px），每帧在循环里读 */
     var drag: Offset = Offset.Zero
 
+    var reduceMotion: Boolean = false
+        set(value) {
+            field = value
+            wake()
+        }
+
     /** 松手后、新的 selectedIndex 传进来之前，先往这里去（不然会先被拉回旧位置一帧） */
     private var settle: Int? = null
     private var settleFrames = 0
 
+    internal fun wake() {
+        wakeChannel.trySend(Unit)
+    }
+
     fun release(target: Int?) {
-        held = false
+        heldState.value = false
         drag = Offset.Zero
         settle = target
         settleFrames = 6
+        wake()
     }
 
     private fun target(n: Int, selected: Int, link: TabBarLink?): Float {
@@ -145,6 +198,10 @@ internal class TabBarState(initial: Float) {
      * 同时起步、时长相近，选中块到位时带一点过冲是选中块自己的果冻感，保留，不为了和页面一致改成临界阻尼。
      */
     suspend fun run(n: Int, selected: () -> Int, haptics: MochiHaptics, bar: Size, maxShift: Offset, link: TabBarLink? = null) {
+        run(n, selected, haptics, { bar }, maxShift, link)
+    }
+
+    suspend fun run(n: Int, selected: () -> Int, haptics: MochiHaptics, bar: () -> Size, maxShift: Offset, link: TabBarLink? = null) {
         val spring = MochiFollowSpring(0.42f, 0.72f)
         // 水滴只稍慢于选中块；拖动时更紧，松手仍沿同一弹簧连续追上。
         val tailSpring = MochiFollowSpring(0.24f, 0.9f)
@@ -154,44 +211,68 @@ internal class TabBarState(initial: Float) {
         tailSpring.snapTo(Offset(tail, 0f))
         shift.snapTo(offset)
         var nearest = selected()
-        while (true) {
-            val t = target(n, selected(), link)
-            // 拖页面时选中块用跟手的紧弹簧追着页面的位置，速度和页面一致；松手只换目标和弹簧参数、不清速度，
-            // 于是接着这股速度走向目标（换页或弹回），不停一下再走
-            val swiping = link != null && !link.swipe.isNaN()
-            if (atRest(t, spring, tailSpring, shift, swiping)) {
-                pos = t
-                tail = t
-                vel = 0f
-                offset = Offset.Zero
-                spring.snapTo(Offset(t, 0f))
-                tailSpring.snapTo(Offset(t, 0f))
-                shift.snapTo(Offset.Zero)
-                snapshotFlow { Triple(held, selected(), link?.swipe ?: Float.NaN) }.first { (h, s, w) ->
-                    h || !w.isNaN() ||
-                        s.toFloat() != pos
+        val unbind = link?.bind(::wake)
+        try {
+            while (true) {
+                val t = target(n, selected(), link)
+                // 拖页面时选中块用跟手的紧弹簧追着页面的位置，速度和页面一致；松手只换目标和弹簧参数、不清速度，
+                // 于是接着这股速度走向目标（换页或弹回），不停一下再走
+                val swiping = link != null && !link.swipe.isNaN()
+                if (reduceMotion) {
+                    pos = t
+                    tail = t
+                    vel = 0f
+                    offset = Offset.Zero
+                    spring.snapTo(Offset(t, 0f))
+                    tailSpring.snapTo(Offset(t, 0f))
+                    shift.snapTo(Offset.Zero)
+                    val k = pos.roundToInt().coerceIn(0, (n - 1).coerceAtLeast(0))
+                    if (held && k != nearest) haptics.tick()
+                    nearest = k
+                    if (!held && !swiping && settle == null) {
+                        wakeChannel.receive()
+                    } else {
+                        spring.awaitFrameDelta()
+                    }
+                    continue
                 }
-                continue
+                if (atRest(t, spring, tailSpring, shift, swiping)) {
+                    pos = t
+                    tail = t
+                    vel = 0f
+                    offset = Offset.Zero
+                    spring.snapTo(Offset(t, 0f))
+                    tailSpring.snapTo(Offset(t, 0f))
+                    shift.snapTo(Offset.Zero)
+                    wakeChannel.receive()
+                    continue
+                }
+                val dt = spring.awaitFrameDelta()
+                // 按住标签栏、拖页面时都是跟手的紧弹簧
+                val follow = held || swiping
+                spring.response = if (follow) 0.22f else 0.42f
+                spring.dampingRatio = if (follow) 0.86f else 0.72f
+                pos = spring.step(Offset(t, 0f), dt).x
+                vel = spring.velocity.x
+                tailSpring.response = if (follow) 0.16f else 0.24f
+                tail = tailSpring.step(Offset(pos, 0f), dt).x
+                val d = drag
+                val barSize = bar()
+                val shiftTarget = if (held) {
+                    Offset(
+                        rubberBand(d.x, barSize.width.coerceAtLeast(1f), maxShift.x),
+                        rubberBand(d.y, (barSize.height * 4f).coerceAtLeast(1f), maxShift.y),
+                    )
+                } else {
+                    Offset.Zero
+                }
+                offset = shift.step(shiftTarget, dt)
+                val k = pos.roundToInt().coerceIn(0, n - 1)
+                if (held && k != nearest) haptics.tick()
+                nearest = k
             }
-            val dt = spring.awaitFrameDelta()
-            // 按住标签栏、拖页面时都是跟手的紧弹簧
-            val follow = held || swiping
-            spring.response = if (follow) 0.22f else 0.42f
-            spring.dampingRatio = if (follow) 0.86f else 0.72f
-            pos = spring.step(Offset(t, 0f), dt).x
-            vel = spring.velocity.x
-            tailSpring.response = if (follow) 0.16f else 0.24f
-            tail = tailSpring.step(Offset(pos, 0f), dt).x
-            val d = drag
-            val shiftTarget = if (held) {
-                Offset(rubberBand(d.x, bar.width, maxShift.x), rubberBand(d.y, bar.height * 4f, maxShift.y))
-            } else {
-                Offset.Zero
-            }
-            offset = shift.step(shiftTarget, dt)
-            val k = pos.roundToInt().coerceIn(0, n - 1)
-            if (held && k != nearest) haptics.tick()
-            nearest = k
+        } finally {
+            unbind?.invoke()
         }
     }
 }

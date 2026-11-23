@@ -6,6 +6,7 @@ package ui.feice.mochi.effect.glass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -13,7 +14,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.node.GlobalPositionAwareModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
@@ -21,6 +24,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import java.util.WeakHashMap
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import ui.feice.mochi.theme.MochiTheme
 
 /**
  * 全局「有东西在大幅运动」（导航转场）。期间：
@@ -28,25 +32,17 @@ import kotlinx.coroutines.flow.collectLatest
  * - 自适应玻璃暂停 PixelCopy 回读亮度（回读会让 GPU 管线停下来等）。
  * 只在主线程读写
  */
-internal object GlassMotion {
+internal val LocalGlassMotion = androidx.compose.runtime.staticCompositionLocalOf { GlassMotion() }
+
+@Stable
+internal class GlassMotion {
     private var count = 0
     private val lowered = LinkedHashSet<() -> Unit>()
 
     val active: Boolean get() = count > 0
 
-    // 运动开始时要换成快照的玻璃（见 LiquidGlassNode 的快照）
-    private val watchers = LinkedHashSet<() -> Unit>()
-
     fun begin() {
-        if (count++ == 0 && watchers.isNotEmpty()) watchers.toList().forEach { it() }
-    }
-
-    fun watch(onBegin: () -> Unit) {
-        watchers += onBegin
-    }
-
-    fun unwatch(onBegin: () -> Unit) {
-        watchers -= onBegin
+        count++
     }
 
     fun end() {
@@ -71,8 +67,9 @@ internal object GlassMotion {
 /**
  * 全局「有列表在滚」（拖动或惯性）。玻璃背后的内容每帧都在变，渲染线程每帧都要把每块玻璃的取样 / 金字塔 / 面色重跑一遍；
  * 期间（clear 以外的）玻璃按运动档的分辨率画，离屏像素约降到 1/4，内容在动、本来就模糊，看不出来。
- * 停下 [SettleMs] 后按全分辨率重画一次。和 [GlassMotion] 不同，不贴快照（栏背后的内容还在变）。只在主线程读写
+ * 停下 [SettleMs] 后按全分辨率重画一次。只在主线程读写。
  */
+@Stable
 internal object GlassScroll {
     const val SettleMs = 150L
 
@@ -91,12 +88,16 @@ internal object GlassScroll {
     }
 
     fun begin() {
-        if (count++ == 0) notifyWatchers()
+        if (count++ == 0) {
+            notifyWatchers()
+        }
     }
 
     fun end() {
         if (count == 0) return
-        if (--count == 0) notifyWatchers()
+        if (--count == 0) {
+            notifyWatchers()
+        }
     }
 
     private fun notifyWatchers() {
@@ -110,6 +111,7 @@ internal object GlassScroll {
  */
 @Composable
 internal fun GlassScrollWhile(key: Any?, scrolling: () -> Boolean) {
+    if (!MochiTheme.materials.anyGlass) return
     val currentScrolling by androidx.compose.runtime.rememberUpdatedState(scrolling)
     androidx.compose.runtime.LaunchedEffect(key) {
         var on = false
@@ -135,9 +137,10 @@ internal fun GlassScrollWhile(key: Any?, scrolling: () -> Boolean) {
 /** [active] 为 true 期间算一次「大幅运动」，见 [GlassMotion] */
 @Composable
 internal fun GlassMotionWhile(active: Boolean) {
-    DisposableEffect(active) {
-        if (active) GlassMotion.begin()
-        onDispose { if (active) GlassMotion.end() }
+    val motion = LocalGlassMotion.current
+    DisposableEffect(motion, active) {
+        if (active) motion.begin()
+        onDispose { if (active) motion.end() }
     }
 }
 
@@ -148,7 +151,47 @@ internal fun GlassMotionWhile(active: Boolean) {
 private val anchors = WeakHashMap<LayerBackdrop, LayoutCoordinates>()
 
 internal fun Modifier.mochiLayerBackdrop(backdrop: LayerBackdrop): Modifier =
-    this.layerBackdrop(backdrop).onGloballyPositioned { if (it.isAttached) anchors[backdrop] = it }
+    this.layerBackdrop(backdrop).then(LayerBackdropAnchorElement(backdrop))
+
+private data class LayerBackdropAnchorElement(val backdrop: LayerBackdrop) : ModifierNodeElement<LayerBackdropAnchorNode>() {
+    override fun create(): LayerBackdropAnchorNode = LayerBackdropAnchorNode(backdrop)
+
+    override fun update(node: LayerBackdropAnchorNode) {
+        if (node.backdrop !== backdrop) {
+            node.clearAnchor()
+            node.backdrop = backdrop
+        }
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiLayerBackdrop"
+    }
+}
+
+private class LayerBackdropAnchorNode(var backdrop: LayerBackdrop) :
+    Modifier.Node(),
+    GlobalPositionAwareModifierNode {
+    private var recorded: LayoutCoordinates? = null
+
+    override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
+        if (coordinates.isAttached) {
+            recorded = coordinates
+            anchors[backdrop] = coordinates
+        }
+    }
+
+    fun clearAnchor() {
+        val prev = recorded
+        if (prev != null && anchors[backdrop] === prev) {
+            anchors.remove(backdrop)
+        }
+        recorded = null
+    }
+
+    override fun onDetach() {
+        clearAnchor()
+    }
+}
 
 /** 组合几份来源；和 kyant 的 rememberCombinedBackdrop 一样画，但公开各份，刚体运动判定能逐份看 */
 @Immutable
@@ -156,7 +199,9 @@ internal class MochiCombinedBackdrop(val parts: List<Backdrop>) : Backdrop {
     override val isCoordinatesDependent: Boolean = parts.any { it.isCoordinatesDependent }
 
     override fun DrawScope.drawBackdrop(density: Density, coordinates: LayoutCoordinates?, layerBlock: (GraphicsLayerScope.() -> Unit)?) {
-        for (p in parts) with(p) { drawBackdrop(density, coordinates, layerBlock) }
+        for (i in parts.indices) {
+            with(parts[i]) { drawBackdrop(density, coordinates, layerBlock) }
+        }
     }
 }
 
@@ -169,6 +214,87 @@ internal interface MotionKeyedBackdrop {
     fun motionKey(coordinates: LayoutCoordinates, out: MutableList<Any>): Boolean
 }
 
+/** 零装箱的相对运动键缓冲：常规 LayerBackdrop 打包 Offset 为原生 Long，仅自定义来源走 extras 列表 */
+internal class MotionKeyBuffer {
+    private var longs = LongArray(8)
+    var longCount = 0
+        private set
+    val extras = ArrayList<Any>(2)
+
+    fun clear() {
+        longCount = 0
+        if (extras.isNotEmpty()) extras.clear()
+    }
+
+    fun addLong(v: Long) {
+        if (longCount >= longs.size) {
+            longs = longs.copyOf(longs.size * 2)
+        }
+        longs[longCount++] = v
+    }
+
+    fun matches(other: MotionKeyBuffer): Boolean {
+        if (longCount != other.longCount || extras.size != other.extras.size) return false
+        for (i in 0 until longCount) {
+            if (longs[i] != other.longs[i]) return false
+        }
+        for (i in 0 until extras.size) {
+            if (extras[i] != other.extras[i]) return false
+        }
+        return true
+    }
+
+    fun copyFrom(other: MotionKeyBuffer) {
+        if (longs.size < other.longCount) {
+            longs = LongArray(other.longCount)
+        }
+        other.longs.copyInto(longs, 0, 0, other.longCount)
+        longCount = other.longCount
+        if (extras.isNotEmpty()) extras.clear()
+        if (other.extras.isNotEmpty()) extras.addAll(other.extras)
+    }
+}
+
+internal fun Backdrop.collectMotionKey(coordinates: LayoutCoordinates, out: MotionKeyBuffer): Boolean {
+    if (!isCoordinatesDependent) return true
+    return when (this) {
+        is MochiLayerBackdrop -> {
+            if (!coordinates.isAttached) return false
+            val a = layerCoordinates?.takeIf { it.isAttached } ?: return false
+            val p: Offset = try {
+                a.localPositionOf(coordinates)
+            } catch (_: Throwable) {
+                return false
+            }
+            out.addLong(p.packedValue)
+            true
+        }
+
+        is LayerBackdrop -> {
+            if (!coordinates.isAttached) return false
+            val a = anchors[this]?.takeIf { it.isAttached } ?: return false
+            val p: Offset = try {
+                a.localPositionOf(coordinates)
+            } catch (_: Throwable) {
+                return false
+            }
+            out.addLong(p.packedValue)
+            true
+        }
+
+        is MochiCombinedBackdrop -> {
+            for (i in parts.indices) {
+                if (!parts[i].collectMotionKey(coordinates, out)) return false
+            }
+            true
+        }
+
+        is MotionKeyedBackdrop -> motionKey(coordinates, out.extras)
+
+        else -> false
+    }
+}
+
 /**
  * 玻璃从 [this] 取样时，取到的画面只取决于哪些相对位置：逐份写进 [out]。
  * 两帧写出的一样 = 玻璃和来源一起刚体移动（同在一个侧推 / 缩放的页里），玻璃画出来的完全相同，不用重录。
@@ -177,14 +303,36 @@ internal interface MotionKeyedBackdrop {
 internal fun Backdrop.motionKey(coordinates: LayoutCoordinates, out: MutableList<Any>): Boolean {
     if (!isCoordinatesDependent) return true
     return when (this) {
-        is LayerBackdrop -> {
-            val a = anchors[this]?.takeIf { it.isAttached } ?: return false
-            val p: Offset = runCatching { a.localPositionOf(coordinates) }.getOrNull() ?: return false
+        is MochiLayerBackdrop -> {
+            if (!coordinates.isAttached) return false
+            val a = layerCoordinates?.takeIf { it.isAttached } ?: return false
+            val p: Offset = try {
+                a.localPositionOf(coordinates)
+            } catch (_: Throwable) {
+                return false
+            }
             out += p
             true
         }
 
-        is MochiCombinedBackdrop -> parts.all { it.motionKey(coordinates, out) }
+        is LayerBackdrop -> {
+            if (!coordinates.isAttached) return false
+            val a = anchors[this]?.takeIf { it.isAttached } ?: return false
+            val p: Offset = try {
+                a.localPositionOf(coordinates)
+            } catch (_: Throwable) {
+                return false
+            }
+            out += p
+            true
+        }
+
+        is MochiCombinedBackdrop -> {
+            for (i in parts.indices) {
+                if (!parts[i].motionKey(coordinates, out)) return false
+            }
+            true
+        }
 
         is MotionKeyedBackdrop -> motionKey(coordinates, out)
 

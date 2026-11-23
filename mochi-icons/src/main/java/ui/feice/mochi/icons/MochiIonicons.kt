@@ -100,7 +100,9 @@ public object MochiIonicons {
      * 排序：名字完全一样 → 名字开头一样 → 名字里有 → 只有关键词命中；同一档按名字排
      */
     public fun search(catalog: List<MochiIconInfo>, query: String): List<MochiIconInfo> {
-        val terms = query.trim().lowercase().split(' ').filter { it.isNotEmpty() }
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return catalog
+        val terms = trimmed.lowercase().split(' ').filter { it.isNotEmpty() }
         if (terms.isEmpty()) return catalog
         fun rank(info: MochiIconInfo): Int {
             var worst = 0
@@ -112,13 +114,40 @@ public object MochiIonicons {
                     info.keywordsZh.any { it.contains(t) } || info.tags.any { it.startsWith(t) } -> 3
                     else -> return -1
                 }
-                worst = maxOf(worst, r)
+                if (r > worst) worst = r
             }
             return worst
         }
-        return catalog.mapNotNull { info -> rank(info).takeIf { it >= 0 }?.let { it to info } }
-            .sortedWith(compareBy({ it.first }, { it.second.name }))
-            .map { it.second }
+        // 将 (rank, 原始下标) 打包进 LongArray 排序，避免每个命中项分配 Pair 与二次列表拷贝
+        val hits = LongArray(catalog.size)
+        var hitCount = 0
+        for (i in catalog.indices) {
+            val r = rank(catalog[i])
+            if (r >= 0) {
+                hits[hitCount++] = (r.toLong() shl 32) or (i.toLong() and 0xFFFFFFFFL)
+            }
+        }
+        if (hitCount == 0) return emptyList()
+        var preSorted = true
+        for (i in 1 until catalog.size) {
+            if (catalog[i - 1].name > catalog[i].name) {
+                preSorted = false
+                break
+            }
+        }
+        if (preSorted) {
+            java.util.Arrays.sort(hits, 0, hitCount)
+            return List(hitCount) { idx -> catalog[(hits[idx] and 0xFFFFFFFFL).toInt()] }
+        }
+        return (0 until hitCount)
+            .map { idx -> hits[idx] }
+            .sortedWith(
+                compareBy(
+                    { (it ushr 32).toInt() },
+                    { catalog[(it and 0xFFFFFFFFL).toInt()].name },
+                ),
+            )
+            .map { catalog[(it and 0xFFFFFFFFL).toInt()] }
     }
 
     /** 在后台把资源读进来，之后第一次画图标不再卡这一下 */
@@ -210,10 +239,15 @@ private fun Context.isDebuggable(): Boolean = applicationInfo.flags and android.
  * 实心路径（圆点、填充块）在描边快画完时淡入。每帧只改各段的裁剪终点和透明度，路径本身不重建
  */
 @Composable
-private fun DrawnIcon(vector: ImageVector, progress: () -> Float, tint: Color, contentDescription: String?, modifier: Modifier = Modifier) {
+private fun DrawnIcon(
+    vector: ImageVector,
+    progress: () -> Float,
+    tint: Color,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+) {
     val parts = remember(vector) { DrawParts.of(vector.root) }
-    val p = progress().coerceIn(0f, 1f)
-    val configs = parts.configs(p)
+    // 将 progress() 读取下沉到 VectorPainter 内部子组合闭包，避免动画每帧重组外层 DrawnIcon 与 Image
     val painter = rememberVectorPainter(
         defaultWidth = vector.defaultWidth,
         defaultHeight = vector.defaultHeight,
@@ -223,7 +257,10 @@ private fun DrawnIcon(vector: ImageVector, progress: () -> Float, tint: Color, c
         tintColor = tint,
         tintBlendMode = BlendMode.SrcIn,
         autoMirror = false,
-    ) { _, _ -> RenderVectorGroup(vector.root, configs) }
+    ) { _, _ ->
+        val p = progress().coerceIn(0f, 1f)
+        RenderVectorGroup(vector.root, parts.configs(p))
+    }
     Image(painter, contentDescription = contentDescription, modifier = modifier)
 }
 

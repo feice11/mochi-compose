@@ -13,9 +13,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -60,26 +65,41 @@ public fun MochiCarousel(
     showPageControl: Boolean = true,
     content: @Composable (page: Int) -> Unit,
 ) {
-    val shape = MochiRoundedRectangle(cornerRadius)
+    val g2Shape = remember(cornerRadius) { MochiRoundedRectangle(cornerRadius) }
+    val fastShape = remember(cornerRadius) { RoundedCornerShape(cornerRadius) }
+    val contentPadding = remember(peek, spacing) { PaddingValues(horizontal = peek + spacing) }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalPager(
             state,
             Modifier.fillMaxWidth().height(height),
-            contentPadding = PaddingValues(horizontal = peek + spacing),
+            contentPadding = contentPadding,
             pageSpacing = spacing,
         ) { page ->
+            val centeredIdle by remember(state, page) {
+                derivedStateOf {
+                    !state.isScrollInProgress &&
+                        state.currentPage == page &&
+                        abs(state.currentPageOffsetFraction) < 0.001f
+                }
+            }
             Box(
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        val off = abs((state.currentPage - page) + state.currentPageOffsetFraction).coerceIn(0f, 1f)
-                        val s = lerp(1f, MochiCarouselDefaults.SideScale, off)
-                        scaleX = s
-                        scaleY = s
-                        alpha = lerp(1f, MochiCarouselDefaults.SideAlpha, off)
-                        clip = true
-                        this.shape = shape
-                    },
+                    .then(
+                        if (centeredIdle) {
+                            if (cornerRadius > 0.dp) Modifier.clip(g2Shape) else Modifier
+                        } else {
+                            Modifier.graphicsLayer {
+                                val off = abs((state.currentPage - page) + state.currentPageOffsetFraction).coerceIn(0f, 1f)
+                                val s = lerp(1f, MochiCarouselDefaults.SideScale, off)
+                                scaleX = s
+                                scaleY = s
+                                alpha = lerp(1f, MochiCarouselDefaults.SideAlpha, off)
+                                clip = cornerRadius > 0.dp
+                                this.shape = if (state.isScrollInProgress) fastShape else g2Shape
+                            }
+                        },
+                    ),
             ) { content(page) }
         }
         if (showPageControl && pageCount > 1) MochiPageControl(state)

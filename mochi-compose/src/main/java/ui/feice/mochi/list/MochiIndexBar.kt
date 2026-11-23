@@ -4,40 +4,47 @@
 package ui.feice.mochi.list
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -48,6 +55,7 @@ import ui.feice.mochi.basic.Text
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.theme.MochiDefaults
+import ui.feice.mochi.theme.MochiShadowLevel
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
 import ui.feice.mochi.utils.rememberMochiHaptics
@@ -77,95 +85,158 @@ public object MochiIndexBarDefaults {
  */
 @Composable
 public fun MochiIndexBar(labels: ImmutableList<String>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    if (labels.isEmpty()) return
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
     val select by rememberUpdatedState(onSelect)
-    var current by remember { mutableIntStateOf(-1) }
+    val activeIndex = remember { intArrayOf(-1) }
+    var touching by remember { mutableStateOf(false) }
+    var shownIndex by remember { mutableIntStateOf(0) }
     var fingerY by remember { mutableFloatStateOf(0f) }
     val bubble = remember { Animatable(0f) }
+    val showBubble by remember { derivedStateOf { touching || bubble.value > 0.001f } }
     val scope = rememberCoroutineScope()
     val accent = MochiTheme.colorScheme.primary
     val dark = MochiTheme.colorScheme.isDark
     val shadow = MochiTheme.shadows.lifted
+    val footnote = MochiTheme.textStyles.footnote
+    val labelStyle = remember(footnote) {
+        footnote.copy(
+            fontSize = 11.sp,
+            lineHeight = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+    }
+    val body = MochiTheme.textStyles.body
+    val bubbleTextStyle = remember(body) {
+        body.copy(fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold)
+    }
     Box(modifier.semantics { contentDescription = "索引" }) {
         Column(
             Modifier
                 .width(MochiIndexBarDefaults.Width)
+                .systemGestureExclusion()
                 .pointerInput(labels.size) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         down.consume()
+                        val count = labels.size
+                        if (count <= 0) return@awaitEachGesture
+                        val padPx = VerticalPad.toPx()
                         fun track(y: Float) {
-                            fingerY = y.coerceIn(0f, size.height.toFloat())
-                            val i = IndexBarGeometry.indexAt(y, size.height.toFloat(), labels.size)
-                            if (i != current) {
-                                current = i
+                            val contentH = (size.height - padPx * 2f).coerceAtLeast(1f)
+                            val halfCell = contentH / (count * 2f)
+                            val lo = padPx + halfCell
+                            val hi = (size.height - padPx - halfCell).coerceAtLeast(lo)
+                            fingerY = y.coerceIn(lo, hi)
+                            val i = IndexBarGeometry.indexAt(y - padPx, contentH, count)
+                            if (i != activeIndex[0]) {
+                                activeIndex[0] = i
+                                shownIndex = i
                                 haptics.tick()
                                 select(i)
                             }
                         }
+                        touching = true
                         scope.launch { bubble.animateTo(1f, MochiMotionTokens.Pop) }
-                        track(down.position.y)
-                        while (true) {
-                            val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                            if (!c.pressed) break
-                            c.consume()
-                            track(c.position.y)
+                        try {
+                            track(down.position.y)
+                            while (true) {
+                                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                if (!c.pressed) break
+                                c.consume()
+                                track(c.position.y)
+                            }
+                        } finally {
+                            activeIndex[0] = -1
+                            touching = false
+                            scope.launch { bubble.animateTo(0f, MochiMotionTokens.Settle) }
                         }
-                        current = -1
-                        scope.launch { bubble.animateTo(0f, MochiMotionTokens.Settle) }
                     }
                 }
-                .padding(vertical = 4.dp),
+                .padding(vertical = VerticalPad),
+            verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             labels.forEach {
                 Text(
                     it,
-                    style = MochiTheme.textStyles.footnote.copy(
-                        fontSize = 11.sp,
-                        lineHeight = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                    ),
+                    style = labelStyle,
                     color = accent,
                     maxLines = 1,
                 )
             }
         }
-        // 放大的字母气泡：在条的左边，纵向跟着手指
-        val label = labels.getOrNull(current.coerceAtLeast(0)) ?: ""
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                // 气泡画在条外面、不占位置：索引条只有 20dp 宽，贴着屏幕边放时字母就在边上
-                .layout { m, _ ->
-                    val p = m.measure(Constraints())
-                    layout(0, 0) { p.place(-BubbleOffset.roundToPx() - p.width, (fingerY - p.height / 2f).roundToInt()) }
-                }
-                .graphicsLayer {
-                    val s = bubble.value.coerceAtLeast(0f)
-                    scaleX = s
-                    scaleY = s
-                    alpha = s.coerceIn(0f, 1f)
-                    transformOrigin = TransformOrigin(1f, 0.5f)
-                }
-                .size(BubbleSize)
-                .drawWithCache {
-                    val path = Path().apply { addOval(Rect(Offset.Zero, size)) }
-                    onDrawBehind { drawMochiShadow(path, shadow.resolve(this, dark), Color.Black) }
-                }
-                .background(MochiDefaults.groupedContainer(), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            MochiBlurText(
-                label,
-                style = MochiTheme.textStyles.body.copy(fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold),
-                color = accent,
-                contentAlignment = Alignment.Center,
+        // 放大的字母气泡：隐藏时不挂载组合；显示时独立读取 shownIndex，拖动不触发全部字母重组
+        if (showBubble) {
+            IndexBarBubble(
+                labels = labels,
+                shownIndex = { shownIndex },
+                fingerY = { fingerY },
+                bubble = bubble,
+                bubbleTextStyle = bubbleTextStyle,
+                accent = accent,
+                dark = dark,
+                shadow = shadow,
+                modifier = Modifier.align(Alignment.TopStart),
             )
         }
     }
 }
 
+@Composable
+private fun IndexBarBubble(
+    labels: ImmutableList<String>,
+    shownIndex: () -> Int,
+    fingerY: () -> Float,
+    bubble: Animatable<Float, AnimationVector1D>,
+    bubbleTextStyle: TextStyle,
+    accent: Color,
+    dark: Boolean,
+    shadow: MochiShadowLevel,
+    modifier: Modifier = Modifier,
+) {
+    val label = labels.getOrElse(shownIndex().coerceIn(0, labels.lastIndex)) { "" }
+    val density = LocalDensity.current
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val resolvedShadow = remember(shadow, density, dark) { shadow.resolve(density, dark) }
+    val bubbleColor = MochiDefaults.groupedContainer()
+    Box(
+        modifier
+            // 气泡画在条外面、不占位置：索引条只有 20dp 宽，贴着屏幕边放时字母就在边上；placeRelative 保证 RTL 镜像到屏幕内侧
+            .layout { m, _ ->
+                val p = m.measure(Constraints())
+                layout(0, 0) { p.placeRelative(-BubbleOffset.roundToPx() - p.width, (fingerY() - p.height / 2f).roundToInt()) }
+            }
+            .graphicsLayer {
+                val s = bubble.value.coerceAtLeast(0f)
+                scaleX = s
+                scaleY = s
+                alpha = s.coerceIn(0f, 1f)
+                transformOrigin = TransformOrigin(if (isRtl) 0f else 1f, 0.5f)
+            }
+            .size(BubbleSize)
+            .drawBehind {
+                drawMochiShadow(
+                    size.toRect(),
+                    size.minDimension / 2f,
+                    resolvedShadow,
+                    Color.Black,
+                    opaqueInterior = bubbleColor.alpha >= 1f,
+                )
+            }
+            .background(bubbleColor, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        MochiBlurText(
+            label,
+            style = bubbleTextStyle,
+            color = accent,
+            contentAlignment = Alignment.Center,
+        )
+    }
+}
+
+private val VerticalPad = 4.dp
 private val BubbleSize = 56.dp
 private val BubbleOffset = 12.dp

@@ -10,6 +10,7 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateTo
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.OverscrollEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,7 +22,10 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.currentValueOf
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.util.fastRoundToInt
@@ -31,7 +35,6 @@ import kotlin.math.ln
 import kotlin.math.sign
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 
@@ -44,10 +47,11 @@ import kotlinx.coroutines.launch
  * measured viewport, observable axis, optional external scope, reset and standard Compose placement.
  * Source links, full license and attribution: THIRD_PARTY_NOTICES.md / META-INF/mochi-compose.
  */
+@Suppress("UNUSED_PARAMETER")
 internal class OffsetOverscrollEffect(
     private val animationSpec: () -> AnimationSpec<Float>,
     private val maxFraction: () -> Float,
-    private val animationScope: (() -> CoroutineScope)? = null,
+    animationScope: (() -> CoroutineScope)? = null,
     private val onOffsetChanged: (Offset) -> Unit = {},
 ) : OverscrollEffect {
 
@@ -75,6 +79,7 @@ internal class OffsetOverscrollEffect(
         springJob?.cancel()
         springJob = null
         flingToScrollOffset = Offset.Zero
+        axis = Axis.None
         updateOffset(Offset.Zero)
     }
 
@@ -83,10 +88,13 @@ internal class OffsetOverscrollEffect(
     private var springJob: Job? = null
     private var flingToScrollOffset = Offset.Zero
 
+    /** 仅在越界位移非零时才挂载硬件图层，静止与正常滚动时零 RenderNode 开销 */
+    private val hasVisibleOffset by derivedStateOf { visibleOffset != Offset.Zero }
+
     override val isInProgress: Boolean = false
 
     override fun applyToScroll(delta: Offset, source: NestedScrollSource, performScroll: (Offset) -> Offset): Offset {
-        if (axis == Axis.None) {
+        if (axis == Axis.None && delta != Offset.Zero) {
             axis = if (abs(delta.y) >= abs(delta.x)) Axis.Vertical else Axis.Horizontal
         }
 
@@ -115,6 +123,9 @@ internal class OffsetOverscrollEffect(
     }
 
     override suspend fun applyToFling(velocity: Velocity, performFling: suspend (Velocity) -> Velocity) {
+        if (axis == Axis.None && velocity != Velocity.Zero) {
+            axis = if (abs(velocity.y) >= abs(velocity.x)) Axis.Vertical else Axis.Horizontal
+        }
         var unconsumed = velocity
 
         if (offset != Offset.Zero) {
@@ -134,21 +145,10 @@ internal class OffsetOverscrollEffect(
             springJob = null
         }
 
-        var frameTimeNanos = 1000L / 60L * 1_000_000L
-        if (offset.toFloat() == 0f && unconsumed.toFloat() != 0f) {
-            (animationScope?.invoke() ?: node.coroutineScope).launch {
-                var start = System.currentTimeMillis()
-                awaitFrame()
-                frameTimeNanos = (System.currentTimeMillis() - start) * 1_000_000L
-                start = System.currentTimeMillis()
-                awaitFrame()
-                frameTimeNanos = (System.currentTimeMillis() - start) * 1_000_000L
-            }
-        }
-
         unconsumed -= performFling(unconsumed)
 
         if (unconsumed.toFloat() != 0f) {
+            val frameTimeNanos = currentFrameNanos()
             springJob = CoroutineScope(currentCoroutineContext()).launch {
                 if (offset.toFloat() == 0f) {
                     updateOffset(
@@ -170,19 +170,36 @@ internal class OffsetOverscrollEffect(
         }
     }
 
+    private fun currentFrameNanos(): Long {
+        if (node.isAttached) {
+            val hz = runCatching {
+                (node as? CompositionLocalConsumerModifierNode)?.currentValueOf(LocalView)?.display?.refreshRate
+            }.getOrNull()
+            if (hz != null && hz in 20f..480f) {
+                return (1_000_000_000.0 / hz).toLong()
+            }
+        }
+        return DefaultFrameNanos
+    }
+
     // Compose 原生 placement API 替代上游的 SingleLayout helper；物理与曲线不变。
-    override val node: Modifier.Node = object : Modifier.Node(), LayoutModifierNode {
+    override val node: Modifier.Node = object : Modifier.Node(), LayoutModifierNode, CompositionLocalConsumerModifierNode {
         override val shouldAutoInvalidate: Boolean = false
 
         override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
             val placeable = measurable.measure(constraints)
-            viewport = Size(placeable.width.toFloat(), placeable.height.toFloat())
+            val nextViewport = Size(placeable.width.toFloat(), placeable.height.toFloat())
+            if (viewport != nextViewport) viewport = nextViewport
             return layout(placeable.width, placeable.height) {
-                placeable.placeWithLayer(0, 0) {
-                    shape = RectangleShape
-                    val translated = visibleOffset
-                    translationX = translated.x
-                    translationY = translated.y
+                if (!hasVisibleOffset) {
+                    placeable.place(0, 0)
+                } else {
+                    placeable.placeWithLayer(0, 0) {
+                        shape = RectangleShape
+                        val translated = visibleOffset
+                        translationX = translated.x
+                        translationY = translated.y
+                    }
                 }
             }
         }
@@ -272,6 +289,7 @@ internal class OffsetOverscrollEffect(
     }
 
     internal companion object {
+        private const val DefaultFrameNanos = 1000L * 1_000_000L / 60L
 
         val DefaultAnimationSpec = spring(1f, 150f, 0.5f)
     }

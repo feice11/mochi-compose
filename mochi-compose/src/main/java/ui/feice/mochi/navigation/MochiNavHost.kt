@@ -8,16 +8,23 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -46,15 +53,21 @@ import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.MochiSprings
+import ui.feice.mochi.anim.animateToSteady
 import ui.feice.mochi.anim.awaitFrameSettle
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.anim.rememberFramePeriodNanos
+import ui.feice.mochi.effect.glass.GlassFill
 import ui.feice.mochi.effect.glass.GlassMotionWhile
 import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.GlassSource
 import ui.feice.mochi.effect.glass.LocalGlassSources
-import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.MochiBackdrop
+import ui.feice.mochi.effect.glass.WindowBackdropDemand
+import ui.feice.mochi.effect.glass.glassOn
+import ui.feice.mochi.effect.glass.mochiWindowBackdropSource
 import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
-import ui.feice.mochi.effect.glass.source
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.lerp
@@ -156,15 +169,26 @@ public fun MochiNavHost(
     val geo = remember(navigator) { NavGeometry(navigator) }
     geo.spec = spec
     val framePeriod = rememberFramePeriodNanos()
+    val reduceMotion by rememberUpdatedState(mochiReduceMotion())
     val pushBackdrop = spec.pushBackdrop.takeOrElse { MochiDefaults.groupedBackground() }
+    val density = LocalDensity.current
+    val contentBlurPx = with(density) { ContentBlur.toPx() }
     geo.defaultCorners = corners ?: screenCorners
     geo.enclosingCorners = if (corners == null) surface?.corners else null
     geo.glassOpaque = surface?.takeIf { it.glass != null }?.opaque
-    geo.fallbackCorner = if (corners == null && surface == null) with(LocalDensity.current) { SlideFallbackCorner.toPx() } else 0f
+    geo.inPanel = surface != null
+    geo.fallbackCorner = if (corners == null && surface == null) with(density) { SlideFallbackCorner.toPx() } else 0f
 
+    val predictiveBackEntry = remember { arrayOfNulls<MochiNavEntry>(1) }
+    NavOrphanStateCleaner(navigator, holder)
     BackHandler(enabled = !predictiveBack && navigator.canPop) { navigator.pop() }
     PredictiveBackHandler(enabled = predictiveBack && navigator.canPop) { events ->
-        val e = navigator.entries.lastOrNull { !it.closing } ?: return@PredictiveBackHandler
+        val e = navigator.entries.lastOrNull { !it.closing }
+        // 仅剩根页或栈无可用页时，仍必须收集 events 以满足 AndroidX PredictiveBackHandler 契约，且不改动根页状态
+        if (e == null || navigator.under(e) == null) {
+            events.collect { }
+            return@PredictiveBackHandler
+        }
         // 上一页还在「从来源打开」式地关闭（或者这一页就是那种页）：这次返回排队，手势不改这一页的画面，免得接手时跳一下
         val leaving = navigator.entries.lastOrNull()?.takeIf { it.closing }
         val queued = leaving != null && (leaving.source != null || e.source != null)
@@ -173,6 +197,7 @@ public fun MochiNavHost(
         var lastT = 0L
         var vel = 0f
         e.backActive = true
+        predictiveBackEntry[0] = e
         try {
             events.collect { ev ->
                 if (startY.isNaN()) startY = ev.touchY
@@ -188,21 +213,26 @@ public fun MochiNavHost(
                 lastT = t
                 if (!queued) e.back.snapTo(ev.progress)
             }
-            // 上面还有一页在侧推退出也照样提交：这一页跟着一起滑走（不再要求它必须是栈顶，连续返回不会被吞掉）
+            // 提交前确认 e 仍是栈顶非关闭页：若返回手势期间已 push 新页，不误弹新页，仅将 e 弹回原位
             if (e in navigator.entries && !e.closing) {
-                if (e.source == null && !queued) {
-                    // 侧推页：把此刻的画面换算回打开进度，关闭动画从这里、以手势速度连续地接着走
-                    val pv = slideProgress(e)
-                    e.progress.snapTo(pv)
-                    e.back.snapTo(0f)
-                    e.releaseVelocity = -SlideBackFollow * vel.coerceAtLeast(0f)
+                if (navigator.entries.lastOrNull { !it.closing } === e) {
+                    if (e.source == null && !queued) {
+                        // 侧推页：把此刻的画面换算回打开进度，关闭动画从这里、以手势速度连续地接着走
+                        val pv = slideProgress(e)
+                        e.progress.snapTo(pv)
+                        e.back.snapTo(0f)
+                        e.releaseVelocity = -SlideBackFollow * vel.coerceAtLeast(0f)
+                    }
+                    navigator.pop()
+                } else {
+                    scope.launch { e.back.animateTo(0f, spec.cancel) }
                 }
-                navigator.pop()
             }
         } catch (c: CancellationException) {
             scope.launch { e.back.animateTo(0f, spec.cancel) }
             throw c
         } finally {
+            if (predictiveBackEntry[0] === e) predictiveBackEntry[0] = null
             e.backActive = false
         }
     }
@@ -213,11 +243,25 @@ public fun MochiNavHost(
     } else {
         null
     }
+    val demand = remember(windowBackdrop) { WindowBackdropDemand() }
+    val windowSource = remember(windowBackdrop, demand) { windowBackdrop?.let { GlassSource(it.layer, it.face, demand) } }
+    val currentGlassSources = LocalGlassSources.current
+    val providedGlassSources = remember(currentGlassSources, windowSource) {
+        currentGlassSources.copy(window = windowSource ?: currentGlassSources.window)
+    }
+    val barScratch = remember(navigator) { SharedBarScratch() }
+    val barFrameState = remember(navigator, contentBlurPx, barScratch) {
+        derivedStateOf {
+            val w = geo.size.width
+            if (w <= 0f || !navigator.hasSlideTransition) null else sharedBarFrame(navigator, w, contentBlurPx, barScratch)
+        }
+    }
+
     CompositionLocalProvider(
         LocalMochiNavigator provides navigator,
         LocalMochiNavSurface provides null,
         LocalMochiPredictiveBack provides predictiveBack,
-        LocalGlassSources provides LocalGlassSources.current.let { it.copy(window = windowBackdrop?.source ?: it.window) },
+        LocalGlassSources provides providedGlassSources,
     ) {
         Box(
             modifier
@@ -226,13 +270,28 @@ public fun MochiNavHost(
                     if (surface == null) {
                         Modifier
                     } else {
-                        Modifier.layout { measurable, constraints ->
-                            // The sheet's stable content box excludes system insets and may extend
-                            // below a floating sheet. Only visual layers use the actual shell height.
-                            val h = surface.height()
-                            val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
-                            layout(constraints.maxWidth, constraints.maxHeight) { p.place(0, 0) }
-                        }
+                        Modifier
+                            .layout { measurable, constraints ->
+                                // 仅在面板内发生导航转场时把可见高度同步给转场视觉层（半屏底圆角落在可见底边）；
+                                // 平时面板展开/拖动保持固定最大高度 + 外层面板硬件裁切，避免每帧重测整棵导航子树
+                                val h = if (navigator.isTransitioning) surface.height() else constraints.maxHeight
+                                val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                                layout(constraints.maxWidth, constraints.maxHeight) { p.place(0, 0) }
+                            }
+                            .drawWithContent {
+                                // 非转场期面板外层 MochiSheet 已对可见高度做了完全一致的硬件裁切；
+                                // 直接绘制而不读取 surface.height()（依赖 state.top.value），避免面板半屏开合/拖动时整棵导航子树每帧无效重绘
+                                if (!navigator.isTransitioning) {
+                                    drawContent()
+                                    return@drawWithContent
+                                }
+                                val visibleH = surface.height().toFloat()
+                                if (visibleH < size.height - 0.5f) {
+                                    clipRect(bottom = visibleH) { this@drawWithContent.drawContent() }
+                                } else {
+                                    drawContent()
+                                }
+                            }
                     },
                 )
                 .onSizeChanged { geo.size = it.toSize() }
@@ -245,7 +304,7 @@ public fun MochiNavHost(
                 },
         ) {
             // 页面录成整页的背景来源（浮层、转场里的共享顶栏玻璃取样它）；共享顶栏在录制外面，不会取样到自己
-            Box(Modifier.fillMaxSize().then(if (windowBackdrop != null) Modifier.mochiBackdropSource(windowBackdrop) else Modifier)) {
+            WindowBackdropHost(windowBackdrop, demand, navigator) {
                 val entries = navigator.entries
                 val n = entries.size
                 // 组合哪些页：从栈顶往下，只要这一页在转场（没把下面完全盖住）就把下面那页也带上，
@@ -256,6 +315,7 @@ public fun MochiNavHost(
                 for (i in 0 until n) {
                     val e = entries[i]
                     key(e.id) {
+                        val steadyVel = remember { FloatArray(2) }
                         // 侧推的前景页不带投影：下层页只压暗（见 NavGeometry.drawOver）
                         if (i >= first) {
                             EntryLayer(e, geo, surface) {
@@ -268,20 +328,44 @@ public fun MochiNavHost(
                         LaunchedEffect(e, e.closing) {
                             val slide = e.source == null
                             // 换方向时上一个协程被取消，Animatable 取消时会把速度清零（endAnimation）：
-                            // 用 closing 变化那一刻记下的速度接着走，掉头时速度连续（见 MochiNavEntry.closing）
-                            val turnV = e.turnVelocity
-                            val turnMoveV = e.turnMoveVelocity
+                            // animateToSteady 走 snapTo 也会清零 progress.velocity，优先接上 steadyVel 保证掉头速度连续
+                            val turnV = if (e.turnVelocity != 0f) e.turnVelocity else steadyVel[0]
+                            val turnMoveV = if (e.turnMoveVelocity != 0f) e.turnMoveVelocity else steadyVel[1]
                             e.turnVelocity = 0f
                             e.turnMoveVelocity = 0f
                             if (!e.closing) {
                                 // 新打开的页：先等它组合、排版、绘制完、帧率回稳（第一次打开时类加载、首屏子组合可能要几百毫秒）
                                 // 再开始动，不然动画的开头几帧被这几帧吞掉，看起来是从卡片一下跳到半屏。等待期间画面还停在起点
-                                if (e.progress.value == 0f && !e.started) awaitFrameSettle(framePeriod)
+                                if (e.progress.value == 0f && !e.started && !reduceMotion) awaitFrameSettle(framePeriod)
                                 if (e.closing) return@LaunchedEffect
                                 e.started = true
+                                if (reduceMotion) {
+                                    steadyVel[0] = 0f
+                                    steadyVel[1] = 0f
+                                    e.fadeClosing = false
+                                    e.fade.snapTo(1f)
+                                    e.move.snapTo(1f)
+                                    e.progress.snapTo(1f)
+                                    return@LaunchedEffect
+                                }
                                 // 打开；关闭途中又被 push 回来时也走这里，从当前位置和速度掉头
                                 if (slide) {
-                                    if (e.progress.value != 1f) e.progress.animateTo(1f, geo.spec.push, initialVelocity = turnV)
+                                    if (e.progress.value != 1f || turnV != 0f) {
+                                        coroutineScope {
+                                            val animJob = launch {
+                                                e.progress.animateToSteady(1f, geo.spec.push, turnV, framePeriod) {
+                                                    steadyVel[0] = it
+                                                }
+                                            }
+                                            val watchJob = launch {
+                                                snapshotFlow { e.backActive && predictiveBackEntry[0] !== e }.first { it }
+                                                steadyVel[0] = 0f
+                                                animJob.cancel()
+                                            }
+                                            animJob.join()
+                                            watchJob.cancel()
+                                        }
+                                    }
                                 } else {
                                     coroutineScope {
                                         // 关闭途中掉头：透明度从此刻的值按淡化时钟过渡回「跟进度」，不跳
@@ -291,19 +375,40 @@ public fun MochiNavHost(
                                             launch { e.fade.animateTo(1f, MochiMotionTokens.Fade) }
                                         }
                                         // 位置弹簧会过冲：取消后停在 1 以上时也要落回 1（取消后 isRunning 已是 false）
-                                        launch {
-                                            if (e.move.value != 1f) e.move.animateTo(1f, geo.spec.openMove, initialVelocity = turnMoveV)
+                                        if (e.move.value != 1f || turnMoveV != 0f) {
+                                            launch {
+                                                e.move.animateToSteady(1f, geo.spec.openMove, turnMoveV, framePeriod) {
+                                                    steadyVel[1] = it
+                                                }
+                                            }
                                         }
-                                        if (e.progress.value != 1f) e.progress.animateTo(1f, geo.spec.open, initialVelocity = turnV)
+                                        if (e.progress.value != 1f || turnV != 0f) {
+                                            e.progress.animateToSteady(1f, geo.spec.open, turnV, framePeriod) {
+                                                steadyVel[0] = it
+                                            }
+                                        }
                                     }
                                 }
+                                return@LaunchedEffect
+                            }
+                            if (reduceMotion) {
+                                steadyVel[0] = 0f
+                                steadyVel[1] = 0f
+                                e.progress.snapTo(0f)
+                                e.move.snapTo(0f)
+                                e.back.snapTo(0f)
+                                if (!e.closing) return@LaunchedEffect
+                                navigator.remove(e)
+                                holder.removeState(e.id)
+                                navigator.onClosed()
                                 return@LaunchedEffect
                             }
                             if (slide) {
                                 // 侧推：同一条弹簧直接往 0 走，打开途中返回也是从当前位置连续掉头
                                 val v = e.releaseVelocity
                                 e.releaseVelocity = 0f
-                                e.progress.animateTo(0f, geo.spec.push, initialVelocity = if (v != 0f) v else turnV)
+                                val initV = if (v != 0f) v else turnV
+                                e.progress.animateToSteady(0f, geo.spec.push, initV, framePeriod) { steadyVel[0] = it }
                                 if (!e.closing) return@LaunchedEffect
                                 navigator.remove(e)
                                 holder.removeState(e.id)
@@ -318,8 +423,12 @@ public fun MochiNavHost(
                             coroutineScope {
                                 launch { e.fade.animateTo(1f, MochiMotionTokens.Fade) }
                                 launch { e.back.animateTo(0f, geo.spec.close) }
-                                launch { e.move.animateTo(0f, geo.spec.closeMove, initialVelocity = turnMoveV) }
-                                e.progress.animateTo(0f, geo.spec.close, initialVelocity = turnV)
+                                launch {
+                                    e.move.animateToSteady(0f, geo.spec.closeMove, turnMoveV, framePeriod) {
+                                        steadyVel[1] = it
+                                    }
+                                }
+                                e.progress.animateToSteady(0f, geo.spec.close, turnV, framePeriod) { steadyVel[0] = it }
                             }
                             if (!e.closing) return@LaunchedEffect
                             navigator.remove(e)
@@ -332,10 +441,11 @@ public fun MochiNavHost(
             // 跨页共享的顶栏：侧推转场中画在所有页面上面、留在顶栏原位变形（见 MochiNavBarItem.kt）。不拦触摸
             // 玻璃按钮的形状画成玻璃（取样整页录制），其余形状和所有图标画在 Spacer 里
             // 不录整页时（windowGlass = false）玻璃按钮取样各自页面的背景，见 SharedBarGlass
-            val barGlass = rememberGlassFill(GlassRole.Control, windowBackdrop?.source)
-            // 转场期间玻璃走运动档（只降真在重画的那几块）、暂停亮度回读，见 GlassMotion
-            GlassMotionWhile(navigator.isTransitioning)
-            if (navigator.isTransitioning) SharedBarGlass(navigator, barGlass)
+            val barGlass = rememberGlassFill(GlassRole.Control, windowSource)
+            val barFrameProvider = remember(barFrameState) { { barFrameState.value } }
+            // 转场状态监听下沉到独立叶组合，避免 isTransitioning / hasSlideTransition 翻转触发整棵 MochiNavHost 重组
+            NavGlassMotionObserver(navigator)
+            NavSharedBarGlassHost(barFrameProvider, barGlass)
             val barPaths = remember { BarPathCache() }
             Spacer(
                 Modifier.fillMaxSize().drawBehind {
@@ -343,7 +453,7 @@ public fun MochiNavHost(
                     // 共享元素飞在所有页面上面、下层页的栏副本下面
                     geo.drawShared(this)
                     geo.drawOccluders(this)
-                    drawSharedBarItems(navigator, barPaths, glass = true)
+                    drawSharedBarFrame(barFrameState.value, barPaths, glass = true)
                 },
             )
         }
@@ -351,34 +461,94 @@ public fun MochiNavHost(
 }
 
 @Composable
+private fun NavOrphanStateCleaner(navigator: MochiNavigator, holder: SaveableStateHolder) {
+    LaunchedEffect(navigator, holder) {
+        snapshotFlow { navigator.orphanedIds.size }.collect { count ->
+            if (count > 0) {
+                val ids = navigator.orphanedIds.toList()
+                navigator.orphanedIds.clear()
+                for (id in ids) holder.removeState(id)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavGlassMotionObserver(navigator: MochiNavigator) {
+    GlassMotionWhile(navigator.isTransitioning)
+}
+
+@Composable
+private fun NavSharedBarGlassHost(barFrame: () -> SharedBarFrame?, barGlass: GlassFill?) {
+    if (glassOn(GlassRole.Control)) SharedBarGlass(barFrame, barGlass)
+}
+
+@Composable
+private fun WindowBackdropHost(
+    backdrop: MochiBackdrop?,
+    demand: WindowBackdropDemand,
+    navigator: MochiNavigator,
+    content: @Composable () -> Unit,
+) {
+    val capture = backdrop != null && (demand.hasReaders || (navigator.hasSlideTransition && glassOn(GlassRole.Control)))
+    val density = LocalDensity.current
+    val statusBars = WindowInsets.statusBars
+    val extraBarStripPx = with(density) { 148.dp.roundToPx() }
+    val captureMaxHeightPx = remember(demand, density, statusBars, extraBarStripPx) {
+        {
+            if (demand.hasReaders) Int.MAX_VALUE else statusBars.getTop(density) + extraBarStripPx
+        }
+    }
+    Box(Modifier.fillMaxSize().mochiWindowBackdropSource(backdrop, capture, captureMaxHeightPx)) {
+        content()
+    }
+}
+
+@Composable
 private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurface?, content: @Composable () -> Unit) {
-    val cover = if (e.source != null) rememberGraphicsLayer() else null
+    // 仅在来源页转场中且下层页有活跃玻璃遮挡栏读者时才分配离屏录制层，静止态零图层开销
+    val hasCoverReaders by remember(e, geo) {
+        derivedStateOf { e.source != null && e.inTransition && (geo.nav.under(e)?.coverReaderCount ?: 0) > 0 }
+    }
+    val cover = if (hasCoverReaders && glassOn(GlassRole.Bar)) rememberGraphicsLayer() else null
     val sourceClip = remember { NavPageClip() }
-    val slideClip = remember { NavPageClip() }
-    DisposableEffect(e, cover) {
+    val carriedUnderSource by remember(e, geo) { derivedStateOf { geo.nav.isCarriedUnderSource(e) } }
+    val showOverLayer by remember(e, geo) { derivedStateOf { e.inTransition || geo.nav.above(e)?.inTransition == true } }
+    DisposableEffect(e) {
         onDispose {
             e.coverLayer = null
             e.coverCoords = null
+            e.contentCoords = null
+        }
+    }
+    DisposableEffect(e, cover) {
+        onDispose {
+            if (e.coverLayer === cover) e.coverLayer = null
         }
     }
     Box(
         Modifier
             .fillMaxSize()
             .onPlaced { e.coverCoords = it }
-            // 来源容器在主机坐标裁切。只有下层页有玻璃取样方、且遮挡栏还可见时才录制。
+            // 来源容器在主机坐标裁切。只有下层页有活跃玻璃取样方、且处于需要遮盖底栏的转场段时才录制。
             .drawWithContent {
                 val outline = geo.sourceOutline(e)
-                if (cover != null && outline != null && geo.needsCover(e)) {
+                val shouldRecordCover = cover != null && outline != null && e.inTransition &&
+                    (geo.nav.under(e)?.coverReaderCount ?: 0) > 0 && geo.needsCover(e) &&
+                    size.width >= 1f && size.height >= 1f
+                if (shouldRecordCover) {
                     val path = sourceClip.pathFor(outline)
                     cover.record {
                         clipPath(path) { this@drawWithContent.drawContent() }
                     }
-                    e.coverLayer = cover
+                    if (e.coverLayer !== cover) e.coverLayer = cover
                     drawLayer(cover)
                 } else {
-                    e.coverLayer = null
-                    if (outline != null || geo.clipsSlide(e)) {
+                    if (e.coverLayer != null) e.coverLayer = null
+                    if (outline != null) {
                         clipRect { sourceClip.draw(this@drawWithContent, outline) }
+                    } else if (geo.clipsSlide(e)) {
+                        clipRect { this@drawWithContent.drawContent() }
                     } else {
                         drawContent()
                     }
@@ -386,16 +556,16 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
             }
             .graphicsLayer { geo.applyLayer(e, this) }
             .drawWithContent {
-                slideClip.draw(this, geo.slideOutline(e))
-            }
-            .drawWithContent {
                 // 完全被盖住的下层页不画。不用 alpha = 0：那样露出来时只改了图层属性，
                 // 内容可能没重新录制（真机上会画成空白）；在这里跳过，露出来时这块会重新执行、整页重画。
                 // 这里只读「是否转场中」（derivedStateOf），不读每帧变化的进度，转场中不会每帧重录整页
                 if (!geo.isHidden(e)) {
-                    // The incoming page also covers the previous page's dimming below its safe body.
-                    // 玻璃面板：页面是透明的，底色按面板此刻的不透明度画（半屏透出面板的玻璃，全屏和面板一样不透明）
-                    if (surface != null) drawRect(surface.color, alpha = if (surface.glass == null) 1f else surface.opaque())
+                    // 仅在面板内页间转场时补画页面底色（遮住下层页与底部安全区）；
+                    // 静止态面板自身已绘制背景，跳过重复填充与每帧读取 surface.opaque()
+                    if (surface != null && showOverLayer) {
+                        val a = if (surface.glass == null) 1f else surface.opaque()
+                        if (a > 0f) drawRect(surface.color, alpha = a)
+                    }
                     drawContent()
                 }
             },
@@ -408,14 +578,14 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
                 .fillMaxSize()
                 // 页面内容单独一层：被盖住时外层跳过绘制、露出来时外层只重录一条「画这一层」，
                 // 页面本身的绘制记录保留着，转场第一帧不用把整页重新录一遍。
-                // 转场中这一层画进离屏纹理：外层每帧缩放、裁切的只是这张图，文字字形和路径不随缩放每帧重新光栅化；
-                // 每帧变的盖色 / 压暗在旁边自己那一层，不会让这张图作废
+                // 仅在来源变形缩放（source != null 或显式 underScale < 1）时才画进离屏纹理，避免每帧缩放重光栅化字形；
+                // 纯侧推平移（source == null）保持 CompositingStrategy.Auto，消除双整屏离屏 FBO 开销
                 .graphicsLayer {
-                    // 被「从来源打开」的页盖着的下层页也一样：它这段时间只缩放（页里收起的栏由下面那层代画）
-                    // 侧推也缓存（动的页、露出来的下层页都只平移）：页里的玻璃 / 模糊不用每帧重跑着色器，开液态玻璃时转场不卡
                     val nav = geo.nav
-                    val cached = e.inTransition || nav.above(e)?.inTransition == true || nav.isCarriedUnderSource(e)
-                    compositingStrategy = if (cached) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                    val above = nav.above(e)
+                    val isSourceTransition = (e.source != null && e.inTransition) ||
+                        (above != null && above.source != null && above.inTransition && geo.underScale(above) < 0.999f)
+                    compositingStrategy = if (isSourceTransition) CompositingStrategy.Offscreen else CompositingStrategy.Auto
                 }
                 .then(
                     if (surface == null) {
@@ -437,13 +607,15 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
                 .onPlaced { e.contentCoords = it },
         ) { content() }
         // 从来源打开的转场中，这一页收起的栏（标签栏、底部工具栏）在这里代画：位置、下滑和原来一样，
-        // 压在下面的压暗层下面；它每帧在动，放在自己的图层里，不会让上面那张整页缓存作废
-        Spacer(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {}
-                .drawBehind { geo.drawCarriedBars(e, this) },
-        )
+        // 压在下面的压暗层下面；静止态不挂载硬件图层
+        if (carriedUnderSource) {
+            Spacer(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {}
+                    .drawBehind { geo.drawCarriedBars(e, this) },
+            )
+        }
         // 正在退出的页不接触摸（iOS 也是）：点在它还露着的部分不会误触，点在露出来的下层页上照常。
         // 有来源的页正在缩回去时点它 = 再打开：从当前位置掉头长回来
         if (e.closing) {
@@ -462,13 +634,15 @@ private fun EntryLayer(e: MochiNavEntry, geo: NavGeometry, surface: MochiNavSurf
                     },
             )
         }
-        // 盖色 / 压暗每帧都变：放在自己的小图层里，只重录这一层，页面内容不跟着重录
-        Spacer(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {}
-                .drawBehind { geo.drawOver(e, this) },
-        )
+        // 盖色 / 压暗每帧都变：仅在转场期挂载独立图层，静止态零额外图层开销
+        if (showOverLayer) {
+            Spacer(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {}
+                    .drawBehind { geo.drawOver(e, this) },
+            )
+        }
     }
 }
 

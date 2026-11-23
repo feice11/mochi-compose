@@ -17,32 +17,35 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.effect.elastic.mochiClaimedPressDeform
 import ui.feice.mochi.effect.elastic.mochiPressDeform
-import ui.feice.mochi.shape.MochiCapsule
+import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.LocalContentColor
+import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
 import ui.feice.mochi.utils.rememberMochiHaptics
@@ -90,25 +93,30 @@ public fun MochiHoldButton(
     val progress = remember { Animatable(0f) }
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
     val confirm by rememberUpdatedState(onConfirm)
+    val reduce by rememberUpdatedState(mochiReduceMotion())
     val scope = rememberCoroutineScope()
-    LaunchedEffect(progress) {
-        snapshotFlow { (progress.value * 10).toInt() }
-            .distinctUntilChanged()
-            .collect { step -> if (step in 1..9 && progress.isRunning && progress.targetValue == 1f) haptics.tick() }
-    }
+    val capsuleCache = remember { G2PathCache() }
     Row(
         modifier
             .defaultMinSize(minHeight = MochiHoldButtonDefaults.Height)
-            .mochiClaimedPressDeform()
-            .clip(MochiCapsule)
+            .then(if (enabled) Modifier.mochiClaimedPressDeform() else Modifier)
             .drawBehind {
-                drawRect(colors.container)
-                val p = progress.value
-                if (p > 0f) drawRect(colors.progress, size = Size(size.width * p, size.height))
+                val path = capsuleCache.get(Rect(Offset.Zero, size), size.minDimension / 2f, 1f)
+                drawPath(path, colors.container)
+                val p = progress.value.coerceIn(0f, 1f)
+                if (p > 0f) {
+                    val w = size.width * p
+                    val left = if (layoutDirection == LayoutDirection.Rtl) size.width - w else 0f
+                    clipPath(path) {
+                        drawRect(colors.progress, topLeft = Offset(left, 0f), size = Size(w, size.height))
+                    }
+                }
             }
             .semantics {
                 role = Role.Button
-                if (enabled) {
+                if (!enabled) {
+                    disabled()
+                } else {
                     onLongClick {
                         confirm()
                         true
@@ -121,26 +129,50 @@ public fun MochiHoldButton(
                 } else {
                     Modifier.pointerInput(holdMillis) {
                         awaitEachGesture {
-                            awaitFirstDown().consume()
+                            val down = awaitFirstDown()
+                            down.consume()
+                            var confirmed = false
+                            val safeHold = holdMillis.coerceAtLeast(1)
                             val job = scope.launch {
+                                var lastStep = (progress.value * 10f).toInt()
                                 progress.animateTo(
                                     1f,
-                                    tween(((1f - progress.value) * holdMillis).toInt().coerceAtLeast(1), easing = LinearEasing),
-                                )
+                                    tween(((1f - progress.value) * safeHold).toInt().coerceAtLeast(1), easing = LinearEasing),
+                                ) {
+                                    val step = (value * 10f).toInt()
+                                    if (step != lastStep) {
+                                        lastStep = step
+                                        if (step in 1..9) haptics.tick()
+                                    }
+                                }
+                                confirmed = true
                                 haptics.threshold()
                                 confirm()
                                 delay(250)
-                                progress.animateTo(0f, spring(dampingRatio = 1f, stiffness = 300f))
+                                if (reduce) {
+                                    progress.snapTo(0f)
+                                } else {
+                                    progress.animateTo(0f, HoldResetSpring)
+                                }
                             }
-                            // 按在按钮上的这一整下都归按钮：外层的滚动、面板拖动不接手，手指挪开也继续按住，松手才算
-                            while (true) {
-                                val c = awaitPointerEvent().changes.firstOrNull() ?: break
-                                c.consume()
-                                if (!c.pressed) break
-                            }
-                            if (progress.value < 1f && job.isActive) {
-                                job.cancel()
-                                scope.launch { progress.animateTo(0f, spring(dampingRatio = 1f, stiffness = 500f)) }
+                            try {
+                                // 按在按钮上的这一整下都归按钮：外层的滚动、面板拖动不接手，手指挪开也继续按住，松手才算
+                                while (true) {
+                                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                    c.consume()
+                                    if (!c.pressed) break
+                                }
+                            } finally {
+                                if (!confirmed) {
+                                    job.cancel()
+                                    scope.launch {
+                                        if (reduce) {
+                                            progress.snapTo(0f)
+                                        } else {
+                                            progress.animateTo(0f, HoldCancelSpring)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -150,8 +182,12 @@ public fun MochiHoldButton(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        CompositionLocalProvider(LocalContentColor provides if (enabled) colors.content else colors.content.copy(alpha = 0.4f)) {
+        val textColor = if (enabled) colors.content else colors.content.copy(alpha = MochiDefaults.DisabledAlpha)
+        CompositionLocalProvider(LocalContentColor provides textColor) {
             content()
         }
     }
 }
+
+private val HoldResetSpring = spring<Float>(dampingRatio = 1f, stiffness = 300f)
+private val HoldCancelSpring = spring<Float>(dampingRatio = 1f, stiffness = 500f)

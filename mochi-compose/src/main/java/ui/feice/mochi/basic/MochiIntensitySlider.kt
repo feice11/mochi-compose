@@ -3,10 +3,8 @@
 
 package ui.feice.mochi.basic
 
-import android.graphics.Paint
 import android.graphics.RuntimeShader
 import android.os.Build
-import android.provider.Settings
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -32,37 +30,41 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.basic.parts.ControlSmoothing
+import ui.feice.mochi.basic.parts.mochiPointerInput
+import ui.feice.mochi.effect.shadow.drawRoundRectShadow
+import ui.feice.mochi.navigation.LocalMochiNavEntry
+import ui.feice.mochi.navigation.LocalMochiNavigator
 import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.utils.lerp
@@ -119,37 +121,45 @@ private fun IntensityTrack(
 ) {
     val haptics = rememberMochiHaptics()
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    // 系统关掉了动画：和 Codex 的 reduced motion 一样，渐变停在第 0 帧，不爆散、不揭开
-    val reduce = remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    // 系统关掉了动画或开启了减弱动态效果：和 Codex 的 reduced motion 一样，渐变停在第 0 帧，不爆散、不揭开
+    val reduce = mochiReduceMotion()
+    val navigator = LocalMochiNavigator.current
+    val navEntry = LocalMochiNavEntry.current
+    var visibleInWindow by remember { mutableStateOf(true) }
+    val cleanValue = if (value.isNaN()) 0f else value.coerceIn(0f, 1f)
     val change by rememberUpdatedState(onValueChange)
-    val pos = remember { Animatable(snap(value, stops)) }
+    val pos = remember { Animatable(snap(cleanValue, stops)) }
     val thumbScale = remember { Animatable(1f) }
     var dragging by remember { mutableStateOf(false) }
     val fx = remember { HighEffects() }
-    // 每帧换一个值，绘制读它重画；不在高值时不变
+    // 每帧换一个值，绘制读它重画；不在高值或滚出屏幕时不变
     var frame by remember { mutableLongStateOf(0L) }
-    val last = remember { floatArrayOf(value) }
+    val last = remember { floatArrayOf(cleanValue) }
 
-    LaunchedEffect(value) {
-        val v = value.coerceIn(0f, 1f)
+    LaunchedEffect(cleanValue, stops, reduce) {
         if (!reduce) {
             // 刚越过 HighFrom 往上：蓝紫渐变从右往左揭开；刚到顶：爆一圈粒子
-            if (last[0] <= MochiIntensitySliderDefaults.HighFrom && v > MochiIntensitySliderDefaults.HighFrom) fx.revealAt = fx.time
-            if (last[0] < Top && v >= Top) fx.burstAt = fx.time
+            if (last[0] <= MochiIntensitySliderDefaults.HighFrom && cleanValue > MochiIntensitySliderDefaults.HighFrom) {
+                fx.revealAt = fx.time
+            }
+            if (last[0] < Top && cleanValue >= Top) fx.burstAt = fx.time
         }
-        last[0] = v
-        if (!dragging) pos.animateTo(snap(v, stops), tween(300, easing = MotionEasing))
+        last[0] = cleanValue
+        if (!dragging) {
+            if (reduce) pos.snapTo(snap(cleanValue, stops)) else pos.animateTo(snap(cleanValue, stops), tween(300, easing = MotionEasing))
+        }
     }
-    // 高值时持续流动；回到 HighFrom 以下、爆散也放完就停
-    LaunchedEffect(enabled, reduce) {
+    // 高值且组件在窗口可见时持续流动；回到 HighFrom 以下、爆散放完、被遮盖或滚出屏幕就停
+    LaunchedEffect(enabled, reduce, navigator, navEntry) {
         if (!enabled || reduce) return@LaunchedEffect
+        fun shouldTick(): Boolean = (high(pos.value) > 0f || fx.bursting()) &&
+            visibleInWindow &&
+            !(navEntry != null && navigator?.isMovingOrCovered(navEntry) == true)
         while (true) {
-            snapshotFlow { high(pos.value) > 0f }.first { it }
+            snapshotFlow { shouldTick() }.first { it }
             var prev = 0L
-            while (high(pos.value) > 0f || fx.bursting()) {
+            while (shouldTick()) {
                 withFrameNanos { now ->
                     fx.step(if (prev == 0L) 0f else ((now - prev) / 1e9f).coerceAtMost(0.1f))
                     prev = now
@@ -160,20 +170,23 @@ private fun IntensityTrack(
     }
 
     val shader = remember { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) HighFieldShader() else null }
+    val fallbackGradient = remember { FallbackFieldCache() }
     val trackCache = remember { G2PathCache() }
     val borderCache = remember { G2PathCache() }
-    val outside = remember { Path() }
-    val layerPaint = remember { androidx.compose.ui.graphics.Paint() }
-    val thumbPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
 
     Box(
         modifier
             .height(MochiIntensitySliderDefaults.Height)
+            .onGloballyPositioned { coords ->
+                val b = coords.boundsInWindow()
+                val vis = !b.isEmpty && b.width > 0f && b.height > 0f
+                if (visibleInWindow != vis) visibleInWindow = vis
+            }
             .semantics {
-                progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f, steps = if (stops >= 2) stops - 2 else 0)
+                progressBarRangeInfo = ProgressBarRangeInfo(cleanValue, 0f..1f, steps = if (stops >= 2) stops - 2 else 0)
                 if (enabled) {
                     setProgress { target ->
-                        change(snap(target.coerceIn(0f, 1f), stops))
+                        if (!target.isNaN()) change(snap(target.coerceIn(0f, 1f), stops))
                         true
                     }
                 }
@@ -182,12 +195,13 @@ private fun IntensityTrack(
                 if (!enabled) {
                     Modifier
                 } else {
-                    Modifier.pointerInput(stops, detent) {
+                    Modifier.mochiPointerInput(stops, detent, rtl) {
                         val side = Side.toPx()
                         val inset = MochiIntensitySliderDefaults.ThumbInset.toPx()
                         fun fraction(x: Float): Float {
                             val travel = (size.width - side * 2f - inset * 2f).coerceAtLeast(1f)
-                            return ((x - side - inset) / travel).coerceIn(0f, 1f)
+                            val localX = if (rtl) size.width - x else x
+                            return ((localX - side - inset) / travel).coerceIn(0f, 1f)
                         }
 
                         fun pick(x: Float): Float {
@@ -198,116 +212,158 @@ private fun IntensityTrack(
 
                         fun move(f: Float) {
                             // 分档时每换一档滑 0.15s（Codex 拖动时的时长）；无级时跟手
-                            scope.launch { if (stops >= 2) pos.animateTo(f, tween(150, easing = MotionEasing)) else pos.snapTo(f) }
+                            if (stops >= 2) {
+                                scope.launch { pos.animateTo(f, tween(150, easing = MotionEasing)) }
+                            } else {
+                                scope.launch(start = CoroutineStart.UNDISPATCHED) { pos.snapTo(f) }
+                            }
                         }
                         awaitEachGesture {
-                            val down = awaitFirstDown()
-                            dragging = true
+                            val down = awaitFirstDown(requireUnconsumed = false)
                             scope.launch { thumbScale.animateTo(PressedScale, PressSpring) }
+                            var claimed = false
+                            var released = false
+                            var lastPos = down.position
                             var prev = pick(down.position.x)
-                            if (stops >= 2) {
-                                scope.launch { pos.animateTo(prev, tween(150, easing = MotionEasing)) }
-                            } else {
-                                scope.launch { pos.animateTo(prev, tween(300, easing = MotionEasing)) }
-                            }
-                            change(prev)
-                            while (true) {
-                                val e = awaitPointerEvent()
-                                val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!c.pressed) break
-                                val f = pick(c.position.x)
-                                if (f != prev) {
-                                    val crossed = stops == 0 && detent != null && (prev - detent) * (f - detent) <= 0f
-                                    if (stops >= 2 || crossed || f == 0f || f == 1f) haptics.tick()
-                                    prev = f
-                                    move(f)
-                                    change(f)
+                            try {
+                                while (true) {
+                                    val e = awaitPointerEvent()
+                                    val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                                    lastPos = c.position
+                                    if (!c.pressed) {
+                                        released = true
+                                        c.consume()
+                                        break
+                                    }
+                                    if (!claimed) {
+                                        if (c.isConsumed) break
+                                        val dx = c.position.x - down.position.x
+                                        val dy = c.position.y - down.position.y
+                                        if (abs(dy) > viewConfiguration.touchSlop && abs(dy) > abs(dx)) {
+                                            // 纵向滑动让给外层列表，不误改强度
+                                            break
+                                        }
+                                        if (abs(dx) > viewConfiguration.touchSlop) {
+                                            claimed = true
+                                            dragging = true
+                                            prev = pick(c.position.x)
+                                            move(prev)
+                                            change(prev)
+                                            c.consume()
+                                        }
+                                    } else {
+                                        val f = pick(c.position.x)
+                                        if (f != prev) {
+                                            val crossed = stops == 0 && detent != null && (prev - detent) * (f - detent) <= 0f
+                                            if (stops >= 2 || crossed || f == 0f || f == 1f) haptics.tick()
+                                            prev = f
+                                            move(f)
+                                            change(f)
+                                        }
+                                        c.consume()
+                                    }
                                 }
-                                c.consume()
+                            } finally {
+                                dragging = false
+                                scope.launch { thumbScale.animateTo(1f, ReleaseSpring) }
                             }
-                            dragging = false
-                            scope.launch { thumbScale.animateTo(1f, ReleaseSpring) }
+                            if (released && !claimed) {
+                                val target = pick(lastPos.x)
+                                scope.launch {
+                                    if (stops >= 2) {
+                                        pos.animateTo(target, tween(150, easing = MotionEasing))
+                                    } else {
+                                        pos.animateTo(target, tween(300, easing = MotionEasing))
+                                    }
+                                }
+                                change(target)
+                            }
                         }
                     }
                 },
             )
-            .drawBehind {
-                @Suppress("UNUSED_EXPRESSION")
-                frame
-                val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
+            .drawWithCache {
                 val side = Side.toPx()
                 val inset = MochiIntensitySliderDefaults.ThumbInset.toPx()
                 val trackH = MochiIntensitySliderDefaults.TrackHeight.toPx()
                 val left = side
-                val w = size.width - side * 2f
+                val w = (size.width - side * 2f).coerceAtLeast(0f)
                 val top = (size.height - trackH) / 2f
                 val cy = size.height / 2f
-                val p = pos.value.coerceIn(0f, 1f)
-                val cx = left + inset + (w - inset * 2f) * p
-                val h = high(p)
-
-                // 轨道：文字色 10% 的连续曲率胶囊（和库里其他控件同一种 G2 圆角）+ 0.5dp 内描边
-                val trackRect = Rect(left, top, left + w, top + trackH)
-                val trackPath = trackCache.get(trackRect, trackH / 2f, ControlSmoothing)
-                drawPath(trackPath, colors.track, alpha = alpha)
                 val hair = 0.5f * density
-                drawPath(
-                    borderCache.get(trackRect.deflate(hair / 2f), trackH / 2f - hair / 2f, ControlSmoothing),
-                    colors.trackBorder,
-                    style = Stroke(hair),
-                    alpha = alpha,
-                )
+                val hairStroke = Stroke(hair)
+                val tickBaseRadius = MochiIntensitySliderDefaults.TickSize.toPx() / 2f
+                val thumbBaseRadius = MochiIntensitySliderDefaults.ThumbSize.toPx() / 2f
+                val thumbShadowSigma = (2f * density) * 0.57735f + 0.5f
+                val trackRect = Rect(left, top, left + w, top + trackH)
+                val trackPath = if (w > 0f) trackCache.get(trackRect, trackH / 2f, ControlSmoothing) else null
+                val borderPath = if (w > 0f) {
+                    borderCache.get(trackRect.deflate(hair / 2f), (trackH / 2f - hair / 2f).coerceAtLeast(0f), ControlSmoothing)
+                } else {
+                    null
+                }
+                onDrawBehind {
+                    @Suppress("UNUSED_EXPRESSION")
+                    frame
+                    if (w <= 0f || trackPath == null || borderPath == null) return@onDrawBehind
+                    val alpha = if (enabled) 1f else MochiDefaults.DisabledAlpha
+                    val p = pos.value.coerceIn(0f, 1f)
+                    val isRtl = layoutDirection == LayoutDirection.Rtl
+                    val cx = if (isRtl) left + w - inset - (w - inset * 2f) * p else left + inset + (w - inset * 2f) * p
+                    val h = high(p)
 
-                // 填充段（Codex 的 Range）：整条轨道那么宽的一块，右边对齐到拇指中心；两端那一档里收拢到 0 / 满格
-                val rangeRight = left + w * p + edgeShift(p, stops) * inset / ThumbInsetCss
-                val rangeLeft = rangeRight - w
-                if (rangeRight > left) {
-                    // 按轨道形状裁：clipPath 没有抗锯齿，圆头会出锯齿。改成在只有轨道大小的一层里画，
-                    // 再用抗锯齿的「轨道外面」那块把多出来的擦掉
-                    val canvas = drawContext.canvas
-                    canvas.saveLayer(trackRect, layerPaint)
-                    clipBox(left, top, rangeRight, top + trackH) {
-                        drawRect(colors.fill, Offset(rangeLeft, top), Size(w, trackH), alpha = alpha)
-                        if (h > 0f) {
-                            // 高值：蓝紫流动渐变 + 星点，都在填充段这块里面
-                            drawHighField(shader, colors, rangeLeft, top, w, trackH, h * alpha, fx)
-                            fx.drawStars(this, rangeLeft, top, w, trackH, h * alpha)
+                    // 轨道：文字色 10% 的连续曲率胶囊（和库里其他控件同一种 G2 圆角）+ 0.5dp 内描边
+                    drawPath(trackPath, colors.track, alpha = alpha)
+                    drawPath(borderPath, colors.trackBorder, style = hairStroke, alpha = alpha)
+
+                    // 填充段（Codex 的 Range）：直接按抗锯齿的 trackPath 在水平轴对齐裁切框内绘制，零离屏 saveLayer 与 DstOut
+                    val span = w * p + edgeShift(p, stops) * inset / ThumbInsetCss
+                    if (span > 0f) {
+                        val clipL = if (isRtl) (left + w - span).coerceAtLeast(left) else left
+                        val clipR = if (isRtl) left + w else (left + span).coerceAtMost(left + w)
+                        val rangeLeft = if (isRtl) left + w - span else left + span - w
+                        clipBox(clipL, top, clipR, top + trackH) {
+                            drawPath(trackPath, colors.fill, alpha = alpha)
+                            if (h > 0f) {
+                                // 高值：蓝紫流动渐变直接作用于抗锯齿 trackPath，星点用 clipPath 限在胶囊内
+                                drawHighField(shader, fallbackGradient, trackPath, colors, rangeLeft, top, w, trackH, h * alpha, fx)
+                                clipPath(trackPath) {
+                                    fx.drawStars(this, rangeLeft, top, w, trackH, h * alpha)
+                                }
+                            }
                         }
                     }
-                    outside.rewind()
-                    outside.fillType = PathFillType.EvenOdd
-                    outside.addRect(trackRect.inflate(2f))
-                    outside.addPath(trackPath)
-                    drawPath(outside, Color.Black, blendMode = BlendMode.DstOut)
-                    canvas.restore()
-                }
 
-                // 刻度：分档时每档一个；无级时只在 detent 画一个。高值时淡出、缩到 0.75
-                val tickAlpha = (1f - h) * alpha
-                if (tickAlpha > 0.01f) {
-                    val r = MochiIntensitySliderDefaults.TickSize.toPx() / 2f * (1f - 0.25f * h)
-                    fun tick(at: Float) {
-                        val x = left + inset + (w - inset * 2f) * at
-                        drawCircle(if (at <= p + 1e-4f) colors.tickOn else colors.tickOff, r, Offset(x, cy), alpha = tickAlpha)
+                    // 刻度：分档时每档一个；无级时只在 detent 画一个。高值时淡出、缩到 0.75
+                    val tickAlpha = (1f - h) * alpha
+                    if (tickAlpha > 0.01f) {
+                        val r = tickBaseRadius * (1f - 0.25f * h)
+                        fun tick(at: Float) {
+                            val x = if (isRtl) left + w - inset - (w - inset * 2f) * at else left + inset + (w - inset * 2f) * at
+                            drawCircle(if (at <= p + 1e-4f) colors.tickOn else colors.tickOff, r, Offset(x, cy), alpha = tickAlpha)
+                        }
+                        if (stops >= 2) {
+                            for (i in 0 until stops) tick(i / (stops - 1f))
+                        } else if (detent != null) {
+                            tick(detent)
+                        }
                     }
-                    if (stops >= 2) {
-                        for (i in 0 until stops) tick(i / (stops - 1f))
-                    } else if (detent != null) {
-                        tick(detent)
-                    }
-                }
 
-                // 到顶时的爆散：在拇指下面，可以飞出轨道
-                fx.drawBurst(this, cx, cy, colors)
+                    // 到顶时的爆散：在拇指下面，可以飞出轨道
+                    fx.drawBurst(this, cx, cy, colors)
 
-                // 拇指：白圆 + 0.5dp 描边 + 2dp 的淡阴影（0 0 2px 黑 10%）
-                val radius = MochiIntensitySliderDefaults.ThumbSize.toPx() / 2f * thumbScale.value
-                drawIntoCanvas { canvas ->
-                    thumbPaint.color = colors.thumb.copy(alpha = colors.thumb.alpha * alpha).toArgb()
-                    thumbPaint.setShadowLayer(2f * density, 0f, 0f, Color.Black.copy(alpha = 0.1f * alpha).toArgb())
-                    canvas.nativeCanvas.drawCircle(cx, cy, radius, thumbPaint)
+                    // 拇指：白圆 + 0.5dp 描边 + 2dp 淡阴影（API 33+ 解析着色器零阴影纹理缓存）
+                    val radius = thumbBaseRadius * thumbScale.value
+                    drawRoundRectShadow(
+                        Rect(cx - radius, cy - radius, cx + radius, cy + radius),
+                        cornerRadius = radius,
+                        sigma = thumbShadowSigma,
+                        dy = 0f,
+                        color = Color.Black.copy(alpha = 0.1f * alpha),
+                    )
+                    drawCircle(colors.thumb, radius, Offset(cx, cy), alpha = alpha)
+                    drawCircle(colors.thumbBorder, radius - hair / 2f, Offset(cx, cy), style = hairStroke, alpha = alpha)
                 }
-                drawCircle(colors.thumbBorder, radius - hair / 2f, Offset(cx, cy), style = Stroke(hair), alpha = alpha)
             },
     )
 }
@@ -316,7 +372,7 @@ private fun IntensityTrack(
 private fun high(v: Float): Float = smoothstep(MochiIntensitySliderDefaults.HighFrom, 1f, v)
 
 private fun snap(v: Float, stops: Int): Float {
-    val c = v.coerceIn(0f, 1f)
+    val c = (if (v.isNaN()) 0f else v).coerceIn(0f, 1f)
     return if (stops >= 2) (c * (stops - 1)).roundToInt() / (stops - 1f) else c
 }
 
@@ -337,9 +393,33 @@ private fun DrawScope.clipBox(l: Float, t: Float, r: Float, b: Float, block: Dra
     c.restore()
 }
 
+private class FallbackFieldCache {
+    private var lastX = Float.NaN
+    private var lastW = Float.NaN
+    private var lastBlue = Color.Unspecified
+    private var lastPurple = Color.Unspecified
+    private var brush: Brush? = null
+
+    fun obtain(x: Float, w: Float, blue: Color, purple: Color): Brush {
+        val existing = brush
+        if (existing != null && lastX == x && lastW == w && lastBlue == blue && lastPurple == purple) return existing
+        val a = lerp(blue, purple, 0.4f)
+        val c = lerp(purple, blue, 0.28f)
+        return Brush.horizontalGradient(0f to a, 0.55f to purple, 1f to c, startX = x, endX = x + w).also {
+            lastX = x
+            lastW = w
+            lastBlue = blue
+            lastPurple = purple
+            brush = it
+        }
+    }
+}
+
 /** 蓝紫流动渐变；Android 12 及以下没有 RuntimeShader，只画静止的横向渐变 */
 private fun DrawScope.drawHighField(
     shader: HighFieldShader?,
+    fallback: FallbackFieldCache,
+    trackPath: Path,
     colors: MochiIntensitySliderColors,
     x: Float,
     y: Float,
@@ -350,14 +430,11 @@ private fun DrawScope.drawHighField(
 ) {
     if (shader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         shader.update(x, y, w, h, fx.time, alpha, fx.reveal(), 120f * density, colors)
-        drawRect(shader.brush, Offset(x, y), Size(w, h))
+        drawPath(trackPath, shader.brush)
     } else {
-        val a = lerp(colors.highBlue, colors.highPurple, 0.4f)
-        val c = lerp(colors.highPurple, colors.highBlue, 0.28f)
-        drawRect(
-            Brush.horizontalGradient(0f to a, 0.55f to colors.highPurple, 1f to c, startX = x, endX = x + w),
-            Offset(x, y),
-            Size(w, h),
+        drawPath(
+            trackPath,
+            fallback.obtain(x, w, colors.highBlue, colors.highPurple),
             alpha = alpha,
         )
     }
@@ -488,7 +565,7 @@ private fun hash(e: Int, t: Int): Float {
     return (n - floor(n)).toFloat()
 }
 
-/** Codex 的高值渐变着色器（逐行移植），再按 mix-blend-mode: luminosity 叠到横向的蓝紫渐变上 */
+/** Codex 的高值渐变着色器（逐行移植），时间相关的 12 团中心/权重与色调全部提至 CPU uniform，逐像素零 sin/cos */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 private class HighFieldShader {
     private val shader = RuntimeShader(HIGH_FIELD_AGSL)
@@ -505,14 +582,88 @@ private class HighFieldShader {
         feather: Float,
         colors: MochiIntensitySliderColors,
     ) {
+        val t = time * 1.25f
+        val sx = 1.55f
+        val s0 = lerp(colors.highPurple, colors.highBlue, 0.6f)
+        val s2 = lerp(colors.highBlue, colors.highPurple, 0.72f)
         shader.setFloatUniform("uOrigin", x, y)
         shader.setFloatUniform("uSize", w, h)
         shader.setFloatUniform("uTime", time)
         shader.setFloatUniform("uAlpha", alpha)
         shader.setFloatUniform("uReveal", reveal)
         shader.setFloatUniform("uFeather", feather)
-        shader.setFloatUniform("uBlue", colors.highBlue.red, colors.highBlue.green, colors.highBlue.blue)
         shader.setFloatUniform("uPurple", colors.highPurple.red, colors.highPurple.green, colors.highPurple.blue)
+        shader.setFloatUniform("uStop0", s0.red, s0.green, s0.blue)
+        shader.setFloatUniform("uStop2", s2.red, s2.green, s2.blue)
+        shader.setFloatUniform(
+            "uC01",
+            (0.18f + sin(t * 0.42f) * 0.18f) * sx,
+            0.36f + cos(t * 0.50f) * 0.42f,
+            (0.34f + cos(t * 0.62f) * 0.24f) * sx,
+            0.62f + sin(t * 0.47f) * 0.38f,
+        )
+        shader.setFloatUniform(
+            "uC23",
+            (0.52f + sin(t * 0.38f) * 0.28f) * sx,
+            0.30f + cos(t * 0.58f) * 0.36f,
+            (0.70f + cos(t * 0.54f) * 0.24f) * sx,
+            0.68f + sin(t * 0.41f) * 0.36f,
+        )
+        shader.setFloatUniform(
+            "uC45",
+            (0.88f + sin(t * 0.74f) * 0.16f) * sx,
+            0.36f + cos(t * 0.64f) * 0.40f,
+            (0.12f + cos(t * 0.48f) * 0.20f) * sx,
+            0.72f + sin(t * 0.70f) * 0.30f,
+        )
+        shader.setFloatUniform(
+            "uC67",
+            (0.30f + sin(t * 0.58f) * 0.22f) * sx,
+            0.44f + cos(t * 0.52f) * 0.42f,
+            (0.46f + cos(t * 0.68f) * 0.26f) * sx,
+            0.72f + sin(t * 0.56f) * 0.32f,
+        )
+        shader.setFloatUniform(
+            "uC89",
+            (0.60f + sin(t * 0.44f) * 0.28f) * sx,
+            0.26f + cos(t * 0.60f) * 0.38f,
+            (0.76f + cos(t * 0.50f) * 0.22f) * sx,
+            0.54f + sin(t * 0.66f) * 0.40f,
+        )
+        shader.setFloatUniform(
+            "uC1011",
+            (0.92f + sin(t * 0.70f) * 0.15f) * sx,
+            0.66f + cos(t * 0.46f) * 0.30f,
+            (0.06f + cos(t * 0.40f) * 0.14f) * sx,
+            0.32f + sin(t * 0.60f) * 0.40f,
+        )
+        shader.setFloatUniform(
+            "uW0",
+            0.7f + 0.3f * sin(time * 0.91f),
+            0.7f + 0.3f * cos(time * 1.07f),
+            0.7f + 0.3f * sin(time * 0.76f),
+            0.7f + 0.3f * cos(time * 1.18f),
+        )
+        shader.setFloatUniform(
+            "uW1",
+            0.7f + 0.3f * sin(time * 1.03f),
+            0.7f + 0.3f * cos(time * 0.83f),
+            0.7f + 0.3f * sin(time * 1.24f),
+            0.7f + 0.3f * cos(time * 0.96f),
+        )
+        shader.setFloatUniform(
+            "uW2",
+            0.7f + 0.3f * sin(time * 1.11f),
+            0.7f + 0.3f * cos(time * 0.72f),
+            0.7f + 0.3f * sin(time * 1.29f),
+            0.7f + 0.3f * cos(time * 0.88f),
+        )
+        shader.setFloatUniform(
+            "uTint",
+            sin(time * 0.5f) * 0.02f,
+            cos(time * 0.7f) * 0.02f,
+            sin(time * 0.6f) * 0.02f,
+        )
     }
 }
 
@@ -547,8 +698,19 @@ uniform float uTime;
 uniform float uAlpha;
 uniform float uReveal;
 uniform float uFeather;
-uniform float3 uBlue;
 uniform float3 uPurple;
+uniform float3 uStop0;
+uniform float3 uStop2;
+uniform float4 uC01;
+uniform float4 uC23;
+uniform float4 uC45;
+uniform float4 uC67;
+uniform float4 uC89;
+uniform float4 uC1011;
+uniform float4 uW0;
+uniform float4 uW1;
+uniform float4 uW2;
+uniform float3 uTint;
 
 const float3 COLOR_1 = float3(0.592, 0.388, 0.945);
 const float3 COLOR_2 = float3(0.831, 0.710, 0.953);
@@ -569,39 +731,24 @@ float grain(float2 uv) {
 }
 
 float fieldWeight(float2 point, float2 center) {
-    return exp(-dot(point - center, point - center) * 12.0);
+    float2 d = point - center;
+    return exp(-dot(d, d) * 12.0);
 }
 
 float3 fieldColor(float2 rawUv) {
-    const float speed = 1.25;
-    float2 uv = float2(rawUv.x, 0.40 + rawUv.y * 0.18);
-    float2 s = float2(1.55, 1.0);
-    float2 point = uv * s;
-    float t = uTime * speed;
-    float2 c1 = float2(0.18 + sin(t * 0.42) * 0.18, 0.36 + cos(t * 0.50) * 0.42) * s;
-    float2 c2 = float2(0.34 + cos(t * 0.62) * 0.24, 0.62 + sin(t * 0.47) * 0.38) * s;
-    float2 c3 = float2(0.52 + sin(t * 0.38) * 0.28, 0.30 + cos(t * 0.58) * 0.36) * s;
-    float2 c4 = float2(0.70 + cos(t * 0.54) * 0.24, 0.68 + sin(t * 0.41) * 0.36) * s;
-    float2 c5 = float2(0.88 + sin(t * 0.74) * 0.16, 0.36 + cos(t * 0.64) * 0.40) * s;
-    float2 c6 = float2(0.12 + cos(t * 0.48) * 0.20, 0.72 + sin(t * 0.70) * 0.30) * s;
-    float2 c7 = float2(0.30 + sin(t * 0.58) * 0.22, 0.44 + cos(t * 0.52) * 0.42) * s;
-    float2 c8 = float2(0.46 + cos(t * 0.68) * 0.26, 0.72 + sin(t * 0.56) * 0.32) * s;
-    float2 c9 = float2(0.60 + sin(t * 0.44) * 0.28, 0.26 + cos(t * 0.60) * 0.38) * s;
-    float2 c10 = float2(0.76 + cos(t * 0.50) * 0.22, 0.54 + sin(t * 0.66) * 0.40) * s;
-    float2 c11 = float2(0.92 + sin(t * 0.70) * 0.15, 0.66 + cos(t * 0.46) * 0.30) * s;
-    float2 c12 = float2(0.06 + cos(t * 0.40) * 0.14, 0.32 + sin(t * 0.60) * 0.40) * s;
-    float w1 = fieldWeight(point, c1) * (0.7 + 0.3 * sin(uTime * 0.91));
-    float w2 = fieldWeight(point, c2) * (0.7 + 0.3 * cos(uTime * 1.07));
-    float w3 = fieldWeight(point, c3) * (0.7 + 0.3 * sin(uTime * 0.76));
-    float w4 = fieldWeight(point, c4) * (0.7 + 0.3 * cos(uTime * 1.18));
-    float w5 = fieldWeight(point, c5) * (0.7 + 0.3 * sin(uTime * 1.03));
-    float w6 = fieldWeight(point, c6) * (0.7 + 0.3 * cos(uTime * 0.83));
-    float w7 = fieldWeight(point, c7) * (0.7 + 0.3 * sin(uTime * 1.24));
-    float w8 = fieldWeight(point, c8) * (0.7 + 0.3 * cos(uTime * 0.96));
-    float w9 = fieldWeight(point, c9) * (0.7 + 0.3 * sin(uTime * 1.11));
-    float w10 = fieldWeight(point, c10) * (0.7 + 0.3 * cos(uTime * 0.72));
-    float w11 = fieldWeight(point, c11) * (0.7 + 0.3 * sin(uTime * 1.29));
-    float w12 = fieldWeight(point, c12) * (0.7 + 0.3 * cos(uTime * 0.88));
+    float2 point = float2(rawUv.x * 1.55, 0.40 + rawUv.y * 0.18);
+    float w1 = fieldWeight(point, uC01.xy) * uW0.x;
+    float w2 = fieldWeight(point, uC01.zw) * uW0.y;
+    float w3 = fieldWeight(point, uC23.xy) * uW0.z;
+    float w4 = fieldWeight(point, uC23.zw) * uW0.w;
+    float w5 = fieldWeight(point, uC45.xy) * uW1.x;
+    float w6 = fieldWeight(point, uC45.zw) * uW1.y;
+    float w7 = fieldWeight(point, uC67.xy) * uW1.z;
+    float w8 = fieldWeight(point, uC67.zw) * uW1.w;
+    float w9 = fieldWeight(point, uC89.xy) * uW2.x;
+    float w10 = fieldWeight(point, uC89.zw) * uW2.y;
+    float w11 = fieldWeight(point, uC1011.xy) * uW2.z;
+    float w12 = fieldWeight(point, uC1011.zw) * uW2.w;
     float total = max(w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8 + w9 + w10 + w11 + w12, 0.0001);
     float3 color = (COLOR_1 * w1 + COLOR_2 * w2 + COLOR_3 * w3 + COLOR_4 * w4 + COLOR_5 * w5 + COLOR_6 * w6 +
         COLOR_7 * w7 + COLOR_8 * w8 + COLOR_9 * w9 + COLOR_10 * w10 + COLOR_11 * w11 + COLOR_12 * w12) / total;
@@ -628,17 +775,12 @@ half4 main(float2 fragCoord) {
     // WebGL 的 vUv 原点在左下
     float2 uv = float2(local.x / uSize.x, 1.0 - local.y / uSize.y);
     float3 color = fieldColor(uv);
-    color += grain(uv) * 0.012;
-    color.r += sin(uTime * 0.5) * 0.02;
-    color.g += cos(uTime * 0.7) * 0.02;
-    color.b += sin(uTime * 0.6) * 0.02;
+    color += grain(uv) * 0.012 + uTint;
     color = pow(max(color, float3(0.0)), float3(0.92));
 
     // 底下那条横向渐变：蓝 60% + 紫 → 紫（55%）→ 紫 72% + 蓝
     float x = clamp(uv.x, 0.0, 1.0);
-    float3 s0 = mix(uPurple, uBlue, 0.6);
-    float3 s2 = mix(uBlue, uPurple, 0.72);
-    float3 base = x < 0.55 ? mix(s0, uPurple, x / 0.55) : mix(uPurple, s2, (x - 0.55) / 0.45);
+    float3 base = x < 0.55 ? mix(uStop0, uPurple, x / 0.55) : mix(uPurple, uStop2, (x - 0.55) / 0.45);
     float3 outC = setLum(base, lum(color));
 
     // 揭开：遮罩位置从右往左扫，前沿 uFeather 宽的羽化

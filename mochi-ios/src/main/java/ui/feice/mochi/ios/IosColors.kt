@@ -332,7 +332,13 @@ public object IosButtonColors {
 }
 
 /** 开关：白色拇指，打开是系统绿，关闭是浅灰轨道；控件底槽用 tertiarySystemFill */
-public fun iosControlPalette(isDark: Boolean, highContrast: Boolean = false): MochiControlPalette {
+public fun iosControlPalette(isDark: Boolean, highContrast: Boolean = false): MochiControlPalette = when {
+    !isDark -> if (highContrast) IosControlLightHighContrast else IosControlLight
+    highContrast -> IosControlDarkHighContrast
+    else -> IosControlDark
+}
+
+private fun buildIosControlPalette(isDark: Boolean, highContrast: Boolean): MochiControlPalette {
     val p = IosPalette.of(isDark, highContrast)
     return MochiControlPalette(
         thumb = Color.White,
@@ -343,13 +349,18 @@ public fun iosControlPalette(isDark: Boolean, highContrast: Boolean = false): Mo
     )
 }
 
+private val IosControlLight = buildIosControlPalette(isDark = false, highContrast = false)
+private val IosControlDark = buildIosControlPalette(isDark = true, highContrast = false)
+private val IosControlLightHighContrast = buildIosControlPalette(isDark = false, highContrast = true)
+private val IosControlDarkHighContrast = buildIosControlPalette(isDark = true, highContrast = true)
+
 /**
  * 把 iOS 的系统语义色映射到 Mochi 的颜色角色。iOS 没有 Material 的「容器色」体系，按组件实际怎么用这些角色来对：
  *
  * | Mochi 角色 | iOS |
  * |---|---|
  * | primary / onPrimary | tintColor（系统蓝）/ 白（filled 按钮） |
- * | primaryContainer / 上面的文字 | secondarySystemFill / label（gray 按钮：iOS 没有 Material 那种强调色调的低强调容器，低强调一律是中性灰底、正文色；带强调色的是 primary 和 tinted 按钮） |
+ * | primaryContainer / 上面的文字 | secondarySystemFill / label（gray 按钮：低强调一律是中性灰底、正文色；带强调色的是 primary 和 tinted 按钮） |
  * | secondaryContainer / 上面的文字 | secondarySystemFill / label（gray 按钮：iOS 26 普通次要按钮是中性灰底、正文色字） |
  * | secondary、tertiary | systemGray、systemIndigo |
  * | tertiaryContainer / 上面的文字 | tertiarySystemFill / label |
@@ -361,7 +372,18 @@ public fun iosControlPalette(isDark: Boolean, highContrast: Boolean = false): Mo
  * | 深色下弹窗、面板用的 surfaceContainerHigh / Highest | elevated 层级的 secondary / tertiary 背景 |
  * | outline、outlineVariant | opaqueSeparator、separator |
  */
-public fun iosColorScheme(isDark: Boolean, highContrast: Boolean = false): MochiColorScheme {
+public fun iosColorScheme(isDark: Boolean, highContrast: Boolean = false): MochiColorScheme = when {
+    !isDark -> if (highContrast) IosSchemeLightHighContrast else IosSchemeLight
+    highContrast -> IosSchemeDarkHighContrast
+    else -> IosSchemeDark
+}
+
+private val IosSchemeLight = buildIosColorScheme(isDark = false, highContrast = false)
+private val IosSchemeDark = buildIosColorScheme(isDark = true, highContrast = false)
+private val IosSchemeLightHighContrast = buildIosColorScheme(isDark = false, highContrast = true)
+private val IosSchemeDarkHighContrast = buildIosColorScheme(isDark = true, highContrast = true)
+
+private fun buildIosColorScheme(isDark: Boolean, highContrast: Boolean): MochiColorScheme {
     val p = IosPalette.of(isDark, highContrast)
     val e = IosPalette.of(isDark, highContrast, elevated = true)
     val other = IosPalette.of(!isDark, highContrast)

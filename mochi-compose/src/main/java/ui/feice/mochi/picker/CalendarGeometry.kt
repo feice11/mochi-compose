@@ -42,23 +42,29 @@ internal object CalendarGeometry {
     fun rangeSegments(start: MochiDate, end: MochiDate, year: Int, month: Int, firstDayOfWeek: Int): List<RangeSegment> {
         val lo = minOf(start, end)
         val hi = maxOf(start, end)
+        val days = MochiDate.daysInMonth(year, month)
         val first = MochiDate(year, month, 1)
-        val last = MochiDate(year, month, MochiDate.daysInMonth(year, month))
+        val last = MochiDate(year, month, days)
         if (hi < first || lo > last) return emptyList()
-        val from = if (lo < first) first else lo
-        val to = if (hi > last) last else hi
-        val out = ArrayList<RangeSegment>()
-        var day = from.day
-        while (day <= to.day) {
-            val (row, col) = cellOf(MochiDate(year, month, day), firstDayOfWeek)
-            val endDay = minOf(to.day, day + (6 - col))
+        val fromDay = if (lo < first) 1 else lo.day
+        val toDay = if (hi > last) days else hi.day
+        val blanks = (first.dayOfWeek - firstDayOfWeek).mod(7)
+        val roundLo = lo.year == year && lo.month == month
+        val roundHi = hi.year == year && hi.month == month
+        val out = ArrayList<RangeSegment>(6)
+        var day = fromDay
+        while (day <= toDay) {
+            val idx = blanks + day - 1
+            val row = idx / 7
+            val col = idx % 7
+            val endDay = minOf(toDay, day + (6 - col))
             val endCol = col + (endDay - day)
             out += RangeSegment(
                 row = row,
                 startCol = col,
                 endCol = endCol,
-                roundStart = MochiDate(year, month, day) == lo,
-                roundEnd = MochiDate(year, month, endDay) == hi,
+                roundStart = roundLo && day == lo.day,
+                roundEnd = roundHi && endDay == hi.day,
             )
             day = endDay + 1
         }

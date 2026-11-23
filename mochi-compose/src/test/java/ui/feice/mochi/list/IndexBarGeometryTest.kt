@@ -18,4 +18,13 @@ class IndexBarGeometryTest {
             assertEquals(i, IndexBarGeometry.indexAt(IndexBarGeometry.centerOf(i, 520f, 26), 520f, 26))
         }
     }
+
+    @Test
+    fun emptyAndDegenerateBoundsStaySafe() {
+        assertEquals(0, IndexBarGeometry.indexAt(50f, 520f, 0))
+        assertEquals(0, IndexBarGeometry.indexAt(50f, 0f, 26))
+        assertEquals(0, IndexBarGeometry.indexAt(50f, -10f, 26))
+        assertEquals(0f, IndexBarGeometry.centerOf(0, 520f, 0), 1e-4f)
+        assertEquals(0, IndexBarGeometry.indexAt(999f, 40f, 1))
+    }
 }

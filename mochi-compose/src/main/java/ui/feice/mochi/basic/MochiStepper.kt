@@ -3,7 +3,6 @@
 
 package ui.feice.mochi.basic
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -59,6 +59,7 @@ public fun MochiStepper(
     val onChange by rememberUpdatedState(onValueChange)
     val haptics = rememberMochiHaptics()
     fun bump(sign: Int): Boolean {
+        if (range.isEmpty() || step <= 0) return false
         val next = (current.toLong() + sign.toLong() * step).coerceIn(range.first.toLong(), range.last.toLong()).toInt()
         if (next == current) return false
         haptics.tick()
@@ -73,8 +74,8 @@ public fun MochiStepper(
         // Measure the whole stepper as one centered unit; the group only publishes its outline
         // for the horizontal inset and must not move independently of the counter.
         MochiButtonGroup(modifier = Modifier.mochiConcentricOutline(), spacing = 2.dp) {
-            StepperHalf(enabled && value > range.first, { bump(-1) }, plus = false)
-            StepperHalf(enabled && value < range.last, { bump(1) }, plus = true)
+            StepperHalf(enabled && !range.isEmpty() && value > range.first, { bump(-1) }, plus = false)
+            StepperHalf(enabled && !range.isEmpty() && value < range.last, { bump(1) }, plus = true)
         }
     }
 }
@@ -89,8 +90,9 @@ private fun StepperHalf(enabled: Boolean, bump: () -> Boolean, plus: Boolean) {
         onClick = { if (!held[0]) currentBump() },
         modifier = Modifier.pointerInput(enabled) {
             if (!enabled) return@pointerInput
+            val slop = viewConfiguration.touchSlop
             awaitEachGesture {
-                // 只旁观、不消费：按钮自己的按压、放大、高光照常
+                // 只旁观、不消费：按钮自己的按压、放大、高光照常；yieldToScroll = true 让按钮不吞微抖移动事件
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 held[0] = false
                 val job = scope.launch {
@@ -107,9 +109,11 @@ private fun StepperHalf(enabled: Boolean, bump: () -> Boolean, plus: Boolean) {
                         val ev = awaitPointerEvent(PointerEventPass.Initial)
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                         if (!ch.pressed) break
-                        // 不抢按钮的点击；移动被滚动/拖动接管后也立即停止连发。
+                        if ((ch.position - down.position).getDistance() > slop) break
+                        // 外层列表真正接管滚动（在 Main 消费了移动）时立即停止连发
                         val final = awaitPointerEvent(PointerEventPass.Final)
-                        if (final.changes.firstOrNull { it.id == down.id }?.isConsumed != false) break
+                        val finalChange = final.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!finalChange.pressed || finalChange.isConsumed) break
                     }
                 } finally {
                     // 到达边界变灰会重启 pointerInput，不能把 composition scope 中的连发留在后台。
@@ -121,17 +125,19 @@ private fun StepperHalf(enabled: Boolean, bump: () -> Boolean, plus: Boolean) {
         style = MochiButtonStyle.Tonal,
         contentPadding = PaddingValues(0.dp),
         minHeight = 34.dp,
-        behavior = MochiButtonDefaults.behavior(maxGrow = 3.dp),
+        behavior = MochiButtonDefaults.behavior(maxGrow = 3.dp, yieldToScroll = true),
     ) {
         val tint = LocalContentColor.current
         MochiIcon(if (plus) "control.plus" else "control.minus", Modifier.size(width = 46.dp, height = 34.dp), tint = tint) { slot ->
-            Canvas(slot) {
-                val c = Offset(size.width / 2f, size.height / 2f)
-                val r = 6.5.dp.toPx()
-                val w = 2.dp.toPx()
-                drawLine(tint, c - Offset(r, 0f), c + Offset(r, 0f), w, StrokeCap.Round)
-                if (plus) drawLine(tint, c - Offset(0f, r), c + Offset(0f, r), w, StrokeCap.Round)
-            }
+            Spacer(
+                slot.drawBehind {
+                    val c = Offset(size.width / 2f, size.height / 2f)
+                    val r = 6.5.dp.toPx()
+                    val w = 2.dp.toPx()
+                    drawLine(tint, c - Offset(r, 0f), c + Offset(r, 0f), w, StrokeCap.Round)
+                    if (plus) drawLine(tint, c - Offset(0f, r), c + Offset(0f, r), w, StrokeCap.Round)
+                },
+            )
         }
     }
 }

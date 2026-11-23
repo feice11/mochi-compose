@@ -6,8 +6,11 @@ package ui.feice.mochi.effect.content
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,6 +20,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextMotion
 import kotlin.math.abs
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.LocalTextStyle
@@ -73,21 +77,37 @@ public fun MochiCounterText(
         else -> LocalContentColor.current
     }
     val glyphs = rememberDigitGlyphs(digits)
-    // 位数只增不减：少掉的位留着一个空位，好让它沉下去、宽度缩回 0
-    val slots = remember { IntRef(0) }
-    slots.v = maxOf(slots.v, text.length)
+    val reduceMotion = mochiReduceMotion()
+    // 位数变少时先保留空位让高位平滑沉下去、宽度缩回 0；退场动画彻底结束后回收空位，不在组合里永久挂着僵尸协程
+    var slotCount by remember { mutableIntStateOf(text.length) }
+    if (reduceMotion) {
+        slotCount = text.length
+    } else if (text.length > slotCount) {
+        slotCount = text.length
+    }
     // 第一次组合时已经在的位直接停在位上；之后才出现的位从下面升上来
     val first = remember { BoolRef(true) }
     SideEffect { first.v = false }
     Row(modifier.clearAndSetSemantics { this.text = AnnotatedString(text) }, verticalAlignment = Alignment.CenterVertically) {
-        for (i in slots.v - 1 downTo 0) {
+        for (i in slotCount - 1 downTo 0) {
             val ch = text.getOrNull(text.length - 1 - i)
             val isDigit = ch == null || ch in '0'..'9'
             key(i) {
                 // 数字（和空位）都交给滚轮，滚轮自己管升起 / 沉下；数字和别的字符互换时两者之间做模糊替换
                 MochiBlurCrossfade(if (isDigit) WheelSlot else ch, transition = transition, direction = direction) { c ->
                     if (c === WheelSlot) {
-                        CounterWheel(if (isDigit) ch?.minus('0') else null, direction, born = !first.v, glyphs, ink)
+                        CounterWheel(
+                            digit = if (isDigit) ch?.minus('0') else null,
+                            direction = direction,
+                            born = !first.v && !reduceMotion,
+                            glyphs = glyphs,
+                            color = ink,
+                            onRetire = {
+                                if (i >= text.length && slotCount > text.length) {
+                                    slotCount = maxOf(text.length, i)
+                                }
+                            },
+                        )
                     } else {
                         Text(c.toString(), color = color, style = digits, maxLines = 1)
                     }
@@ -101,7 +121,5 @@ public fun MochiCounterText(
 private object WheelSlot
 
 private class LongRef(var v: Long)
-
-private class IntRef(var v: Int)
 
 private class BoolRef(var v: Boolean)

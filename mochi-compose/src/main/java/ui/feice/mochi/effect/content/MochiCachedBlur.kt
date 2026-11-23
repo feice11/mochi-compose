@@ -5,6 +5,9 @@ package ui.feice.mochi.effect.content
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
@@ -15,20 +18,28 @@ import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.node.invalidateMeasurement
 import androidx.compose.ui.node.requireDensity
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
+import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import ui.feice.mochi.theme.MochiGraphics
@@ -53,16 +64,79 @@ import ui.feice.mochi.theme.MochiGraphics
  *   模糊图层按这一圈往外多录，模糊时外面的阴影不会被切成直角矩形；默认 0，只录内容自己的范围
  */
 public fun Modifier.mochiBlur(continuous: Boolean = false, overflow: Dp = 0.dp, radius: () -> Dp): Modifier =
-    // 内容垫一层自己的图层：模糊程度变了要重画这一层时只录一个图层引用，不把整块内容重新录一遍
-    this then CachedBlurElement(radius, continuous, overflow) then Modifier.graphicsLayer()
+    // 仅在模糊生效时给内部内容垫一层独立图层（换档重画只录图层引用）；半径为 0 静止时走 place(0, 0) 不建任何硬件图层
+    this then CachedBlurElement(radius, continuous, overflow) then BlurContentLayerElement(radius)
+
+private class BlurContentLayerElement(val radius: () -> Dp) : ModifierNodeElement<BlurContentLayerNode>() {
+    override fun create(): BlurContentLayerNode = BlurContentLayerNode(radius)
+
+    override fun update(node: BlurContentLayerNode) {
+        if (node.radius !== radius) {
+            node.radius = radius
+            node.invalidateActive()
+        }
+    }
+
+    override fun hashCode(): Int = radius.hashCode()
+
+    override fun equals(other: Any?): Boolean = other is BlurContentLayerElement && other.radius === radius
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiBlurContentLayer"
+    }
+}
+
+private class BlurContentLayerNode(var radius: () -> Dp) :
+    Modifier.Node(),
+    LayoutModifierNode {
+    private var cachedDensity by mutableFloatStateOf(1f)
+    private var activeState: State<Boolean>? = null
+
+    fun invalidateActive() {
+        activeState = null
+        invalidateMeasurement()
+    }
+
+    private fun isActive(density: Density): Boolean {
+        val d = density.density
+        if (cachedDensity != d) cachedDensity = d
+        val st = activeState ?: derivedStateOf {
+            val dp = this@BlurContentLayerNode.radius()
+            val px = if (dp.value.isFinite()) dp.value * cachedDensity else 0f
+            MochiGraphics.blur && px * MochiGraphics.blurScale >= 0.75f
+        }.also { activeState = it }
+        return st.value
+    }
+
+    override fun onDetach() {
+        activeState = null
+    }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val p = measurable.measure(constraints)
+        val density = this
+        return layout(p.width, p.height) {
+            if (isActive(density)) {
+                p.placeWithLayer(0, 0) {}
+            } else {
+                p.place(0, 0)
+            }
+        }
+    }
+}
 
 private class CachedBlurElement(val radius: () -> Dp, val continuous: Boolean, val overflow: Dp) : ModifierNodeElement<CachedBlurNode>() {
     override fun create(): CachedBlurNode = CachedBlurNode(radius, continuous, overflow)
 
     override fun update(node: CachedBlurNode) {
+        val radiusChanged = node.radius !== radius
+        val structuralChanged = node.continuous != continuous || node.overflow != overflow
         node.radius = radius
         node.continuous = continuous
         node.overflow = overflow
+        if (radiusChanged || structuralChanged) {
+            node.invalidatePlan()
+        }
     }
 
     override fun hashCode(): Int = (radius.hashCode() * 31 + continuous.hashCode()) * 31 + overflow.hashCode()
@@ -78,25 +152,37 @@ private class CachedBlurElement(val radius: () -> Dp, val continuous: Boolean, v
 }
 
 /** 这一刻怎么模糊：原分辨率下的半径 [radius]（px）、降采样倍数 [k]、低分辨率上实际用的半径 [low] */
-private data class BlurPlan(val radius: Float, val k: Int, val low: Float)
+internal data class BlurPlan(val radius: Float, val k: Int, val low: Float, val sharedEffect: BlurEffect? = null)
 
 private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean, var overflow: Dp) :
     Modifier.Node(),
     DrawModifierNode {
-    // 重组时换成新的 lambda 也不重画：派生状态下次重算时读最新的那个（读的通常是同一批状态）
+    // lambda 变更时由 Element.update 重置 plan 并重绘，避免捕获非 State 参数的旧值滞留
     var radius: () -> Dp = radius
+
+    private var cachedDensity by mutableFloatStateOf(1f)
 
     // 只在模糊方案变了时才变，绘制读它：同一档里半径怎么变都不重画
     private var plan: State<BlurPlan?>? = null
     private var inner: GraphicsLayer? = null
     private var outer: GraphicsLayer? = null
     private var effect: BlurEffect? = null
-    private var effectPlan: BlurPlan? = null
+    private var effectLow: Float = -1f
 
-    private fun planState(density: Density): State<BlurPlan?> = plan ?: derivedStateOf {
-        val px = with(density) { this@CachedBlurNode.radius().toPx() }
-        if (continuous) continuousPlan(px) else steppedPlan(px)
-    }.also { plan = it }
+    fun invalidatePlan() {
+        plan = null
+        invalidateDraw()
+    }
+
+    private fun planState(density: Density): State<BlurPlan?> {
+        val d = density.density
+        if (cachedDensity != d) cachedDensity = d
+        return plan ?: derivedStateOf {
+            val dp = this@CachedBlurNode.radius()
+            val px = if (dp.value.isFinite()) dp.value * cachedDensity else 0f
+            if (continuous) continuousPlan(px) else steppedPlan(px)
+        }.also { plan = it }
+    }
 
     override fun ContentDrawScope.draw() {
         val p = planState(requireDensity()).value
@@ -105,22 +191,33 @@ private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean, var over
             drawContent()
             return
         }
-        val ctx = requireGraphicsContext()
-        val i = inner ?: ctx.createGraphicsLayer().also { inner = it }
-        val e = if (p == effectPlan) {
-            effect!!
-        } else {
-            BlurEffect(p.low, p.low, TileMode.Decal).also {
-                effect = it
-                effectPlan = p
-            }
-        }
         val k = p.k
         // 内容画出边界的那一圈（外阴影）也录进来：带模糊的图层按自己的范围离屏，范围外的会被切掉
         val over = ceil(overflow.toPx() / k).toInt().coerceAtLeast(0)
         val shift = over.toFloat() * k
-        i.renderEffect = e
-        i.record(IntSize(ceil(size.width / k).toInt() + over * 2, ceil(size.height / k).toInt() + over * 2)) {
+        val w = ceil(size.width / k).toInt() + over * 2
+        val h = ceil(size.height / k).toInt() + over * 2
+
+        val ctx = requireGraphicsContext()
+        val i = inner ?: ctx.createGraphicsLayer().also { inner = it }
+        // continuous && k > 1 时给 inner 设 Offscreen，隔离外层 scale(k) CTM 穿透 RenderEffect；
+        // k == 1 或非 continuous（画进 Offscreen outer 无缩放）时保持 Auto
+        val wantInnerStrategy = if (continuous && k > 1) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+        if (i.compositingStrategy != wantInnerStrategy) {
+            i.compositingStrategy = wantInnerStrategy
+        }
+        val e = p.sharedEffect ?: if (p.low == effectLow && effect != null) {
+            effect!!
+        } else {
+            BlurEffect(p.low, p.low, TileMode.Decal).also {
+                effect = it
+                effectLow = p.low
+            }
+        }
+        if (i.renderEffect !== e) {
+            i.renderEffect = e
+        }
+        i.record(IntSize(w, h)) {
             translate(over.toFloat(), over.toFloat()) {
                 if (k == 1) {
                     this@draw.drawContent()
@@ -129,30 +226,29 @@ private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean, var over
                 }
             }
         }
-        if (continuous) {
-            // 连续：半径每帧都在变，本来就要每帧重新模糊，只用这一层离屏（和直接设 renderEffect 一样多）——
-            // 再套缓存层只会每帧多一次渲染目标切换（手机 GPU 上这比省下的像素更贵）。模糊的外溢不受这一层大小限制
+        if (continuous || k == 1) {
+            // 连续模式每帧换半径，或 k == 1 小半径过渡（如 mochiBlurReveal 首段大标题/小标题交接）：
+            // 直接由 inner 挂 RenderEffect 输出，省去外层 outer Offscreen FBO 分配与二次拷贝；
+            // 模糊外溢不受这一层大小限制，内容变化时 draw() 仍会重录 inner 实时刷新
             releaseCache()
             translate(-shift, -shift) {
                 if (k == 1) drawLayer(i) else scale(k.toFloat(), pivot = Offset.Zero) { drawLayer(i) }
             }
             return
         }
-        // 分档：大多数帧档位不变、只是在移动 / 缩放 / 淡化。模糊结果画进缓存层（四周留出外溢的那圈），
-        // 这些帧只合成这张图，一次离屏都不用；只有换档、内容变了的那一帧才重新模糊
+        // 分档且 k > 1：外层 graphicsLayer 平移 / 缩放 / 淡化不会重新进入此 draw()，直接合成已烘焙的 outer 纹理；
+        // 仅当换档、尺寸变化或子内容失效触发 draw() 时才重新录制 inner 与 outer，确保子内容变更实时刷新
         val o = outer ?: ctx.createGraphicsLayer().also {
             it.compositingStrategy = CompositingStrategy.Offscreen
             outer = it
         }
         val pad = ceil(3f * blurSigma(p.radius) / k).roundToInt() + 1
-        val w = ceil(size.width / k).toInt() + over * 2
-        val h = ceil(size.height / k).toInt() + over * 2
         o.record(IntSize(w + pad * 2, h + pad * 2)) {
             translate(pad.toFloat(), pad.toFloat()) { drawLayer(i) }
         }
         withTransform({
             translate(-pad.toFloat() * k - shift, -pad.toFloat() * k - shift)
-            if (k != 1) scale(k.toFloat(), k.toFloat(), pivot = Offset.Zero)
+            scale(k.toFloat(), k.toFloat(), pivot = Offset.Zero)
         }) { drawLayer(o) }
     }
 
@@ -174,16 +270,31 @@ private class CachedBlurNode(radius: () -> Dp, var continuous: Boolean, var over
         release()
         plan = null
         effect = null
-        effectPlan = null
+        effectLow = -1f
     }
 }
 
-/** 分档：半径落到 1.5 倍一档的档位上（和 [mochiCachedBlur] 同一套档位） */
+private val LnStepRatio = ln(StepRatio)
+
+private val SteppedPlans: Array<BlurPlan?> = arrayOfNulls(MaxBlurLevel + 1)
+
+internal fun steppedLowRadius(level: Int): Float {
+    val r = StepRatio.pow(level)
+    return lowRadius(r, blurDownsample(r))
+}
+
+/** 分档：半径落到 1.5 倍一档的预计算档位上，全进程共享同一组 BlurPlan 与降采样 BlurEffect */
 private fun steppedPlan(px: Float): BlurPlan? {
-    val e = mochiCachedBlur(px) ?: return null
-    val r = mochiCachedBlurRadius(e)
-    val k = blurDownsample(r)
-    return BlurPlan(r, k, lowRadius(r, k))
+    if (!MochiGraphics.blur) return null
+    val scaled = px * MochiGraphics.blurScale
+    if (scaled < 0.75f) return null
+    val level = (ln(scaled) / LnStepRatio).roundToInt().coerceIn(0, MaxBlurLevel)
+    return SteppedPlans[level] ?: run {
+        val r = StepRatio.pow(level)
+        val k = blurDownsample(r)
+        val low = lowRadius(r, k)
+        BlurPlan(r, k, low, BlurEffect(low, low, TileMode.Decal)).also { SteppedPlans[level] = it }
+    }
 }
 
 /** 连续：半径照实算，低分辨率上的半径按 1/4 px 取整（再细肉眼看不出，只会多重画） */
@@ -230,9 +341,9 @@ private fun blurDownsample(r: Float): Int {
  * （ModulateAlpha），不再为透明度单独开一层离屏——手机 GPU 上那一层离屏比模糊本身还贵。
  * 模糊没生效时照常（半透明的内容不会互相透出来）。[blur] 传和 [mochiBlur] 同一个半径
  */
+@Suppress("UNUSED_PARAMETER")
 public fun GraphicsLayerScope.mochiBlurAlpha(alpha: Float, blur: Dp, continuous: Boolean = false) {
     this.alpha = alpha
-    val px = blur.toPx()
-    val active = if (continuous) continuousPlan(px) != null else steppedPlan(px) != null
+    val active = MochiGraphics.blur && blur.toPx() * MochiGraphics.blurScale >= 0.75f
     compositingStrategy = if (active && alpha < 1f) AlphaStrategy.ModulateAlpha else AlphaStrategy.Auto
 }

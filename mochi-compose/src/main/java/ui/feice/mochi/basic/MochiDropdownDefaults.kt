@@ -3,153 +3,62 @@
 
 package ui.feice.mochi.basic
 
-import android.os.Build
-import android.provider.Settings
-import android.view.View
-import android.view.ViewGroup
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCompositionContext
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
-import kotlin.math.sign
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import ui.feice.mochi.anim.MochiMotion
-import ui.feice.mochi.anim.MochiMotions
-import ui.feice.mochi.effect.elastic.MochiRubberBandState
-import ui.feice.mochi.effect.elastic.jellyCrossScale
-import ui.feice.mochi.effect.elastic.jellyStretch
-import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
-import ui.feice.mochi.effect.elastic.rubberStretched
-import ui.feice.mochi.effect.glow.MochiGlowDefaults
-import ui.feice.mochi.effect.glow.MochiGlowSpec
-import ui.feice.mochi.effect.glow.MochiGlowState
-import ui.feice.mochi.effect.glow.mochiGlow
-import ui.feice.mochi.effect.glow.rememberMochiGlowState
-import ui.feice.mochi.effect.metaball.MochiBlob
-import ui.feice.mochi.effect.metaball.MochiMetaballColors
-import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
-import ui.feice.mochi.effect.metaball.drawMochiMetaball
-import ui.feice.mochi.effect.metaball.proximityFuse
-import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
-import ui.feice.mochi.gesture.MochiCallbacks
-import ui.feice.mochi.gesture.MochiController
-import ui.feice.mochi.gesture.mochiButtonGesture
-import ui.feice.mochi.overlay.InWindowOverlay
-import ui.feice.mochi.shape.G2PathCache
-import ui.feice.mochi.shape.G2RectClipShape
-import ui.feice.mochi.shape.addG2RoundRect
-import ui.feice.mochi.shape.continuityFor
-import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
-import ui.feice.mochi.utils.MochiHaptics
-import ui.feice.mochi.utils.lerp
-import ui.feice.mochi.utils.smoothstep
-import ui.feice.mochi.utils.windowOriginOnScreen
 
 // ───────────────────────── 公开 API ─────────────────────────
 
-/** 菜单项。icon 是一个拿到当前文字颜色的插槽，用什么图标库都行。 */
+/**
+ * 菜单项。icon 是一个拿到当前文字颜色的插槽，用什么图标库都行。
+ *
+ * @param divider 在这一项上面画一条分组分割线（第一项忽略）。分割线压在两行的分界上，不占高度，滑选手感不变
+ * @param submenu 二级菜单：选中这一项不关菜单，在其上方以水滴融球动画展开独立子菜单卡片（首行保留父项并把行尾箭头旋至向下，点击首行、外侧或返回键收起），可以再嵌套。
+ *   这一项行尾显示 ›；子菜单里的项用自己的 [onClick] 响应（不走菜单的 onItemClick）
+ * @param panel 自定义二级面板：选中这一项不关菜单，在其上方以水滴融球动画展开独立子面板（首行保留父项，点击收起），
+ *   比如一排排表情回应、颜色格子。参数 close 关掉整个菜单。行尾同样显示 ›；目前只有 MochiContextMenu 支持
+ * @param checked 显示对勾（二级菜单里没有 selectedIndex，用它标出当前值；一级菜单里和 selectedIndex 叠加）
+ * @param onClick 选中这一项时执行；一级菜单里在 onItemClick 之前执行，二级菜单里只有它
+ */
 @Immutable
 public class MochiItem(
     public val label: String,
     public val destructive: Boolean = false,
     public val icon: (@Composable (tint: Color) -> Unit)? = null,
-)
+    public val divider: Boolean = false,
+    public val submenu: ImmutableList<MochiItem>? = null,
+    public val checked: Boolean = false,
+    public val onClick: (() -> Unit)? = null,
+    public val panel: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null,
+) {
+    /** 选中后不关菜单、弹出二级菜单或自定义面板 */
+    internal val opensLevel: Boolean get() = submenu != null || panel != null
+
+    /** 二级菜单顶上的父项返回行（库自己生成，保留父项内容并带旋转箭头） */
+    internal var back: Boolean = false
+        private set
+
+    /** 内部启用态（供 MochiConfirmationDialogBox 禁用操作项使用，不改变公开二进制签名） */
+    internal var itemEnabled: Boolean = true
+
+    internal companion object {
+        fun backTo(parent: String): MochiItem = MochiItem(parent).also { it.back = true }
+
+        fun submenuHeader(parent: MochiItem): MochiItem = MochiItem(
+            label = parent.label,
+            destructive = parent.destructive,
+            icon = parent.icon,
+        ).also { it.back = true }
+    }
+}
 
 /** 面板相对按钮的对齐 */
 public enum class MochiAlign { Start, Center, End }

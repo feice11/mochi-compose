@@ -61,6 +61,19 @@ public fun iosMaterials(
     blur: Boolean = true,
     glassMaterial: MochiGlass = MochiGlassDefaults.Regular,
 ): MochiMaterials {
+    if (glassMaterial === MochiGlassDefaults.Regular) {
+        return when {
+            glass && blur -> MaterialsGlassBlur
+            glass -> MaterialsGlassNoBlur
+            blur -> MaterialsSolidBlur
+            else -> MaterialsSolidNoBlur
+        }
+    }
     val edge = if (blur) MochiScrollEdge.Default else null
     return if (glass) mochiGlassMaterials(glassMaterial, scrollEdge = edge) else MochiMaterials(scrollEdge = edge)
 }
+
+private val MaterialsGlassBlur = mochiGlassMaterials(MochiGlassDefaults.Regular, scrollEdge = MochiScrollEdge.Default)
+private val MaterialsGlassNoBlur = mochiGlassMaterials(MochiGlassDefaults.Regular, scrollEdge = null)
+private val MaterialsSolidBlur = MochiMaterials(scrollEdge = MochiScrollEdge.Default)
+private val MaterialsSolidNoBlur = MochiMaterials(scrollEdge = null)

@@ -3,8 +3,9 @@
 
 package ui.feice.mochi.basic
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.Animatable as ColorAnimatable
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,15 +18,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -35,6 +39,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -114,14 +119,12 @@ public fun MochiChip(
         modifier = modifier.semantics { this.selected = selected },
         enabled = enabled,
         colors = colors,
-    ) {
+    ) { contentColorState ->
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (showCheck) CheckSlot(selected)
-            if (leadingIcon != null) {
-                leadingIcon()
-                Spacer(Modifier.width(6.dp))
+            if (showCheck || leadingIcon != null) {
+                ChipLeading(showCheck, selected, leadingIcon, if (enabled) contentColorState else null)
             }
-            Text(label, maxLines = 1, style = ChipTextStyle())
+            ChipLabelText(label, chipTextStyle(), if (enabled) contentColorState else null)
         }
     }
 }
@@ -145,9 +148,10 @@ public fun MochiRemovableChip(
         modifier = modifier.semantics { contentDescription = removeDescription },
         enabled = enabled,
         colors = colors,
-        contentPadding = PaddingValues(start = 14.dp, end = 11.dp),
-    ) {
-        Text(label, maxLines = 1, style = ChipTextStyle())
+        contentPadding = RemovableChipPadding,
+        animateSelection = false,
+    ) { _ ->
+        Text(label, maxLines = 1, style = chipTextStyle())
         MochiGlyphs.Close(LocalContentColor.current.copy(alpha = 0.6f), size = 9.dp)
     }
 }
@@ -209,6 +213,10 @@ public fun MochiChipGroup(
 /** 横排上下给按压放大留的余量（芯片按下最多长 4dp、放大 6%） */
 private val PressRoom = 6.dp
 
+private val RemovableChipPadding = PaddingValues(start = 14.dp, end = 10.dp)
+
+private val ChipBehavior = MochiButtonDefaults.behavior(pressScale = 1.06f, maxGrow = 4.dp, yieldToScroll = true)
+
 @Composable
 private fun ChipCore(
     selected: Boolean,
@@ -217,19 +225,91 @@ private fun ChipCore(
     colors: MochiChipColors,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = MochiChipDefaults.ContentPadding,
-    content: @Composable RowScope.() -> Unit,
+    animateSelection: Boolean = true,
+    content: @Composable RowScope.((() -> Color)?) -> Unit,
 ) {
-    val container by animateColorAsState(if (selected) colors.selectedContainer else colors.container, label = "chipContainer")
-    val text by animateColorAsState(if (selected) colors.selectedContent else colors.content, label = "chipContent")
-    val buttonColors = MochiButtonColors(
-        container = container,
-        content = text,
-        outline = Color.Transparent,
-        pressedContainer = Color.Transparent,
-        glow = Color.White.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.16f else 0.28f),
+    val targetContainer = if (selected) colors.selectedContainer else colors.container
+    val targetText = if (selected) colors.selectedContent else colors.content
+    // 静态芯片在 selected 未切换前零 Animatable 分配；切换后才懒创建颜色动画并延后读取，避免逐帧重组内容子树
+    val animHolder = if (animateSelection) remember { ChipColorAnimHolder(selected, targetContainer, targetText) } else null
+    val containerAnim: Animatable<Color, AnimationVector4D>?
+    val contentAnim: Animatable<Color, AnimationVector4D>?
+    if (animHolder != null && (animHolder.containerAnim != null || selected != animHolder.lastSelected)) {
+        containerAnim = animHolder.containerAnim ?: ColorAnimatable(animHolder.lastContainer).also { animHolder.containerAnim = it }
+        contentAnim = animHolder.contentAnim ?: ColorAnimatable(animHolder.lastContent).also { animHolder.contentAnim = it }
+        animHolder.lastSelected = selected
+    } else {
+        containerAnim = null
+        contentAnim = null
+        if (animHolder != null) {
+            animHolder.lastSelected = selected
+            animHolder.lastContainer = targetContainer
+            animHolder.lastContent = targetText
+        }
+    }
+    if (containerAnim != null) {
+        LaunchedEffect(targetContainer) {
+            containerAnim.animateTo(targetContainer)
+        }
+    }
+    if (contentAnim != null) {
+        LaunchedEffect(targetText) {
+            contentAnim.animateTo(targetText)
+        }
+    }
+    val containerColorProvider: (() -> Color)? = remember(containerAnim) {
+        containerAnim?.let { anim -> { anim.value } }
+    }
+    val contentColorProvider: (() -> Color)? = remember(contentAnim) {
+        contentAnim?.let { anim -> { anim.value } }
+    }
+    val isDark = MochiTheme.colorScheme.isDark
+    val body: @Composable RowScope.() -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            content(contentColorProvider)
+        }
+    }
+    ChipButton(
+        onClick = onClick,
+        enabled = enabled,
+        containerColorProvider = containerColorProvider,
+        fallbackContainer = targetContainer,
+        staticContentColor = targetText,
         disabledContainer = colors.disabledContainer,
         disabledContent = colors.disabledContent,
+        isDark = isDark,
+        contentPadding = contentPadding,
+        modifier = modifier,
+        content = body,
     )
+}
+
+@Composable
+private fun ChipButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    containerColorProvider: (() -> Color)?,
+    fallbackContainer: Color,
+    staticContentColor: Color,
+    disabledContainer: Color,
+    disabledContent: Color,
+    isDark: Boolean,
+    contentPadding: PaddingValues,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val container = containerColorProvider?.invoke() ?: fallbackContainer
+    val buttonColors = remember(container, staticContentColor, disabledContainer, disabledContent, isDark) {
+        MochiButtonColors(
+            container = container,
+            content = staticContentColor,
+            outline = Color.Transparent,
+            pressedContainer = Color.Transparent,
+            glow = Color.White.copy(alpha = if (isDark) 0.16f else 0.28f),
+            disabledContainer = disabledContainer,
+            disabledContent = disabledContent,
+        )
+    }
     MochiButton(
         onClick = onClick,
         modifier = modifier,
@@ -238,17 +318,57 @@ private fun ChipCore(
         contentPadding = contentPadding,
         minHeight = MochiChipDefaults.Height,
         // 芯片常排在横向滑动的一行里：手指一过阈值就让给外层滚动，不跟手
-        behavior = MochiButtonDefaults.behavior(pressScale = 1.06f, maxGrow = 4.dp, yieldToScroll = true),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+        behavior = ChipBehavior,
+        content = content,
+    )
+}
+
+@Composable
+private fun ChipLeading(
+    showCheck: Boolean,
+    selected: Boolean,
+    leadingIcon: (@Composable () -> Unit)?,
+    contentColorProvider: (() -> Color)?,
+) {
+    val color = contentColorProvider?.invoke() ?: LocalContentColor.current
+    CompositionLocalProvider(LocalContentColor provides color) {
+        if (showCheck) CheckSlot(selected)
+        if (leadingIcon != null) {
+            leadingIcon()
+            Spacer(Modifier.width(6.dp))
+        }
     }
+}
+
+@Composable
+private fun ChipLabelText(label: String, style: TextStyle, contentColorProvider: (() -> Color)?) {
+    if (contentColorProvider == null || LocalMochiFontCrossfade.current) {
+        Text(label, maxLines = 1, style = style, color = contentColorProvider?.invoke() ?: Color.Unspecified)
+        return
+    }
+    val producer = remember(contentColorProvider) { ColorProducer { contentColorProvider() } }
+    BasicText(
+        text = label,
+        style = style,
+        color = producer,
+        maxLines = 1,
+    )
+}
+
+@Stable
+private class ChipColorAnimHolder(var lastSelected: Boolean, var lastContainer: Color, var lastContent: Color) {
+    var containerAnim: Animatable<Color, AnimationVector4D>? = null
+    var contentAnim: Animatable<Color, AnimationVector4D>? = null
 }
 
 /** 选中时对勾一笔画出来、占的宽度（对勾 + 到文字的间距）同步长出来；取消时原路擦掉、宽度收回，文字跟着平移不跳 */
 @Composable
 private fun CheckSlot(selected: Boolean) {
     val p = remember { Animatable(if (selected) 1f else 0f) }
-    LaunchedEffect(selected) { p.animateTo(if (selected) 1f else 0f, MochiMorphIconDefaults.Spring) }
+    LaunchedEffect(selected) {
+        val target = if (selected) 1f else 0f
+        if (p.value != target) p.animateTo(target, MochiMorphIconDefaults.Spring)
+    }
     Box(
         Modifier
             .clipToBounds()
@@ -263,7 +383,9 @@ private fun CheckSlot(selected: Boolean) {
 }
 
 @Composable
-private fun ChipTextStyle() = MochiTheme.textStyles.subhead.copy(fontWeight = FontWeight.Medium)
+private fun chipTextStyle() = MochiTheme.textStyles.subhead.let { base ->
+    remember(base) { base.copy(fontWeight = FontWeight.Medium) }
+}
 
 /** 对勾（24 视口，半粗线宽） */
 private val CheckVector: ImageVector by lazy {

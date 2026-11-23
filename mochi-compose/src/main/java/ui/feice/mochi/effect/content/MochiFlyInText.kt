@@ -56,6 +56,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import ui.feice.mochi.anim.mochiReduceMotion
+import ui.feice.mochi.effect.mask.MochiSmoothGradient
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.LocalTextStyle
 import ui.feice.mochi.utils.smoothstep
@@ -83,7 +84,8 @@ private class FlyChar(val ch: String, val start: Long, val omega: Float) {
 
     var sharp: Bitmap? = null
     var blurred: Bitmap? = null
-    var rasterKey: Any? = null
+    var rasterColor: Color = Color.Unspecified
+    var rasterWidthBits: Int = 0
 }
 
 /** 一道波：下一个字最早什么时候起飞、这道波里已经排了几个字（越往后越慢） */
@@ -288,6 +290,9 @@ private fun FlyInLine(text: String, color: Color, style: TextStyle, leadingGap: 
         }
     }
     val paint = remember { android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG) }
+    val layerPaint = remember { Paint() }
+    val mesh = remember(paint) { FlyMesh(paint) }
+    val fadeCache = remember { FlyFadeCache() }
     val verts = remember { FloatArray((FlyMeshCols + 1) * (FlyMeshRows + 1) * 2) }
     val matrix = remember { android.graphics.Matrix() }
     Spacer(
@@ -314,11 +319,27 @@ private fun FlyInLine(text: String, color: Color, style: TextStyle, leadingGap: 
                 latest.viewW = viewW
                 latest.color = color
                 translate(gap, 0f) {
-                    drawFlyLine(chars, dying, offsets, layout, color, t, scroll.value, viewW, paint, verts, motionBlur)
+                    drawFlyLine(
+                        chars, dying, offsets, layout, color, t, scroll.value, viewW,
+                        layerPaint, mesh, fadeCache, verts, motionBlur,
+                    )
                     for (g in ghosts) drawGhost(g, t, paint, matrix, motionBlur)
                 }
             },
     )
+}
+
+private class FlyFadeCache {
+    private var lastFadePx = -1f
+    private var brush: Brush? = null
+
+    fun fadeOutBrush(fadePx: Float): Brush {
+        if (fadePx != lastFadePx || brush == null) {
+            lastFadePx = fadePx
+            brush = MochiSmoothGradient.horizontal(Color.Black, Color.Transparent, startX = 0f, endX = fadePx)
+        }
+        return brush!!
+    }
 }
 
 private fun DrawScope.drawFlyLine(
@@ -330,7 +351,9 @@ private fun DrawScope.drawFlyLine(
     now: Long,
     scroll: Float,
     viewW: Float,
-    paint: android.graphics.Paint,
+    layerPaint: Paint,
+    mesh: FlyMesh,
+    fadeCache: FlyFadeCache,
     verts: FloatArray,
     motionBlur: Boolean,
 ) {
@@ -344,7 +367,7 @@ private fun DrawScope.drawFlyLine(
     val ext = lineH * FlyDrawReach
     val first = chars.indexOfFirst { it.settleAt > now }.let { if (it < 0) chars.size else it }
     drawIntoCanvas { canvas ->
-        if (faded) canvas.saveLayer(Rect(-ext, -ext, viewW + ext, size.height + ext), Paint())
+        if (faded) canvas.saveLayer(Rect(-ext, -ext, viewW + ext, size.height + ext), layerPaint)
         // 落定的字：一段普通文字，切在第一个还在飞的字左边
         val cut = if (first < chars.size) layout.getBoundingBox(offsets[first]).left + ox else Float.MAX_VALUE
         clipRect(-ext, -ext, cut.coerceAtMost(viewW + ext), size.height + ext) {
@@ -352,7 +375,7 @@ private fun DrawScope.drawFlyLine(
         }
         val padPx = ceil(FlyBlur.toPx() * 1.5f).toInt()
         val blurPx = if (motionBlur) FlyBlur.toPx() else 0f
-        val mesh = FlyMesh(lineH, lineH * FlyFocalLines, viewW + padPx, padPx, canvas.nativeCanvas, paint, verts, motionBlur)
+        mesh.configure(lineH, lineH * FlyFocalLines, viewW + padPx, padPx, canvas.nativeCanvas, verts, motionBlur)
         // 被改掉、删掉的在飞字先画（在下面），新字盖在上面
         for (d in dying) {
             val fade = 1f - smoothstep(0f, DyingMs.toFloat(), (now - d.at).toFloat())
@@ -364,29 +387,27 @@ private fun DrawScope.drawFlyLine(
             val left = box.left + ox
             val right = box.right + ox
             if (right - left < 0.5f) continue
-            if (c.rasterKey != (color to box.width) || c.sharp == null) {
+            val widthBits = box.width.toRawBits()
+            if (c.rasterColor != color || c.rasterWidthBits != widthBits || c.sharp == null) {
                 // 同一个字（同字号、同颜色）画过就直接拿：拼音字母、常用字反复出现，不再每打一个字建图、做模糊
                 val key = FlyRasterKey(c.ch, color, layout.layoutInput.style, (box.width * 4f).roundToInt(), padPx, blurPx)
                 val (sharp, blurred) = FlyRasterCache[key]
                     ?: rasterRange(layout, box, color, padPx, blurPx, 0f).also { FlyRasterCache[key] = it }
                 c.sharp = sharp
                 c.blurred = blurred
-                c.rasterKey = color to box.width
+                c.rasterColor = color
+                c.rasterWidthBits = widthBits
             }
             val nxt = chars.getOrNull(i + 1)
             mesh.draw(c, left, right, nxt?.start ?: (c.start + FlyStaggerMs), nxt?.omega ?: c.omega, now, 1f)
         }
         if (faded) {
             drawRect(
-                Brush.horizontalGradient(
-                    0f to Color.Black.copy(alpha = 1f - fadeAmount),
-                    1f to Color.Black,
-                    startX = 0f,
-                    endX = fadePx,
-                ),
+                fadeCache.fadeOutBrush(fadePx),
                 topLeft = Offset(-ext, -ext),
-                size = Size(viewW + ext * 2, size.height + ext * 2),
-                blendMode = BlendMode.DstIn,
+                size = Size(ext + fadePx, size.height + ext * 2),
+                alpha = fadeAmount,
+                blendMode = BlendMode.DstOut,
             )
             canvas.restore()
         }
@@ -395,19 +416,37 @@ private fun DrawScope.drawFlyLine(
 
 /**
  * 把一个飞行中的字按纸带形变贴到屏幕上。[cx] 是透视中心的横坐标（可见区右边：近处放大的字往左边铺开，不冲出右边），
- * 竖直在行中间。
+ * 竖直在行中间。单实例复用，每帧零对象分配。
  */
-private class FlyMesh(
-    val lineH: Float,
-    val focal: Float,
-    val cx: Float,
-    val padPx: Int,
-    val native: android.graphics.Canvas,
-    val paint: android.graphics.Paint,
-    val verts: FloatArray,
-    val motionBlur: Boolean,
-) {
+private class FlyMesh(val paint: android.graphics.Paint) {
+    private var lineH = 0f
+    private var focal = 0f
+    private var cx = 0f
+    private var padPx = 0
+    private var native: android.graphics.Canvas? = null
+    private var verts: FloatArray = FloatArray(0)
+    private var motionBlur = true
+
+    fun configure(
+        lineH: Float,
+        focal: Float,
+        cx: Float,
+        padPx: Int,
+        native: android.graphics.Canvas,
+        verts: FloatArray,
+        motionBlur: Boolean,
+    ) {
+        this.lineH = lineH
+        this.focal = focal
+        this.cx = cx
+        this.padPx = padPx
+        this.native = native
+        this.verts = verts
+        this.motionBlur = motionBlur
+    }
+
     fun draw(c: FlyChar, left: Float, right: Float, nextStart: Long, nextOmega: Float, now: Long, alphaMul: Float) {
+        val canvas = native ?: return
         if (alphaMul <= 0.002f || right - left < 0.5f) return
         val sharp = c.sharp ?: return
         val blurred = c.blurred ?: return
@@ -463,9 +502,9 @@ private class FlyMesh(
         val blurMix = if (motionBlur) motion.coerceAtMost(FlyMaxBlurFraction) else 0f
         paint.alpha = (255 * alpha * blurMix).roundToInt().coerceIn(0, 255)
         // 糊的那份是半分辨率的小图：网格按整张图分格，照样铺满同一块
-        if (paint.alpha > 0) native.drawBitmapMesh(blurred, FlyMeshCols, FlyMeshRows, verts, 0, null, 0, paint)
+        if (paint.alpha > 0) canvas.drawBitmapMesh(blurred, FlyMeshCols, FlyMeshRows, verts, 0, null, 0, paint)
         paint.alpha = (255 * alpha * (1f - blurMix)).roundToInt().coerceIn(0, 255)
-        if (paint.alpha > 0) native.drawBitmapMesh(sharp, FlyMeshCols, FlyMeshRows, verts, 0, null, 0, paint)
+        if (paint.alpha > 0) canvas.drawBitmapMesh(sharp, FlyMeshCols, FlyMeshRows, verts, 0, null, 0, paint)
     }
 }
 

@@ -5,6 +5,7 @@ package ui.feice.mochi.effect.elastic
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -16,6 +17,7 @@ import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DelegatingNode
 import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
@@ -29,6 +31,7 @@ import kotlin.math.tanh
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.isReduceMotion
 import ui.feice.mochi.gesture.awaitMochiPress
 import ui.feice.mochi.gesture.isInScrollContainer
 
@@ -98,12 +101,12 @@ private class PressDeformNode(
     val claimed: Boolean,
     var onMotionChanged: ((Boolean) -> Unit)?,
 ) : DelegatingNode(),
+    CompositionLocalConsumerModifierNode,
     LayoutModifierNode {
-    /** (缩放, 0) */
-    private var press by mutableStateOf(Offset(1f, 0f))
-
-    /** 跟手偏移（px） */
-    private var shift by mutableStateOf(Offset.Zero)
+    private var pressScale by mutableFloatStateOf(1f)
+    private var shiftX by mutableFloatStateOf(0f)
+    private var shiftY by mutableFloatStateOf(0f)
+    private var animating by mutableStateOf(false)
     private var held = false
     private var finger = Offset.Zero
     private var w = 1f
@@ -128,7 +131,7 @@ private class PressDeformNode(
                         onMove = { finger = it },
                         onRelease = { hold ->
                             release?.cancel()
-                            if (hold <= 0L) {
+                            if (hold <= 0L || isReduceMotion()) {
                                 held = false
                             } else {
                                 release = coroutineScope.launch {
@@ -137,6 +140,7 @@ private class PressDeformNode(
                                 }
                             }
                         },
+                        claimed = claimed,
                     )
                 }
             },
@@ -152,30 +156,55 @@ private class PressDeformNode(
     }
 
     private fun startLoop() {
+        if (isReduceMotion()) {
+            held = false
+            pressScale = 1f
+            shiftX = 0f
+            shiftY = 0f
+            animating = false
+            return
+        }
         if (loop?.isActive == true) return
         loop = coroutineScope.launch {
+            animating = true
             onMotionChanged?.invoke(true)
-            val s = MochiFollowSpring(0.24f, 0.62f)
-            val o = MochiFollowSpring(0.3f, 0.7f)
-            s.snapTo(press)
-            o.snapTo(shift)
-            while (true) {
-                val dt = s.awaitFrameDelta()
-                press = s.step(Offset(if (held) scale else 1f, 0f), dt)
-                shift = o.step(shiftTarget(), dt)
-                val rest = !held && abs(press.x - 1f) < 0.0005f && abs(s.velocity.x) < 0.01f &&
-                    shift.getDistance() < 0.05f && o.velocity.getDistance() < 1f
-                if (rest) {
-                    press = Offset(1f, 0f)
-                    shift = Offset.Zero
-                    break
+            try {
+                val s = MochiFollowSpring(0.24f, 0.62f)
+                val o = MochiFollowSpring(0.3f, 0.7f)
+                s.snapTo(Offset(pressScale, 0f))
+                o.snapTo(Offset(shiftX, shiftY))
+                while (true) {
+                    if (isReduceMotion()) break
+                    val dt = s.awaitFrameDelta()
+                    val nextPress = s.step(Offset(if (held) scale else 1f, 0f), dt)
+                    val nextShift = o.step(shiftTarget(), dt)
+                    pressScale = nextPress.x
+                    shiftX = nextShift.x
+                    shiftY = nextShift.y
+                    val rest = !held && abs(nextPress.x - 1f) < 0.0005f && abs(s.velocity.x) < 0.01f &&
+                        nextShift.getDistance() < 0.05f && o.velocity.getDistance() < 1f
+                    if (rest) break
                 }
+            } finally {
+                pressScale = 1f
+                shiftX = 0f
+                shiftY = 0f
+                animating = false
+                onMotionChanged?.invoke(false)
             }
-            onMotionChanged?.invoke(false)
         }
     }
 
     override fun onDetach() {
+        release?.cancel()
+        release = null
+        loop?.cancel()
+        loop = null
+        held = false
+        pressScale = 1f
+        shiftX = 0f
+        shiftY = 0f
+        animating = false
         onMotionChanged?.invoke(false)
     }
 
@@ -184,23 +213,28 @@ private class PressDeformNode(
         w = p.width.toFloat()
         h = p.height.toFloat()
         return layout(p.width, p.height) {
-            p.placeWithLayer(0, 0) {
-                val k = press.x * (extraScale?.invoke() ?: 1f)
-                val sh = shift
-                // 朝手指那侧略微拉长：偏移越大拉得越多（最多 ~2%）
-                val stretchX = 1f + abs(sh.x) / w.coerceAtLeast(1f) * 0.6f
-                val stretchY = 1f + abs(sh.y) / h.coerceAtLeast(1f) * 0.6f
-                scaleX = k * stretchX
-                scaleY = k * stretchY
-                translationX = sh.x
-                translationY = sh.y
-                transformOrigin = TransformOrigin.Center
-                bounds?.invoke()?.let { safe ->
-                    val fitted = fitPressTransform(Size(w, h), Offset(scaleX, scaleY), sh, safe)
-                    scaleX = fitted.scale.x
-                    scaleY = fitted.scale.y
-                    translationX = fitted.shift.x
-                    translationY = fitted.shift.y
+            if (!animating && extraScale == null) {
+                p.place(0, 0)
+            } else {
+                p.placeWithLayer(0, 0) {
+                    val k = pressScale * (extraScale?.invoke() ?: 1f)
+                    val sx0 = shiftX
+                    val sy0 = shiftY
+                    // 朝手指那侧略微拉长：偏移越大拉得越多（最多 ~2%）
+                    val stretchX = 1f + abs(sx0) / w.coerceAtLeast(1f) * 0.6f
+                    val stretchY = 1f + abs(sy0) / h.coerceAtLeast(1f) * 0.6f
+                    scaleX = k * stretchX
+                    scaleY = k * stretchY
+                    translationX = sx0
+                    translationY = sy0
+                    transformOrigin = TransformOrigin.Center
+                    bounds?.invoke()?.let { safe ->
+                        val fitted = fitPressTransform(Size(w, h), Offset(scaleX, scaleY), Offset(sx0, sy0), safe)
+                        scaleX = fitted.scale.x
+                        scaleY = fitted.scale.y
+                        translationX = fitted.shift.x
+                        translationY = fitted.shift.y
+                    }
                 }
             }
         }

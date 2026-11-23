@@ -9,7 +9,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,7 +75,7 @@ public fun MochiTheme(
 public fun animateMochiColorScheme(target: MochiColorScheme, animate: Boolean = true): MochiColorScheme {
     val state = remember { SchemeTransition(target) }
     LaunchedEffect(target, animate) {
-        if (target == state.to) return@LaunchedEffect
+        if (target == state.to && (!animate || !state.progress.isRunning)) return@LaunchedEffect
         if (!animate) {
             state.from = target
             state.to = target
@@ -87,12 +90,14 @@ public fun animateMochiColorScheme(target: MochiColorScheme, animate: Boolean = 
     return if (animate) state.current() else target
 }
 
+@Stable
 private class SchemeTransition(initial: MochiColorScheme) {
     var from by mutableStateOf(initial)
     var to by mutableStateOf(initial)
     val progress = Animatable(1f)
+    private val interpolator = ColorSchemeInterpolator()
 
-    fun current(): MochiColorScheme = progress.value.let { if (it >= 1f) to else lerp(from, to, it) }
+    fun current(): MochiColorScheme = interpolator.at(from, to, progress.value)
 }
 
 /** 配色过渡时长 */
@@ -110,8 +115,8 @@ public fun MochiTheme(
     shadows: MochiShadows = LocalMochiShadows.current,
     content: @Composable () -> Unit,
 ) {
-    // HDR 窗口模式只由最外层（最先出现）的 MochiTheme 管一次，见 MochiHdrWindowEffect
-    MochiHdrWindowEffect()
+    // 广色域和 HDR 共用窗口的色彩模式，由根主题统一设置。
+    MochiColorWindowEffect()
     MochiGraphicsWindowEffect()
     if (systemBarAppearance) MochiSystemBarsEffect(colors.isDark)
     CompositionLocalProvider(
@@ -156,16 +161,16 @@ public object MochiTheme {
         get() = LocalMochiShadows.current
 }
 
-// 没包 MochiTheme 时也能用：默认浅色配色和默认 token
-internal val LocalMochiColorScheme = staticCompositionLocalOf { lightColorScheme() }
+private val DefaultLightColorScheme by lazy(LazyThreadSafetyMode.PUBLICATION) { lightColorScheme() }
+
+// 配色插值期间每帧变化：用追踪读取者的 compositionLocalOf，只重组实际读取 colorScheme 的作用域，避免整棵树无跳过重建
+internal val LocalMochiColorScheme = compositionLocalOf { DefaultLightColorScheme }
 internal val LocalMochiTextStyles = staticCompositionLocalOf { defaultTextStyles() }
 internal val LocalMochiShapes = staticCompositionLocalOf { defaultShapes() }
 internal val LocalMochiMotionScheme = staticCompositionLocalOf { defaultMotionScheme() }
 
 /** 当前内容（文字、图标）的颜色，容器组件会按自己的背景色改写它 */
-public val LocalContentColor: androidx.compose.runtime.ProvidableCompositionLocal<Color> =
-    androidx.compose.runtime.compositionLocalOf { Color.Black }
+public val LocalContentColor: ProvidableCompositionLocal<Color> = compositionLocalOf { Color.Black }
 
 /** 当前默认文字样式 */
-public val LocalTextStyle: androidx.compose.runtime.ProvidableCompositionLocal<TextStyle> =
-    androidx.compose.runtime.compositionLocalOf { TextStyle.Default }
+public val LocalTextStyle: ProvidableCompositionLocal<TextStyle> = compositionLocalOf { TextStyle.Default }

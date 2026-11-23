@@ -23,10 +23,12 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -38,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.parts.MochiGlyphs
+import ui.feice.mochi.effect.content.MochiBlurText
+import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.effect.glass.LocalGlassSources
 import ui.feice.mochi.effect.glass.LocalMochiBackdrop
 import ui.feice.mochi.effect.glass.mochiBackdropSource
@@ -67,11 +71,19 @@ public fun MochiBottomToolbar(
             .fillMaxWidth()
             // 浮在内容上面的栏：从这一页的卡片打开时先盖在变形的容器上再淡掉
             .mochiNavOccluder()
-            .drawBehind {
-                if (edgeColor.alpha > 0f) {
-                    // 上半段渐隐、下半段实色，S 曲线接头，看不到渐变的起止线
-                    drawRect(MochiSmoothGradient.vertical(edgeColor.copy(alpha = 0f), edgeColor, 0f, size.height * 0.6f))
-                    drawRect(edgeColor, Offset(0f, size.height * 0.6f), Size(size.width, size.height * 0.4f))
+            .drawWithCache {
+                val fadeHeight = size.height * 0.6f
+                val fadeBrush = if (edgeColor.alpha > 0f && fadeHeight > 0f) {
+                    MochiSmoothGradient.vertical(edgeColor.copy(alpha = 0f), edgeColor, 0f, fadeHeight)
+                } else {
+                    null
+                }
+                onDrawBehind {
+                    if (fadeBrush != null) {
+                        // 上半段渐隐、下半段实色，S 曲线接头，看不到渐变的起止线
+                        drawRect(fadeBrush)
+                        drawRect(edgeColor, Offset(0f, fadeHeight), Size(size.width, size.height - fadeHeight))
+                    }
                 }
             }
             .windowInsetsPadding(windowInsets)
@@ -104,19 +116,29 @@ public fun MochiKeyboardToolbar(
     content: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val density = LocalDensity.current
-    val imeVisible = WindowInsets.ime.getBottom(density) > 0
-    val shown by animateFloatAsState(if (imeVisible) 1f else 0f, spring(dampingRatio = 1f, stiffness = 900f), label = "kbd")
-    if (shown <= 0f && !imeVisible) return
+    val ime = WindowInsets.ime
+    val imeVisible by remember(ime, density) { derivedStateOf { ime.getBottom(density) > 0 } }
+    val shownState = animateFloatAsState(if (imeVisible) 1f else 0f, KeyboardToolbarSpring, label = "kbd")
+    val active by remember { derivedStateOf { imeVisible || shownState.value > 0.001f } }
+    if (!active) return
+    val settled by remember { derivedStateOf { shownState.value >= 0.999f } }
     val bar = MochiButtonDefaults.barColors().copy(outline = outline)
     val done = MochiButtonDefaults.colors(MochiButtonStyle.Filled).copy(outline = outline)
     Row(
         modifier
             .fillMaxWidth()
             .imePadding()
-            .graphicsLayer {
-                alpha = shown
-                translationY = (1f - shown) * 16.dp.toPx()
-            }
+            .then(
+                if (settled) {
+                    Modifier
+                } else {
+                    Modifier.graphicsLayer {
+                        val s = shownState.value.coerceIn(0f, 1f)
+                        alpha = s
+                        translationY = (1f - s) * 16.dp.toPx()
+                    }
+                },
+            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -140,6 +162,8 @@ public fun MochiKeyboardToolbar(
         MochiBarButton(doneLabel, onClick = onDone, colors = done)
     }
 }
+
+private val KeyboardToolbarSpring = spring<Float>(dampingRatio = 1f, stiffness = 900f)
 
 /**
  * 工具栏脚手架：把 [content] 录成玻璃的背景来源，[toolbar] 浮在上面（自己用 `Modifier.align(...)` 摆位置）。
@@ -167,10 +191,13 @@ public fun MochiToolbarScaffold(
     Box(modifier.fillMaxSize().background(background)) {
         Box(Modifier.fillMaxSize().mochiBackdropSource(backdrop)) { content() }
         val sources = LocalGlassSources.current
+        val providedSources = remember(sources, backdrop) {
+            if (backdrop != null) sources.copy(bar = null) else sources
+        }
         CompositionLocalProvider(
             LocalMochiBackdrop provides (backdrop ?: LocalMochiBackdrop.current),
             // 栏里的玻璃取样这份内容，不取外面传进来的栏来源
-            LocalGlassSources provides if (backdrop != null) sources.copy(bar = null) else sources,
+            LocalGlassSources provides providedSources,
         ) { toolbar() }
     }
 }
@@ -217,13 +244,16 @@ public fun MochiSelectionToolbar(
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             leading?.invoke(this)
         }
-        if (title != null) {
-            Text(
-                title,
-                style = MochiTheme.textStyles.footnote.copy(fontWeight = FontWeight.SemiBold),
+        val footnote = MochiTheme.textStyles.footnote
+        val titleStyle = remember(footnote) { footnote.copy(fontWeight = FontWeight.SemiBold) }
+        MochiBlurVisibility(title != null, contentAlignment = Alignment.Center) {
+            MochiBlurText(
+                title.orEmpty(),
+                style = titleStyle,
                 color = MochiTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                contentAlignment = Alignment.Center,
             )
         }
         Row(
@@ -265,6 +295,8 @@ public fun MochiSearchToolbar(
             placeholder = placeholder,
             onSearch = onSearch,
             onCancel = onCancel,
+            // 旁边放了栏按钮（44dp）时搜索胶囊也用 44dp，上下边对齐；只有搜索栏时保持 iOS 的 36dp
+            height = if (leading != null || trailing != null) MochiButtonDefaults.BarItemSize else MochiSearchBarDefaults.Height,
         )
         trailing?.invoke(this)
     }

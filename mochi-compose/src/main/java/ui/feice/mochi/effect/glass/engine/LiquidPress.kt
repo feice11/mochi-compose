@@ -114,6 +114,20 @@ internal class GlassGlowState(private val scope: CoroutineScope) {
         if (matrix + glow < 1e-4f) return null
         return LiquidPressFrame(matrix, glow, center.x / density, center.y / density, LiquidPressSpec.SigmaFactor * shortSide * grow)
     }
+
+    /** 零分配填充按压帧数据到 [out] */
+    fun fillFrame(shortSide: Float, density: Float, out: LiquidFrame) {
+        if (matrix + glow < 1e-4f) {
+            out.pressOn = false
+            return
+        }
+        out.pressOn = true
+        out.pressB = matrix
+        out.pressG = glow
+        out.pressX = center.x / density
+        out.pressY = center.y / density
+        out.pressSigma = LiquidPressSpec.SigmaFactor * shortSide * grow
+    }
 }
 
 @Composable

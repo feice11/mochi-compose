@@ -8,16 +8,15 @@ import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
@@ -25,36 +24,40 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.LayoutAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.currentValueOf
+import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.toSize
 import kotlin.math.abs
-import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import ui.feice.mochi.basic.BarFlex
+import ui.feice.mochi.basic.LocalBarFlex
+import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.effect.content.mochiCachedBlur
+import ui.feice.mochi.effect.glass.GlassBlobs
+import ui.feice.mochi.effect.glass.GlassDrawSuppression
 import ui.feice.mochi.effect.glass.GlassFill
-import ui.feice.mochi.effect.glass.GlassSurface
+import ui.feice.mochi.effect.glass.GlassSource
+import ui.feice.mochi.effect.glass.LocalMochiGlassShadow
+import ui.feice.mochi.effect.glass.blobPairFuse
+import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.effect.metaball.MochiBlob
 import ui.feice.mochi.effect.metaball.MochiMetaballColors
 import ui.feice.mochi.effect.metaball.MochiMetaballFrame
 import ui.feice.mochi.effect.metaball.MochiMetaballRenderer
 import ui.feice.mochi.effect.metaball.drawMochiMetaball
-import ui.feice.mochi.effect.metaball.proximityFuse
 import ui.feice.mochi.shape.G2PathCache
+import ui.feice.mochi.theme.MochiGlass
 import ui.feice.mochi.theme.MochiGraphics
-import ui.feice.mochi.utils.lerp
-import ui.feice.mochi.utils.lerpRect
-import ui.feice.mochi.utils.smoothstep
 
 /*
  * 跨页共享的顶栏（iOS 26：导航转场时顶栏按钮不跟着页面滑走，而是原地变形）。
@@ -95,9 +98,29 @@ internal sealed class BarHandle(var id: String) {
     var coords: LayoutCoordinates? = null
     var layer: GraphicsLayer? = null
     var size: Size = Size.Zero
+    var recorded: Boolean = false
 
-    /** 页面里的矩形（未变换的页面坐标系 = 整屏坐标），不受页面滑动影响 */
+    /** 所在栏按钮此刻的按压形变（[BarFlex]）；不在栏按钮里是 null */
+    var flex: BarFlex? = null
+
+    /**
+     * 页面里此刻的矩形（未变换的页面坐标系 = 整屏坐标），不受页面滑动影响，但带上按钮的按压形变：
+     * 形状按 [flex] 放大、挪动；内容本身就在按钮的形变图层里，中心取它此刻的外接框中心（大小仍是原大小，缩放另由 [flex] 给）
+     */
     fun restRect(page: LayoutCoordinates): Rect? {
+        val r = layoutRect(page) ?: return null
+        val c = coords?.takeIf { it.isAttached } ?: return r
+        return if (this is BarShapeHandle) {
+            flex?.rect(r) ?: r
+        } else {
+            val box = page.localBoundingBoxOf(c, clipBounds = false)
+            val s = r.size
+            Rect(box.center - Offset(s.width / 2f, s.height / 2f), s)
+        }
+    }
+
+    /** 布局矩形（不含按压形变）；优先用排版坐标尺寸，首次绘制前就已可用 */
+    private fun layoutRect(page: LayoutCoordinates): Rect? {
         val c = coords?.takeIf { it.isAttached } ?: return null
         if (!page.isAttached) return null
         // 浮层继承 CompositionLocal，但有独立的布局树；只有页内节点才能参与共享顶栏。
@@ -105,16 +128,21 @@ internal sealed class BarHandle(var id: String) {
         while (ancestor !== page) {
             ancestor = ancestor?.parentLayoutCoordinates ?: return null
         }
-        return Rect(page.localPositionOf(c, Offset.Zero), size)
+        val s = c.size.toSize().let { if (it.width >= 1f && it.height >= 1f) it else size }
+        if (s.width < 1f || s.height < 1f) return null
+        return Rect(page.localPositionOf(c, Offset.Zero), s)
     }
 }
 
-/** 形状：胶囊或圆角矩形 + 底色 */
+/** 形状：胶囊或圆角矩形 + 底色 + 外阴影进度 */
 internal class BarShapeHandle(id: String) : BarHandle(id) {
     var color: Color = Color.Transparent
     var cornerRadius: Float = -1f
     var glass: GlassFill? = null
+    var shadow: () -> Float = DefaultShadow
 }
+
+private val DefaultShadow: () -> Float = { 1f }
 
 /** 内容：录下来的图标 / 文字 */
 internal class BarContentHandle(id: String) : BarHandle(id) {
@@ -125,7 +153,7 @@ private data class NavBarContentElement(val id: String, val contentKey: Any?) : 
     override fun create(): NavBarNode = NavBarNode(BarContentHandle(id)).also { update(it) }
 
     override fun update(node: NavBarNode) {
-        (node.handle as BarContentHandle).contentKey = contentKey
+        node.updateContentKey(contentKey)
         node.updateId(id)
     }
 
@@ -160,24 +188,55 @@ private class NavBarNode(val handle: BarHandle) :
     LayoutAwareModifierNode,
     DrawModifierNode {
     private var nav: MochiNavigator? = null
+    private var lastPlacedSize: IntSize = IntSize.Zero
+    private var lastPlacedPos: Offset = Offset.Unspecified
+    private var pendingInvalidate: Boolean = false
+    private var recordedContentKey: Any? = null
+    private var recordedSize: Size = Size.Unspecified
+    private var contentVersion: Int = 0
+    private var recordedContentVersion: Int = -1
 
-    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够
+    // 导航器和所在的页对一个节点来说一辈子不变（换页会换节点），挂上时读一次就够；图层仅在侧推转场期按需创建，静止态零 GraphicsLayer
     @SuppressLint("SuspiciousCompositionLocalModifierRead")
     override fun onAttach() {
         val n = currentValueOf(LocalMochiNavigator) ?: return
         nav = n
         handle.entry = currentValueOf(LocalMochiNavEntry)
         handle.shown = currentValueOf(LocalMochiTabPageShown)
-        handle.layer = requireGraphicsContext().createGraphicsLayer()
+        handle.flex = currentValueOf(LocalBarFlex)
+        if (handle is BarShapeHandle) {
+            handle.shadow = currentValueOf(LocalMochiGlassShadow)
+        }
         n.registerBar(handle)
     }
 
     override fun onDetach() {
         nav?.unregisterBar(handle)
         nav = null
+        pendingInvalidate = false
         handle.layer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
         handle.layer = null
         handle.coords = null
+        resetRecording()
+        lastPlacedSize = IntSize.Zero
+        lastPlacedPos = Offset.Unspecified
+    }
+
+    private fun resetRecording() {
+        handle.recorded = false
+        recordedContentKey = null
+        recordedSize = Size.Unspecified
+        recordedContentVersion = -1
+    }
+
+    fun updateContentKey(contentKey: Any?) {
+        val h = handle as? BarContentHandle ?: return
+        if (h.contentKey != contentKey) {
+            h.contentKey = contentKey
+            contentVersion++
+            resetRecording()
+            if (isAttached) invalidateDraw()
+        }
     }
 
     fun updateId(id: String) {
@@ -188,62 +247,110 @@ private class NavBarNode(val handle: BarHandle) :
     }
 
     override fun onPlaced(coordinates: LayoutCoordinates) {
+        val hadCoords = handle.coords != null
         handle.coords = coordinates
+        val pos = coordinates.positionInParent()
+        if (!hadCoords || lastPlacedSize != coordinates.size || lastPlacedPos != pos) {
+            lastPlacedSize = coordinates.size
+            lastPlacedPos = pos
+            nav?.invalidateBars()
+        }
     }
 
     override fun ContentDrawScope.draw() {
-        val layer = handle.layer
         val n = nav
-        if (layer == null || n == null) {
+        if (n == null) {
             drawContent()
             return
         }
-        // 总是录一遍（里面的内容也因此录好自己的那层，新页第一帧就被接管时也有画面）；被接管时这里不画，不然会跟着页面滑
+        if (!n.hasSlideTransition) {
+            // 脱离侧推转场立即复位录制标记，确保下次进入接管态重新采集最新图标/文字与颜色
+            resetRecording()
+            if (!n.isTransitioning && handle.layer != null) {
+                requireGraphicsContext().releaseGraphicsLayer(handle.layer!!)
+                handle.layer = null
+            }
+            if (handle is BarShapeHandle) {
+                handle.shadow = currentValueOf(LocalMochiGlassShadow)
+            }
+            handle.size = size
+            drawContent()
+            return
+        }
+        val carried = n.isBarCarried(handle)
+        if (handle is BarShapeHandle) {
+            handle.shadow = currentValueOf(LocalMochiGlassShadow)
+            handle.size = size
+            if (!carried || size.width < 1f || size.height < 1f) {
+                if (!carried && !n.isTransitioning) {
+                    handle.layer?.let {
+                        requireGraphicsContext().releaseGraphicsLayer(it)
+                        handle.layer = null
+                    }
+                }
+                drawContent()
+                return
+            }
+            // 被接管时仍执行子内容绘制（录进抛弃层），确保新页里的 BarContentHandle 第一帧就录好自己的画面；
+            // 同时抑制隐藏按钮内的 LiquidGlassNode，避免往抛弃层重复跑金字塔与 AGSL 着色器
+            val layer = handle.layer ?: requireGraphicsContext().createGraphicsLayer().also { handle.layer = it }
+            GlassDrawSuppression.depth++
+            try {
+                layer.record { this@draw.drawContent() }
+            } finally {
+                GlassDrawSuppression.depth--
+            }
+            return
+        }
+        if (!carried) {
+            // 非接管态直接正常绘制，并复位录制标记以便下次进入接管态重新采集最新外观
+            resetRecording()
+            handle.size = size
+            drawContent()
+            return
+        }
+        if (size.width < 1f || size.height < 1f) {
+            handle.size = size
+            resetRecording()
+            return
+        }
+        // 接管态中按钮图标/文字通常静态：contentKey、内容版本与尺寸均未变且已完成首次录制时，直接复用已有图层
+        val contentKey = (handle as BarContentHandle).contentKey
+        val existing = handle.layer
+        if (existing != null &&
+            handle.recorded &&
+            recordedSize == size &&
+            recordedContentKey == contentKey &&
+            recordedContentVersion == contentVersion
+        ) {
+            return
+        }
+        val layer = existing ?: requireGraphicsContext().createGraphicsLayer().also { handle.layer = it }
+        val firstRecord = !handle.recorded || handle.size != size
         layer.record { this@draw.drawContent() }
         handle.size = size
-        if (n.isBarCarried(handle)) return
-        layer.alpha = 1f
-        layer.renderEffect = null
-        drawLayer(layer)
-    }
-}
-
-/**
- * 一帧里的一个形状（rect 是此刻的矩形）。corner 为负数 = 胶囊：圆角永远是此刻短边的一半，
- * 变形途中鼓起、缩放时也一直是胶囊，不会变成偏方的圆角矩形
- */
-private class MorphShape(
-    val rect: Rect,
-    val corner: Float,
-    val color: Color,
-    val alpha: Float,
-    val leading: Boolean,
-    val glass: GlassFill? = null,
-) {
-    val radius: Float
-        get() {
-            val half = minOf(rect.width, rect.height) / 2f
-            return if (corner < 0f) half else corner.coerceAtMost(half)
+        handle.recorded = true
+        recordedSize = size
+        recordedContentKey = contentKey
+        recordedContentVersion = contentVersion
+        // 严禁在 draw() 内同步修改 barsVersion（触发帧内快照失效）；改为延迟到 draw 结束后投递一次通知
+        if (firstRecord && !pendingInvalidate && isAttached) {
+            pendingInvalidate = true
+            coroutineScope.launch {
+                pendingInvalidate = false
+                if (isAttached) nav?.invalidateBars()
+            }
         }
-}
-
-/** 一帧里的一项内容：此刻的中心、透明度、模糊，以及它在所在形状里的相对位置（形状变形时跟着走） */
-private class MorphContent(val handle: BarContentHandle, var center: Offset, var alpha: Float, var blur: Float) {
-    var shape = -1
-    var fx = 0.5f
-    var fy = 0.5f
-
-    fun anchorTo(shapes: List<MorphShape>) {
-        if (shape < 0) return
-        val r = shapes[shape].rect
-        center = Offset(r.left + fx * r.width, r.top + fy * r.height)
     }
 }
 
 /** MochiNavHost 里每帧复用的路径缓存和融球渲染器 */
+@Stable
 internal class BarPathCache {
     val renderer = MochiMetaballRenderer()
     private val caches = ArrayList<G2PathCache>()
+    val scratchShapes = ArrayList<MorphShape>(6)
+    var joined = BooleanArray(8)
 
     fun path(i: Int, r: Rect, radius: Float): Path {
         while (caches.size <= i) caches += G2PathCache()
@@ -257,210 +364,53 @@ internal class BarPathCache {
  * 快速连续推入 / 返回时也只有一套顶栏，某一页转场结束、这一串变短时画面不跳
  */
 internal fun DrawScope.drawSharedBarItems(nav: MochiNavigator, paths: BarPathCache, glass: Boolean = false) {
-    val f = sharedBarFrame(nav, size.width, ContentBlur.toPx()) ?: return
-    drawMorphShapes(if (glass) f.shapes.filter { it.glass == null } else f.shapes, f.envelope, paths)
-    // 先画淡出的，再画淡入 / 接着走的
-    f.contents.sortedBy { it.alpha }.forEach { drawContentLayer(it.handle, it.center, it.alpha, it.blur) }
+    drawSharedBarFrame(sharedBarFrame(nav, size.width, ContentBlur.toPx()), paths, glass)
 }
 
-/** 一帧的共享顶栏：此刻的形状、内容和融球颈的包络 */
-private class SharedBarFrame(val shapes: List<MorphShape>, val contents: List<MorphContent>, val envelope: Float)
-
-/**
- * 侧推转场里画成玻璃的共享顶栏形状（[navBarShape] 的 glass），按从左到右的顺序；没在转场时为空。
- * [width] 是导航主机的宽，[blurMax] 内容模糊的上限（px，只影响内容，这里用不到但算法共用）
- */
-internal fun sharedBarGlassShapes(nav: MochiNavigator, width: Float, blurMax: Float): List<SharedGlassShape> =
-    sharedBarFrame(nav, width, blurMax)?.shapes?.filter { it.glass != null }?.sortedBy { it.rect.center.x }
-        ?.map { SharedGlassShape(it.rect, it.radius, it.alpha, it.glass!!) }.orEmpty()
-
-/** 转场里一块玻璃形状：此刻的矩形、圆角（px）、透明度，和按钮在页里的玻璃（主机没有整页录制时取样它所在页的背景） */
-internal class SharedGlassShape(val rect: Rect, val radius: Float, val alpha: Float, val fill: GlassFill)
-
-private fun sharedBarFrame(nav: MochiNavigator, width: Float, blurMax: Float): SharedBarFrame? {
-    val chain = nav.slideChain()
-    if (chain.size < 2) return null
-    val base = chain.first()
-    val bc = base.contentCoords?.takeIf { it.isAttached } ?: return null
-    val mid = width / 2f
-
-    // 起点：起点页的顶栏原样
-    var shapes = nav.barsOf(base).filterIsInstance<BarShapeHandle>().mapNotNull { h ->
-        h.restRect(bc)?.let { MorphShape(it, h.cornerRadius, h.color, 1f, it.center.x < mid, h.glass) }
+internal fun DrawScope.drawSharedBarFrame(f: SharedBarFrame?, paths: BarPathCache, glass: Boolean = false) {
+    if (f == null) return
+    drawMorphShapes(f.shapes, f.envelope, paths, skipGlass = glass)
+    // sharedBarFrame 已将 contents 按 alpha 升序排好：先画淡出的，再画淡入 / 接着走的
+    val contents = f.contents
+    for (i in 0 until contents.size) {
+        val c = contents[i]
+        drawContentLayer(c.handle, c.center, c.alpha, c.blur, c.scaleX, c.scaleY)
     }
-    var contents = nav.barsOf(base).filterIsInstance<BarContentHandle>().mapNotNull { h ->
-        h.restRect(bc)?.let { r -> MorphContent(h, r.center, 1f, 0f).also { it.attach(r, shapes) } }
+}
+
+/** 画一帧的所有纯色形状：同侧挨近的两两用融球连起来（重叠时压掉鼓包），首尾不连，和静止页面一致 */
+private fun DrawScope.drawMorphShapes(shapes: List<MorphShape>, envelope: Float, paths: BarPathCache, skipGlass: Boolean) {
+    val sorted = paths.scratchShapes
+    sorted.clear()
+    for (i in 0 until shapes.size) {
+        val s = shapes[i]
+        if (skipGlass && s.glass != null) continue
+        sorted += s
     }
-    // 颈只在转场中段连（开头、结尾和静止页面一样不连）；一串里任何一步在中段都连，快速连推时颈不会突然断开
-    var envelope = 0f
-    for (k in 1 until chain.size) {
-        val page = chain[k]
-        val pc = page.contentCoords?.takeIf { it.isAttached } ?: continue
-        val m = slideProgress(page).coerceIn(0f, 1f)
-        envelope = maxOf(envelope, fuseEnvelope(m))
-        val targetShapes = nav.barsOf(page).filterIsInstance<BarShapeHandle>().mapNotNull { h -> h.restRect(pc)?.let { h to it } }
-        val step = morphStep(shapes, targetShapes, m, mid)
-        // 旧的内容跟着自己的形状走
-        contents.forEach { c ->
-            c.shape = if (c.shape >= 0) step.fromOld[c.shape] else -1
-            c.anchorTo(step.shapes)
+    val count = sorted.size
+    if (count == 0) return
+    for (i in 1 until count) {
+        val item = sorted[i]
+        val cx = item.rect.center.x
+        var j = i - 1
+        while (j >= 0 && sorted[j].rect.center.x > cx) {
+            sorted[j + 1] = sorted[j]
+            j--
         }
-        val next = ArrayList<MorphContent>()
-        val used = HashSet<MorphContent>()
-        val carried = HashSet<MorphContent>()
-        for (h in nav.barsOf(page).filterIsInstance<BarContentHandle>()) {
-            val r = h.restRect(pc) ?: continue
-            val inc = MorphContent(h, r.center, 0f, 0f)
-            inc.attach(r, targetShapes.map { it.second }, step.fromNew)
-            inc.anchorTo(step.shapes)
-            val old = contents.filter { it.handle.id == h.id && it !in used }.maxByOrNull { it.alpha }
-            if (old != null) {
-                used += old
-                val anchored = inc.center
-                inc.center = lerp(old.center, anchored, m)
-                if (h.contentKey != null && h.contentKey == old.handle.contentKey) {
-                    // 同一个内容：接着旧的走（透明度、模糊都连续），移动时中途稍微糊一下
-                    val moving = (old.center - anchored).getDistance() > 0.5f
-                    inc.alpha = old.alpha
-                    inc.blur = old.blur * (1f - m) + if (moving) blurMax * 0.5f * pop(m) else 0f
-                    carried += old
-                    next += inc
-                    continue
-                }
-                old.center = inc.center
-            }
-            inc.alpha = smoothstep(0.45f, 0.85f, m)
-            inc.blur = blurMax * (1f - smoothstep(0.4f, 0.95f, m))
-            next += inc
-        }
-        // 没接上的旧内容：糊掉、淡出
-        for (c in contents) {
-            if (c in carried) continue
-            c.alpha *= 1f - smoothstep(0.1f, 0.5f, m)
-            c.blur = maxOf(c.blur, blurMax * smoothstep(0f, 0.45f, m))
-            if (c.alpha > 0.003f) next += c
-        }
-        shapes = step.shapes
-        contents = next
+        sorted[j + 1] = item
     }
-    return SharedBarFrame(shapes, contents, envelope)
-}
-
-/** 内容挂到所在的形状上：找包含它中心的那个形状，记下相对位置 */
-private fun MorphContent.attach(rest: Rect, shapes: List<MorphShape>) {
-    val i = shapes.indexOfFirst { it.rect.contains(rest.center) }
-    if (i < 0) return
-    shape = i
-    val r = shapes[i].rect
-    fx = if (r.width > 0f) (rest.center.x - r.left) / r.width else 0.5f
-    fy = if (r.height > 0f) (rest.center.y - r.top) / r.height else 0.5f
-}
-
-/** 新页的内容挂到新页的形状上（形状在这一步结果里的序号由 indexMap 给出） */
-private fun MorphContent.attach(rest: Rect, restShapes: List<Rect>, indexMap: IntArray) {
-    val i = restShapes.indexOfFirst { it.contains(rest.center) }
-    if (i < 0) return
-    shape = indexMap[i]
-    val r = restShapes[i]
-    fx = if (r.width > 0f) (rest.center.x - r.left) / r.width else 0.5f
-    fy = if (r.height > 0f) (rest.center.y - r.top) / r.height else 0.5f
-}
-
-private fun BarShapeHandle.radiusFor(r: Rect) = if (cornerRadius < 0f) minOf(r.width, r.height) / 2f else cornerRadius
-
-/** 一步变形的结果：此刻的形状，以及旧形状 / 新页形状各自变成了结果里的第几个 */
-private class MorphStep(val shapes: List<MorphShape>, val fromOld: IntArray, val fromNew: IntArray)
-
-/**
- * 从当前的形状变向一页的形状（进度 m）。左右两侧各自从屏幕边往里排，第 i 个对第 i 个；
- * 多出来的从最里面那个配对的形状里长出来 / 被吸回去；一边完全没有时原地放大弹出 / 缩小消失。
- * 变形带 iOS 的弹性（[elasticRect]）：中途整体鼓起，到终点冲过头一点再落回
- */
-private fun morphStep(cur: List<MorphShape>, target: List<Pair<BarShapeHandle, Rect>>, m: Float, mid: Float): MorphStep {
-    val out = ArrayList<MorphShape>()
-    val fromOld = IntArray(cur.size) { -1 }
-    val fromNew = IntArray(target.size) { -1 }
-    for (leading in booleanArrayOf(true, false)) {
-        fun order(r: Rect) = if (leading) r.left else -r.right
-        val a = cur.indices.filter { cur[it].leading == leading }.sortedBy { order(cur[it].rect) }
-        val b = target.indices.filter { (target[it].second.center.x < mid) == leading }.sortedBy { order(target[it].second) }
-        val n = minOf(a.size, b.size)
-        fun morph(from: MorphShape, to: Pair<BarShapeHandle, Rect>, color: Color): MorphShape {
-            val (h, r) = to
-            val rect = elasticRect(from.rect, r, m)
-            // 两头都是胶囊就一直是胶囊；否则圆角在两头之间过渡
-            val corner = if (from.corner < 0f && h.cornerRadius < 0f) -1f else lerp(from.radius, h.radiusFor(r), m)
-            return MorphShape(rect, corner, color, lerp(from.alpha, 1f, m), leading, h.glass ?: from.glass)
-        }
-        for (i in 0 until n) {
-            val from = cur[a[i]]
-            val to = target[b[i]]
-            fromOld[a[i]] = out.size
-            fromNew[b[i]] = out.size
-            out += morph(from, to, lerp(from.color, to.first.color, m))
-        }
-        for (j in n until b.size) {
-            val to = target[b[j]]
-            fromNew[b[j]] = out.size
-            out += if (n > 0) morph(cur[a[n - 1]], to, to.first.color) else appear(to.first, to.second, m, leading)
-        }
-        for (j in n until a.size) {
-            val from = cur[a[j]]
-            fromOld[a[j]] = out.size
-            out += if (n > 0) {
-                MorphShape(elasticRect(from.rect, target[b[n - 1]].second, m), from.corner, from.color, from.alpha, leading, from.glass)
-            } else {
-                vanish(from, m)
-            }
-        }
-    }
-    return MorphStep(out, fromOld, fromNew)
-}
-
-/** 一边没有任何形状时：原地从小放大弹出（m 0 → 1），略微冲过头再落回 */
-private fun appear(h: BarShapeHandle, r: Rect, m: Float, leading: Boolean): MorphShape {
-    val e = smoothstep(0.1f, 0.85f, m)
-    val s = AppearFrom + (1f - AppearFrom) * e + AppearPop * pop(e)
-    val half = Offset(r.width * s / 2f, r.height * s / 2f)
-    val rr = Rect(r.center - half, r.center + half)
-    return MorphShape(rr, if (h.cornerRadius < 0f) -1f else h.cornerRadius * s, h.color, e, leading, h.glass)
-}
-
-/** 新页这一侧没有形状：原地缩小、淡出 */
-private fun vanish(from: MorphShape, m: Float): MorphShape {
-    val e = 1f - smoothstep(0.15f, 0.9f, m)
-    val s = AppearFrom + (1f - AppearFrom) * e
-    val half = Offset(from.rect.width * s / 2f, from.rect.height * s / 2f)
-    return MorphShape(
-        Rect(from.rect.center - half, from.rect.center + half),
-        if (from.corner <
-            0f
-        ) {
-            -1f
-        } else {
-            from.corner * s
-        },
-        from.color,
-        from.alpha * e,
-        from.leading,
-        from.glass,
-    )
-}
-
-/** 画一帧的所有形状：挨着的两两用融球连起来（离得近就长出颈，拉开就掐断），开头和结尾不连，和静止的页面完全一样 */
-private fun DrawScope.drawMorphShapes(shapes: List<MorphShape>, envelope: Float, paths: BarPathCache) {
-    if (shapes.isEmpty()) return
-    val sorted = shapes.sortedBy { it.rect.center.x }
 
     val fuseMax = FuseRadius.toPx() * envelope
     val reach = FuseReach.toPx()
-    val joined = BooleanArray(sorted.size)
+    if (paths.joined.size < count) paths.joined = BooleanArray(count * 2)
+    val joined = paths.joined
+    for (i in 0 until count) joined[i] = false
     if (MochiGraphics.shaders && fuseMax > 0.5f) {
-        for (i in 0 until sorted.size - 1) {
+        for (i in 0 until count - 1) {
             val a = sorted[i]
             val b = sorted[i + 1]
-            if (a.alpha < 0.99f || b.alpha < 0.99f) continue
-            val fuse = fuseMax * proximityFuse(a.rect, b.rect, reach)
+            if (a.leading != b.leading || abs(a.alpha - b.alpha) > 0.02f || a.alpha < 0.99f) continue
+            val fuse = blobPairFuse(a.rect, b.rect, fuseMax, reach)
             if (fuse <= 0.5f) continue
             joined[i] = true
             joined[i + 1] = true
@@ -471,105 +421,101 @@ private fun DrawScope.drawMorphShapes(shapes: List<MorphShape>, envelope: Float,
             )
         }
     }
-    sorted.forEachIndexed { i, s ->
-        if (!joined[i]) drawPath(paths.path(i, s.rect, s.radius), s.color, alpha = s.alpha)
-    }
-}
-
-private fun DrawScope.drawContentLayer(h: BarHandle, center: Offset, alpha: Float, blur: Float) {
-    val layer = h.layer ?: return
-    if (alpha <= 0.003f) return
-    layer.alpha = alpha.coerceIn(0f, 1f)
-    layer.renderEffect = if (blur > 0.3f && Build.VERSION.SDK_INT >= 31) mochiCachedBlur(blur) else null
-    withTransform({ translate(center.x - h.size.width / 2f, center.y - h.size.height / 2f) }) { drawLayer(layer) }
-}
-
-/**
- * 形状从 from 变到 to 的弹性过程（对着 iOS 26 录屏估的）：
- * - 大小和位置按带回弹的曲线走，到终点冲过头一点再落回
- * - 中途整体鼓起，高度鼓得比宽度多（玻璃被「吹」起来那一下）
- * 两端一样的形状（比如返回按钮）纹丝不动。这是设计出来的动感，和融球合并时多出来的鼓包（已在 shader 里限制住）不是一回事
- */
-private fun elasticRect(from: Rect, to: Rect, m: Float): Rect {
-    val changed = abs(from.left - to.left) + abs(from.right - to.right) + abs(from.top - to.top) + abs(from.bottom - to.bottom) > 1f
-    if (!changed) return to
-    val r = lerpRect(from, to, backOut(m))
-    val k = pop(m)
-    val dw = r.width * SwellX * k / 2f
-    val dh = r.height * SwellY * k / 2f
-    return Rect(r.left - dw, r.top - dh, r.right + dw, r.bottom + dh)
-}
-
-/** 带回弹的缓出：0 → 1，接近终点时冲过头约 5% 再落回 */
-private fun backOut(t: Float): Float {
-    val c1 = OvershootFactor
-    val u = t - 1f
-    return 1f + (c1 + 1f) * u * u * u + c1 * u * u
-}
-
-/** 0 → 1 → 0 的鼓起曲线，峰值在 0.5 */
-private fun pop(t: Float): Float = 4f * t * (1f - t)
-
-/** 内容换掉时最模糊处（视频里几乎糊成一团） */
-private val ContentBlur = 12.dp
-
-/** 变形中途鼓起：高度、宽度各多出多少（估计值） */
-private const val SwellY = 0.14f
-private const val SwellX = 0.05f
-
-/** 回弹曲线的系数：约冲过头 5% 再落回（估计值） */
-private const val OvershootFactor = 1.2f
-
-/** 两块形状之间颈的最大融合半径；离得比 [FuseReach] 远就不连 */
-private val FuseRadius = 18.dp
-private val FuseReach = 14.dp
-
-/** 一边没有形状时从多小开始放大弹出，中途冲过头多少 */
-private const val AppearFrom = 0.55f
-private const val AppearPop = 0.12f
-
-/** 一步变形的进度 m 时颈的强度：开头和结尾为 0，第一帧和最后一帧和静止的页面完全一样 */
-private fun fuseEnvelope(m: Float): Float = smoothstep(0f, 0.12f, m) * (1f - smoothstep(0.88f, 1f, m))
-
-/**
- * 侧推转场里把玻璃按钮的共享形状画成玻璃（[navBarShape] 的 glass）：最多 [SharedGlassSlots] 块，
- * 每块在排版阶段读这一帧的形状（[sharedBarGlassShapes]），按它的位置、大小、圆角画，不重组。
- * [fill] 取样整页的录制，这一层要放在录制范围外面（不然取样到自己）；形状上的图标由 [drawSharedBarItems] 画在它上面。
- * [fill] 为 null（主机不录整页）时每块用按钮自己的玻璃，取样它所在页的背景：转场里玻璃按钮还是玻璃，不变成纯色
- */
-@Composable
-internal fun SharedBarGlass(nav: MochiNavigator, fill: GlassFill?) {
-    val blurMax = with(LocalDensity.current) { ContentBlur.toPx() }
-    var width by remember { mutableFloatStateOf(0f) }
-    fun shape(i: Int) = sharedBarGlassShapes(nav, width, blurMax).getOrNull(i)
-    // 每块用哪份玻璃：只在换了的时候重组，形状每帧变不重组
-    val fills by remember(nav, fill) {
-        derivedStateOf { List(SharedGlassSlots) { i -> fill ?: shape(i)?.fill } }
-    }
-    Box(Modifier.fillMaxSize().onSizeChanged { width = it.width.toFloat() }) {
-        repeat(SharedGlassSlots) { i ->
-            val slotFill = fills[i] ?: return@repeat
-            GlassSurface(
-                slotFill,
-                null,
-                null,
-                Modifier
-                    .fillMaxSize()
-                    .layout { measurable, constraints ->
-                        val r = shape(i)?.rect
-                        val w = r?.width?.roundToInt()?.coerceAtLeast(1) ?: 1
-                        val h = r?.height?.roundToInt()?.coerceAtLeast(1) ?: 1
-                        val placeable = measurable.measure(Constraints.fixed(w, h))
-                        layout(constraints.maxWidth, constraints.maxHeight) {
-                            placeable.place(r?.left?.roundToInt() ?: 0, r?.top?.roundToInt() ?: 0)
-                        }
-                    },
-                alpha = { shape(i)?.alpha ?: 0f },
-                cornerRadiusPx = { shape(i)?.radius ?: 0f },
-            )
+    for (i in 0 until count) {
+        if (!joined[i]) {
+            val s = sorted[i]
+            drawPath(paths.path(i, s.rect, s.radius), s.color, alpha = s.alpha)
         }
     }
 }
 
-/** 转场里同时画成玻璃的共享形状最多几块（左边返回按钮 + 右边一两个按钮 / 按钮组，变形途中多出来的也够用） */
-private const val SharedGlassSlots = 4
+private fun DrawScope.drawContentLayer(h: BarHandle, center: Offset, alpha: Float, blur: Float, sx: Float = 1f, sy: Float = 1f) {
+    val layer = h.layer ?: return
+    if (!h.recorded || h.size.width < 1f || h.size.height < 1f || alpha <= 0.003f) return
+    layer.alpha = alpha.coerceIn(0f, 1f)
+    layer.renderEffect = if (blur > 0.3f && Build.VERSION.SDK_INT >= 31) mochiCachedBlur(blur) else null
+    withTransform({
+        translate(center.x - h.size.width / 2f, center.y - h.size.height / 2f)
+        if (sx != 1f || sy != 1f) scale(sx, sy, Offset(h.size.width / 2f, h.size.height / 2f))
+    }) { drawLayer(layer) }
+}
+
+private data class SlotSurfaceKey(val material: MochiGlass, val source: GlassSource)
+
+private fun MochiGlass.forSharedBar(): MochiGlass = if (adaptive) copy(adaptive = false) else this
+
+/**
+ * 侧推转场里画成玻璃的共享顶栏形状：
+ * - 常驻挂载（静止时 alpha = 0，LiquidGlassNode 零 pass 短路退出），消除转场首帧冷组合与连续换页重建闪烁
+ * - 复用主机单次计算的 [frame]，避免同一帧重复计算变形链
+ * - 用固定槽位（[SharedGlassSlots]）加值相等的 [SlotSurfaceKey] 承接左右两组及溢出玻璃，
+ *   块数变化、透明度过 1、连续多页换页时均不销毁重建玻璃节点；共享栏材质关闭自适应，避免空闲回读和连续转场明暗跳变
+ * - 配方短边锁定为标准栏按钮高度、外阴影跟随页面 [LocalMochiGlassShadow] 平滑过渡，交接无跳变
+ */
+@Composable
+internal fun SharedBarGlass(frame: () -> SharedBarFrame?, fill: GlassFill?) {
+    val density = LocalDensity.current
+    val fusePx = with(density) { FuseRadius.toPx() }
+    val reachPx = with(density) { FuseReach.toPx() }
+    val barSidePx = with(density) { MochiButtonDefaults.BarItemSize.toPx() }
+    val slotScratch = remember { GlassSlotScratch() }
+    val currentSlots = remember(frame, fill, slotScratch) { { fillGlassSlots(frame(), fill, slotScratch) } }
+    val defaultKey = remember(fill) { fill?.let { SlotSurfaceKey(it.material.forSharedBar(), it.source) } }
+    val keyCache = remember(fill, defaultKey) {
+        Array<SlotSurfaceKey?>(SharedGlassSlots) { if (it < 2) defaultKey else null }
+    }
+    val slotKeys by remember(currentSlots, fill, defaultKey, keyCache) {
+        var cachedList: List<SlotSurfaceKey?> = List(SharedGlassSlots) { keyCache[it] }
+        derivedStateOf {
+            val cur = currentSlots()
+            var changed = false
+            for (index in 0 until SharedGlassSlots) {
+                val local = cur[index]?.fill
+                val prev = keyCache[index]
+                val rawMat = local?.material
+                val mat = when {
+                    rawMat != null && defaultKey != null && rawMat == fill?.material -> defaultKey.material
+                    rawMat != null -> rawMat.forSharedBar()
+                    index < 2 -> defaultKey?.material
+                    fill != null && prev != null && prev.source == fill.source -> prev.material
+                    else -> null
+                }
+                val src = when {
+                    local != null -> fill?.source ?: local.source
+                    index < 2 -> defaultKey?.source
+                    fill != null && prev != null && prev.source == fill.source -> prev.source
+                    else -> null
+                }
+                if (mat == null || src == null) {
+                    if (prev != null) {
+                        keyCache[index] = null
+                        changed = true
+                    }
+                } else if (prev == null || prev.material != mat || prev.source != src) {
+                    keyCache[index] = SlotSurfaceKey(mat, src)
+                    changed = true
+                }
+            }
+            if (changed) {
+                cachedList = List(SharedGlassSlots) { keyCache[it] }
+            }
+            cachedList
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        repeat(SharedGlassSlots) { index ->
+            val key = slotKeys[index] ?: return@repeat
+            val surface = rememberGlassFill(key.material, key.source) ?: return@repeat
+            GlassBlobs(
+                surface,
+                blobs = { currentSlots()[index]?.blobs.orEmpty() },
+                modifier = Modifier.fillMaxSize(),
+                fuse = { fusePx * (frame()?.envelope ?: 0f) },
+                alpha = { currentSlots()[index]?.alpha ?: 0f },
+                reach = { reachPx },
+                recipeSide = { barSidePx },
+                shadowScale = { currentSlots()[index]?.shadow ?: 1f },
+            )
+        }
+    }
+}

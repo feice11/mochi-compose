@@ -60,50 +60,53 @@ internal object ColorSpaces {
         return doubleArrayOf(116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz))
     }
 
-    /** Lab → 线性 sRGB（不截断，可能超出 0..1） */
-    private fun labToLinear(l: Double, a: Double, b: Double, out: DoubleArray) {
-        val fy = (l + 16.0) / 116.0
-        val fx = fy + a / 500.0
-        val fz = fy - b / 200.0
-        val x = Xn * fInv(fx)
-        val y = Yn * (if (l > Kappa * Eps) fy * fy * fy else l / Kappa)
-        val z = Zn * fInv(fz)
-        out[0] = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
-        out[1] = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z
-        out[2] = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
-    }
-
-    private fun inGamut(lin: DoubleArray): Boolean = lin.all { it >= 0.0 && it <= 1.0 }
-
     /**
      * LCH（L 0..100，C ≥ 0，h 角度）→ sRGB。显示不出来时保持 L 和 h，二分找最大能显示的 C。
-     * 结果每个分量都在 0..1（来自色域内的线性值，不是截出来的）
+     * 结果每个分量都在 0..1（来自色域内的线性值，不是截出来的）；全局部标量运算，每像素零堆分配。
      */
     fun lchToSrgb(l: Double, c: Double, hDeg: Double, out: FloatArray) {
-        val lin = DoubleArray(3)
+        val fy = (l + 16.0) / 116.0
+        val yVal = Yn * (if (l > Kappa * Eps) fy * fy * fy else l / Kappa)
         val h = Math.toRadians(hDeg)
         val ca = cos(h)
         val sa = sin(h)
-        labToLinear(l, c * ca, c * sa, lin)
-        if (!inGamut(lin)) {
+
+        fun linearR(x: Double, z: Double): Double = 3.2404542 * x - 1.5371385 * yVal - 0.4985314 * z
+        fun linearG(x: Double, z: Double): Double = -0.9692660 * x + 1.8760108 * yVal + 0.0415560 * z
+        fun linearB(x: Double, z: Double): Double = 0.0556434 * x - 0.2040259 * yVal + 1.0572252 * z
+
+        var x = Xn * fInv(fy + (c * ca) / 500.0)
+        var z = Zn * fInv(fy - (c * sa) / 200.0)
+        var lr = linearR(x, z)
+        var lg = linearG(x, z)
+        var lb = linearB(x, z)
+        if (lr < 0.0 || lr > 1.0 || lg < 0.0 || lg > 1.0 || lb < 0.0 || lb > 1.0) {
             var lo = 0.0
             var hi = c
             repeat(18) {
-                val mid = (lo + hi) / 2.0
-                labToLinear(l, mid * ca, mid * sa, lin)
-                if (inGamut(lin)) lo = mid else hi = mid
+                val mid = (lo + hi) * 0.5
+                val mx = Xn * fInv(fy + (mid * ca) / 500.0)
+                val mz = Zn * fInv(fy - (mid * sa) / 200.0)
+                val mr = linearR(mx, mz)
+                val mg = linearG(mx, mz)
+                val mb = linearB(mx, mz)
+                if (mr in 0.0..1.0 && mg in 0.0..1.0 && mb in 0.0..1.0) lo = mid else hi = mid
             }
-            labToLinear(l, lo * ca, lo * sa, lin)
-            if (!inGamut(lin)) {
+            x = Xn * fInv(fy + (lo * ca) / 500.0)
+            z = Zn * fInv(fy - (lo * sa) / 200.0)
+            lr = linearR(x, z)
+            lg = linearG(x, z)
+            lb = linearB(x, z)
+            if (lr < 0.0 || lr > 1.0 || lg < 0.0 || lg > 1.0 || lb < 0.0 || lb > 1.0) {
                 // 只有 L 在两端时会到这里（彩度 0 的灰在浮点上差一点点）：直接用这个明度的灰
-                // （L 在 0..100 里时这个 Y 本来就在 0..1）
-                val y = if (l > Kappa * Eps) ((l + 16.0) / 116.0).pow(3) else l / Kappa
-                lin[0] = y
-                lin[1] = y
-                lin[2] = y
+                lr = yVal
+                lg = yVal
+                lb = yVal
             }
         }
-        for (i in 0..2) out[i] = fromLinear(lin[i]).toFloat()
+        out[0] = fromLinear(lr).toFloat()
+        out[1] = fromLinear(lg).toFloat()
+        out[2] = fromLinear(lb).toFloat()
     }
 
     /** Lab → sRGB，色域外同样按 LCH 降彩度映射回来 */

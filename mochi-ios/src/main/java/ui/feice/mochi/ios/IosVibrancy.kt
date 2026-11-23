@@ -6,6 +6,7 @@ package ui.feice.mochi.ios
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,7 +26,11 @@ public enum class IosVibrancyLevel { Primary, Secondary, Tertiary, Quaternary }
  *
  * 用法见 [IosVibrant]。iOS 把它压在材质（模糊过的背景）上，这里用 [IosVibrant] 的 blur 模糊背后来接近；观感接近，不保证逐像素一致
  */
+@Immutable
 public object IosVibrancy {
+    private val PrimaryDark = Color.White.copy(alpha = 0.96f)
+    private val PrimaryLight = Color.Black.copy(alpha = 0.96f)
+
     /** 文字、图标用的那一组（platformStroke）；[IosVibrancyLevel.Primary] 返回 null（纯色，见 [primary]） */
     public fun label(level: IosVibrancyLevel, isDark: Boolean): List<Float>? = when (level) {
         IosVibrancyLevel.Primary -> null
@@ -43,7 +48,7 @@ public object IosVibrancy {
     }
 
     /** primary 级的纯色：深色白、浅色黑，不透明度 0.96 */
-    public fun primary(isDark: Boolean): Color = if (isDark) Color.White.copy(alpha = 0.96f) else Color.Black.copy(alpha = 0.96f)
+    public fun primary(isDark: Boolean): Color = if (isDark) PrimaryDark else PrimaryLight
 
     private fun m(vararg rows: Float): List<Float> = rows.toList()
 

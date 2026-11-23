@@ -3,7 +3,9 @@
 
 package ui.feice.mochi.basic
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ui.feice.mochi.navigation.MochiScreenCorners
@@ -49,6 +51,22 @@ class SheetGeometryTest {
                     assertTrue(radii.topLeft <= 48 * density)
                 }
             }
+        }
+    }
+
+    @Test
+    fun shortWindowDoesNotProduceNaNLargenessOrCrashFrame() = runBlocking {
+        val state = MochiSheetState(listOf(MochiSheetDetent.Medium, MochiSheetDetent.Large), MochiSheetDetent.Medium)
+        state.height = 120f
+        state.width = 400
+        state.largeTop = 80f
+        assertTrue(state.mediumTop >= state.largeTop)
+        for (y in listOf(0f, 60f, 80f, 100f, 120f)) {
+            state.top.snapTo(y)
+            assertFalse(state.largeness.isNaN())
+            assertFalse(state.presence.isNaN())
+            val frame = sheetFrame(state.width, state.height.toInt(), state.top.value, state.largeness, 16f)
+            assertTrue(frame.width >= 0 && frame.height >= 0)
         }
     }
 }

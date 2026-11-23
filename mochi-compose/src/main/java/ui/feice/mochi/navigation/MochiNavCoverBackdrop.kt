@@ -6,6 +6,7 @@ package ui.feice.mochi.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -15,8 +16,13 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
+import ui.feice.mochi.effect.glass.IdleSkipBackdrop
+import ui.feice.mochi.effect.glass.MochiLayerBackdrop
 import ui.feice.mochi.effect.glass.MotionKeyedBackdrop
+import ui.feice.mochi.effect.glass.SharedPyramidProvider
 import ui.feice.mochi.effect.glass.motionKey
+import ui.feice.mochi.effect.glass.resolveSharedBackdrop
+import ui.feice.mochi.effect.glass.resolveUnderTint
 
 /**
  * 页里的玻璃（标签栏等）在「从来源打开」转场中要看到的东西：正盖上来的那一页（变形中的容器）。
@@ -38,18 +44,24 @@ internal fun rememberMochiNavCoverBackdrop(): Backdrop? {
 
 private class NavCoverBackdrop(private val nav: MochiNavigator, private val entry: MochiNavEntry) :
     Backdrop,
-    MotionKeyedBackdrop {
+    MotionKeyedBackdrop,
+    IdleSkipBackdrop {
     override val isCoordinatesDependent: Boolean = true
 
-    // 不画时位置无关；转场中容器每帧在变，但那时玻璃按「运动中冻结取样」不跟（见 LiquidNode），
-    // 转场开始 / 结束时 drawBackdrop 里读的 inTransition 一变，玻璃自己会重画
-    override fun motionKey(coordinates: LayoutCoordinates, out: MutableList<Any>): Boolean = true
+    override fun isBackdropIdle(coordinates: LayoutCoordinates?): Boolean {
+        val top = nav.above(entry) ?: return true
+        return top.source == null || !top.inTransition || nav.coverOf(entry) <= 0f
+    }
+
+    override fun motionKey(coordinates: LayoutCoordinates, out: MutableList<Any>): Boolean =
+        nav.above(entry)?.let { it.source == null || !it.inTransition } ?: true
     private val matrix = Matrix()
 
     override fun DrawScope.drawBackdrop(density: Density, coordinates: LayoutCoordinates?, layerBlock: (GraphicsLayerScope.() -> Unit)?) {
         val c = coordinates?.takeIf { it.isAttached } ?: return
         val top = nav.above(entry) ?: return
-        if (top.source == null || !top.inTransition) return
+        // 容器的位移与缩放只改图层属性，进度变化也要触发当前玻璃重画。
+        if (top.source == null || !top.inTransition || nav.coverOf(entry) <= 0f) return
         val layer = top.coverLayer ?: return
         val from = top.coverCoords?.takeIf { it.isAttached } ?: return
         // 容器图层的坐标 → 玻璃的坐标：带上下层页此刻的缩放，不只是平移
@@ -73,8 +85,23 @@ internal fun rememberMochiNavCarriedBackdrop(inner: Backdrop): Backdrop {
 
 private class CarriedBackdrop(private val inner: Backdrop, private val nav: MochiNavigator, private val entry: MochiNavEntry) :
     Backdrop,
-    MotionKeyedBackdrop {
+    MotionKeyedBackdrop,
+    SharedPyramidProvider {
     override val isCoordinatesDependent: Boolean = true
+
+    override fun activeSharedBackdrop(coordinates: LayoutCoordinates?): MochiLayerBackdrop? {
+        val c = coordinates?.takeIf { it.isAttached }
+        val dy = if (c != null) {
+            nav.carriedShift(entry, c)
+        } else if (nav.coverOf(entry) > 0f && nav.above(entry)?.source != null) {
+            1f
+        } else {
+            0f
+        }
+        return if (dy == 0f) inner.resolveSharedBackdrop(coordinates) else null
+    }
+
+    override fun underTint(): Color = inner.resolveUnderTint()
 
     override fun motionKey(coordinates: LayoutCoordinates, out: MutableList<Any>): Boolean {
         val dy = if (coordinates.isAttached) nav.carriedShift(entry, coordinates) else 0f

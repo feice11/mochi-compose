@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -48,14 +49,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -69,8 +74,15 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextMotion
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -85,10 +97,14 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import ui.feice.mochi.anim.mochiReduceMotion
+import ui.feice.mochi.effect.glass.GlassMotionWhile
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.glass.LocalMochiGlassDark
 import ui.feice.mochi.effect.glass.MochiGlassContent
+import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.effect.glass.rememberGlassFill
 import ui.feice.mochi.overlay.InWindowOverlay
 import ui.feice.mochi.theme.LocalContentColor
@@ -246,10 +262,11 @@ private fun angleOf(i: Int, n: Int): Float = -90f + i * 360f / n
 
 /**
  * 以 [mid] 度为中线、张角 [step] 的一段圆环（[inner]–[outer]），两侧各让出 [gap] px（按弧长，内外圈留的缝一样宽）。
- * 弧用折线画（每 2° 一段）：CornerPathEffect 只会把折线的拐角变圆，曲线段上的角它不管
+ * 弧用折线画（每 2° 一段）：CornerPathEffect 只会把折线的拐角变圆，曲线段上的角它不管。
+ * 复用传入的 [path]（先 rewind），避免每帧分配 JNI Native Path。
  */
-private fun annularSector(c: Offset, inner: Float, outer: Float, mid: Float, step: Float, gap: Float): android.graphics.Path {
-    val path = android.graphics.Path()
+private fun annularSector(path: android.graphics.Path, c: Offset, inner: Float, outer: Float, mid: Float, step: Float, gap: Float) {
+    path.rewind()
     fun arc(r: Float, from: Float, to: Float, first: Boolean) {
         val segs = (kotlin.math.abs(to - from) / 2f).toInt().coerceAtLeast(2)
         for (k in 0..segs) {
@@ -265,7 +282,6 @@ private fun annularSector(c: Offset, inner: Float, outer: Float, mid: Float, ste
     arc(outer, mid - half + go, mid + half - go, first = true)
     arc(inner, mid + half - gi, mid - half + gi, first = false)
     path.close()
-    return path
 }
 
 /**
@@ -321,83 +337,115 @@ private suspend fun PointerInputScope.anchorGesture(
         var pos = down.position
         var moved = false
         var holding = false
+        var completed = false
         val t0 = SystemClock.uptimeMillis()
         var dwellFrom = t0
         // 第二级里滑回中间圆停一下：回到上一级（中间圆显示着「‹ 组名」）
         var hubFrom = -1L
-        while (true) {
-            // 手指不动时也要按时间判断停留和长按，所以每 40ms 醒一次
-            val event = withTimeoutOrNull(40L) { awaitPointerEvent() }
-            val now = SystemClock.uptimeMillis()
-            val change = event?.changes?.firstOrNull { it.id == down.id }
-            if (event != null && (change == null || !change.pressed)) {
-                change?.consume()
-                if (holding) {
-                    onEnd()
-                } else {
-                    val h = state.highlighted
-                    when {
-                        h >= 0 -> if (!state.activate(h)) state.close()
+        try {
+            while (true) {
+                val nowBefore = SystemClock.uptimeMillis()
+                val activeGroup = armed && state.highlighted >= 0 && state.level.getOrNull(state.highlighted)?.isGroup == true
+                val timeoutMs: Long? = when {
+                    holding -> null
 
-                        // 轻点：留着等点选
-                        !moved -> state.sticky = true
+                    !moved && holdEnabled() -> (MochiRadialMenuDefaults.HoldMillis - (nowBefore - t0)).coerceAtLeast(1L)
 
-                        else -> state.close()
-                    }
+                    activeGroup -> (MochiRadialMenuDefaults.DwellMillis - (nowBefore - dwellFrom)).coerceAtLeast(1L)
+
+                    hubFrom >= 0L && state.path.isNotEmpty() ->
+                        (MochiRadialMenuDefaults.DwellMillis - (nowBefore - hubFrom)).coerceAtLeast(1L)
+
+                    else -> null
                 }
-                break
-            }
-            if (change != null) {
-                if (holding) {
-                    onDrag(change.positionChange())
+                val event = if (timeoutMs != null) {
+                    withTimeoutOrNull(timeoutMs) { awaitPointerEvent() }
+                } else {
+                    awaitPointerEvent()
+                }
+                val now = SystemClock.uptimeMillis()
+                val change = event?.changes?.firstOrNull { it.id == down.id }
+                if (event != null && (change == null || !change.pressed)) {
+                    change?.consume()
+                    if (holding) {
+                        holding = false
+                        onEnd()
+                    } else {
+                        val h = state.highlighted
+                        when {
+                            h >= 0 -> if (!state.activate(h)) state.close()
+
+                            // 轻点：留着等点选
+                            !moved -> state.sticky = true
+
+                            else -> state.close()
+                        }
+                    }
+                    completed = true
+                    break
+                }
+                if (change != null) {
+                    if (holding) {
+                        onDrag(change.positionChange())
+                        change.consume()
+                        continue
+                    }
                     change.consume()
+                    pos = change.position
+                }
+                if (holding) continue
+                if ((pos - down.position).getDistance() > dead) moved = true
+                if (!moved && holdEnabled() && now - t0 >= MochiRadialMenuDefaults.HoldMillis) {
+                    holding = true
+                    state.close()
+                    state.haptics?.longPress()
+                    onStart()
                     continue
                 }
-                change.consume()
-                pos = change.position
-            }
-            if (holding) continue
-            if ((pos - down.position).getDistance() > dead) moved = true
-            if (!moved && holdEnabled() && now - t0 > MochiRadialMenuDefaults.HoldMillis) {
-                holding = true
-                state.close()
-                state.haptics?.longPress()
-                onStart()
-                continue
-            }
-            if (!armed && (pos - armFrom).getDistance() > dead) armed = true
-            if (!armed) continue
-            // 命中看手指实际在盘上的哪儿（轮盘被屏幕边挤开时也是指哪选哪）；滑出盘外按方向算，照样选中那一格
-            val rel = base + pos - state.wheelCenter
-            val d = rel.getDistance()
-            val level = state.level
-            if (d > hub && level.isNotEmpty()) {
-                val i = sectorOf(rel, level.size)
-                val target = if (level[i].enabled) i else -1
-                if (target != state.highlighted) {
-                    state.highlight(target)
-                    dwellFrom = now
-                }
-                val item = level.getOrNull(target)
-                if (item != null && item.isGroup && (d > rim || now - dwellFrom > MochiRadialMenuDefaults.DwellMillis)) {
-                    state.drill(target)
-                    armFrom = pos
-                    armed = false
-                    dwellFrom = now
-                }
-                hubFrom = -1L
-            } else {
-                if (state.highlighted != -1) state.highlight(-1)
-                if (d <= hub && state.path.isNotEmpty()) {
-                    if (hubFrom < 0) hubFrom = now
-                    if (now - hubFrom > MochiRadialMenuDefaults.DwellMillis) {
-                        state.back()
+                if (!armed && (pos - armFrom).getDistance() > dead) armed = true
+                if (!armed) continue
+                // 命中看手指实际在盘上的哪儿（轮盘被屏幕边挤开时也是指哪选哪）；滑出盘外按方向算，照样选中那一格
+                val rel = base + pos - state.wheelCenter
+                val d = rel.getDistance()
+                val level = state.level
+                if (d > hub && level.isNotEmpty()) {
+                    val i = sectorOf(rel, level.size)
+                    val target = if (level[i].enabled) i else -1
+                    if (target != state.highlighted) {
+                        state.highlight(target)
+                        dwellFrom = now
+                    }
+                    val item = level.getOrNull(target)
+                    if (item != null && item.isGroup && (d > rim || now - dwellFrom >= MochiRadialMenuDefaults.DwellMillis)) {
+                        state.drill(target)
                         armFrom = pos
                         armed = false
+                        dwellFrom = now
+                    }
+                    hubFrom = -1L
+                } else {
+                    if (state.highlighted != -1) state.highlight(-1)
+                    if (d <= hub && state.path.isNotEmpty()) {
+                        if (hubFrom < 0) hubFrom = now
+                        if (now - hubFrom >= MochiRadialMenuDefaults.DwellMillis) {
+                            state.back()
+                            armFrom = pos
+                            armed = false
+                            hubFrom = -1L
+                        }
+                    } else {
                         hubFrom = -1L
                     }
-                } else {
-                    hubFrom = -1L
+                }
+            }
+        } finally {
+            if (!completed) {
+                if (holding) {
+                    holding = false
+                    onEnd()
+                }
+                if (!state.sticky) {
+                    state.close()
                 }
             }
         }
@@ -414,32 +462,41 @@ private suspend fun PointerInputScope.anchorGesture(
 @Composable
 public fun MochiRadialMenu(state: MochiRadialMenuState, items: ImmutableList<MochiRadialItem>, onSelect: (MochiRadialItem) -> Unit) {
     val haptics = rememberMochiHaptics()
+    val reduceMotion = mochiReduceMotion()
     val select by rememberUpdatedState(onSelect)
     SideEffect {
         state.root = items
         state.onSelect = { select(it) }
         state.haptics = haptics
     }
-    LaunchedEffect(state) {
+    LaunchedEffect(state, reduceMotion) {
         snapshotFlow { state.requested }.collectLatest { open ->
             if (open) {
-                state.progress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 520f))
+                if (reduceMotion) {
+                    state.progress.snapTo(1f)
+                } else {
+                    state.progress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 520f))
+                }
             } else {
-                state.progress.animateTo(0f, tween(170, easing = FastOutLinearInEasing))
+                if (reduceMotion) {
+                    state.progress.snapTo(0f)
+                } else {
+                    state.progress.animateTo(0f, tween(170, easing = FastOutLinearInEasing))
+                }
                 state.path.clear()
             }
         }
     }
     val visible by remember(state) { derivedStateOf { state.requested || state.progress.value > 0f } }
     if (!visible) return
-    InWindowOverlay(leaving = { !state.requested }) {
+    InWindowOverlay(leaving = { !state.requested }, needsBackdrop = glassOn(GlassRole.Menu)) {
         BackHandler(enabled = state.requested) { state.back() }
-        RadialOverlay(state, items)
+        RadialOverlay(state, items, reduceMotion)
     }
 }
 
 @Composable
-private fun RadialOverlay(state: MochiRadialMenuState, items: List<MochiRadialItem>) {
+private fun RadialOverlay(state: MochiRadialMenuState, items: List<MochiRadialItem>, reduceMotion: Boolean) {
     val density = LocalDensity.current
     val radius = with(density) { MochiRadialMenuDefaults.Radius.toPx() }
     val hub = with(density) { MochiRadialMenuDefaults.HubRadius.toPx() }
@@ -485,7 +542,7 @@ private fun RadialOverlay(state: MochiRadialMenuState, items: List<MochiRadialIt
                 .offset { IntOffset((center.x - radius).roundToInt(), (center.y - radius).roundToInt()) }
                 .size(diameter),
         ) {
-            RadialDisk(state, items)
+            RadialDisk(state, items, reduceMotion)
         }
     }
 }
@@ -527,14 +584,20 @@ private suspend fun PointerInputScope.stickyGesture(
         val onAnchor = anchor().inflate(6.dp.toPx()).contains(down.position)
         val startZone = zoneOf(down.position)
         var pos = down.position
-        if (!onAnchor) track(pos)
-        while (true) {
-            val e = awaitPointerEvent()
-            val c = e.changes.firstOrNull { it.id == down.id } ?: break
-            if (!c.pressed) break
-            c.consume()
-            pos = c.position
-            if (!onAnchor || (pos - down.position).getDistance() > slop) track(pos)
+        var completed = false
+        try {
+            if (!onAnchor) track(pos)
+            while (true) {
+                val e = awaitPointerEvent()
+                val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                if (!c.pressed) break
+                c.consume()
+                pos = c.position
+                if (!onAnchor || (pos - down.position).getDistance() > slop) track(pos)
+            }
+            completed = true
+        } finally {
+            if (!completed) state.highlight(-1)
         }
         if (onAnchor && (pos - down.position).getDistance() <= slop) {
             state.close()
@@ -552,15 +615,27 @@ private suspend fun PointerInputScope.stickyGesture(
 private data class LevelFrame(val key: String, val depth: Int, val items: List<MochiRadialItem>, val title: String?)
 
 @Composable
-private fun RadialDisk(state: MochiRadialMenuState, items: List<MochiRadialItem>) {
+private fun RadialDisk(state: MochiRadialMenuState, items: List<MochiRadialItem>, reduceMotion: Boolean) {
     val cs = MochiTheme.colorScheme
     val fill = rememberGlassFill(GlassRole.Menu)
-    val scale = { lerp(0.55f, 1f, state.progress.value) }
+    val scale = { if (reduceMotion) 1f else lerp(0.55f, 1f, state.progress.value) }
     val alpha = { smoothstep(0f, 0.45f, state.progress.value) }
-    val path = state.path.toList()
-    val title = if (path.isEmpty()) null else levelOf(items, path.dropLast(1)).getOrNull(path.last())?.label
-    val frame = LevelFrame(path.joinToString("/"), path.size, levelOf(items, path), title)
+    val frame by remember(state, items) {
+        derivedStateOf {
+            val path = state.path.toList()
+            val title = if (path.isEmpty()) null else levelOf(items, path.dropLast(1)).getOrNull(path.last())?.label
+            LevelFrame(path.joinToString("/"), path.size, levelOf(items, path), title)
+        }
+    }
     if (fill != null) {
+        RadialGlassMotion(state.progress)
+        val density = LocalDensity.current
+        val holdRect = remember(density) {
+            val r = with(density) { MochiRadialMenuDefaults.Radius.toPx() }
+            val d = r * 2f
+            val pad = r * 0.12f
+            Rect(-pad, -pad, d + pad, d + pad)
+        }
         GlassSurface(
             fill,
             cornerRadius = MochiRadialMenuDefaults.Radius,
@@ -569,6 +644,8 @@ private fun RadialDisk(state: MochiRadialMenuState, items: List<MochiRadialItem>
             scaleX = scale,
             scaleY = scale,
             alpha = alpha,
+            hold = { holdRect },
+            freezeBackdrop = { state.progress.isRunning || state.progress.value < 0.995f },
         ) {
             val dark = LocalMochiGlassDark.current
             Box(
@@ -576,7 +653,7 @@ private fun RadialDisk(state: MochiRadialMenuState, items: List<MochiRadialItem>
                     scaleX = scale()
                     scaleY = scale()
                 },
-            ) { RadialFace(state, frame, dark, glass = true) }
+            ) { RadialFace(state, frame, dark, glass = true, reduceMotion = reduceMotion) }
         }
     } else {
         val panel = if (cs.isDark) cs.surfaceContainerHigh else Color.White
@@ -595,35 +672,66 @@ private fun RadialDisk(state: MochiRadialMenuState, items: List<MochiRadialItem>
                 }
                 .background(panel, CircleShape),
         ) {
-            CompositionLocalProvider(LocalContentColor provides cs.onSurface) { RadialFace(state, frame, cs.isDark, glass = false) }
+            CompositionLocalProvider(LocalContentColor provides cs.onSurface) {
+                RadialFace(state, frame, cs.isDark, glass = false, reduceMotion = reduceMotion)
+            }
         }
     }
 }
 
 /** 盘面：当前这一级的格子（级之间缩放 + 淡入淡出切换）和中间的返回 / 关闭 */
 @Composable
-private fun RadialFace(state: MochiRadialMenuState, frame: LevelFrame, dark: Boolean, glass: Boolean) {
+private fun RadialFace(state: MochiRadialMenuState, frame: LevelFrame, dark: Boolean, glass: Boolean, reduceMotion: Boolean) {
+    val activeKey by remember(state) { derivedStateOf { state.path.joinToString("/") } }
+    val sticky = state.sticky && state.requested
     Box(Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = frame,
             contentKey = { it.key },
             transitionSpec = {
-                val forward = targetState.depth >= initialState.depth
-                (fadeIn(tween(170, delayMillis = 40)) + scaleIn(tween(240), initialScale = if (forward) 0.82f else 1.14f)) togetherWith
-                    (fadeOut(tween(120)) + scaleOut(tween(200), targetScale = if (forward) 1.14f else 0.82f))
+                if (reduceMotion) {
+                    fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                } else {
+                    val forward = targetState.depth >= initialState.depth
+                    (fadeIn(tween(170, delayMillis = 40)) + scaleIn(tween(240), initialScale = if (forward) 0.82f else 1.14f)) togetherWith
+                        (fadeOut(tween(120)) + scaleOut(tween(200), targetScale = if (forward) 1.14f else 0.82f))
+                }
             },
             modifier = Modifier.fillMaxSize(),
             label = "radialLevel",
         ) { level ->
-            val active = level.key == state.path.joinToString("/")
-            RadialRing(level.items, if (active) state.highlighted else -1, dark, glass)
+            val active = level.key == activeKey
+            RadialRing(
+                items = level.items,
+                highlighted = if (active) state.highlighted else -1,
+                dark = dark,
+                glass = glass,
+                reduceMotion = reduceMotion,
+                sticky = sticky && active,
+                onActivate = { state.activate(it) },
+            )
         }
-        RadialHub(frame.title, dark, Modifier.align(Alignment.Center))
+        RadialHub(
+            title = frame.title,
+            dark = dark,
+            reduceMotion = reduceMotion,
+            sticky = sticky,
+            onBack = { state.back() },
+            modifier = Modifier.align(Alignment.Center),
+        )
     }
 }
 
 @Composable
-private fun RadialRing(items: List<MochiRadialItem>, highlighted: Int, dark: Boolean, glass: Boolean) {
+private fun RadialRing(
+    items: List<MochiRadialItem>,
+    highlighted: Int,
+    dark: Boolean,
+    glass: Boolean,
+    reduceMotion: Boolean,
+    sticky: Boolean,
+    onActivate: (Int) -> Unit,
+) {
     val n = items.size
     if (n == 0) return
     val cs = MochiTheme.colorScheme
@@ -637,18 +745,33 @@ private fun RadialRing(items: List<MochiRadialItem>, highlighted: Int, dark: Boo
     val checkedFill = Color.Transparent
     val checkedContent = accent
     val glow = remember(n) { List(n) { Animatable(0f) } }
-    LaunchedEffect(highlighted, glow) {
+    val glowProviders = remember(glow) { List(n) { i -> { glow[i].value } } }
+    LaunchedEffect(highlighted, glow, reduceMotion) {
         glow.forEachIndexed { i, a ->
-            launch {
-                val on = i == highlighted
-                a.animateTo(if (on) 1f else 0f, spring(dampingRatio = if (on) 0.62f else 1f, stiffness = if (on) 700f else 420f))
+            val target = if (i == highlighted) 1f else 0f
+            if (a.targetValue != target) {
+                launch {
+                    if (reduceMotion) {
+                        a.snapTo(target)
+                    } else {
+                        val on = i == highlighted
+                        a.animateTo(target, spring(dampingRatio = if (on) 0.62f else 1f, stiffness = if (on) 700f else 420f))
+                    }
+                }
             }
         }
     }
     val density = LocalDensity.current
     val radius = with(density) { MochiRadialMenuDefaults.Radius.toPx() }
     val hub = with(density) { MochiRadialMenuDefaults.HubRadius.toPx() }
-    val paint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
+    val cornerRadiusPx = with(density) { 12.dp.toPx() }
+    val paint = remember(cornerRadiusPx) {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            pathEffect = android.graphics.CornerPathEffect(cornerRadiusPx)
+        }
+    }
+    val sectorScratch = remember { android.graphics.Path() }
+    val currentOnActivate by rememberUpdatedState(onActivate)
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
             val c = Offset(size.width / 2f, size.height / 2f)
@@ -661,6 +784,7 @@ private fun RadialRing(items: List<MochiRadialItem>, highlighted: Int, dark: Boo
                 drawLine(separator, c + dir * (hub + 10.dp.toPx()), c + dir * (radius - 16.dp.toPx()), 1.dp.toPx(), StrokeCap.Round)
             }
             // 一组的格子在外沿画一小段弧：这一格还能往外展开
+            val arcStroke = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round)
             items.forEachIndexed { i, item ->
                 if (!item.isGroup) return@forEachIndexed
                 val r = radius - 8.dp.toPx()
@@ -672,19 +796,18 @@ private fun RadialRing(items: List<MochiRadialItem>, highlighted: Int, dark: Boo
                     useCenter = false,
                     topLeft = Offset(c.x - r, c.y - r),
                     size = androidx.compose.ui.geometry.Size(r * 2f, r * 2f),
-                    style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round),
+                    style = arcStroke,
                 )
             }
             // 扇面：和盘沿、中间圆同心的一段圆环，四边离开盘沿 / 中间圆 / 两侧分隔线各一点，四个角是圆的。
             // 指向的格子扇面从里往外长出来（外沿跟着弹簧到位），当前生效的那格常驻一块淡的
             val outerRest = radius - 6.dp.toPx()
             val gapLen = 3.dp.toPx()
-            paint.pathEffect = android.graphics.CornerPathEffect(12.dp.toPx())
             fun wedge(i: Int, outer: Float, color: Color) {
                 if (color.alpha <= 0.004f || outer <= inner + 1f) return
-                val path = annularSector(c, inner, outer, angleOf(i, n), step, gapLen)
+                annularSector(sectorScratch, c, inner, outer, angleOf(i, n), step, gapLen)
                 paint.color = color.toArgb()
-                drawIntoCanvas { it.nativeCanvas.drawPath(path, paint) }
+                drawIntoCanvas { it.nativeCanvas.drawPath(sectorScratch, paint) }
             }
             for (i in 0 until n) {
                 if (items[i].checked) wedge(i, outerRest, checkedFill)
@@ -699,11 +822,15 @@ private fun RadialRing(items: List<MochiRadialItem>, highlighted: Int, dark: Boo
             val a = Math.toRadians(angleOf(i, n).toDouble())
             val dx = (cos(a) * mid).toFloat()
             val dy = (sin(a) * mid).toFloat()
+            val onClickItem = remember(i) { { currentOnActivate(i) } }
             RadialCell(
-                item,
-                glow = { glow[i].value },
+                item = item,
+                glow = glowProviders[i],
                 normal = if (item.checked) checkedContent else content,
                 lit = litContent,
+                reduceMotion = reduceMotion,
+                sticky = sticky,
+                onClick = onClickItem,
                 modifier = Modifier
                     .align(Alignment.Center)
                     .offset { IntOffset(dx.roundToInt(), dy.roundToInt()) },
@@ -713,14 +840,48 @@ private fun RadialRing(items: List<MochiRadialItem>, highlighted: Int, dark: Boo
 }
 
 @Composable
-private fun RadialCell(item: MochiRadialItem, glow: () -> Float, normal: Color, lit: Color, modifier: Modifier = Modifier) {
-    val h = glow().coerceIn(0f, 1f)
-    val color = lerp(normal, lit, h)
+private fun RadialCell(
+    item: MochiRadialItem,
+    glow: () -> Float,
+    normal: Color,
+    lit: Color,
+    reduceMotion: Boolean,
+    sticky: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val baseFootnote = MochiTheme.textStyles.footnote
+    val labelStyle = remember(baseFootnote) {
+        baseFootnote.copy(
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            textMotion = baseFootnote.textMotion ?: TextMotion.Animated,
+        )
+    }
     Column(
         modifier
             .width(66.dp)
+            .then(
+                if (sticky) {
+                    Modifier.semantics(mergeDescendants = true) {
+                        role = Role.Button
+                        if (!item.enabled) {
+                            disabled()
+                        } else {
+                            onClick {
+                                onClick()
+                                true
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .graphicsLayer {
-                val s = 1f + 0.12f * glow()
+                val s = if (reduceMotion) 1f else 1f + 0.12f * glow()
                 scaleX = s
                 scaleY = s
                 alpha = if (item.enabled) 1f else 0.35f
@@ -729,68 +890,138 @@ private fun RadialCell(item: MochiRadialItem, glow: () -> Float, normal: Color, 
     ) {
         // 图标位只定高、不定宽：帧率数字这类文字图标（120）按自己的宽度排，不会被挤成两行、裁掉半截
         Box(Modifier.height(28.dp).widthIn(min = 28.dp), contentAlignment = Alignment.Center) {
-            CompositionLocalProvider(LocalContentColor provides color) { item.icon?.invoke() }
+            if (item.icon != null) {
+                RadialCellIcon(item.icon, glow, normal, lit)
+            }
         }
         Spacer(Modifier.height(3.dp))
-        Text(
-            item.label,
-            color = color,
-            style = MochiTheme.textStyles.footnote.copy(
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-            ),
+        BasicText(
+            text = item.label,
+            style = labelStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            color = { lerp(normal, lit, glow().coerceIn(0f, 1f)) },
         )
+    }
+}
+
+@Composable
+private fun RadialGlassMotion(progress: Animatable<Float, *>) {
+    val active by remember(progress) {
+        derivedStateOf { progress.value < 0.995f || progress.isRunning }
+    }
+    GlassMotionWhile(active)
+}
+
+@Composable
+private fun RadialCellIcon(icon: @Composable () -> Unit, glow: () -> Float, normal: Color, lit: Color) {
+    // 把 glow() 读取延迟到图层与绘制阶段，消除 120Hz 高亮弹簧动画期间的每帧图标重组
+    val paint = remember { Paint() }
+    val opaqueNormal = remember(normal) { normal.copy(alpha = 1f) }
+    val opaqueLit = remember(lit) { lit.copy(alpha = 1f) }
+    Box(
+        Modifier
+            .graphicsLayer {
+                val t = glow().coerceIn(0f, 1f)
+                alpha = lerp(normal.alpha, lit.alpha, t)
+            }
+            .drawWithContent {
+                val t = glow().coerceIn(0f, 1f)
+                if (t <= 0.004f) {
+                    drawContent()
+                } else {
+                    paint.colorFilter = ColorFilter.tint(lerp(opaqueNormal, opaqueLit, t), BlendMode.SrcIn)
+                    drawIntoCanvas { canvas ->
+                        canvas.saveLayer(Rect(Offset.Zero, size), paint)
+                        drawContent()
+                        canvas.restore()
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(LocalContentColor provides opaqueNormal) { icon() }
     }
 }
 
 /** 中间的圆：第一级是关闭（×），第二级是返回（‹ + 这一组的名字） */
 @Composable
-private fun RadialHub(title: String?, dark: Boolean, modifier: Modifier = Modifier) {
+private fun RadialHub(
+    title: String?,
+    dark: Boolean,
+    reduceMotion: Boolean,
+    sticky: Boolean,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val content = LocalContentColor.current
     val fill = MochiGlassContent.separator(dark)
+    val baseFootnote = MochiTheme.textStyles.footnote
+    val hubTextStyle = remember(baseFootnote) {
+        baseFootnote.copy(
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+        )
+    }
     Box(
         modifier
             .size(MochiRadialMenuDefaults.HubRadius * 2)
-            .background(fill, CircleShape),
+            .background(fill, CircleShape)
+            .then(
+                if (sticky) {
+                    Modifier.semantics(mergeDescendants = true) {
+                        role = Role.Button
+                        contentDescription = if (title == null) "关闭轮盘菜单" else "返回上一级"
+                        onClick {
+                            onBack()
+                            true
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         AnimatedContent(
             targetState = title,
-            transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(110)) },
+            transitionSpec = {
+                if (reduceMotion) fadeIn(tween(0)) togetherWith fadeOut(tween(0)) else fadeIn(tween(160)) togetherWith fadeOut(tween(110))
+            },
             label = "radialHub",
         ) { t ->
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Canvas(Modifier.size(if (t == null) 16.dp else 12.dp)) {
-                    val w = size.width
-                    val stroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    val p = Path()
-                    if (t == null) {
-                        p.moveTo(w * 0.15f, w * 0.15f)
-                        p.lineTo(w * 0.85f, w * 0.85f)
-                        p.moveTo(w * 0.85f, w * 0.15f)
-                        p.lineTo(w * 0.15f, w * 0.85f)
-                    } else {
-                        p.moveTo(w * 0.62f, w * 0.12f)
-                        p.lineTo(w * 0.3f, w * 0.5f)
-                        p.lineTo(w * 0.62f, w * 0.88f)
-                    }
-                    drawPath(p, content.copy(alpha = content.alpha * 0.8f), style = stroke)
-                }
+                val glyphTint = content.copy(alpha = content.alpha * 0.8f)
+                Spacer(
+                    Modifier
+                        .size(if (t == null) 16.dp else 12.dp)
+                        .drawWithCache {
+                            val w = size.width
+                            val stroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            val p = Path()
+                            if (t == null) {
+                                p.moveTo(w * 0.15f, w * 0.15f)
+                                p.lineTo(w * 0.85f, w * 0.85f)
+                                p.moveTo(w * 0.85f, w * 0.15f)
+                                p.lineTo(w * 0.15f, w * 0.85f)
+                            } else {
+                                p.moveTo(w * 0.62f, w * 0.12f)
+                                p.lineTo(w * 0.3f, w * 0.5f)
+                                p.lineTo(w * 0.62f, w * 0.88f)
+                            }
+                            onDrawBehind {
+                                drawPath(p, glyphTint, style = stroke)
+                            }
+                        },
+                )
                 if (t != null) {
                     Spacer(Modifier.height(2.dp))
                     Text(
                         t,
-                        color = content.copy(alpha = content.alpha * 0.8f),
-                        style = MochiTheme.textStyles.footnote.copy(
-                            fontSize = 11.sp,
-                            lineHeight = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center,
-                        ),
+                        color = glyphTint,
+                        style = hubTextStyle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.width(64.dp),

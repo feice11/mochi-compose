@@ -22,11 +22,26 @@ private val BodyFamily = FontFamily(
 private val DisplayFamily = FontFamily.Serif
 private val DotFamily = FontFamily(Font(R.font.nothing_dot))
 
+private val DefaultNothingSerifStyles by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    buildNothingTextStyles(defaultTextStyles(), serifDisplay = true)
+}
+
+private val DefaultNothingSansStyles by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    buildNothingTextStyles(defaultTextStyles(), serifDisplay = false)
+}
+
 /**
  * Replace families only. Size, weight, line height and platform font scaling remain the caller's.
  * @param serifDisplay titles (large / nav title, display, headline) use the system serif; false keeps them in Inter
  */
 public fun nothingTextStyles(base: MochiTextStyles = defaultTextStyles(), serifDisplay: Boolean = true): MochiTextStyles {
+    if (base === defaultTextStyles()) {
+        return if (serifDisplay) DefaultNothingSerifStyles else DefaultNothingSansStyles
+    }
+    return buildNothingTextStyles(base, serifDisplay)
+}
+
+private fun buildNothingTextStyles(base: MochiTextStyles, serifDisplay: Boolean): MochiTextStyles {
     // System serif supplies a matching Latin/CJK family through the device's font fallback.
     fun TextStyle.displayFamily(): TextStyle = copy(fontFamily = if (serifDisplay) DisplayFamily else BodyFamily)
     return nothingStyles(base) { it.displayFamily() }

@@ -8,11 +8,14 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.RenderEffect
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -111,31 +114,98 @@ internal class MenuLens {
     }
 
     /**
-     * 内容图层的 RenderEffect：先位移、再模糊。[panel] 是图层坐标里的当前面板（已经按 [scale] 换算回放大前），
-     * [radius] 是它的圆角；位移按 1 / [scale] 缩小，放大后屏幕上还是原生的量
+     * 内容图层的 RenderEffect：位移与轻量 5-tap 模糊融合进单 Pass AGSL，彻底消除 createChainEffect 双级联离屏 FBO。
+     * [panel] 是图层坐标里的当前面板（已经按 [scale] 换算回放大前），[radius] 是它的圆角；
+     * 位移按 1 / [scale] 缩小，放大后屏幕上还是原生的量；lens <= 0.03f 时直接短路跳过位移 RenderEffect。
      */
     fun effect(density: Density, panel: Rect, radius: Float, scale: Float): RenderEffect? {
         val l = lens.value.coerceAtLeast(0f)
         val b = blur.value.coerceAtLeast(0f)
-        val blurEffect = blurEffect(with(density) { (BlurSigma * b).toPx() })
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return blurEffect
-        val k = min(min(panel.width, panel.height) * scale / with(density) { 250.dp.toPx() }, 1f)
-        val height = with(density) { 75.dp.toPx() } * l * k / scale
-        if (height < 0.5f) return blurEffect
-        val lensEffect = displacement(panel, radius / scale, height)
-        return if (blurEffect == null) lensEffect else chain(blurEffect, lensEffect)
+        val sigmaPx = if (b <= 0.03f) 0f else with(density) { (BlurSigma * b).toPx() }
+        val blurPx = if (sigmaPx > 0.5f) (sigmaPx - 0.5f) / 0.57735f else 0f
+        if (l <= 0.03f) {
+            return if (blurPx <= 2f) null else blurCache.get(sigmaPx, minSigma = 0.5001f)
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return if (blurPx <= 2f) null else blurCache.get(sigmaPx, minSigma = 0.5001f)
+        }
+        val safeScale = scale.coerceAtLeast(1e-3f)
+        val k = min(min(panel.width, panel.height) * safeScale / with(density) { 250.dp.toPx() }, 1f)
+        val height = with(density) { 75.dp.toPx() } * l * k / safeScale
+        if (height < 0.5f) {
+            return if (blurPx <= 2f) null else blurCache.get(sigmaPx, minSigma = 0.5001f)
+        }
+        val clampedRadius = (radius / safeScale).coerceAtMost(min(panel.width, panel.height) / 2f)
+        val fusedBlur = if (blurPx <= 2f) 0f else (sigmaPx / safeScale * 0.85f).coerceIn(0.5f, 6f)
+        return displacement(panel, clampedRadius, height, fusedBlur)
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private fun displacement(panel: Rect, radius: Float, height: Float): RenderEffect {
+    private fun displacement(panel: Rect, radius: Float, height: Float, blurRadius: Float): RenderEffect {
+        val qL = panel.left.roundToInt().toFloat()
+        val qT = panel.top.roundToInt().toFloat()
+        val qR = panel.right.roundToInt().toFloat()
+        val qB = panel.bottom.roundToInt().toFloat()
+        val qRadius = (radius * 2f).roundToInt() * 0.5f
+        val qHeight = (height * 2f).roundToInt() * 0.5f
+        val qBlur = (blurRadius * 2f).roundToInt() * 0.5f
+        val existing = cachedDisp
+        if (existing != null &&
+            qL == lastDispL &&
+            qT == lastDispT &&
+            qR == lastDispR &&
+            qB == lastDispB &&
+            qRadius == lastDispRadius &&
+            qHeight == lastDispHeight &&
+            qBlur == lastDispBlur
+        ) {
+            return existing
+        }
         val s = shader ?: RuntimeShader(DISPLACEMENT_AGSL).also { shader = it }
-        s.setFloatUniform("rect", panel.left, panel.top, panel.right, panel.bottom)
-        s.setFloatUniform("radius", radius.coerceAtMost(min(panel.width, panel.height) / 2f))
-        s.setFloatUniform("height", height)
-        return android.graphics.RenderEffect.createRuntimeShaderEffect(s, "content").asComposeRenderEffect()
+        s.setFloatUniform("rect", qL, qT, qR, qB)
+        s.setFloatUniform("radius", qRadius)
+        s.setFloatUniform("height", qHeight)
+        s.setFloatUniform("blurRadius", qBlur)
+        lastDispL = qL
+        lastDispT = qT
+        lastDispR = qR
+        lastDispB = qB
+        lastDispRadius = qRadius
+        lastDispHeight = qHeight
+        lastDispBlur = qBlur
+        return android.graphics.RenderEffect.createRuntimeShaderEffect(s, "content").asComposeRenderEffect().also { cachedDisp = it }
     }
 
     private var shader: RuntimeShader? = null
+    private val blurCache = BlurEffectCache()
+    private var lastDispL: Float = Float.NaN
+    private var lastDispT: Float = Float.NaN
+    private var lastDispR: Float = Float.NaN
+    private var lastDispB: Float = Float.NaN
+    private var lastDispRadius: Float = -1f
+    private var lastDispHeight: Float = -1f
+    private var lastDispBlur: Float = -1f
+    private var cachedDisp: RenderEffect? = null
+}
+
+/**
+ * 单槽高斯模糊 RenderEffect 缓存：
+ * - [visibleAlpha] <= 0.001f（如水滴内容已完全透明）时返回 null，不在隐藏图层上挂离屏模糊；
+ * - 模糊半径按 0.5px 量化复用上一帧缓存实例，避免开合尾段每帧新建 BlurEffect 与 chain。
+ */
+internal class BlurEffectCache {
+    private var lastRadius = -1f
+    private var cached: RenderEffect? = null
+
+    fun get(sigma: Float, visibleAlpha: Float = 1f, minSigma: Float = 0.6f): RenderEffect? {
+        if (visibleAlpha <= 0.001f || sigma < minSigma || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+        val r = (((sigma - 0.5f) / 0.57735f) * 2f).roundToInt() * 0.5f
+        if (r < 0.5f) return null
+        val prev = cached
+        if (prev != null && r == lastRadius) return prev
+        lastRadius = r
+        return BlurEffect(r, r, TileMode.Decal).also { cached = it }
+    }
 }
 
 /** response / dampingRatio，按 speed 换算后才变成弹簧（见 [MenuLens.run]） */
@@ -158,40 +228,48 @@ private val KickOff = LensSpring(0.35f, 0.8f)
 private val SmoothOn = LensSpring(0.1f, 1f)
 private val SmoothOff = LensSpring(0.6f, 1f)
 
-/** sigma 换成 RenderEffect 的半径（Skia：sigma = 0.57735·r + 0.5），Android 12 以下不模糊 */
-private fun blurEffect(sigma: Float): RenderEffect? {
-    if (sigma <= 0.5f || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
-    val r = (sigma - 0.5f) / 0.57735f
-    return androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Decal)
-}
-
-@RequiresApi(Build.VERSION_CODES.S)
-private fun chain(outer: RenderEffect, inner: RenderEffect): RenderEffect =
-    android.graphics.RenderEffect.createChainEffect(outer.asAndroidRenderEffect(), inner.asAndroidRenderEffect())
-        .asComposeRenderEffect()
-
-/** 圆角矩形 SDF 的位移：离边 height 以内往里取样，边上偏移 height，按 1 - sqrt(t(2 - t)) 变小 */
+/**
+ * 单 Pass 圆角矩形 SDF 解析位移 + 轻量 5-tap 模糊：
+ * 离边 height 以内按解析梯度（零额外 SDF 差分）往里取样，边上偏移 height，按 1 - sqrt(t(2 - t)) 变小；
+ * blurRadius > 0.5 时在位移坐标处执行 5-tap 模糊，省去 createChainEffect 第二次离屏 FBO。
+ */
 private const val DISPLACEMENT_AGSL = """
 uniform shader content;
 uniform float4 rect;
 uniform float radius;
 uniform float height;
+uniform float blurRadius;
 
-float sdf(float2 p) {
-    float2 c = (rect.xy + rect.zw) * 0.5;
-    float2 h = (rect.zw - rect.xy) * 0.5;
-    float2 q = abs(p - c) - h + radius;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+half4 evalSample(float2 uv) {
+    if (blurRadius <= 0.5) return content.eval(uv);
+    float2 d1 = float2(blurRadius, blurRadius);
+    float2 d2 = float2(blurRadius, -blurRadius);
+    return content.eval(uv) * 0.36
+        + (content.eval(uv + d1) + content.eval(uv - d1)
+        + content.eval(uv + d2) + content.eval(uv - d2)) * 0.16;
 }
 
 half4 main(float2 p) {
-    float depth = -sdf(p);
-    if (depth <= 0.0 || depth >= height) return content.eval(p);
-    float2 g = float2(sdf(p + float2(0.5, 0.0)) - sdf(p - float2(0.5, 0.0)), sdf(p + float2(0.0, 0.5)) - sdf(p - float2(0.0, 0.5)));
-    float n = length(g);
-    if (n < 1e-4) return content.eval(p);
+    float2 c = (rect.xy + rect.zw) * 0.5;
+    float2 h = (rect.zw - rect.xy) * 0.5;
+    float2 d = p - c;
+    float2 q = abs(d) - h + radius;
+    float2 m = max(q, 0.0);
+    float outside = length(m);
+    float dist = outside + min(max(q.x, q.y), 0.0) - radius;
+    float depth = -dist;
+    if (depth <= 0.0 || depth >= height) return evalSample(p);
+    float2 sgn = float2(d.x < 0.0 ? -1.0 : 1.0, d.y < 0.0 ? -1.0 : 1.0);
+    float2 g;
+    if (outside > 1e-4) {
+        g = sgn * (m / outside);
+    } else if (q.x > q.y) {
+        g = float2(sgn.x, 0.0);
+    } else {
+        g = float2(0.0, sgn.y);
+    }
     float t = depth / height;
     float off = height * (1.0 - sqrt(t * (2.0 - t)));
-    return content.eval(p - g / n * off);
+    return evalSample(p - g * off);
 }
 """

@@ -6,6 +6,7 @@ package ui.feice.mochi.navigation
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
@@ -18,14 +19,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -35,7 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,32 +53,37 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.kyant.capsule.ContinuousRoundedRectangle
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotionTokens
@@ -90,10 +95,10 @@ import ui.feice.mochi.basic.MochiSearchBarDefaults
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.effect.shadow.drawMochiShadow
 import ui.feice.mochi.shape.MochiCapsule
-import ui.feice.mochi.shape.MochiContinuity
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.utils.lerp
 
 /** 侧边栏打开时的样子 */
 public enum class MochiSidebarStyle {
@@ -206,7 +211,9 @@ public object MochiSidebarDefaults {
         pressed: Color = MochiTheme.colorScheme.onSurface.copy(alpha = if (MochiTheme.colorScheme.isDark) 0.1f else 0.06f),
         content: Color = MochiTheme.colorScheme.onSurface,
         secondaryContent: Color = MochiTheme.colorScheme.onSurfaceVariant,
-    ): MochiSidebarColors = MochiSidebarColors(background, panel, scrim, pushScrim, selected, pressed, content, secondaryContent)
+    ): MochiSidebarColors = remember(background, panel, scrim, pushScrim, selected, pressed, content, secondaryContent) {
+        MochiSidebarColors(background, panel, scrim, pushScrim, selected, pressed, content, secondaryContent)
+    }
 }
 
 /** 侧边栏宽度（px） */
@@ -264,90 +271,94 @@ public fun MochiSidebarLayout(
     val density = LocalDensity.current
     val screen = rememberMochiScreenCorners()
     val fallback = with(density) { SlideFallbackCorner.toPx() }
-    val tl = if (screen.topLeft > 0.5f) screen.topLeft else fallback
     val bl = if (screen.bottomLeft > 0.5f) screen.bottomLeft else fallback
     val showing by remember(state) { derivedStateOf { state.isOpen || state.anim.value > 0.0005f } }
+    val insetPx = with(density) { MochiSidebarDefaults.FloatingInset.toPx() }
+    val maxWidthPx = with(density) { maxWidth.toPx() }
+    val flingPx = with(density) { SidebarFlingVelocity.toPx() }
+    val floating = style == MochiSidebarStyle.Floating
+    val statusTopPx = if (floating) WindowInsets.statusBars.getTop(density) else 0
+    val metrics = remember { SidebarMetrics() }
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val panelPx = sidebarWidth(constraints.maxWidth.toFloat(), with(density) { maxWidth.toPx() })
-        val panelDp = with(density) { panelPx.toDp() }
-        val insetPx = with(density) { MochiSidebarDefaults.FloatingInset.toPx() }
-        val floating = style == MochiSidebarStyle.Floating
-        // 打开进度 1 对应手指走的距离：推开样式是主页面平移的宽度，浮动样式是面板右边缘走的距离
-        val travel = if (floating) panelPx + insetPx else panelPx
-        val flingPx = with(density) { SidebarFlingVelocity.toPx() }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .pointerInput(state, floating, swipeToOpen, travel) {
-                    sidebarGestures(state, swipeToOpen, travel, flingPx / travel.coerceAtLeast(1f), scope) {
-                        val p = state.anim.value.coerceIn(0f, 1f)
-                        if (floating) (insetPx + panelPx) * p else panelPx * p
-                    }
-                },
-        ) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { if (!floating) translationX = panelPx * state.anim.value.coerceIn(0f, 1f) }
-                    .drawWithContent {
-                        drawContent()
-                        val p = state.anim.value.coerceIn(0f, 1f)
-                        if (p > 0f) drawRect(if (floating) colors.scrim else colors.pushScrim, alpha = p)
-                    },
-            ) { content() }
-            if (!floating) {
-                // 侧边栏在主页面上面，右边缘贴着主页面的左边缘一起走，主页面只压暗
-                Column(
+    if (floating && hideNavigationBar) HideNavBarWhileOpen(state)
+
+    Layout(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(state, floating, swipeToOpen, maxWidthPx, insetPx, flingPx) {
+                sidebarGestures(state, floating, swipeToOpen, maxWidthPx, insetPx, flingPx, scope)
+            },
+        content = {
+            Box(Modifier.fillMaxSize()) { content() }
+            if (showing) {
+                Spacer(
                     Modifier
-                        .width(panelDp)
-                        .fillMaxHeight()
-                        .graphicsLayer {
+                        .fillMaxSize()
+                        .drawBehind {
                             val p = state.anim.value.coerceIn(0f, 1f)
-                            alpha = if (p > 0.0005f) 1f else 0f
-                            translationX = -(1f - p) * panelPx
-                        }
-                        .background(colors.background)
-                        .statusBarsPadding()
-                        .navigationBarsPadding(),
-                    content = sidebar,
+                            if (p <= 0f) return@drawBehind
+                            if (floating) {
+                                drawRect(colors.scrim, alpha = p)
+                            } else {
+                                val left = metrics.panelPx * p
+                                drawRect(
+                                    colors.pushScrim,
+                                    Offset(left, 0f),
+                                    Size((size.width - left).coerceAtLeast(0f), size.height),
+                                    alpha = p,
+                                )
+                            }
+                        },
                 )
-            } else {
-                // 顶角 = 搜索框圆头半径 + 10dp：和离边 10dp 的搜索框同心（顶边不贴屏幕，不跟屏幕圆角）；
-                // 底角和屏幕底角同心（屏幕圆角 − 8dp，不设上限，大圆角机型照样对齐）
-                val top = FloatingTopCorner
-                val radius = with(density) { (bl - insetPx).toDp() }.coerceAtLeast(top)
-                val shape = remember(radius) { ContinuousRoundedRectangle(top, top, radius, radius, MochiContinuity) }
-                val dark = MochiTheme.colorScheme.isDark
-                val shadow = MochiTheme.shadows.floating
-                val statusTop = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
-                val navBottom =
-                    with(density) { (WindowInsets.navigationBarsIgnoringVisibility.getBottom(this) - insetPx).coerceAtLeast(0f).toDp() }
-                // 同心：头部搜索框（上下各 8dp 留白）离面板顶边也是 10dp；底部的行（胶囊高亮）和面板底角同心
-                val topPad = (top - MochiSearchBarDefaults.Height / 2 - SidebarHeaderVerticalPadding).coerceAtLeast(0.dp)
-                val concentricBottom = (radius - MochiSidebarDefaults.ItemHeight / 2).coerceAtLeast(MochiSidebarDefaults.FloatingInset)
-                val bottomPad = if (hideNavigationBar) concentricBottom else maxOf(concentricBottom, navBottom)
-                if (hideNavigationBar) HideNavBarWhileOpen(state)
-                if (showing) {
+                if (!floating) {
+                    // 侧边栏在主页面上面，右边缘贴着主页面的左边缘一起走，主页面只压暗；完全收起时不挂载组合与语义节点
                     Column(
                         Modifier
-                            .padding(
-                                start = MochiSidebarDefaults.FloatingInset,
-                                top = statusTop + MochiSidebarDefaults.FloatingInset,
-                                bottom = MochiSidebarDefaults.FloatingInset,
-                            )
-                            .width(panelDp)
-                            .fillMaxHeight()
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val p = state.anim.value.coerceIn(0f, 1f)
+                                alpha = if (p > 0.0005f) 1f else 0f
+                                translationX = -(1f - p) * metrics.panelPx
+                            }
+                            .background(colors.background)
+                            .statusBarsPadding()
+                            .navigationBarsPadding(),
+                        content = sidebar,
+                    )
+                } else {
+                    // 顶角 = 搜索框圆头半径 + 10dp：和离边 10dp 的搜索框同心（顶边不贴屏幕，不跟屏幕圆角）；
+                    // 底角和屏幕底角同心（屏幕圆角 − 8dp，不设上限，大圆角机型照样对齐）
+                    val top = FloatingTopCorner
+                    val radius = with(density) { (bl - insetPx).toDp() }.coerceAtLeast(top)
+                    val shape = remember(radius) {
+                        RoundedCornerShape(topStart = top, topEnd = top, bottomEnd = radius, bottomStart = radius)
+                    }
+                    val dark = MochiTheme.colorScheme.isDark
+                    val shadow = MochiTheme.shadows.floating
+                    val navBottom =
+                        with(density) { (WindowInsets.navigationBarsIgnoringVisibility.getBottom(this) - insetPx).coerceAtLeast(0f).toDp() }
+                    // 同心：头部搜索框（上下各 8dp 留白）离面板顶边也是 10dp；底部的行（胶囊高亮）和面板底角同心
+                    val topPad = (top - MochiSearchBarDefaults.Height / 2 - SidebarHeaderVerticalPadding).coerceAtLeast(0.dp)
+                    val concentricBottom = (radius - MochiSidebarDefaults.ItemHeight / 2).coerceAtLeast(MochiSidebarDefaults.FloatingInset)
+                    val bottomPad = if (hideNavigationBar) concentricBottom else maxOf(concentricBottom, navBottom)
+                    Column(
+                        Modifier
+                            .fillMaxSize()
                             .graphicsLayer {
                                 val p = state.anim.value.coerceIn(0f, 1f)
                                 // 连阴影一起滑出屏幕
-                                translationX = -(1f - p) * (travel + FloatingShadowMargin.toPx())
+                                translationX = -(1f - p) * (metrics.travel + FloatingShadowMargin.toPx())
                             }
-                            .drawWithCache {
-                                val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
-                                onDrawBehind {
-                                    val p = state.anim.value.coerceIn(0f, 1f)
-                                    drawMochiShadow(path, shadow.resolve(this, dark, visibility = p), Color.Black)
+                            .drawBehind {
+                                val p = state.anim.value.coerceIn(0f, 1f)
+                                if (p > 0.001f) {
+                                    drawMochiShadow(
+                                        size.toRect(),
+                                        radius.toPx(),
+                                        shadow.resolve(this, dark, visibility = p),
+                                        Color.Black,
+                                        opaqueInterior = colors.panel.alpha >= 1f,
+                                    )
                                 }
                             }
                             .clip(shape)
@@ -357,13 +368,67 @@ public fun MochiSidebarLayout(
                     )
                 }
             }
+        },
+    ) { measurables, constraints ->
+        val w = constraints.maxWidth
+        val h = constraints.maxHeight
+        val panelPx = sidebarWidth(w.toFloat(), maxWidthPx)
+        metrics.panelPx = panelPx
+        metrics.travel = if (floating) panelPx + insetPx else panelPx
+        val mainPlaceable = measurables[0].measure(constraints)
+        val scrimPlaceable = if (measurables.size > 1) measurables[1].measure(constraints) else null
+        val sidebarPlaceable = if (measurables.size > 2) {
+            val panelW = panelPx.roundToInt().coerceAtLeast(0)
+            if (floating) {
+                val insetInt = insetPx.roundToInt()
+                val fw = panelW.coerceAtMost((w - insetInt).coerceAtLeast(0))
+                val fh = (h - statusTopPx - insetInt * 2).coerceAtLeast(0)
+                measurables[2].measure(Constraints.fixed(fw, fh))
+            } else {
+                measurables[2].measure(Constraints.fixed(panelW, h))
+            }
+        } else {
+            null
+        }
+        layout(w, h) {
+            // 侧边栏关闭时不给主页面挂载整屏 graphicsLayer
+            if (showing && !floating) {
+                mainPlaceable.placeWithLayer(0, 0) {
+                    translationX = metrics.panelPx * state.anim.value.coerceIn(0f, 1f)
+                }
+            } else {
+                mainPlaceable.place(0, 0)
+            }
+            scrimPlaceable?.place(0, 0)
+            if (sidebarPlaceable != null) {
+                if (floating) {
+                    val insetInt = insetPx.roundToInt()
+                    sidebarPlaceable.place(insetInt, statusTopPx + insetInt)
+                } else {
+                    sidebarPlaceable.place(0, 0)
+                }
+            }
         }
     }
     // 放在内容后面登记：比页面里（包括内部导航）的返回处理更晚注册，打开时优先收起侧边栏
-    PredictiveBackHandler(enabled = state.isOpen) { events ->
+    val predictiveBack = LocalMochiPredictiveBack.current
+    BackHandler(enabled = !predictiveBack && state.isOpen) { state.close() }
+    PredictiveBackHandler(enabled = predictiveBack && state.isOpen) { events ->
+        var lastP = 0f
+        var lastT = 0L
+        var vel = 0f
         try {
-            events.collect { e -> state.anim.snapTo(1f - SidebarBackFollow * e.progress) }
-            state.settle(false)
+            events.collect { e ->
+                val t = System.nanoTime()
+                if (lastT != 0L) {
+                    val dt = (t - lastT) / 1e9f
+                    if (dt > 0f) vel = lerp(vel, (e.progress - lastP) / dt, 0.5f)
+                }
+                lastP = e.progress
+                lastT = t
+                state.anim.snapTo(1f - SidebarBackFollow * e.progress)
+            }
+            state.settle(false, -SidebarBackFollow * vel.coerceAtLeast(0f))
         } catch (c: CancellationException) {
             state.settle(true)
             throw c
@@ -371,86 +436,121 @@ public fun MochiSidebarLayout(
     }
 }
 
+private class SidebarMetrics {
+    var panelPx: Float = 0f
+    var travel: Float = 0f
+}
+
 /**
  * 一次手势：
  * - 打开时按在主页面上：Initial 阶段就拦下（主页面里的东西收不到），没动就是点按关闭，横向拖动跟手开合；
  *   收起动画途中不再拦，主页面的点击立刻生效
  * - 其他位置：只看子元素没消费的拖动；收起时往右（且允许 [swipeToOpen]）、打开时任意横向拖动都接手（往右停在完全打开，不会漏给外层变成返回）
- * @param mainLeft 主页面此刻在屏幕上的左边缘（打开时它右边才是「主页面」）
  */
 private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.sidebarGestures(
     state: MochiSidebarState,
+    floating: Boolean,
     swipeToOpen: Boolean,
-    travel: Float,
-    fling: Float,
+    maxWidthPx: Float,
+    insetPx: Float,
+    flingPx: Float,
     scope: CoroutineScope,
-    mainLeft: () -> Float,
 ) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        val open = state.isOpen || state.anim.value > 0.0005f
-        // 只有停在打开（或正在打开）时才拦主页面；开始收起的那一刻起，点主页面照常落到主页面里，横向拖动仍能接手
-        val onMain = state.isOpen && down.position.x >= mainLeft()
-        if (!open && !swipeToOpen) return@awaitEachGesture
-        if (onMain) down.consume()
-        val slop = viewConfiguration.touchSlop
-        val tracker = VelocityTracker()
-        tracker.addPosition(down.uptimeMillis, down.position)
-        var dx = 0f
-        var dy = 0f
-        var claimed = false
-        var base = 0f
-        while (true) {
-            val ev = awaitPointerEvent(if (onMain) PointerEventPass.Initial else PointerEventPass.Main)
-            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
-            if (!ch.pressed) {
-                if (onMain) ch.consume()
-                break
-            }
-            // 按下那一下会在 Main 阶段再送来一次，行的点按检测已经消费了它，不算子元素接手；只看之后的移动
-            if (!claimed && !onMain && ch.previousPressed && ch.isConsumed) return@awaitEachGesture
-            if (onMain || claimed) ch.consume()
-            tracker.addPosition(ch.uptimeMillis, ch.position)
-            dx += ch.position.x - ch.previousPosition.x
-            dy += ch.position.y - ch.previousPosition.y
-            if (!claimed) {
-                val horizontal = abs(dx) > slop && abs(dx) > abs(dy) * 1.2f
-                val start = when {
-                    onMain -> abs(dx) > slop || abs(dy) > slop
-
-                    open -> {
-                        if (abs(dy) > slop && abs(dy) >= abs(dx)) return@awaitEachGesture
-                        // 往右也接手（到 1 就停住）：打开时右划不能漏给外层变成返回
-                        horizontal
-                    }
-
-                    else -> {
-                        if (abs(dy) > slop && abs(dy) >= abs(dx)) return@awaitEachGesture
-                        if (dx < -slop) return@awaitEachGesture
-                        horizontal && dx > 0f
-                    }
-                }
-                if (start) {
-                    // 接手的这一下就要消费掉：外层（父级）的整页返回在同一个事件里用同样的阈值判断，不消费它也会接手
-                    ch.consume()
-                    claimed = true
-                    scope.launch { state.anim.stop() }
-                    base = state.anim.value.coerceIn(0f, 1f)
-                    dx = 0f
-                    dy = 0f
-                }
-            } else {
-                val p = (base + dx / travel).coerceIn(0f, 1f)
-                scope.launch { state.anim.snapTo(p) }
+    val tracker = VelocityTracker()
+    var pendingProgress = Float.NaN
+    val dragSignal = Channel<Unit>(Channel.CONFLATED)
+    val driverJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        for (ignored in dragSignal) {
+            val p = pendingProgress
+            if (!p.isNaN()) {
+                pendingProgress = Float.NaN
+                state.anim.snapTo(p)
             }
         }
-        if (claimed) {
-            val v = tracker.calculateVelocity().x / travel
-            val p = (base + dx / travel).coerceIn(0f, 1f)
-            state.settle(sidebarSettle(p, v, fling), v)
-        } else if (onMain) {
-            state.close()
+    }
+    try {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val panelPx = sidebarWidth(size.width.toFloat(), maxWidthPx)
+            val travel = (if (floating) panelPx + insetPx else panelPx).coerceAtLeast(1f)
+            val fling = flingPx / travel
+            val pNow = state.anim.value.coerceIn(0f, 1f)
+            val mainLeft = if (floating) (insetPx + panelPx) * pNow else panelPx * pNow
+            val open = state.isOpen || state.anim.value > 0.0005f
+            // 只有停在打开（或正在打开）时才拦主页面；开始收起的那一刻起，点主页面照常落到主页面里，横向拖动仍能接手
+            val onMain = state.isOpen && down.position.x >= mainLeft
+            if (!open && !swipeToOpen) return@awaitEachGesture
+            if (onMain) down.consume()
+            val slop = viewConfiguration.touchSlop
+            tracker.resetTracking()
+            tracker.addPosition(down.uptimeMillis, down.position)
+            var dx = 0f
+            var dy = 0f
+            var claimed = false
+            var base = 0f
+            try {
+                while (true) {
+                    val ev = awaitPointerEvent(if (onMain) PointerEventPass.Initial else PointerEventPass.Main)
+                    val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!ch.pressed) {
+                        if (onMain) ch.consume()
+                        break
+                    }
+                    // 按下那一下会在 Main 阶段再送来一次，行的点按检测已经消费了它，不算子元素接手；只看之后的移动
+                    if (!claimed && !onMain && ch.previousPressed && ch.isConsumed) return@awaitEachGesture
+                    if (onMain || claimed) ch.consume()
+                    tracker.addPosition(ch.uptimeMillis, ch.position)
+                    dx += ch.position.x - ch.previousPosition.x
+                    dy += ch.position.y - ch.previousPosition.y
+                    if (!claimed) {
+                        val horizontal = abs(dx) > slop && abs(dx) > abs(dy) * 1.2f
+                        val start = when {
+                            onMain -> abs(dx) > slop || abs(dy) > slop
+
+                            open -> {
+                                if (abs(dy) > slop && abs(dy) >= abs(dx)) return@awaitEachGesture
+                                // 往右也接手（到 1 就停住）：打开时右划不能漏给外层变成返回
+                                horizontal
+                            }
+
+                            else -> {
+                                if (abs(dy) > slop && abs(dy) >= abs(dx)) return@awaitEachGesture
+                                if (dx < -slop) return@awaitEachGesture
+                                horizontal && dx > 0f
+                            }
+                        }
+                        if (start) {
+                            // 接手的这一下就要消费掉：外层（父级）的整页返回在同一个事件里用同样的阈值判断，不消费它也会接手
+                            ch.consume()
+                            claimed = true
+                            base = state.anim.value.coerceIn(0f, 1f)
+                            pendingProgress = base
+                            dragSignal.trySend(Unit)
+                            dx = 0f
+                            dy = 0f
+                        }
+                    } else {
+                        pendingProgress = (base + dx / travel).coerceIn(0f, 1f)
+                        dragSignal.trySend(Unit)
+                    }
+                }
+                pendingProgress = Float.NaN
+                if (claimed) {
+                    val v = tracker.calculateVelocity().x / travel
+                    val p = (base + dx / travel).coerceIn(0f, 1f)
+                    state.settle(sidebarSettle(p, v, fling), v)
+                } else if (onMain) {
+                    state.close()
+                }
+            } catch (c: CancellationException) {
+                pendingProgress = Float.NaN
+                if (claimed) state.settle(state.isOpen)
+                throw c
+            }
         }
+    } finally {
+        driverJob.cancel()
+        dragSignal.close()
     }
 }
 
@@ -631,8 +731,8 @@ private fun SidebarRow(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val sel by animateFloatAsState(if (selected) 1f else 0f, MochiMotionTokens.Settle, label = "selected")
-    val press by animateFloatAsState(if (pressed) 1f else 0f, MochiMotions.responseSpring(0.2f, 1f), label = "pressed")
+    val sel = animateFloatAsState(if (selected) 1f else 0f, MochiMotionTokens.Settle, label = "selected")
+    val press = animateFloatAsState(if (pressed) 1f else 0f, MochiMotions.responseSpring(0.2f, 1f), label = "pressed")
     Row(
         modifier
             .fillMaxWidth()
@@ -641,8 +741,10 @@ private fun SidebarRow(
             .drawWithCache {
                 val outline = MochiRoundedRectangle(minHeight / 2).createOutline(size, layoutDirection, this)
                 onDrawBehind {
-                    if (sel > 0f) drawOutline(outline, colors.selected, alpha = sel.coerceIn(0f, 1f))
-                    if (press > 0f) drawOutline(outline, colors.pressed, alpha = press.coerceIn(0f, 1f))
+                    val s = sel.value
+                    if (s > 0f) drawOutline(outline, colors.selected, alpha = s.coerceIn(0f, 1f))
+                    val p = press.value
+                    if (p > 0f) drawOutline(outline, colors.pressed, alpha = p.coerceIn(0f, 1f))
                 }
             }
             .clickable(interaction, indication = null, onClick = onClick)

@@ -3,6 +3,8 @@
 
 package ui.feice.mochi.shape
 
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -26,28 +28,39 @@ internal fun continuityFor(smoothing: Float): Continuity = if (smoothing <= 0f) 
 /** 往 Path 里加一个连续曲率圆角矩形（rect 是绝对坐标） */
 internal fun Path.addG2RoundRect(rect: Rect, radius: Float, smoothing: Float) {
     if (rect.width <= 0f || rect.height <= 0f) return
-    val r = radius.coerceIn(0f, min(rect.width, rect.height) / 2f).toDouble()
-    val p = continuityFor(smoothing)
-        .createRoundedRectanglePathSegments(rect.width.toDouble(), rect.height.toDouble(), r, r, r, r)
-        .toConvexPath()
-    addPath(p, rect.topLeft)
+    val r = radius.coerceIn(0f, min(rect.width, rect.height) / 2f)
+    if (r <= 0f) {
+        addRect(rect)
+        return
+    }
+    val rd = r.toDouble()
+    continuityFor(smoothing)
+        .createRoundedRectanglePathSegments(rect.width.toDouble(), rect.height.toDouble(), rd, rd, rd, rd)
+        .buildConvexPathInto(this, rect.left, rect.top)
 }
 
 /** 四个角各自半径的连续曲率圆角矩形（rect 是绝对坐标；顺序：左上、右上、右下、左下） */
 internal fun Path.addG2RoundRect(rect: Rect, topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float) {
     if (rect.width <= 0f || rect.height <= 0f) return
     val half = min(rect.width, rect.height) / 2f
-    val p = MochiContinuity
+    val tl = topLeft.coerceIn(0f, half)
+    val tr = topRight.coerceIn(0f, half)
+    val br = bottomRight.coerceIn(0f, half)
+    val bl = bottomLeft.coerceIn(0f, half)
+    if (tl <= 0f && tr <= 0f && br <= 0f && bl <= 0f) {
+        addRect(rect)
+        return
+    }
+    MochiContinuity
         .createRoundedRectanglePathSegments(
             rect.width.toDouble(),
             rect.height.toDouble(),
-            topLeft.coerceIn(0f, half).toDouble(),
-            topRight.coerceIn(0f, half).toDouble(),
-            bottomRight.coerceIn(0f, half).toDouble(),
-            bottomLeft.coerceIn(0f, half).toDouble(),
+            tl.toDouble(),
+            tr.toDouble(),
+            br.toDouble(),
+            bl.toDouble(),
         )
-        .toConvexPath()
-    addPath(p, rect.topLeft)
+        .buildConvexPathInto(this, rect.left, rect.top)
 }
 
 /**
@@ -64,7 +77,7 @@ internal fun DrawScope.drawG2RoundRect(
     style: DrawStyle = Fill,
 ) {
     if (rect.width <= 0f || rect.height <= 0f) return
-    scratch.reset()
+    scratch.rewind()
     scratch.addG2RoundRect(rect, radius, 1f)
     drawPath(scratch, color, alpha = alpha, style = style)
 }
@@ -81,7 +94,7 @@ internal fun DrawScope.drawG2RoundRect(
     alpha: Float = 1f,
 ) {
     if (rect.width <= 0f || rect.height <= 0f) return
-    scratch.reset()
+    scratch.rewind()
     scratch.addG2RoundRect(rect, topLeft, topRight, bottomRight, bottomLeft)
     drawPath(scratch, color, alpha = alpha)
 }
@@ -105,12 +118,21 @@ public val G2PillShape: Shape = MochiCapsule
  * 动画里每帧变化的裁剪形状（rect 是相对于被裁剪 layer 的坐标）。
  * 按值比较：几何没变时 graphicsLayer 认为 shape 没变，不会每帧重建 outline。
  */
+@Immutable
 internal class G2RectClipShape(private val rect: Rect, private val radiusPx: Float, private val smoothing: Float) : Shape {
+    private val path = Path()
+    private var cachedOutline: androidx.compose.ui.graphics.Outline.Generic? = null
+
     override fun createOutline(
         size: androidx.compose.ui.geometry.Size,
         layoutDirection: androidx.compose.ui.unit.LayoutDirection,
         density: androidx.compose.ui.unit.Density,
-    ) = androidx.compose.ui.graphics.Outline.Generic(Path().apply { addG2RoundRect(rect, radiusPx, smoothing) })
+    ): androidx.compose.ui.graphics.Outline {
+        cachedOutline?.let { return it }
+        path.rewind()
+        path.addG2RoundRect(rect, radiusPx, smoothing)
+        return androidx.compose.ui.graphics.Outline.Generic(path).also { cachedOutline = it }
+    }
 
     override fun equals(other: Any?): Boolean =
         other is G2RectClipShape && other.rect == rect && other.radiusPx == radiusPx && other.smoothing == smoothing
@@ -119,6 +141,7 @@ internal class G2RectClipShape(private val rect: Rect, private val radiusPx: Flo
 }
 
 /** 四角各自半径的动画裁剪形状（rect 是相对于被裁剪 layer 的坐标），按值比较 */
+@Immutable
 internal class G2RectClipShape4(
     private val rect: Rect,
     private val topLeft: Float,
@@ -126,11 +149,19 @@ internal class G2RectClipShape4(
     private val bottomRight: Float,
     private val bottomLeft: Float,
 ) : Shape {
+    private val path = Path()
+    private var cachedOutline: androidx.compose.ui.graphics.Outline.Generic? = null
+
     override fun createOutline(
         size: androidx.compose.ui.geometry.Size,
         layoutDirection: androidx.compose.ui.unit.LayoutDirection,
         density: androidx.compose.ui.unit.Density,
-    ) = androidx.compose.ui.graphics.Outline.Generic(Path().apply { addG2RoundRect(rect, topLeft, topRight, bottomRight, bottomLeft) })
+    ): androidx.compose.ui.graphics.Outline {
+        cachedOutline?.let { return it }
+        path.rewind()
+        path.addG2RoundRect(rect, topLeft, topRight, bottomRight, bottomLeft)
+        return androidx.compose.ui.graphics.Outline.Generic(path).also { cachedOutline = it }
+    }
 
     override fun equals(other: Any?): Boolean = other is G2RectClipShape4 &&
         other.rect == rect &&
@@ -152,6 +183,7 @@ internal class G2RectClipShape4(
  * 每帧画同一个形状时复用 Path：尺寸 / 圆角没变就不重新生成曲线，只是位置变了就平移。
  * 一个缓存只给一个形状用（按钮、面板、高亮块各一个）。
  */
+@Stable
 internal class G2PathCache {
     private val local = Path()
     private val placed = Path()
@@ -172,6 +204,7 @@ internal class G2PathCache {
             local.addG2RoundRect(Rect(0f, 0f, rect.width, rect.height), radius, smoothing)
             x = Float.NaN
         }
+        if (rect.left == 0f && rect.top == 0f) return local
         if (rect.left != x || rect.top != y) {
             x = rect.left
             y = rect.top
@@ -184,7 +217,15 @@ internal class G2PathCache {
 
 // —— shader 里的 SDF 只用来算阴影和融球颈，用同样「角区 1.528r」的超椭圆近似 ——
 
-internal class G2Corner(val extent: Float, val exponent: Float)
+@JvmInline
+internal value class G2Corner private constructor(private val packed: Long) {
+    constructor(extent: Float, exponent: Float) : this(
+        (extent.toRawBits().toLong() shl 32) or (exponent.toRawBits().toLong() and 0xFFFFFFFFL),
+    )
+
+    val extent: Float get() = Float.fromBits((packed ushr 32).toInt())
+    val exponent: Float get() = Float.fromBits(packed.toInt())
+}
 
 private const val SQRT2 = 1.4142135f
 

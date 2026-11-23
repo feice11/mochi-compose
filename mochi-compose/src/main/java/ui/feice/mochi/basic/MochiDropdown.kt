@@ -3,84 +3,35 @@
 
 package ui.feice.mochi.basic
 
-import android.os.Build
-import android.provider.Settings
-import android.view.View
-import android.view.ViewGroup
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -89,70 +40,27 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import com.kyant.capsule.ContinuousRoundedRectangle
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
-import kotlin.math.sign
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotion
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.menu.AnchorTracker
 import ui.feice.mochi.basic.menu.Overlay
 import ui.feice.mochi.basic.menu.rememberMochiEngine
-import ui.feice.mochi.effect.elastic.MochiRubberBandState
-import ui.feice.mochi.effect.elastic.jellyCrossScale
-import ui.feice.mochi.effect.elastic.jellyStretch
-import ui.feice.mochi.effect.elastic.rememberMochiRubberBandState
-import ui.feice.mochi.effect.elastic.rubberStretched
 import ui.feice.mochi.effect.glass.GlassRole
 import ui.feice.mochi.effect.glass.GlassSurface
 import ui.feice.mochi.effect.glass.MochiGlassContent
 import ui.feice.mochi.effect.glass.glassOn
 import ui.feice.mochi.effect.glass.overlayBackdropSource
-import ui.feice.mochi.effect.glow.MochiGlowDefaults
-import ui.feice.mochi.effect.glow.MochiGlowSpec
-import ui.feice.mochi.effect.glow.MochiGlowState
 import ui.feice.mochi.effect.glow.mochiGlow
-import ui.feice.mochi.effect.glow.rememberMochiGlowState
-import ui.feice.mochi.effect.metaball.MochiBlob
-import ui.feice.mochi.effect.metaball.MochiMetaballColors
-import ui.feice.mochi.effect.metaball.MochiMetaballFrame
-import ui.feice.mochi.effect.metaball.MochiMetaballShadow
-import ui.feice.mochi.effect.metaball.drawMochiMetaball
-import ui.feice.mochi.effect.metaball.proximityFuse
-import ui.feice.mochi.effect.metaball.rememberMochiMetaballRenderer
-import ui.feice.mochi.gesture.MochiCallbacks
-import ui.feice.mochi.gesture.MochiController
 import ui.feice.mochi.gesture.mochiButtonGesture
-import ui.feice.mochi.overlay.InWindowOverlay
-import ui.feice.mochi.shape.G2PathCache
-import ui.feice.mochi.shape.G2RectClipShape
-import ui.feice.mochi.shape.addG2RoundRect
 import ui.feice.mochi.shape.continuityFor
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.utils.MochiHapticProfile
-import ui.feice.mochi.utils.MochiHaptics
-import ui.feice.mochi.utils.lerp
-import ui.feice.mochi.utils.smoothstep
 import ui.feice.mochi.utils.windowOriginOnScreen
 
 /** 内部用的扁平参数表（各个公开参数合起来） */
@@ -403,12 +311,12 @@ internal fun DropdownCore(
     val view = LocalView.current
     // 锚点位置平时不进可观察状态（转场里每帧都变），浮层打开期间才跟踪
     val anchor = remember { AnchorTracker() }
-    // 开关动画、发光、触感、滑选、返回键都在引擎里：和长按预览、返回历史菜单是同一套
+    // 开关动画、发光、触感、滑选、二级菜单栈与返回键都在引擎里：和长按预览、返回历史菜单是同一套
     val engine = rememberMochiEngine(
         expanded = expanded,
         onExpandedChange = onExpandedChange,
+        items = items,
         onItemClick = onItemClick,
-        itemCount = items.size,
         style = style,
         motion = menuMotion,
         dismissDelayMillis = behavior.dismissDelayMillis,
@@ -422,6 +330,9 @@ internal fun DropdownCore(
     val currentExpanded by rememberUpdatedState(expanded)
     val currentOnExpandedChange by rememberUpdatedState(onExpandedChange)
     val currentOnClick by rememberUpdatedState(onClick)
+    LaunchedEffect(enabled) {
+        if (!enabled && currentExpanded) currentOnExpandedChange(false)
+    }
 
     val buttonShape: Shape = remember(style.buttonCornerRadius, style.g2Smoothing) {
         ContinuousRoundedRectangle(style.buttonCornerRadius, continuityFor(style.g2Smoothing))
@@ -437,6 +348,11 @@ internal fun DropdownCore(
         }
     }
     flex.unit = LocalDensity.current.density
+    val barFlex = if (group == null) LocalBarFlex.current else null
+    if (barFlex != null) {
+        barFlex.visual = if (buttonGlass != null) flex else null
+        barFlex.extraScale = { if (engine.overlayReady) 1f else press.value }
+    }
     val flexScope = rememberCoroutineScope()
     // 布局里的真按钮。菜单打开期间隐藏，由浮层里的克隆 + shader 接管
     Box(
@@ -474,9 +390,12 @@ internal fun DropdownCore(
                 // 浮层接手画整个按钮组时，组自己不画，这一格照常录进组的内容里（浮层按组画它）
                 // 按钮组里的一格自己从不藏：组藏不藏由浮层管（group.hidden，整组一起），
                 // 不然浮层就绪、动画还没开始的那一帧这一格先没了，组里少一个图标
-                alpha = if (engine.overlayReady && group == null) {
-                    0f
-                } else if (!enabled) {
+                if (engine.overlayReady && group == null) {
+                    // 浮层已接管绘制：直接隐藏并返回，不再读 press.value / flex，避免隐藏中的原按钮逐帧标脏 WindowBackdrop
+                    alpha = 0f
+                    return@graphicsLayer
+                }
+                alpha = if (!enabled) {
                     0.38f
                 } else if (group != null && glow.held) {
                     // 按钮组里的一格按下时不放大、不发光（组的玻璃自己发光），图标变暗（iOS 的高亮）
@@ -497,9 +416,10 @@ internal fun DropdownCore(
                 val outline = buttonShape.createOutline(size, layoutDirection, this)
                 onDrawBehind { if (buttonGlass == null) drawOutline(outline, style.buttonColor) }
             }
-            // 长按还没打开前，按钮自己画发光（打开后由浮层的融球 shader 画）；玻璃按钮不画（近似：玻璃的按压光没接这条手势）
+            // 长按还没打开前，按钮自己画发光（打开后由浮层的融球 shader 画）；浮层就绪后停用，防止隐藏按钮继续标脏 WindowBackdrop
             .then(
-                Modifier.mochiGlow(glow, buttonShape, origin = { anchor.rect.topLeft }).takeIf { group == null && buttonGlass == null }
+                Modifier.mochiGlow(glow, buttonShape, origin = { anchor.rect.topLeft })
+                    .takeIf { group == null && buttonGlass == null && !engine.overlayReady }
                     ?: Modifier,
             )
             .sizeIn(minWidth = buttonMinWidth, minHeight = buttonMinHeight),
@@ -515,9 +435,10 @@ internal fun DropdownCore(
         }
     }
 
-    anchor.tracking = expanded || engine.overlayVisible
+    val trackAnchor = expanded || engine.overlayVisible
+    SideEffect { anchor.tracking = trackAnchor }
     engine.Overlay(
-        anchorOnScreen = anchor.observed(),
+        anchorOnScreen = { anchor.observed() },
         trigger = trigger,
         items = items,
         selectedIndex = selectedIndex,

@@ -108,10 +108,11 @@ private class Opening(val platter: Rect, val radius: Float, val droplet: Rect, v
 
 private fun opening(t: Float, anchor: Rect, card: Rect, cardRadius: Float, density: Float): Opening {
     val progress = openSpring(t)
-    val scale = lerp(PlatterInControl * min(anchor.width, anchor.height) / card.width, 1f, progress)
+    val cw = card.width.coerceAtLeast(1f)
+    val scale = lerp(PlatterInControl * min(anchor.width, anchor.height) / cw, 1f, progress)
     val height = lerp(card.width, card.height, progress)
     val toCard = card.center.y - anchor.center.y
-    val distance = abs(toCard) / density
+    val distance = abs(toCard) / density.coerceAtLeast(1e-3f)
     val dip = sign(toCard) * (min(1f, distance / 30f) * 23f + 0.124f * distance) * density * riseAndFall(t, 0.098f, 3.3f)
     val beyond = beyondRound(anchor)
     val left = (1f - progress).coerceIn(0f, 1f)
@@ -178,13 +179,17 @@ private fun containedBlend(blend: Float, platter: Rect, radius: Float, droplet: 
  * 打开途中（[t] 秒）的一帧。
  * @param anchor 按钮（玻璃按钮就是它的玻璃，纯色按钮外扩一圈）
  */
-internal fun morphOpen(t: Float, anchor: Rect, card: Rect, cardRadius: Float, density: Float): MorphFrame {
+internal fun morphOpen(t: Float, anchor: Rect, card: Rect, cardRadius: Float, density: Float, detach: Boolean = false): MorphFrame {
     val o = opening(t, anchor, card, cardRadius, density)
     val settled = o.progress.coerceIn(0f, 1f)
     val blendPx = MorphBlendDp * density
     // 光滑并集的半径从 0 长起来：一开始就用满半径，两块重叠处会往外鼓出半径的 1/4，按钮在第一帧突然变大、圆角变形
     val ramp = EaseOut.transform((t / BlendRampSeconds).coerceIn(0f, 1f))
-    val blend = if (merged(o.platter, o.radius, o.droplet, blendPx)) 0f else containedBlend(blendPx * ramp, o.platter, o.radius, o.droplet)
+    val blend = if (merged(o.platter, o.radius, o.droplet, blendPx)) {
+        0f
+    } else {
+        containedBlend(blendPx * ramp, o.platter, o.radius, o.droplet)
+    }
     val under = min(1f, settled / GlyphUnderAt)
     val blur = sqrt((OpenContentBlur * (1f - settled)).pow(2) + (OpenBlurBump * riseAndFall(t, 0.069f, 2.1f)).pow(2))
     return MorphFrame(
@@ -195,9 +200,9 @@ internal fun morphOpen(t: Float, anchor: Rect, card: Rect, cardRadius: Float, de
         settled = settled,
         reveal = settled,
         blur = blur,
-        contentScale = o.platter.width / card.width,
-        glyphAlpha = 1f - under,
-        glyphBlur = OpenContentBlur * under,
+        contentScale = o.platter.width / card.width.coerceAtLeast(1f),
+        glyphAlpha = if (detach) 1f else 1f - under,
+        glyphBlur = if (detach) 0f else OpenContentBlur * under,
         absorbed = 0f,
     )
 }
@@ -205,7 +210,15 @@ internal fun morphOpen(t: Float, anchor: Rect, card: Rect, cardRadius: Float, de
 /**
  * 收起途中的一帧：从 [startT]（收起时还在打开就是那时的打开秒数，开完了是 null）开始收了 [t] 秒
  */
-internal fun morphClose(t: Float, startT: Float?, anchor: Rect, card: Rect, cardRadius: Float, density: Float): MorphFrame {
+internal fun morphClose(
+    t: Float,
+    startT: Float?,
+    anchor: Rect,
+    card: Rect,
+    cardRadius: Float,
+    density: Float,
+    detach: Boolean = false,
+): MorphFrame {
     val o = startT?.let { opening(it, anchor, card, cardRadius, density) }
     val from = o?.platter ?: card
     val fromRadius = o?.radius ?: cardRadius
@@ -219,10 +232,11 @@ internal fun morphClose(t: Float, startT: Float?, anchor: Rect, card: Rect, card
     val progress = 1f + (dropletSpring(t) - 1f) * ringing
     val toCard = from.center.y - anchor.center.y
     val away = sign(toCard)
-    val dist = abs(toCard) / density
+    val dist = abs(toCard) / density.coerceAtLeast(1e-3f)
     val dip = min(0.21f * dist, 22f) * density * riseAndFall(t, 0.072f, 2.4f)
     val lift = min(0.25f * dist, 19f) * density * riseAndFall(t, 0.176f, 4.9f)
-    val scale = lerp(1f, PlatterInControl * min(anchor.width, anchor.height) / max(from.width, from.height), progress)
+    val maxFrom = max(from.width, from.height).coerceAtLeast(1f)
+    val scale = lerp(1f, PlatterInControl * min(anchor.width, anchor.height) / maxFrom, progress)
     val beyond = beyondRound(anchor)
     val pc = progress.coerceIn(0f, 1f)
     val platter = rectAt(
@@ -251,12 +265,31 @@ internal fun morphClose(t: Float, startT: Float?, anchor: Rect, card: Rect, card
         settled = (1f - progress).coerceIn(0f, 1f),
         reveal = reveal,
         blur = MaxContentBlur * (1f - reveal),
-        contentScale = min(platter.width / card.width, platter.height / card.height),
-        glyphAlpha = lerp(0.2f, 1f, GlyphCurve.transform((t / GlyphIn).coerceIn(0f, 1f))),
+        contentScale = min(platter.width / card.width.coerceAtLeast(1f), platter.height / card.height.coerceAtLeast(1f)),
+        glyphAlpha = if (detach) 1f else lerp(0.2f, 1f, GlyphCurve.transform((t / GlyphIn).coerceIn(0f, 1f))),
         glyphBlur = 0f,
         absorbed = absorbed,
     )
 }
+
+/**
+ * 分离式开合（长按预览 MochiContextMenu）：卡片不缩成水滴、原地不动；托盘从卡片靠近面板那一侧的一颗「种子」里长出来，
+ * 曲线和融球颈和按钮的开合同一套（FlClash 拟合）。种子是卡片边上一颗胶囊，贴着卡片朝向面板的那条边。
+ */
+internal fun detachSeed(card: Rect, panel: Rect, density: Float): Rect {
+    val s = min(36f * density, min(card.width, card.height))
+    val px = panel.center.x.coerceIn(card.left, card.right)
+    val py = if (panel.center.y >= card.center.y) card.bottom else card.top
+    val c = Offset(
+        px.coerceIn(card.left + s / 2f, max(card.left + s / 2f, card.right - s / 2f)),
+        py.coerceIn(card.top + s / 2f, max(card.top + s / 2f, card.bottom - s / 2f)),
+    )
+    return rectAt(c, s, s)
+}
+
+/** 把按钮开合的一帧改成分离式：卡片内容一直清楚可见（不淡、不糊） */
+internal fun MorphFrame.detached(): MorphFrame =
+    MorphFrame(platter, radius, droplet, blend, settled, reveal, blur, contentScale, 1f, 0f, absorbed)
 
 /**
  * 收起途中又打开：按此刻托盘长成面板的程度，找打开弹簧走到同样程度的时刻，换算成线性进度从那里接着开，
@@ -319,7 +352,7 @@ internal fun growOpen(t: Float, anchor: Rect, anchorRadius: Float, card: Rect, c
         settled = pc,
         reveal = reveal,
         blur = OpenContentBlur * (1f - reveal),
-        contentScale = (rect.width / card.width).coerceIn(0f, 1.2f),
+        contentScale = (rect.width / card.width.coerceAtLeast(1f)).coerceIn(0f, 1.2f),
         glyphAlpha = glyph,
         glyphBlur = OpenContentBlur * (1f - glyph),
         absorbed = 0f,
@@ -345,7 +378,7 @@ internal fun growClose(t: Float, startT: Float?, anchor: Rect, anchorRadius: Flo
         settled = p,
         reveal = reveal,
         blur = MaxContentBlur * (1f - reveal),
-        contentScale = (rect.width / card.width).coerceIn(0f, 1.2f),
+        contentScale = (rect.width / card.width.coerceAtLeast(1f)).coerceIn(0f, 1.2f),
         glyphAlpha = glyph,
         glyphBlur = 0f,
         absorbed = 0f,

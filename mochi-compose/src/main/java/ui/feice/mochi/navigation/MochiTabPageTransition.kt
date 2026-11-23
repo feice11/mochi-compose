@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -37,11 +38,14 @@ import androidx.compose.ui.layout.Layout
 import kotlin.math.abs
 import kotlin.math.sign
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.anim.animateToSteady
 import ui.feice.mochi.anim.awaitFrameSettle
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.anim.rememberFramePeriodNanos
 import ui.feice.mochi.basic.TabBarLink
 import ui.feice.mochi.effect.elastic.rubberBand
@@ -68,6 +72,7 @@ internal fun <T : Any> MochiTabPageTransition(
     val holder = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
     val framePeriod = rememberFramePeriodNanos()
+    val reduceMotion by rememberUpdatedState(mochiReduceMotion())
     val currentPages by rememberUpdatedState(pages)
     val currentOnPageChange by rememberUpdatedState(onPageChange)
     val currentTarget by rememberUpdatedState(targetState)
@@ -80,6 +85,17 @@ internal fun <T : Any> MochiTabPageTransition(
     var warming by remember { mutableStateOf<Any?>(null) }
 
     suspend fun depthTo(target: TabPageLayer<T>, handoff: Float, warm: Boolean = false) {
+        if (reduceMotion) {
+            link?.let {
+                val i = currentLinkIndex(target.key)
+                if (i >= 0) it.started = i
+                if (it.pending == i) it.pending = -1
+            }
+            target.vis.snapTo(1f)
+            target.velocity = 0f
+            layers.removeAll { it !== target }
+            return
+        }
         coroutineScope {
             fun go(l: TabPageLayer<T>) {
                 val to = if (l === target) 1f else 0f
@@ -120,6 +136,11 @@ internal fun <T : Any> MochiTabPageTransition(
             layers.remove(target)
             layers.add(target)
         }
+        if (reduceMotion) {
+            handoffVelocity = 0f
+            depthTo(target, 0f, warm = false)
+            return@LaunchedEffect
+        }
         val fresh = existing == null && handoffVelocity == 0f
         // 要预热：告诉标签栏这一页还没起步（纯色标签栏松手后停在新的一项等页面，不被拉回旧的一项）
         if (fresh) link?.pending = currentLinkIndex(targetState)
@@ -142,77 +163,124 @@ internal fun <T : Any> MochiTabPageTransition(
         Modifier
     } else {
         Modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var overSlop = 0f
-                val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-                    change.consume()
-                    overSlop = over
-                } ?: return@awaitEachGesture
-                // 只在静止时（只有一页）开始跟手；切换途中的拖动交给页面本身
-                val all = currentPages ?: return@awaitEachGesture
-                if (layers.size != 1) return@awaitEachGesture
-                val current = layers.first()
-                val index = all.indexOf(current.key)
-                val w = size.width.toFloat()
-                val tracker = VelocityTracker()
-                tracker.addPosition(drag.uptimeMillis, drag.position)
-                var dx = overSlop
-                var neighbor: TabPageLayer<T>? = null
-                fun follow() {
-                    // 手指往左 = 去右边那一页
-                    val dir = if (dx < 0f) 1 else -1
-                    val next = all.getOrNull(index + dir)
-                    if (next != null && neighbor?.key != next) {
-                        neighbor?.let { layers.remove(it) }
-                        neighbor = TabPageLayer(next, visible = 0f).also { layers.add(it) }
-                    }
-                    val raw = -dx / w
-                    val pos = if (next == null) rubberBand(raw, 1f, 0.12f) else raw.coerceIn(-1f, 1f)
-                    val n = neighbor
-                    scope.launch { current.vis.snapTo(1f - abs(pos)) }
-                    if (n != null) scope.launch { n.vis.snapTo(abs(pos)) }
-                    // 标签栏的选中块跟着拖动进度走（pos > 0 = 往后一项）
-                    val li = currentLinkIndex(current.key)
-                    if (link != null && li >= 0) link.swipe = li + pos
+            val tracker = VelocityTracker()
+            var pendingCurrent: TabPageLayer<T>? = null
+            var pendingCurrentVis = 1f
+            var pendingNeighbor: TabPageLayer<T>? = null
+            var pendingNeighborVis = 0f
+            val dragSignal = Channel<Unit>(Channel.CONFLATED)
+            val driverJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                for (ignored in dragSignal) {
+                    val cur = pendingCurrent
+                    val curV = pendingCurrentVis
+                    val nb = pendingNeighbor
+                    val nbV = pendingNeighborVis
+                    pendingCurrent = null
+                    pendingNeighbor = null
+                    cur?.vis?.snapTo(curV)
+                    nb?.vis?.snapTo(nbV)
                 }
-                try {
-                    follow()
-                    horizontalDrag(drag.id) { change ->
-                        dx += change.positionChange().x
-                        tracker.addPosition(change.uptimeMillis, change.position)
+            }
+            try {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var overSlop = 0f
+                    val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
                         change.consume()
+                        overSlop = over
+                    } ?: return@awaitEachGesture
+                    // 只在静止时（只有一页）开始跟手；切换途中的拖动交给页面本身
+                    val all = currentPages ?: return@awaitEachGesture
+                    if (layers.size != 1) return@awaitEachGesture
+                    val current = layers.first()
+                    val index = all.indexOf(current.key)
+                    val w = size.width.toFloat().coerceAtLeast(1f)
+                    tracker.resetTracking()
+                    tracker.addPosition(drag.uptimeMillis, drag.position)
+                    var dx = overSlop
+                    var neighbor: TabPageLayer<T>? = null
+                    fun follow() {
+                        // 手指往左 = 去右边那一页
+                        val dir = if (dx < 0f) 1 else -1
+                        val next = all.getOrNull(index + dir)
+                        if (next == null) {
+                            neighbor?.let {
+                                layers.remove(it)
+                                neighbor = null
+                            }
+                            pendingNeighbor = null
+                            pendingNeighborVis = 0f
+                        } else if (neighbor?.key != next) {
+                            neighbor?.let { layers.remove(it) }
+                            neighbor = TabPageLayer(next, visible = 0f).also { layers.add(it) }
+                        }
+                        val raw = -dx / w
+                        val pos = if (next == null) rubberBand(raw, 1f, 0.12f) else raw.coerceIn(-1f, 1f)
+                        val n = neighbor
+                        pendingCurrent = current
+                        pendingCurrentVis = 1f - abs(pos)
+                        pendingNeighbor = n
+                        pendingNeighborVis = if (n != null) abs(pos) else 0f
+                        dragSignal.trySend(Unit)
+                        // 标签栏的选中块跟着拖动进度走（pos > 0 = 往后一项）
+                        val li = currentLinkIndex(current.key)
+                        if (link != null && li >= 0) link.swipe = li + pos
+                    }
+                    try {
                         follow()
+                        horizontalDrag(drag.id) { change ->
+                            dx += change.positionChange().x
+                            tracker.addPosition(change.uptimeMillis, change.position)
+                            change.consume()
+                            follow()
+                        }
+                    } catch (e: CancellationException) {
+                        pendingCurrent = null
+                        pendingNeighbor = null
+                        link?.let {
+                            it.handOff(0f)
+                            it.swipe = Float.NaN
+                        }
+                        if (neighbor != null || current.vis.value != 1f) {
+                            scope.launch {
+                                current.velocity = 0f
+                                neighbor?.velocity = 0f
+                                depthTo(current, 0f)
+                            }
+                        }
+                        throw e
                     }
-                } catch (e: CancellationException) {
-                    link?.swipe = Float.NaN
-                    throw e
-                }
-                // 松手：过了一半，或者朝那边甩得够快，就换到旁边一页；否则弹回
-                val vx = tracker.calculateVelocity().x
-                val v = -vx / w
-                val offset = (neighbor?.vis?.value ?: (1f - current.vis.value)) * (if (dx < 0f) 1f else -1f)
-                val n = neighbor
-                val go = n != null && (abs(offset) > 0.5f || (abs(v) > FlingPagesPerSecond && sign(v) == sign(offset)))
-                // 选中块接着页面的速度走（拖动位置 = 当前项 + pos，它的速度就是 v 项 / 秒）；
-                // 换页时同一刻把起步的那一项改成新页（新页已经在场、不预热，页面这一帧就接着走）
-                link?.let {
-                    it.handOff(v)
-                    if (go) currentLinkIndex(n.key).takeIf { i -> i >= 0 }?.let { i -> it.started = i }
-                    it.swipe = Float.NaN
-                }
-                if (go) {
-                    // 换页动画从这一帧的位置、缩放和速度接着走
-                    // （景深：旁边那页显出的速度 = 朝它那边拖的速度）
-                    handoffVelocity = v * sign(offset)
-                    currentOnPageChange(n.key)
-                } else {
-                    scope.launch {
-                        current.velocity = -v * sign(offset)
-                        n?.velocity = v * sign(offset)
-                        depthTo(current, 0f)
+                    pendingCurrent = null
+                    pendingNeighbor = null
+                    // 松手：过了一半，或者朝那边甩得够快，就换到旁边一页；否则弹回
+                    val vx = tracker.calculateVelocity().x
+                    val v = -vx / w
+                    val offset = (neighbor?.vis?.value ?: (1f - current.vis.value)) * (if (dx < 0f) 1f else -1f)
+                    val n = neighbor
+                    val go = n != null && (abs(offset) > 0.5f || (abs(v) > FlingPagesPerSecond && sign(v) == sign(offset)))
+                    // 选中块接着页面的速度走（拖动位置 = 当前项 + pos，它的速度就是 v 项 / 秒）；
+                    // 换页时同一刻把起步的那一项改成新页（新页已经在场、不预热，页面这一帧就接着走）
+                    link?.let {
+                        it.handOff(v)
+                        if (go) currentLinkIndex(n.key).takeIf { i -> i >= 0 }?.let { i -> it.started = i }
+                        it.swipe = Float.NaN
+                    }
+                    if (go) {
+                        // 换页动画从这一帧的位置、缩放和速度接着走
+                        // （景深：旁边那页显出的速度 = 朝它那边拖的速度）
+                        handoffVelocity = v * sign(offset)
+                        currentOnPageChange(n.key)
+                    } else {
+                        scope.launch {
+                            current.velocity = -v * sign(offset)
+                            n?.velocity = v * sign(offset)
+                            depthTo(current, 0f)
+                        }
                     }
                 }
+            } finally {
+                driverJob.cancel()
+                dragSignal.close()
             }
         }
     }
@@ -235,15 +303,22 @@ internal fun <T : Any> MochiTabPageTransition(
                                 .graphicsLayer {
                                     val layer = layers.firstOrNull { it.key == k } ?: return@graphicsLayer
                                     val v = layer.vis.value.coerceIn(0f, 1f)
-                                    val moving = layers.size > 1 || v < 0.9995f
-                                    compositingStrategy = if (moving) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                                    val isWarming = warming == k
+                                    val fadeAlpha = smoothstep(DepthFadeStart, 1f, v)
+                                    val a = if (isWarming && fadeAlpha < WarmAlpha) WarmAlpha else fadeAlpha
+                                    compositingStrategy = when {
+                                        fadeAlpha > 0.001f && fadeAlpha < 0.999f -> CompositingStrategy.Offscreen
+                                        isWarming -> CompositingStrategy.ModulateAlpha
+                                        else -> CompositingStrategy.Auto
+                                    }
                                     val scale = TabPageMinScale + (1f - TabPageMinScale) * v
                                     scaleX = scale
                                     scaleY = scale
-                                    alpha = smoothstep(DepthFadeStart, 1f, v).coerceAtLeast(if (warming == k) WarmAlpha else 0f)
+                                    alpha = a
                                 }
                                 .drawWithContent {
-                                    drawRect(background)
+                                    // 仅在多页景深切换时为缩放卡片补底色，单页静止态由外层 MochiTabScaffold 绘制背景，避免全屏重复过绘
+                                    if (layers.size > 1) drawRect(background)
                                     drawContent()
                                 },
                         ) {
@@ -258,12 +333,18 @@ internal fun <T : Any> MochiTabPageTransition(
                 }
             },
         ) { measurables, constraints ->
-            val placeables = measurables.map { it.measure(constraints) }
+            // 只测量并摆放在场的页（后加入的画在上面）；留在组合里的离屏标签页不重复测量、不绘制、不接收触摸
+            val activeCount = layers.size
+            val activePlaceables = arrayOfNulls<androidx.compose.ui.layout.Placeable>(activeCount)
+            for (idx in 0 until activeCount) {
+                val i = shown.indexOf(layers[idx].key)
+                if (i in measurables.indices) {
+                    activePlaceables[idx] = measurables[i].measure(constraints)
+                }
+            }
             layout(constraints.maxWidth, constraints.maxHeight) {
-                // 只摆放在场的页（后加入的画在上面）；不摆放的页不绘制、不接收触摸
-                for (layer in layers) {
-                    val i = shown.indexOf(layer.key)
-                    if (i >= 0) placeables[i].place(0, 0)
+                for (idx in 0 until activeCount) {
+                    activePlaceables[idx]?.place(0, 0)
                 }
             }
         }
@@ -278,6 +359,7 @@ internal val LocalMochiTabPageShown = staticCompositionLocalOf<() -> Boolean> { 
 
 internal val AlwaysShown: () -> Boolean = { true }
 
+@Stable
 private class TabPageLayer<T>(val key: T, visible: Float = 1f) {
     /** 景深样式：这一页显出了多少（0 = 退到最远、看不见，1 = 到位） */
     val vis = Animatable(visible)

@@ -24,6 +24,10 @@ kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
 }
 
+composeCompiler {
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("gradle/compose-stability.conf"))
+}
+
 dependencies {
     api(project(":mochi-compose"))
     implementation(platform(libs.androidx.compose.bom))

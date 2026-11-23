@@ -10,10 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -102,7 +106,7 @@ public fun LazyListScope.mochiListSection(
         items(
             count = iv.count,
             key = { i -> "mochi-section:$key:" + (iv.key?.invoke(i)?.toString() ?: "#${iv.start + i}") },
-            contentType = { i -> SectionRowType(iv.contentType(i)) },
+            contentType = { i -> iv.contentType(i)?.let(::SectionRowType) ?: NullSectionRowType },
         ) { i ->
             val index = iv.start + i
             SectionSegment(
@@ -123,7 +127,32 @@ public fun LazyListScope.mochiListSection(
  * 每段卡片往下多画一截盖住项间距（[coverItemSpacing]），淡入的半透明图层只按条目自己的范围离屏画，
  * 多画的那截被切掉，淡入那几帧行间露缝、最后一行字被裁（转场途中数据才到时最明显）
  */
+@Immutable
 internal data class SectionRowType(val type: Any?)
+
+private val NullSectionRowType = SectionRowType(null)
+
+private val SectionCornerBoth: Shape = ContinuousRoundedRectangle(
+    MochiListDefaults.SectionCorner,
+    MochiListDefaults.SectionCorner,
+    MochiListDefaults.SectionCorner,
+    MochiListDefaults.SectionCorner,
+    MochiContinuity,
+)
+private val SectionCornerTop: Shape = ContinuousRoundedRectangle(
+    MochiListDefaults.SectionCorner,
+    MochiListDefaults.SectionCorner,
+    0.dp,
+    0.dp,
+    MochiContinuity,
+)
+private val SectionCornerBottom: Shape = ContinuousRoundedRectangle(
+    0.dp,
+    0.dp,
+    MochiListDefaults.SectionCorner,
+    MochiListDefaults.SectionCorner,
+    MochiContinuity,
+)
 
 private class SectionInterval(
     val start: Int,
@@ -160,46 +189,70 @@ private fun SectionSegment(
     content: @Composable () -> Unit,
 ) {
     val c = colors ?: MochiListDefaults.colors()
-    val r = MochiListDefaults.SectionCorner
-    val shape = remember(first, last) {
-        ContinuousRoundedRectangle(
-            if (first) r else 0.dp,
-            if (first) r else 0.dp,
-            if (last) r else 0.dp,
-            if (last) r else 0.dp,
-            MochiContinuity,
-        )
+    // 中间行用 RectangleShape，避免每行构造零圆角的 G2 Outline.Generic(Path)
+    val shape = when {
+        first && last -> SectionCornerBoth
+        first -> SectionCornerTop
+        last -> SectionCornerBottom
+        else -> RectangleShape
     }
-    val spacing = LocalMochiListItemSpacing.current
-    val link = remember(section, index) { SectionSegmentLink(section, index) }
-    DisposableEffect(link) { onDispose { link.release() } }
-    Column(Modifier.fillMaxWidth()) {
-        if (header != null) MochiListSectionHeader(header, color = c.secondary)
+    val spacing = if (last) 0.dp else LocalMochiListItemSpacing.current
+    val link = if (last) {
+        null
+    } else {
+        remember(section, index) { SectionSegmentLink(section, index) }.also {
+            DisposableEffect(it) { onDispose { it.release() } }
+        }
+    }
+    val cardModifier = if (last) Modifier else Modifier.coverItemSpacing(spacing)
+    if (header == null && footer == null) {
         ListCardImpl(
             // 不是末行：报告的高度少一段项间距，画出来的部分正好盖住和下一行之间那段间距，两行连成一张卡片
-            modifier = if (last) Modifier else Modifier.coverItemSpacing(spacing),
+            modifier = cardModifier,
             colors = c,
             showDividers = true,
-            animateHeight = true,
+            animateHeight = false,
             shape = shape,
             topEdge = first,
             bottomEdge = last,
-            link = if (last) null else link,
+            staticDividers = true,
+            link = link,
             content = content,
         )
-        if (footer != null) MochiListSectionFooter(footer, color = c.secondary)
+    } else {
+        Column(Modifier.fillMaxWidth()) {
+            if (header != null) MochiListSectionHeader(header, color = c.secondary)
+            ListCardImpl(
+                modifier = cardModifier,
+                colors = c,
+                showDividers = true,
+                animateHeight = false,
+                shape = shape,
+                topEdge = first,
+                bottomEdge = last,
+                staticDividers = true,
+                link = link,
+                content = content,
+            )
+            if (footer != null) MochiListSectionFooter(footer, color = c.secondary)
+        }
     }
 }
 
 private fun Modifier.coverItemSpacing(spacing: Dp): Modifier = layout { measurable, constraints ->
     val p = measurable.measure(constraints)
-    val cut = spacing.roundToPx().coerceIn(0, p.height)
-    layout(p.width, p.height - cut) { p.place(0, 0) }
+    val spacingPx = spacing.roundToPx().coerceAtLeast(0)
+    val cut = spacingPx.coerceAtMost(p.height)
+    // 当子项（如左滑删除收起）高度小于列表项间距时，向下贴齐下一段的顶边，避免卡片在收起后半段从中间撕裂露底
+    val shiftDown = (spacingPx - p.height).coerceAtLeast(0)
+    layout(p.width, p.height - cut) { p.place(0, shiftDown) }
 }
 
 /** 懒加载分组里相邻两段互相找到对方：段间分隔线要跟着下一段第一行的按下一起淡出 */
-internal class SectionSegmentLink(private val section: Any, private val index: Int) {
+@Stable
+internal class SectionSegmentLink(section: Any, index: Int) {
     private val self = SegmentKey(section, index)
+    private val nextKey = SegmentKey(section, index + 1)
     private var published: ListItemInfo? = null
 
     fun publish(info: ListItemInfo?) {
@@ -208,7 +261,7 @@ internal class SectionSegmentLink(private val section: Any, private val index: I
         if (info == null) Links.remove(self) else Links[self] = info
     }
 
-    fun next(): ListItemInfo? = Links[SegmentKey(section, index + 1)]
+    fun next(): ListItemInfo? = Links[nextKey]
 
     fun release() {
         if (published != null && Links[self] === published) Links.remove(self)

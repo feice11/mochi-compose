@@ -7,29 +7,39 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.anim.MochiMotions
+import ui.feice.mochi.basic.parts.drawG2Capsule
+import ui.feice.mochi.basic.parts.mochiPointerInput
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
+import ui.feice.mochi.shape.G2PathCache
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
@@ -80,36 +90,58 @@ public fun MochiDownloadButton(
     val style = MochiTheme.textStyles.subhead
     val ring = state is MochiDownloadState.Waiting || state is MochiDownloadState.Loading
     val text = if (state is MochiDownloadState.Done) doneLabel else label
-    val measurer = rememberTextMeasurer()
+    val measurer = rememberTextMeasurer(cacheSize = 0)
     val density = LocalDensity.current
-    val textWidth = remember(text, style, density) { with(density) { measurer.measure(text, style).size.width.toDp() } }
+    val fontResolver = LocalFontFamilyResolver.current
+    val textWidth = remember(text, style, density, fontResolver) {
+        with(density) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width.toDp() }
+    }
     val h = MochiDownloadButtonDefaults.Height
     val pillWidth = maxOf(textWidth + MochiDownloadButtonDefaults.HorizontalPadding * 2, h * 2.4f)
-    val width by animateDpAsState(
+    val widthState = animateDpAsState(
         if (ring) h else pillWidth,
-        spring(dampingRatio = 0.82f, stiffness = MochiMotions.stiffnessFor(0.4f)),
+        DownloadWidthSpring,
         label = "downloadWidth",
     )
     // 收成圈时底板淡掉，只剩进度圈
-    val plate by animateFloatAsState(if (ring) 0f else 1f, MochiMotions.responseSpring(0.3f, 1f), label = "downloadPlate")
+    val plateState = animateFloatAsState(if (ring) 0f else 1f, DownloadPlateSpring, label = "downloadPlate")
     val glow = rememberMochiGlowState()
+    val plateCache = remember { G2PathCache() }
+    val currentOnClick by rememberUpdatedState(onClick)
     val content = if (enabled) cs.primary else cs.onSurfaceVariant
     Box(
         modifier
-            .width(width)
-            .height(h)
-            .mochiPressDeform()
-            .clip(MochiCapsule)
-            .background(cs.secondaryContainer.copy(alpha = cs.secondaryContainer.alpha * plate))
-            .mochiPressGlow(glow, MochiCapsule)
-            .clickable(
-                remember {
-                    MutableInteractionSource()
+            .layout { measurable, _ ->
+                val wPx = widthState.value.roundToPx().coerceAtLeast(0)
+                val hPx = h.roundToPx().coerceAtLeast(0)
+                val placeable = measurable.measure(Constraints.fixed(wPx, hPx))
+                layout(wPx, hPx) { placeable.place(0, 0) }
+            }
+            .then(if (enabled) Modifier.mochiPressDeform() else Modifier)
+            .drawBehind {
+                val a = (cs.secondaryContainer.alpha * plateState.value).coerceIn(0f, 1f)
+                if (a > 0.001f) {
+                    drawG2Capsule(plateCache, Rect(Offset.Zero, size), cs.secondaryContainer.copy(alpha = 1f), alpha = a)
+                }
+            }
+            .then(if (enabled) Modifier.mochiPressGlow(glow, MochiCapsule) else Modifier)
+            .semantics {
+                role = Role.Button
+                if (!enabled) {
+                    disabled()
+                } else {
+                    onClick {
+                        currentOnClick()
+                        true
+                    }
+                }
+            }
+            .then(
+                if (enabled) {
+                    Modifier.mochiPointerInput(Unit) { detectTapGestures { currentOnClick() } }
+                } else {
+                    Modifier
                 },
-                indication = null,
-                enabled = enabled,
-                role = Role.Button,
-                onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -125,11 +157,15 @@ public fun MochiDownloadButton(
                 1 -> MochiProgressRing(null, size = h - 2.dp, strokeWidth = 2.5.dp)
 
                 2 -> MochiProgressRing((state as? MochiDownloadState.Loading)?.progress ?: 0f, size = h - 2.dp, strokeWidth = 2.5.dp) {
-                    Box(Modifier.size(9.dp).background(cs.primary, MochiRoundedRectangle(2.dp)))
+                    Box(Modifier.size(9.dp).background(cs.primary, StopSquareShape))
                 }
 
-                else -> Text(if (k == 3) doneLabel else label, style = style, color = content, maxLines = 1)
+                else -> Text(if (k == 3) doneLabel else label, style = style, color = content, maxLines = 1, softWrap = false)
             }
         }
     }
 }
+
+private val DownloadWidthSpring = spring<Dp>(dampingRatio = 0.82f, stiffness = MochiMotions.stiffnessFor(0.4f))
+private val DownloadPlateSpring = MochiMotions.responseSpring(0.3f, 1f)
+private val StopSquareShape = MochiRoundedRectangle(2.dp)

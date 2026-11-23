@@ -4,26 +4,41 @@
 package ui.feice.mochi.effect.elastic
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sign
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.mochiReduceMotion
 
 /*
  * 形变（iOS 式弹性）：
@@ -139,6 +154,7 @@ public class MochiRubberBandState internal constructor(
     private val pointer: () -> Offset?,
     private val bounds: () -> Rect,
     private val adjust: (Offset) -> Offset,
+    private val scope: CoroutineScope? = null,
 ) {
     /** 最多拉多远（px，软上限） */
     public var maxPull: Float by mutableStateOf(maxPull)
@@ -147,16 +163,36 @@ public class MochiRubberBandState internal constructor(
     public var pull: Offset by mutableStateOf(Offset.Zero)
         private set
 
-    /** 手指位置对应的目标拉动量 */
-    public val target: Offset get() = adjust(rubberBandPull(pointer(), bounds(), maxPull))
+    internal var reduceMotion: Boolean by mutableStateOf(false)
 
-    internal suspend fun run() {
+    private var job: Job? = null
+
+    /** 手指位置对应的目标拉动量 */
+    public val target: Offset get() = if (reduceMotion) Offset.Zero else adjust(rubberBandPull(pointer(), bounds(), maxPull))
+
+    /** 惰性启动弹簧回弹协程：仅在拖出边界时运行，回正收敛后退出，静止态 0 协程、0 ApplyObserver */
+    internal fun ensureRunning() {
+        if (job?.isActive == true) return
+        val s = scope ?: return
+        var launched: Job? = null
+        launched = s.launch {
+            try {
+                runUntilSettled()
+            } finally {
+                if (job === launched) job = null
+            }
+        }
+        job = launched
+    }
+
+    private suspend fun runUntilSettled() {
         val spring = MochiFollowSpring(0.24f, 0.86f)
+        spring.snapTo(pull)
         while (true) {
-            if (target == Offset.Zero && pull == Offset.Zero && spring.velocity == Offset.Zero) {
-                // 静止：等手指再拖出去
-                snapshotFlow { target }.first { it != Offset.Zero }
+            if (reduceMotion || (currentCoroutineContext()[MotionDurationScale]?.scaleFactor ?: 1f) <= 0f) {
                 spring.snapTo(Offset.Zero)
+                pull = Offset.Zero
+                return
             }
             val dt = spring.awaitFrameDelta()
             val t = target
@@ -164,10 +200,18 @@ public class MochiRubberBandState internal constructor(
             spring.response = if (back) 0.36f else 0.24f
             spring.dampingRatio = if (back) 0.7f else 0.86f
             val x = spring.step(t, dt)
-            if (back && (x - t).getDistance() < 0.3f && spring.velocity.getDistance() < 5f) {
-                spring.snapTo(Offset.Zero, resetClock = false)
+            if ((x - t).getDistance() < 0.3f && spring.velocity.getDistance() < 5f) {
+                if (back) {
+                    spring.snapTo(Offset.Zero)
+                    pull = Offset.Zero
+                    return
+                }
+                spring.snapTo(t)
+                pull = t
+                snapshotFlow { target != t || reduceMotion }.first { it }
+                continue
             }
-            pull = spring.value
+            pull = x
         }
     }
 }
@@ -184,23 +228,65 @@ public fun rememberMochiRubberBandState(
     adjust: (Offset) -> Offset = { it },
 ): MochiRubberBandState {
     val max = with(LocalDensity.current) { maxPull.toPx() }
-    val state = remember { MochiRubberBandState(max, pointer, bounds, adjust) }
+    val reduce = mochiReduceMotion()
+    val scope = rememberCoroutineScope()
+    val state = remember(scope) { MochiRubberBandState(max, pointer, bounds, adjust, scope) }
     state.maxPull = max
-    LaunchedEffect(state) { state.run() }
+    state.reduceMotion = reduce
+    val active by remember(state) { derivedStateOf { state.target != Offset.Zero } }
+    if (active) {
+        SideEffect { state.ensureRunning() }
+    }
     return state
 }
 
 /** 把元素按 [MochiRubberBandState.pull] 拉过去并拉长（见 [Rect.rubberStretched]） */
-public fun Modifier.mochiRubberBand(state: MochiRubberBandState): Modifier = graphicsLayer {
-    val w = size.width
-    val h = size.height
-    if (w <= 0f || h <= 0f) return@graphicsLayer
-    val r = Rect(0f, 0f, w, h).rubberStretched(state.pull)
-    transformOrigin = TransformOrigin(0f, 0f)
-    translationX = r.left
-    translationY = r.top
-    scaleX = r.width / w
-    scaleY = r.height / h
+public fun Modifier.mochiRubberBand(state: MochiRubberBandState): Modifier = this then RubberBandElement(state)
+
+private data class RubberBandElement(val state: MochiRubberBandState) : ModifierNodeElement<RubberBandNode>() {
+    override fun create(): RubberBandNode = RubberBandNode(state)
+
+    override fun update(node: RubberBandNode) {
+        node.state = state
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiRubberBand"
+    }
+}
+
+private class RubberBandNode(var state: MochiRubberBandState) :
+    Modifier.Node(),
+    LayoutModifierNode {
+    private val layerBlock: GraphicsLayerScope.() -> Unit = {
+        val p = state.pull
+        val w = size.width
+        val h = size.height
+        if (p == Offset.Zero || w <= 0f || h <= 0f) {
+            translationX = 0f
+            translationY = 0f
+            scaleX = 1f
+            scaleY = 1f
+        } else {
+            val r = Rect(0f, 0f, w, h).rubberStretched(p)
+            transformOrigin = TransformOrigin(0f, 0f)
+            translationX = r.left
+            translationY = r.top
+            scaleX = r.width / w
+            scaleY = r.height / h
+        }
+    }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val p = measurable.measure(constraints)
+        return layout(p.width, p.height) {
+            if (state.pull == Offset.Zero || p.width <= 0 || p.height <= 0) {
+                p.place(0, 0)
+            } else {
+                p.placeWithLayer(0, 0, layerBlock = layerBlock)
+            }
+        }
+    }
 }
 
 // ───────────────────────── 果冻 ─────────────────────────
@@ -221,14 +307,50 @@ public fun Modifier.mochiJelly(
     gel: Float = 0.6f,
     vertical: Boolean = true,
     origin: TransformOrigin = TransformOrigin.Center,
-): Modifier = graphicsLayer {
-    val s = jellyStretch(velocity()) * gel
-    transformOrigin = origin
-    if (vertical) {
-        scaleY = 1f + s
-        scaleX = jellyCrossScale(s)
-    } else {
-        scaleX = 1f + s
-        scaleY = jellyCrossScale(s)
+): Modifier = this then JellyElement(velocity, gel, vertical, origin)
+
+private data class JellyElement(val velocity: () -> Float, val gel: Float, val vertical: Boolean, val origin: TransformOrigin) :
+    ModifierNodeElement<JellyNode>() {
+    override fun create(): JellyNode = JellyNode(velocity, gel, vertical, origin)
+
+    override fun update(node: JellyNode) {
+        node.velocity = velocity
+        node.gel = gel
+        node.vertical = vertical
+        node.origin = origin
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiJelly"
+        properties["gel"] = gel
+        properties["vertical"] = vertical
+    }
+}
+
+private class JellyNode(var velocity: () -> Float, var gel: Float, var vertical: Boolean, var origin: TransformOrigin) :
+    Modifier.Node(),
+    LayoutModifierNode {
+    private val layerBlock: GraphicsLayerScope.() -> Unit = {
+        val s = if (gel == 0f) 0f else jellyStretch(velocity()) * gel
+        transformOrigin = origin
+        if (vertical) {
+            scaleY = 1f + s
+            scaleX = jellyCrossScale(s)
+        } else {
+            scaleX = 1f + s
+            scaleY = jellyCrossScale(s)
+        }
+    }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val p = measurable.measure(constraints)
+        return layout(p.width, p.height) {
+            val s = if (gel == 0f) 0f else jellyStretch(velocity()) * gel
+            if (abs(s) < 1e-4f) {
+                p.place(0, 0)
+            } else {
+                p.placeWithLayer(0, 0, layerBlock = layerBlock)
+            }
+        }
     }
 }

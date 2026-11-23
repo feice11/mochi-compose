@@ -6,7 +6,7 @@
 package ui.feice.mochi.list
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -28,22 +29,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import ui.feice.mochi.anim.MochiTransition
 import ui.feice.mochi.basic.Text
@@ -73,7 +83,32 @@ public class MochiListColors(
     public val destructive: Color,
     /** 行尾 › 的颜色（iOS 用三级文字色，比次要文字更淡） */
     public val chevron: Color = secondary.copy(alpha = 0.7f),
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is MochiListColors) return false
+        return container == other.container &&
+            content == other.content &&
+            secondary == other.secondary &&
+            divider == other.divider &&
+            highlight == other.highlight &&
+            accent == other.accent &&
+            destructive == other.destructive &&
+            chevron == other.chevron
+    }
+
+    override fun hashCode(): Int {
+        var result = container.hashCode()
+        result = 31 * result + content.hashCode()
+        result = 31 * result + secondary.hashCode()
+        result = 31 * result + divider.hashCode()
+        result = 31 * result + highlight.hashCode()
+        result = 31 * result + accent.hashCode()
+        result = 31 * result + destructive.hashCode()
+        result = 31 * result + chevron.hashCode()
+        return result
+    }
+}
 
 /**
  * 行首图标的两种样子（iOS 列表里的两种）：
@@ -144,7 +179,9 @@ public object MochiListDefaults {
         chevron: Color = LocalMochiControlPalette.current?.listChevron
             ?.takeUnless { it == Color.Unspecified }
             ?: MochiTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-    ): MochiListColors = MochiListColors(container, content, secondary, divider, highlight, accent, destructive, chevron)
+    ): MochiListColors = remember(container, content, secondary, divider, highlight, accent, destructive, chevron) {
+        MochiListColors(container, content, secondary, divider, highlight, accent, destructive, chevron)
+    }
 }
 
 /**
@@ -161,7 +198,7 @@ internal class ListCardClip {
     /** 子行已有逐帧高度动画时，当前卡片直接跟随；其他卡片不受影响。 */
     var heightAnimations by mutableIntStateOf(0)
 
-    fun needed(): Boolean = SwipeRowGroup.openCount > 0 || infos.any { (it?.press?.value ?: 0f) > 0f }
+    fun needed(): Boolean = SwipeRowGroup.openCount > 0 || infos.any { (it?.pressValue ?: 0f) > 0f }
 }
 
 // 卡片内部的布局协作：子行删除时只通知最近的卡片，避免全局关闭其他卡片的高度动画。
@@ -182,8 +219,16 @@ internal class ListItemInfo(val inset: Dp, val leading: Boolean = false, var end
     /** Standard rows include corner safety in every row's own height, not only the shell edges. */
     var ownsVerticalInsets: Boolean = false
 
-    /** 按下高亮的强度 0..1 */
-    val press = Animatable(0f)
+    /** 按下高亮的强度 0..1：首次按下时才懒创建 Animatable，静止列表行零 Animatable / MutatorMutex 分配 */
+    private var pressAnim: Animatable<Float, AnimationVector1D>? by mutableStateOf(null)
+
+    /** 按压手势写入与旧调用方入口；首次访问时创建 Animatable */
+    val press: Animatable<Float, AnimationVector1D>
+        get() = pressAnim ?: Animatable(0f).also { pressAnim = it }
+
+    /** 零分配只读高亮值：未按下过的行直接返回 0f，不触发 Animatable 分配 */
+    val pressValue: Float
+        get() = pressAnim?.value ?: 0f
 
     /** 卡片在这一项上方 / 下方额外留的白（首末行离圆角远一点），按下高亮要一起盖住（px） */
     var extraTop by mutableFloatStateOf(0f)
@@ -302,9 +347,10 @@ public fun MochiListCard(
     animateHeight: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val shape = remember { MochiRoundedRectangle(MochiListDefaults.SectionCorner) }
-    ListCardImpl(colors, showDividers, animateHeight, shape, modifier, content = content)
+    ListCardImpl(colors, showDividers, animateHeight, ListCardShape, modifier, content = content)
 }
+
+private val ListCardShape: Shape = MochiRoundedRectangle(MochiListDefaults.SectionCorner)
 
 /**
  * 卡片的实现。懒加载分组（[mochiListSection]）里每一行是卡片的一段：[topEdge] / [bottomEdge] 只在首段 / 末段留首末白，
@@ -315,174 +361,322 @@ internal fun ListCardImpl(
     colors: MochiListColors,
     showDividers: Boolean,
     animateHeight: Boolean,
-    shape: androidx.compose.ui.graphics.Shape,
+    shape: Shape,
     modifier: Modifier = Modifier,
     topEdge: Boolean = true,
     bottomEdge: Boolean = true,
+    staticDividers: Boolean = false,
     link: SectionSegmentLink? = null,
     content: @Composable () -> Unit,
 ) {
-    // 拖动排序时分隔线淡出，不横在浮起的行上
-    val dividerAlpha by animateFloatAsState(if (showDividers) 1f else 0f, tween(160), label = "dividers")
+    // 拖动排序时分隔线淡出，不横在浮起的行上；静态卡片在 showDividers 未变更前直接返回常量，零 Animatable / LaunchedEffect 开销
+    val dividerHolder = if (staticDividers) null else remember { DividerAlphaHolder(showDividers) }
+    val dividerAnim = if (dividerHolder != null && (dividerHolder.anim != null || showDividers != dividerHolder.initial)) {
+        dividerHolder.anim ?: Animatable(if (dividerHolder.initial) 1f else 0f).also { dividerHolder.anim = it }
+    } else {
+        null
+    }
+    if (dividerAnim != null) {
+        LaunchedEffect(showDividers) {
+            dividerAnim.animateTo(if (showDividers) 1f else 0f, DividerFadeSpec)
+        }
+    }
+    val staticDividerAlpha = if (showDividers) 1f else 0f
     val lines = remember { DividerLines() }
     val divider = colors.divider
-    val cornerPx = with(LocalDensity.current) { MochiListDefaults.SectionCorner.toPx() }
-    val maxEdgePx = with(LocalDensity.current) { MaxEdgeInset.toPx() }
-    val padPx = with(LocalDensity.current) { MochiListDefaults.RowPadding.toPx() }
-    val leadPx = with(LocalDensity.current) { MochiListDefaults.LeadingSize.toPx() }
-    val clip = remember { ListCardClip() }
-    val heightSpec = MochiTransition.current.spatial.let { remember(it) { it.forPixels() } }
+    val density = LocalDensity.current
+    val cornerPx = with(density) { MochiListDefaults.SectionCorner.toPx() }
+    val maxEdgePx = with(density) { MaxEdgeInset.toPx() }
+    val padPx = with(density) { MochiListDefaults.RowPadding.toPx() }
+    val leadPx = with(density) { MochiListDefaults.LeadingSize.toPx() }
+    val needsClip = shape !== RectangleShape || animateHeight
+    val clip = if (needsClip) remember { ListCardClip() } else null
+    val heightModifier = if (animateHeight && clip != null) {
+        val heightSpec = MochiTransition.current.spatial.let { remember(it) { it.forPixels() } }
+        Modifier.mochiAnimateHeight(shape, enabled = clip.heightAnimations == 0, animationSpec = heightSpec)
+    } else {
+        Modifier
+    }
     Layout(
-        content = { CompositionLocalProvider(LocalListCardClip provides clip, LocalListRowGeometry provides null, content = content) },
+        content = {
+            if (clip != null) {
+                CompositionLocalProvider(LocalListCardClip provides clip, LocalListRowGeometry provides null, content = content)
+            } else if (LocalListRowGeometry.current != null) {
+                CompositionLocalProvider(LocalListRowGeometry provides null, content = content)
+            } else {
+                content()
+            }
+        },
         modifier = modifier
             .fillMaxWidth()
-            // 只在需要时裁切（见 ListCardClip）：滚动时不裁，不用每帧重做遮罩
-            .graphicsLayer {
-                this.shape = shape
-                this.clip = clip.needed()
-            }
+            // 只在需要裁切时挂载图层（见 ListCardClip）：滚动静止态零 RenderNode，中间矩形分段完全跳过 ListCardClipElement
+            .then(if (clip != null && shape !== RectangleShape) ListCardClipElement(shape, clip) else Modifier)
             .background(colors.container, shape)
             // 高度用这一层的转场（默认 Settle），和展开箭头等同一次变化的参与者同起同停
-            .mochiAnimateHeight(shape, enabled = animateHeight && clip.heightAnimations == 0, animationSpec = heightSpec)
+            .then(heightModifier)
             // 分隔线画在内容上面：左滑行之类自带不透明底色的行不会把线盖住
             .drawWithContent {
                 drawContent()
+                val dividerAlpha = dividerAnim?.value ?: staticDividerAlpha
+                if (dividerAlpha <= 0f) return@drawWithContent
                 val w = 0.5.dp.toPx()
-                lines.items.forEach { l ->
+                val items = lines.items
+                for (idx in items.indices) {
+                    val l = items[idx]
                     // 分隔线右端到卡片边（iOS）
                     val end = size.width - (l.above?.end ?: 0.dp).toPx()
-                    val hidden = max(l.above?.press?.value ?: 0f, l.below?.press?.value ?: 0f)
-                    if (hidden >= 0.999f) return@forEach
+                    val hidden = max(l.above?.pressValue ?: 0f, l.below?.pressValue ?: 0f)
+                    if (hidden >= 0.999f) continue
+                    val scaleAlpha = min(l.above?.heightScale?.invoke() ?: 1f, l.below?.heightScale?.invoke() ?: 1f).coerceIn(0f, 1f)
+                    val a = (1f - hidden) * dividerAlpha * scaleAlpha
                     val x = l.inset.toPx()
-                    if (end > x &&
-                        dividerAlpha > 0f
-                    ) {
-                        drawRect(divider, Offset(x, l.y - w / 2f), Size(end - x, w), alpha = (1f - hidden) * dividerAlpha)
+                    if (end > x && a > 0.001f) {
+                        drawRect(divider, Offset(x, l.y - w / 2f), Size(end - x, w), alpha = a)
                     }
                 }
                 // 懒加载分组：和下一段之间的线画在这一段底边，起点跟这一段最后一行的文字
-                if (link != null && dividerAlpha > 0f) {
+                if (link != null) {
                     val above = lines.last
-                    val hidden = max(above?.press?.value ?: 0f, link.next()?.press?.value ?: 0f)
+                    val nextInfo = link.next()
+                    val hidden = max(above?.pressValue ?: 0f, nextInfo?.pressValue ?: 0f)
+                    val scaleAlpha = min(above?.heightScale?.invoke() ?: 1f, nextInfo?.heightScale?.invoke() ?: 1f).coerceIn(0f, 1f)
+                    val a = (1f - hidden) * dividerAlpha * scaleAlpha
                     val x = (above?.inset ?: MochiListDefaults.RowPadding).toPx()
                     val end = size.width - (above?.end ?: 0.dp).toPx()
-                    if (hidden < 0.999f && end > x) {
-                        drawRect(divider, Offset(x, size.height - w), Size(end - x, w), alpha = (1f - hidden) * dividerAlpha)
+                    if (a > 0.001f && end > x) {
+                        drawRect(divider, Offset(x, size.height - w), Size(end - x, w), alpha = a)
                     }
                 }
             },
     ) { measurables, constraints ->
+        val n = measurables.size
         val c = constraints.copy(minHeight = 0)
-        val placeables = measurables.map { it.measure(c) }
-        val infos = measurables.map { it.layoutId as? ListItemInfo }
-        if (clip.infos != infos) clip.infos = infos
         val width = constraints.maxWidth
-
-        // A multiline text block has two optical anchors; a centered switch and a leading tile
-        // have different corner centers. Read actual child guides, including through swipe wrappers.
-        fun edge(i: Int, bottom: Boolean): Int {
-            if (infos[i]?.ownsVerticalInsets == true) return 0
-            val p = placeables[i]
-            val h = if (infos[i]?.heightScale != null) infos[i]!!.fullHeight else p.height
-            val anchor = p[if (bottom) ConcentricBottom else ConcentricTop]
-            if (anchor != AlignmentLine.Unspecified) {
-                val distance = if (bottom) h - anchor else anchor
-                return ceil((cornerPx - distance).coerceAtLeast(0f)).toInt()
-            }
-            // Arbitrary custom content keeps the legacy fallback; standard rows publish guides.
-            val fallback = if (infos[i]?.leading == true) padPx - (h - leadPx) / 2f else cornerPx - h / 2f
-            return fallback.coerceIn(0f, maxEdgePx).roundToInt()
-        }
-        val first = placeables.indexOfFirst { it.height > 0 }
-        val last = placeables.indexOfLast { it.height > 0 }
-        // 首末留白也跟随行的收起比例：两行变一行、最后一行变零时不会残留 8/16dp 再瞬间消失。
-        val scales = placeables.indices.map { i ->
-            infos[i]?.heightScale?.invoke()?.coerceIn(0f, 1f) ?: if (placeables[i].height > 0) 1f else 0f
-        }
-        val topEdges = placeables.indices.map { edge(it, false) }
-        val bottomEdges = placeables.indices.map { edge(it, true) }
-        val (naturalTop, naturalBottom) = listCardEdgeInsets(topEdges, scales, bottomEdges)
-        val controls = infos.filterNotNull().filter { it.controlBaseEnd >= 0 }
-        val topControlGaps = infos.map { info ->
-            if (info != null && info.controlBaseEnd >= 0) naturalTop + info.controlTop else 0
-        }
-        val bottomControlGaps = infos.mapIndexed { i, info ->
-            if (info != null && info.controlBaseEnd >= 0) {
-                val h = if (info.heightScale != null) info.fullHeight else placeables[i].height
-                naturalBottom + h - info.controlBottom
-            } else {
-                0
-            }
-        }
-        val (topGap, bottomGap) = listCardEdgeInsets(topControlGaps, scales, bottomControlGaps)
-        var absentBefore = 1f
-        var topControlWeight = 0f
-        infos.forEachIndexed { i, info ->
-            if (info != null && info.controlBaseEnd >= 0) topControlWeight += scales[i] * absentBefore
-            absentBefore *= 1f - scales[i]
-        }
-        var absentAfter = 1f
-        var bottomControlWeight = 0f
-        for (i in infos.indices.reversed()) {
-            if (infos[i]?.controlBaseEnd?.let { it >= 0 } == true) bottomControlWeight += scales[i] * absentAfter
-            absentAfter *= 1f - scales[i]
-        }
-        val controlEnd = if (controls.isEmpty()) {
-            -1
-        } else {
-            max(max(topGap, bottomGap), controls.maxOf { it.controlBaseEnd })
-                .coerceAtMost(controls.minOf { it.controlBudget })
-        }
-        // Keep all rows on their own centerline. Match boundary whitespace by extending the
-        // shell and resolving one shared end gutter, instead of moving first/last controls.
-        val top = if (!topEdge || infos.getOrNull(first)?.ownsVerticalInsets ==
-            true
-        ) {
-            0
-        } else {
-            naturalTop + (controlEnd * topControlWeight - topGap).coerceAtLeast(0f).roundToInt()
-        }
-        val bottom = if (!bottomEdge || infos.getOrNull(last)?.ownsVerticalInsets ==
-            true
-        ) {
-            0
-        } else {
-            naturalBottom + (controlEnd * bottomControlWeight - bottomGap).coerceAtLeast(0f).roundToInt()
-        }
-        infos.forEachIndexed { i, info ->
-            info ?: return@forEachIndexed
-            info.extraTop = if (i == first) top.toFloat() else 0f
-            info.roundTop = topEdge && i == first
-            info.roundBottom = bottomEdge && i == last
-            info.extraBottom = if (i == last) bottom.toFloat() else 0f
-            info.resolvedControlEnd = if (info.controlBaseEnd >= 0) controlEnd else -1
-        }
-        val height = (placeables.sumOf { it.height } + top + bottom).coerceIn(constraints.minHeight, constraints.maxHeight)
-        val list = ArrayList<DividerLine>()
-        var y = top
-        var prev = -1
-        placeables.forEachIndexed { i, p ->
-            if (p.height > 0) {
-                if (prev >= 0) {
-                    val above = infos[prev]
-                    list += DividerLine(y.toFloat(), above?.inset ?: MochiListDefaults.RowPadding, above, infos[i])
+        // 懒加载分组中间行单子项零分配快路径：不分配数组 / 列表，不写 clip.infos
+        if (n == 1 && clip == null && !topEdge && !bottomEdge) {
+            val m0 = measurables[0]
+            val p0 = m0.measure(c)
+            val info0 = m0.layoutId as? ListItemInfo
+            if (info0 == null || info0.controlBaseEnd < 0) {
+                if (info0 != null) {
+                    info0.extraTop = 0f
+                    info0.extraBottom = 0f
+                    info0.roundTop = false
+                    info0.roundBottom = false
+                    info0.resolvedControlEnd = -1
                 }
-                prev = i
+                if (lines.items.isNotEmpty()) lines.items = emptyList()
+                lines.last = info0
+                link?.publish(info0)
+                val height = p0.height.coerceIn(constraints.minHeight, constraints.maxHeight)
+                return@Layout layout(width, height) { p0.place(0, 0) }
             }
-            y += p.height
         }
-        if (list != lines.items) lines.items = list
+        val placeables = arrayOfNulls<Placeable>(n)
+        val prevInfos = clip?.infos
+        var infosSame = prevInfos != null && prevInfos.size == n
+        var first = -1
+        var last = -1
+        var activeCount = 0
+        var childrenHeight = 0
+        var allOwnInsets = true
+        var hasControls = false
+        for (i in 0 until n) {
+            val m = measurables[i]
+            val p = m.measure(c)
+            placeables[i] = p
+            val info = m.layoutId as? ListItemInfo
+            if (infosSame && prevInfos!![i] !== info) infosSame = false
+            if (p.height > 0) {
+                if (first < 0) first = i
+                last = i
+                activeCount++
+                childrenHeight += p.height
+            }
+            if (p.height > 0 || info?.heightScale != null) {
+                if (info?.ownsVerticalInsets != true) allOwnInsets = false
+            }
+            if (info != null && info.controlBaseEnd >= 0) hasControls = true
+        }
+        val infos = if (clip != null) {
+            if (infosSame) {
+                prevInfos!!
+            } else {
+                List(n) { measurables[it].layoutId as? ListItemInfo }.also { clip.infos = it }
+            }
+        } else {
+            List(n) { measurables[it].layoutId as? ListItemInfo }
+        }
+
+        val top: Int
+        val bottom: Int
+        if (n == 0 || (allOwnInsets && !hasControls)) {
+            // 标准行自带完整上下留白且无自定义边缘控件预算：零数组分配快路径
+            top = 0
+            bottom = 0
+            var absentBefore = 1f
+            for (i in 0 until n) {
+                val info = infos[i]
+                val p = placeables[i]!!
+                val s = info?.heightScale?.invoke()?.coerceIn(0f, 1f) ?: if (p.height > 0) 1f else 0f
+                if (info != null) {
+                    info.extraTop = 0f
+                    info.extraBottom = 0f
+                    info.roundTop = topEdge && s > 0f && absentBefore > 0.001f
+                    info.resolvedControlEnd = -1
+                }
+                absentBefore *= 1f - s
+            }
+            var absentAfter = 1f
+            for (i in n - 1 downTo 0) {
+                val info = infos[i]
+                val p = placeables[i]!!
+                val s = info?.heightScale?.invoke()?.coerceIn(0f, 1f) ?: if (p.height > 0) 1f else 0f
+                if (info != null) {
+                    info.roundBottom = bottomEdge && s > 0f && absentAfter > 0.001f
+                }
+                absentAfter *= 1f - s
+            }
+        } else {
+            // A multiline text block has two optical anchors; a centered switch and a leading tile
+            // have different corner centers. Read actual child guides, including through swipe wrappers.
+            fun edge(i: Int, isBottom: Boolean): Int {
+                val info = infos[i]
+                if (info?.ownsVerticalInsets == true) return 0
+                val p = placeables[i]!!
+                val h = if (info?.heightScale != null) info.fullHeight else p.height
+                val anchor = p[if (isBottom) ConcentricBottom else ConcentricTop]
+                if (anchor != AlignmentLine.Unspecified) {
+                    val distance = if (isBottom) h - anchor else anchor
+                    return ceil((cornerPx - distance).coerceAtLeast(0f)).toInt()
+                }
+                // Arbitrary custom content keeps the legacy fallback; standard rows publish guides.
+                val fallback = if (info?.leading == true) padPx - (h - leadPx) / 2f else cornerPx - h / 2f
+                return fallback.coerceIn(0f, maxEdgePx).roundToInt()
+            }
+            val scales = List(n) { i ->
+                infos[i]?.heightScale?.invoke()?.coerceIn(0f, 1f) ?: if (placeables[i]!!.height > 0) 1f else 0f
+            }
+            val topEdges = List(n) { edge(it, false) }
+            val bottomEdges = List(n) { edge(it, true) }
+            val (naturalTop, naturalBottom) = listCardEdgeInsets(topEdges, scales, bottomEdges)
+            var controlEnd = -1
+            var topGap = 0
+            var bottomGap = 0
+            var topControlWeight = 0f
+            var bottomControlWeight = 0f
+            if (hasControls) {
+                var maxBaseEnd = 0
+                var minBudget = Int.MAX_VALUE
+                val topControlGaps = List(n) { i ->
+                    val info = infos[i]
+                    if (info != null && info.controlBaseEnd >= 0) {
+                        maxBaseEnd = max(maxBaseEnd, info.controlBaseEnd)
+                        minBudget = min(minBudget, info.controlBudget)
+                        naturalTop + info.controlTop
+                    } else {
+                        0
+                    }
+                }
+                val bottomControlGaps = List(n) { i ->
+                    val info = infos[i]
+                    if (info != null && info.controlBaseEnd >= 0) {
+                        val h = if (info.heightScale != null) info.fullHeight else placeables[i]!!.height
+                        naturalBottom + h - info.controlBottom
+                    } else {
+                        0
+                    }
+                }
+                val gaps = listCardEdgeInsets(topControlGaps, scales, bottomControlGaps)
+                topGap = gaps.first
+                bottomGap = gaps.second
+                var absentBefore = 1f
+                for (i in 0 until n) {
+                    val info = infos[i]
+                    if (info != null && info.controlBaseEnd >= 0) topControlWeight += scales[i] * absentBefore
+                    absentBefore *= 1f - scales[i]
+                }
+                var absentAfter = 1f
+                for (i in n - 1 downTo 0) {
+                    val info = infos[i]
+                    if (info != null && info.controlBaseEnd >= 0) bottomControlWeight += scales[i] * absentAfter
+                    absentAfter *= 1f - scales[i]
+                }
+                controlEnd = max(max(topGap, bottomGap), maxBaseEnd).coerceAtMost(minBudget)
+            }
+            // Keep all rows on their own centerline. Match boundary whitespace by extending the
+            // shell and resolving one shared end gutter, instead of moving first/last controls.
+            top = if (!topEdge || infos.getOrNull(first)?.ownsVerticalInsets == true) {
+                0
+            } else {
+                naturalTop + (controlEnd * topControlWeight - topGap).coerceAtLeast(0f).roundToInt()
+            }
+            bottom = if (!bottomEdge || infos.getOrNull(last)?.ownsVerticalInsets == true) {
+                0
+            } else {
+                naturalBottom + (controlEnd * bottomControlWeight - bottomGap).coerceAtLeast(0f).roundToInt()
+            }
+            var absentBefore = 1f
+            for (i in 0 until n) {
+                val info = infos[i]
+                val s = scales[i]
+                if (info != null) {
+                    info.extraTop = if (info.ownsVerticalInsets || s <= 0f) 0f else top * absentBefore
+                    info.roundTop = topEdge && s > 0f && absentBefore > 0.001f
+                    info.resolvedControlEnd = if (info.controlBaseEnd >= 0) controlEnd else -1
+                }
+                absentBefore *= 1f - s
+            }
+            var absentAfter = 1f
+            for (i in n - 1 downTo 0) {
+                val info = infos[i]
+                val s = scales[i]
+                if (info != null) {
+                    info.extraBottom = if (info.ownsVerticalInsets || s <= 0f) 0f else bottom * absentAfter
+                    info.roundBottom = bottomEdge && s > 0f && absentAfter > 0.001f
+                }
+                absentAfter *= 1f - s
+            }
+        }
+        val height = (childrenHeight + top + bottom).coerceIn(constraints.minHeight, constraints.maxHeight)
+        if (activeCount <= 1) {
+            if (lines.items.isNotEmpty()) lines.items = emptyList()
+        } else {
+            val list = ArrayList<DividerLine>(activeCount - 1)
+            var y = top
+            var prev = -1
+            for (i in 0 until n) {
+                val p = placeables[i]!!
+                if (p.height > 0) {
+                    if (prev >= 0) {
+                        val above = infos[prev]
+                        list += DividerLine(y.toFloat(), above?.inset ?: MochiListDefaults.RowPadding, above, infos[i])
+                    }
+                    prev = i
+                }
+                y += p.height
+            }
+            if (list != lines.items) lines.items = list
+        }
         lines.last = infos.getOrNull(last)
         link?.publish(infos.getOrNull(first))
         layout(width, height) {
             var at = top
-            placeables.forEach {
-                it.place(0, at)
-                at += it.height
+            for (i in 0 until n) {
+                val p = placeables[i]!!
+                p.place(0, at)
+                at += p.height
             }
         }
     }
 }
+
+@Stable
+private class DividerAlphaHolder(val initial: Boolean) {
+    var anim: Animatable<Float, AnimationVector1D>? = null
+}
+
+private val DividerFadeSpec = tween<Float>(160)
 
 private data class DividerLine(val y: Float, val inset: Dp, val above: ListItemInfo?, val below: ListItemInfo?)
 
@@ -492,6 +686,39 @@ private class DividerLines {
 
     /** 最后一行（懒加载分组画段间分隔线用） */
     var last: ListItemInfo? = null
+}
+
+private data class ListCardClipElement(val cardShape: Shape, val cardClip: ListCardClip) : ModifierNodeElement<ListCardClipNode>() {
+    override fun create(): ListCardClipNode = ListCardClipNode(cardShape, cardClip)
+
+    override fun update(node: ListCardClipNode) {
+        node.cardShape = cardShape
+        node.cardClip = cardClip
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "mochiListCardClip"
+    }
+}
+
+private class ListCardClipNode(var cardShape: Shape, var cardClip: ListCardClip) :
+    Modifier.Node(),
+    LayoutModifierNode {
+    private val layerBlock: GraphicsLayerScope.() -> Unit = {
+        shape = cardShape
+        clip = true
+    }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val p = measurable.measure(constraints)
+        return layout(p.width, p.height) {
+            if (cardClip.needed()) {
+                p.placeWithLayer(0, 0, layerBlock = layerBlock)
+            } else {
+                p.place(0, 0)
+            }
+        }
+    }
 }
 
 /** 文字到行尾（iOS 内容和附件之间 16） */

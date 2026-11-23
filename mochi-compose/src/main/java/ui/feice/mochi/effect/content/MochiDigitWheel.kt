@@ -25,13 +25,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.acos
 import kotlin.math.asin
 import kotlin.math.atan
 import kotlin.math.atan2
@@ -48,6 +53,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.mochiReduceMotion
 import ui.feice.mochi.utils.HalfPi
 import ui.feice.mochi.utils.smoothstep
 
@@ -117,33 +123,53 @@ internal class DigitGlyphs(
     val pitch: Float,
 )
 
+private data class DigitGlyphKey(
+    val style: TextStyle,
+    val density: Float,
+    val fontScale: Float,
+    val layoutDirection: LayoutDirection,
+    val fontFamilyResolver: FontFamily.Resolver,
+)
+
+private const val DigitGlyphCacheSize = 24
+
+private val DigitGlyphCache = object : LinkedHashMap<DigitGlyphKey, DigitGlyphs>(DigitGlyphCacheSize, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<DigitGlyphKey, DigitGlyphs>?): Boolean = size > DigitGlyphCacheSize
+}
+
 @Composable
 internal fun rememberDigitGlyphs(style: TextStyle): DigitGlyphs {
-    val measurer = rememberTextMeasurer(cacheSize = 0)
-    return remember(style, measurer) {
-        val layouts = Array(10) { measurer.measure(it.toString(), style, maxLines = 1) }
-        var top = Float.MAX_VALUE
-        var bottom = -Float.MAX_VALUE
-        for (l in layouts) {
-            val b = l.getPathForRange(0, 1).getBounds()
-            if (b.height > 0f) {
-                top = minOf(top, b.top)
-                bottom = maxOf(bottom, b.bottom)
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val resolver = LocalFontFamilyResolver.current
+    return remember(style, density.density, density.fontScale, layoutDirection, resolver) {
+        val key = DigitGlyphKey(style, density.density, density.fontScale, layoutDirection, resolver)
+        synchronized(DigitGlyphCache) { DigitGlyphCache[key] } ?: run {
+            val measurer = TextMeasurer(resolver, density, layoutDirection, cacheSize = 0)
+            val layouts = Array(10) { measurer.measure(it.toString(), style, maxLines = 1) }
+            var top = Float.MAX_VALUE
+            var bottom = -Float.MAX_VALUE
+            for (l in layouts) {
+                val b = l.getPathForRange(0, 1).getBounds()
+                if (b.height > 0f) {
+                    top = minOf(top, b.top)
+                    bottom = maxOf(bottom, b.bottom)
+                }
             }
+            val height = layouts[0].size.height
+            if (top > bottom) {
+                top = height * 0.25f
+                bottom = height * 0.75f
+            }
+            DigitGlyphs(
+                layouts = layouts,
+                width = layouts.maxOf { it.size.width },
+                height = height,
+                inkCenter = (top + bottom) / 2f,
+                inkHalf = (bottom - top) / 2f,
+                pitch = (bottom - top) * WheelPitchPerInk,
+            ).also { synchronized(DigitGlyphCache) { DigitGlyphCache[key] = it } }
         }
-        val height = layouts[0].size.height
-        if (top > bottom) {
-            top = height * 0.25f
-            bottom = height * 0.75f
-        }
-        DigitGlyphs(
-            layouts = layouts,
-            width = layouts.maxOf { it.size.width },
-            height = height,
-            inkCenter = (top + bottom) / 2f,
-            inkHalf = (bottom - top) / 2f,
-            pitch = (bottom - top) * WheelPitchPerInk,
-        )
     }
 }
 
@@ -174,10 +200,13 @@ private class WheelTrack(var digit: Int) {
  * [born] = 这一位是后来才出现的（从下面升上来、宽度从 0 长出来），否则一开始就停在位上
  */
 @Composable
-internal fun CounterWheel(digit: Int?, direction: Int, born: Boolean, glyphs: DigitGlyphs, color: Color) {
+internal fun CounterWheel(digit: Int?, direction: Int, born: Boolean, glyphs: DigitGlyphs, color: Color, onRetire: () -> Unit = {}) {
     val track = remember { WheelTrack(digit ?: 0) }
     val target = track.push(digit, direction)
     val absent = digit == null
+    val reduceMotion = mochiReduceMotion()
+    val currentReduce by rememberUpdatedState(reduceMotion)
+    val currentOnRetire by rememberUpdatedState(onRetire)
     val roll = remember { Animatable(target.toFloat()) }
     val shift = remember { Animatable(if (born || absent) 1f else 0f) }
     val presence = remember { Animatable(if (born || absent) 0f else 1f) }
@@ -199,6 +228,11 @@ internal fun CounterWheel(digit: Int?, direction: Int, born: Boolean, glyphs: Di
 
     // 弹簧按「还剩几格 + 现在多快」现算：滚一格和滚九格回弹一样大，连按时动量接着走
     LaunchedEffectTarget(target.toFloat()) { t ->
+        if (currentReduce) {
+            hold.clear()
+            roll.snapTo(t)
+            return@LaunchedEffectTarget
+        }
         // 格子在视口外（新生 / 退场途中）：轮盘直接落到目标，免得升上来的时候当着人转
         if (abs(shift.value) > WheelFadeEndCells) roll.snapTo(t)
         // 新目标要倒着走：速度必然过零，先冻住当前的运动量，模糊不会在那一瞬间闪回清晰
@@ -206,10 +240,24 @@ internal fun CounterWheel(digit: Int?, direction: Int, born: Boolean, glyphs: Di
         roll.animateTo(t, retargetSpring(t - roll.value, roll.velocity))
     }
     LaunchedEffectTarget(if (absent) RetireShift else 0f) { t ->
+        if (currentReduce) {
+            hold.clear()
+            shift.snapTo(t)
+            return@LaunchedEffectTarget
+        }
         if ((t - shift.value) * shift.velocity < 0f) hold.freeze(abs(roll.velocity) + abs(shift.velocity))
         shift.animateTo(t, retargetSpring(t - shift.value, shift.velocity))
     }
-    LaunchedEffectTarget(if (absent) 0f else 1f) { presence.animateTo(it, DigitSlideSpring) }
+    LaunchedEffectTarget(if (absent) 0f else 1f) { t ->
+        if (currentReduce) {
+            presence.snapTo(t)
+        } else {
+            presence.animateTo(t, DigitSlideSpring)
+        }
+        if (t == 0f && retiring) {
+            currentOnRetire()
+        }
+    }
 
     val density = LocalDensity.current
     val w = glyphs.width
@@ -307,7 +355,7 @@ private const val MinDamping = 0.40f
 private const val MaxDamping = 0.93f
 private const val MinStiffness = 8f
 private const val MaxStiffness = 8000f
-private const val SolverSteps = 32
+private const val DampingSolverSteps = 12
 private const val VisibilityThreshold = 0.002f
 private val TwoPi = (2.0 * PI).toFloat()
 
@@ -327,75 +375,54 @@ private fun retargetSpring(remaining: Float, velocity: Float): SpringSpec<Float>
     )
 }
 
-/** x(t) = R·e^(−ζωt)·cos(ωd·t − φ) 里的相位量 */
-private class Phase(val omega: Float, val omegaD: Float, val radius: Float, val phi: Float)
-
-private fun phase(distance: Float, damping: Float, stiffness: Float, velocity: Float): Phase {
-    val omega = sqrt(stiffness)
-    val omegaD = omega * sqrt((1f - damping * damping).coerceAtLeast(1e-4f))
-    val x0 = -distance
-    val b = (velocity + damping * omega * x0) / omegaD
-    var phi = atan2(b, x0)
-    if (phi > 0f) phi -= TwoPi
-    return Phase(omega, omegaD, sqrt(x0 * x0 + b * b), phi)
-}
-
 /** 静止起步：过冲率只由阻尼定，闭式反解让它正好等于 OvershootCells / 距离 */
 private fun dampingForDistance(distance: Float): Float {
     val c = ln(distance / OvershootCells) / PI.toFloat()
     return (c / sqrt(1f + c * c)).coerceIn(MinDamping, 0.92f)
 }
 
-private fun peakSpeedFromRest(distance: Float, damping: Float, stiffness: Float): Float {
-    val p = phase(distance, damping, stiffness, 0f)
-    val decay = damping * p.omega
-    val amplitude = p.radius * p.omega * sqrt((1f - damping * damping).coerceAtLeast(0f))
-    val psi = atan2(p.omegaD, decay)
-    val turn = -atan(decay / p.omegaD)
-    var best = 0f
-    for (m in 0..5) {
-        val t = (p.phi + psi + turn + m * PI.toFloat()) / p.omegaD
-        if (t < 0f) continue
-        val speed = amplitude * exp(-decay * t)
-        if (speed > best) best = speed
-    }
-    return best
-}
-
+/**
+ * 静止起步峰值速度精确闭式解：v_peak = D·ω·exp(−ζ·arccos(ζ)/√(1−ζ²)) 与 √stiffness 严格成正比，
+ * 直接反解 stiffness 仅需 1 次 exp() + 1 次 acos()，替代原来的 32×6 = 192 次 exp() 二分搜索。
+ */
 private fun stiffnessForPeak(distance: Float, damping: Float, target: Float): Float {
-    var lo = MinStiffness
-    var hi = MaxStiffness
-    repeat(SolverSteps) {
-        val mid = sqrt(lo * hi)
-        if (peakSpeedFromRest(distance, damping, mid) < target) lo = mid else hi = mid
-    }
-    return sqrt(lo * hi)
+    val z = damping.coerceIn(0f, 0.9999f)
+    val sinTheta = sqrt((1f - z * z).coerceAtLeast(1e-4f))
+    val factor = exp(-z * acos(z) / sinTheta)
+    val omega = target / (distance * factor)
+    return (omega * omega).coerceIn(MinStiffness, MaxStiffness)
 }
 
+/** 首个正向过冲峰值：单次 exp()（指数包络严格递减，最小正极值点即为全局最大过冲），零对象分配 */
 private fun overshoot(distance: Float, velocity: Float, damping: Float, stiffness: Float): Float {
-    val p = phase(distance, damping, stiffness, velocity)
-    val decay = damping * p.omega
-    val amplitude = p.radius * sqrt((1f - damping * damping).coerceAtLeast(0f))
-    val turn = -atan(decay / p.omegaD)
-    val period = TwoPi / p.omegaD
-    var best = 0f
-    for (m in 0..5) {
-        var t = (turn + p.phi + m * TwoPi) / p.omegaD
-        while (t <= 0f) t += period
-        val x = amplitude * exp(-decay * t)
-        if (x > best) best = x
-    }
-    return best
+    val omega = sqrt(stiffness)
+    val sinTheta = sqrt((1f - damping * damping).coerceAtLeast(1e-4f))
+    val omegaD = omega * sinTheta
+    val x0 = -distance
+    val b = (velocity + damping * omega * x0) / omegaD
+    var phi = atan2(b, x0)
+    if (phi > 0f) phi -= TwoPi
+    val decay = damping * omega
+    val amplitude = sqrt(x0 * x0 + b * b) * sinTheta
+    val turn = -atan(decay / omegaD)
+    val period = TwoPi / omegaD
+    var t = (turn + phi) / omegaD
+    while (t <= 0f) t += period
+    return amplitude * exp(-decay * t)
 }
 
 private fun dampingForOvershoot(distance: Float, velocity: Float, stiffness: Float): Float {
+    if (abs(velocity) < 1e-4f) {
+        val c = ln(distance / OvershootCells) / PI.toFloat()
+        return (c / sqrt(1f + c * c)).coerceIn(MinDamping, MaxDamping)
+    }
     var lo = 0.02f
     var hi = 0.99f
-    repeat(SolverSteps) {
-        val mid = (lo + hi) / 2f
+    repeat(DampingSolverSteps) {
+        val mid = (lo + hi) * 0.5f
         if (overshoot(distance, velocity, mid, stiffness) > OvershootCells) lo = mid else hi = mid
     }
-    return ((lo + hi) / 2f).coerceIn(MinDamping, MaxDamping)
+    return ((lo + hi) * 0.5f).coerceIn(MinDamping, MaxDamping)
 }
 
 /*
