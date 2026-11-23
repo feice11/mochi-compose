@@ -267,7 +267,7 @@ internal fun rememberMochiEngine(
 }
 
 /**
- * 菜单浮层（打开期间挂在窗口上）。锚点是按钮时 [anchorContent] 是按钮的内容；锚点是长按预览的卡片时，
+ * 菜单浮层。锚点是按钮时 [anchorContent] 是按钮的内容；锚点是长按预览的卡片时，
  * [anchorContent] 是卡片本身、[scrim] 给背景压暗、[matchAnchorWidth] = false（面板不跟卡片一样宽）。
  */
 @Composable
@@ -288,7 +288,7 @@ internal fun MochiEngine.Overlay(
     anchorContent: @Composable RowScope.() -> Unit,
 ) {
     if (!overlayVisible) return
-    PageOrWindowMenuOverlay(leaving = { !callbacks.isExpanded() }) {
+    PageOrWindowMenuOverlay(trigger, canUsePage = content == null, leaving = { !callbacks.isExpanded() }) { interactive ->
         MochiOverlay(
             anchorOnScreen = anchorOnScreen,
             progress = progress,
@@ -313,6 +313,7 @@ internal fun MochiEngine.Overlay(
             content = content,
             contentPadding = contentPadding,
             group = group,
+            interactive = interactive,
             buttonContent = anchorContent,
         )
     }

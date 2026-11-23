@@ -5,6 +5,7 @@
 
 package ui.feice.mochi.basic
 
+import android.view.View
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,47 +20,88 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import ui.feice.mochi.effect.glass.GlassRole
+import ui.feice.mochi.effect.glass.GlassSource
 import ui.feice.mochi.effect.glass.LocalGlassSources
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.glassOn
+import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.overlayBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
+import ui.feice.mochi.effect.glass.source
+import ui.feice.mochi.navigation.LocalMochiNavEntry
+import ui.feice.mochi.navigation.MochiNavEntry
 import ui.feice.mochi.overlay.InWindowOverlay
 
-private class PageMenuSlot(val view: android.view.View) {
+private class PageMenuSlot(val view: View, val entry: MochiNavEntry?, val backdrop: GlassSource?) {
     val panels = mutableStateListOf<@Composable () -> Unit>()
 }
 
 private val LocalPageMenuSlot = staticCompositionLocalOf<PageMenuSlot?> { null }
 
-/** Keep the menu above its toolbar, inside the same moving navigation page. */
+/**
+ * Keep button-triggered item menus on their source page during navigation.
+ * Place one host around the whole destination, outside its title and scroll containers.
+ */
 @Composable
 public fun MochiPageMenuHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val view = LocalView.current
-    val slot = remember(view) { PageMenuSlot(view) }
+    val entry = LocalMochiNavEntry.current
+    val backdrop = if (glassOn(GlassRole.Menu)) rememberMochiBackdrop(Color.Transparent) else null
+    val slot = remember(view, entry, backdrop) { PageMenuSlot(view, entry, backdrop?.source) }
     CompositionLocalProvider(LocalPageMenuSlot provides slot) {
         Box(modifier.fillMaxSize()) {
-            content()
+            // Only the page content belongs in the menu's sampling layer.
+            val activeBackdrop = backdrop.takeIf { slot.panels.isNotEmpty() }
+            Box(Modifier.fillMaxSize().mochiBackdropSource(activeBackdrop), content = content)
             slot.panels.forEach { panel -> key(panel) { panel() } }
         }
     }
 }
 
 @Composable
-internal fun PageOrWindowMenuOverlay(leaving: () -> Boolean, content: @Composable () -> Unit) {
-    val slot = LocalPageMenuSlot.current
-    if (slot == null || slot.view !== LocalView.current) {
-        InWindowOverlay(leaving, content)
+private fun pageMenuSlot(trigger: MochiTrigger): PageMenuSlot? {
+    val slot = LocalPageMenuSlot.current ?: return null
+    return slot.takeIf { trigger == MochiTrigger.Press && it.view === LocalView.current && it.entry === LocalMochiNavEntry.current }
+}
+
+@Composable
+internal fun menuBackdropSource(trigger: MochiTrigger): GlassSource? {
+    val slot = pageMenuSlot(trigger) ?: return overlayBackdropSource()
+    val sources = LocalGlassSources.current
+    return sources.bar ?: LocalMochiBackdrop.current?.source ?: sources.page?.source ?: slot.backdrop
+}
+
+@Composable
+internal fun PageOrWindowMenuOverlay(
+    trigger: MochiTrigger,
+    canUsePage: Boolean,
+    leaving: () -> Boolean,
+    content: @Composable (interactive: Boolean) -> Unit,
+) {
+    val slot = if (canUsePage) pageMenuSlot(trigger) else null
+    if (slot == null) {
+        InWindowOverlay(leaving) { content(true) }
         return
     }
     val locals by rememberUpdatedState(currentCompositionLocalContext)
     val menu by rememberUpdatedState(content)
+    val isLeaving by rememberUpdatedState(leaving)
     // Resolve the page behind the trigger before moving the menu to its overlay slot.
     val sources = LocalGlassSources.current
-    val below = overlayBackdropSource()
+    val below = menuBackdropSource(trigger)
     val overlaySources by rememberUpdatedState(remember(sources, below) { sources.copy(overlay = below) })
     val panel: @Composable () -> Unit = remember {
         {
             CompositionLocalProvider(locals) {
-                CompositionLocalProvider(LocalGlassSources provides overlaySources, LocalPageMenuSlot provides null) { menu() }
+                CompositionLocalProvider(
+                    LocalGlassSources provides overlaySources,
+                    LocalMochiBackdrop provides null,
+                    LocalMochiNavEntry provides null,
+                    LocalPageMenuSlot provides null,
+                ) { menu(!isLeaving()) }
             }
         }
     }

@@ -384,7 +384,7 @@ internal fun DropdownCore(
     buttonContent: @Composable RowScope.() -> Unit,
 ) {
     // 弹出层（content）不是选项列表，不换玻璃菜单的排版
-    val liquid = content == null && liquidMenu()
+    val liquid = content == null && glassOn(GlassRole.Menu) && menuBackdropSource(behavior.trigger) != null
     val dark = MochiTheme.colorScheme.isDark
     val onSurface = MochiTheme.colorScheme.onSurface
     val style = remember(colors, behavior, physics, menuWidth, panelCornerRadius, liquid, dark, onSurface, buttonCornerRadius) {

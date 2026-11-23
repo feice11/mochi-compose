@@ -199,4 +199,4 @@ With liquid glass enabled and a backdrop available, tall and scrollable menus re
 
 ## Page navigation
 
-Wrap the full destination in `MochiPageMenuHost` when its toolbar menu should close as the next page slides in. Keep the outgoing destination composed during the transition. In the selection callback, set `expanded = false` and push the destination immediately. The menu draws above its own page and uses the same backdrop as its glass trigger.
+Wrap the full destination in `MochiPageMenuHost` when its toolbar menu should close as the next page slides in. Keep the outgoing destination composed during the transition. In the selection callback, set `expanded = false` and push the destination immediately. Button-triggered item menus draw above their own page. Glass samples the toolbar or page below the menu. New touches reach the page as soon as the menu starts closing.

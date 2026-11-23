@@ -53,12 +53,15 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.PointerInputEventHandler
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
@@ -106,6 +109,9 @@ import ui.feice.mochi.utils.lerp
 import ui.feice.mochi.utils.smoothstep
 import ui.feice.mochi.utils.windowOriginOnScreen
 
+private fun Modifier.menuPointerInput(interactive: Boolean, vararg keys: Any?, block: PointerInputEventHandler): Modifier =
+    if (interactive) pointerInput(*keys, block = block) else this
+
 // ───────────────────────── 浮层 ─────────────────────────
 
 @Composable
@@ -134,6 +140,7 @@ internal fun MochiOverlay(
     content: (@Composable ColumnScope.() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     group: BarGroupHandle? = null,
+    interactive: Boolean = true,
     buttonContent: @Composable RowScope.() -> Unit,
 ) {
     val view = LocalView.current
@@ -210,7 +217,8 @@ internal fun MochiOverlay(
             // 长按预览：背景跟着展开进度压暗
             // 透明度只取展开进度的前一段：压暗很快到位、收起时最后才退，不跟着弹簧拖（编排规则：透明度独立且短）
             .drawBehind { if (scrim.alpha > 0f) drawRect(scrim, alpha = smoothstep(0f, 0.4f, progress.value)) }
-            .pointerInput(Unit) { detectTapGestures { callbacks.close() } },
+            .menuPointerInput(interactive, Unit) { detectTapGestures { callbacks.close() } }
+            .then(if (interactive) Modifier else Modifier.semantics { hideFromAccessibility() }),
     ) {
         val o = origin ?: return@Box
         if (containerSize == Size.Zero) return@Box
@@ -610,7 +618,7 @@ internal fun MochiOverlay(
                         Modifier
                             .offset { target.topLeft.round() }
                             .size(target.width.toDp(), target.height.toDp())
-                            .pointerInput(controller, target, scroller, hasContent) {
+                            .menuPointerInput(interactive, controller, target, scroller, hasContent) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
                                     val origin2 = target.topLeft + o
@@ -729,7 +737,7 @@ internal fun MochiOverlay(
                                 o + target.topLeft + Offset(px.panelPadding, px.panelPadding + headerPx) + (f.panel.center - target.center)
                             },
                             effects = innerEffects,
-                            onSelect = { callbacks.select(it) },
+                            onSelect = { if (interactive) callbacks.select(it) },
                             scroll = { controller.scroll },
                             window = ((target.height + px.rubberMax) / itemH).toInt() + 2,
                             modifier = Modifier
