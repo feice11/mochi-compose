@@ -34,7 +34,6 @@ import ui.feice.mochi.basic.MochiTabItem
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.basic.rememberMochiTabBarScrollBehavior
 import ui.feice.mochi.demo.catalog.CatalogEntry
-import ui.feice.mochi.demo.common.Caption
 import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
@@ -43,14 +42,23 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
+import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.icons.MochiIconStyle
 import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.theme.MochiTheme
 
 /** 演示的四种布局 */
 private enum class TabBarDemoLayout { Standard, IconOnly, Search, Accessory }
+
+private val LayoutOptions = listOf(
+    "标准" to TabBarDemoLayout.Standard,
+    "仅图标" to TabBarDemoLayout.IconOnly,
+    "搜索" to TabBarDemoLayout.Search,
+    "附件条" to TabBarDemoLayout.Accessory,
+)
 
 private val allTabs = listOf(
     "首页" to DemoIcons.HOME,
@@ -67,7 +75,7 @@ fun TabBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val unread = 3
     val scrollBehavior = rememberMochiTabBarScrollBehavior()
     var selected by rememberSaveable { mutableIntStateOf(0) }
-    var layout by remember { mutableStateOf(TabBarDemoLayout.Standard) }
+    var layout by rememberSaveable { mutableStateOf(TabBarDemoLayout.Standard) }
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf(false) }
@@ -88,13 +96,17 @@ fun TabBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 
     DemoPage(entry, modifier) {
         demoItem {
-            DemoSection("试一试", footer = "点标签或按住左右滑。", padding = 0.dp) {
-                if (layout == TabBarDemoLayout.Search) {
+            DemoSection("试一试", footer = "点标签或按住左右滑。", padding = 0.dp, animateHeight = true) {
+                MochiBlurVisibility(layout == TabBarDemoLayout.Search, contentAlignment = Alignment.TopStart) {
                     MochiBlurText(
                         if (searching) "搜索：${query.ifEmpty { "…" }}" else "点右边的放大镜开始搜索",
                         style = MochiTheme.textStyles.bodyMedium,
                         color = MochiTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp),
+                        modifier = Modifier.padding(
+                            start = MochiListDefaults.TextRowPadding,
+                            end = MochiListDefaults.TextRowPadding,
+                            top = 16.dp,
+                        ),
                     )
                 }
                 MochiTabBar(
@@ -133,16 +145,7 @@ fun TabBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
         demoItem {
             DemoSettingsSection("布局") {
-                Toggles(
-                    "布局",
-                    listOf(
-                        "标准" to TabBarDemoLayout.Standard,
-                        "仅图标" to TabBarDemoLayout.IconOnly,
-                        "搜索" to TabBarDemoLayout.Search,
-                        "附件条" to TabBarDemoLayout.Accessory,
-                    ),
-                    layout,
-                ) {
+                Toggles("布局", LayoutOptions, layout) {
                     layout = it
                     searching = false
                     query = ""

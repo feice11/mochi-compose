@@ -1,0 +1,327 @@
+:root {
+  --bg: #070709;
+  --fg: #f7f3ec;
+  --accent: #d97757;
+  --red: #d71921;
+  --font-sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  cursor: grab;
+  touch-action: none;
+}
+
+.stage:active {
+  cursor: grabbing;
+}
+
+#gl-canvas,
+#overlay-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#overlay-canvas {
+  pointer-events: none;
+  z-index: 6;
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #030305;
+  z-index: 14;
+  pointer-events: none;
+  transition: height 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.letterbox-top {
+  top: 0;
+}
+
+.letterbox-bottom {
+  bottom: 0;
+}
+
+.stage.scope-active .letterbox {
+  height: max(0px, calc((100vh - (100vw / 2.39)) * 0.5));
+}
+
+/* 极简启幕：画面本身即海报，只留干净字标和一枚按钮 */
+.curtain {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 32px 11vh;
+  background: linear-gradient(180deg, rgba(6, 6, 8, 0.08) 0%, rgba(6, 6, 8, 0.25) 55%, rgba(6, 6, 8, 0.72) 100%);
+  transition: opacity 760ms cubic-bezier(0.22, 1, 0.36, 1), visibility 760ms ease;
+}
+
+.curtain.dismissed {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.curtain-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.curtain-title {
+  font-size: clamp(46px, 6.2vw, 76px);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  color: #faf6ef;
+  text-shadow: 0 8px 36px rgba(0, 0, 0, 0.45);
+}
+
+.curtain-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-primary {
+  appearance: none;
+  border: 1px solid rgba(255, 250, 244, 0.25);
+  background: rgba(250, 246, 239, 0.94);
+  color: #151210;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
+  padding: 12px 30px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 180ms ease;
+}
+
+.btn-primary:hover {
+  transform: scale(1.04);
+  background: #ffffff;
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+.btn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.btn-ghost {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(10, 10, 14, 0.38);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: rgba(250, 246, 239, 0.86);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-indent: 0.1em;
+  padding: 12px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 180ms ease, color 180ms ease, transform 200ms ease;
+}
+
+.btn-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+  transform: scale(1.03);
+}
+
+/* 极简悬浮单条控制栏 */
+.hud {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+  z-index: 25;
+  display: flex;
+  justify-content: center;
+  padding: 0 20px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1), transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hud.hud-hidden {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.hud.hud-hidden * {
+  pointer-events: none !important;
+}
+
+.hud-bottom {
+  pointer-events: auto;
+  width: min(680px, 100%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgba(12, 12, 16, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.hud-icon-btn {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #faf6ef;
+  font-size: 11px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background-color 180ms ease, transform 160ms ease;
+}
+
+.hud-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.hud-icon-btn:active {
+  transform: scale(0.92);
+}
+
+.scrubber {
+  flex: 1;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  cursor: ew-resize;
+  outline: none;
+}
+
+.scrubber-track {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.scrubber-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  border-radius: 999px;
+  background: #faf6ef;
+}
+
+.scrubber-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.hud-time {
+  font-size: 11px;
+  color: rgba(250, 246, 239, 0.72);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.hud-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-pill-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(250, 246, 239, 0.84);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.hud-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.hud-pill-btn.active {
+  background: rgba(217, 119, 87, 0.24);
+  border-color: rgba(217, 119, 87, 0.72);
+  color: #fff8f0;
+}
+
+.hud-pill-btn.recording {
+  background: rgba(215, 25, 33, 0.36);
+  border-color: var(--red);
+  color: #ffffff;
+}

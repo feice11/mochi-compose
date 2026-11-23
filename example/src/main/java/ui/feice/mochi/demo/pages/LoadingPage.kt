@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -103,34 +106,7 @@ fun LoadingPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
         demoItem {
             DemoSection("进度") {
-                var p by rememberSaveable { mutableFloatStateOf(0f) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        delay(60)
-                        p = if (p >= 1f) 0f else (p + 0.012f)
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MochiProgressRing(p, size = 28.dp)
-                    MochiProgressRing(null, size = 28.dp)
-                    MochiProgressRing(p, size = 56.dp, strokeWidth = 6.dp) {
-                        Text("${(p * 100).roundToInt()}%", style = ts.footnote, color = cs.onSurface)
-                    }
-                    MochiProgressRing(p, size = 44.dp, strokeWidth = 4.dp, color = cs.tertiary)
-                }
-                var bar by rememberSaveable { mutableFloatStateOf(0.35f) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        delay(1200)
-                        bar = if (bar > 0.9f) 0.1f else bar + 0.2f
-                    }
-                }
-                MochiProgressBar(bar, height = 4.dp)
-                MochiProgressBar(bar, height = 8.dp, color = cs.tertiary)
+                AutoProgressDemo()
                 StorageBar()
             }
         }
@@ -214,16 +190,61 @@ private fun DownloadButton() {
     )
 }
 
+/** 自动推进的进度演示：局部化重组（不连带刷新 [StorageBar]），且窗口失焦/进入后台时自动暂停循环 */
+@Composable
+private fun AutoProgressDemo() {
+    val cs = MochiTheme.colorScheme
+    val ts = MochiTheme.textStyles
+    val active = LocalWindowInfo.current.isWindowFocused
+    var p by remember { mutableFloatStateOf(0f) }
+    var bar by remember { mutableFloatStateOf(0.35f) }
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
+        while (true) {
+            delay(60)
+            p = if (p >= 1f) 0f else (p + 0.012f)
+        }
+    }
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
+        while (true) {
+            delay(1200)
+            bar = if (bar > 0.9f) 0.1f else bar + 0.2f
+        }
+    }
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MochiProgressRing(p, size = 28.dp)
+        MochiProgressRing(null, size = 28.dp)
+        MochiProgressRing(p, size = 56.dp, strokeWidth = 6.dp) {
+            Text(
+                "${(p * 100).roundToInt()}%",
+                style = ts.footnote.copy(fontFeatureSettings = "tnum"),
+                color = cs.onSurface,
+            )
+        }
+        MochiProgressRing(p, size = 44.dp, strokeWidth = 4.dp, color = cs.tertiary)
+    }
+    MochiProgressBar(bar, height = 4.dp)
+    MochiProgressBar(bar, height = 8.dp, color = cs.tertiary)
+}
+
 /** iOS 储存空间条 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StorageBar() {
     val cs = MochiTheme.colorScheme
-    val parts = listOf(
-        Triple("照片", 0.32f, cs.primary),
-        Triple("应用", 0.22f, cs.tertiary),
-        Triple("系统", 0.14f, cs.secondary),
-        Triple("其他", 0.08f, cs.outline),
-    )
+    val parts = remember(cs.primary, cs.tertiary, cs.secondary, cs.outline) {
+        listOf(
+            Triple("照片", 0.32f, cs.primary),
+            Triple("应用", 0.22f, cs.tertiary),
+            Triple("系统", 0.14f, cs.secondary),
+            Triple("其他", 0.08f, cs.outline),
+        )
+    }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             Modifier
@@ -234,11 +255,14 @@ private fun StorageBar() {
         ) {
             parts.forEach { (_, w, c) ->
                 Box(Modifier.weight(w).height(12.dp).background(c))
-                Box(Modifier.width(1.5.dp).height(12.dp).background(MochiTheme.colorScheme.surfaceContainerLowest))
+                Box(Modifier.width(1.5.dp).height(12.dp).background(cs.surfaceContainerLowest))
             }
-            Spacer(Modifier.weight(1f - parts.sumOf { it.second.toDouble() }.toFloat()))
+            Spacer(Modifier.weight(0.24f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             parts.forEach { (label, _, c) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).background(c, MochiCapsule))

@@ -5,12 +5,12 @@ package ui.feice.mochi.demo.pages
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,18 +21,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -52,51 +59,56 @@ import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.shape.MochiSuperellipse
 import ui.feice.mochi.theme.MochiTheme
 
+private val CombG2Shape = MochiRoundedRectangle(44.dp)
+private val CompareRoundedShape = RoundedCornerShape(36.dp)
+private val CompareG2Shape = MochiRoundedRectangle(36.dp)
+private val SuperellipseShape = MochiSuperellipse(5f)
+private val NestedOuterRadius = 32.dp
+private val NestedOuterShape = MochiRoundedRectangle(NestedOuterRadius)
+private val NestedInnerSpring = spring<Dp>()
+
 /** 连续圆角与同心：曲率梳、超椭圆图标、同心嵌套 */
 @Composable
 fun CornersPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    val radius = 44f
     var padding by rememberSaveable { mutableFloatStateOf(14f) }
     DemoPage(entry, modifier) {
         demoItem {
             DemoSection("曲率梳") {
-                val g2 = MochiRoundedRectangle(radius.dp)
                 Box(Modifier.fillMaxWidth().aspectRatio(1.35f).padding(28.dp)) {
-                    Box(Modifier.fillMaxSize().background(cs.primaryContainer, g2))
-                    Canvas(Modifier.fillMaxSize()) { drawComb(outlinePath(g2), cs.primary) }
+                    Box(Modifier.fillMaxSize().background(cs.primaryContainer, CombG2Shape))
+                    CurvatureComb(CombG2Shape, cs.primary)
                 }
             }
         }
         demoItem {
             DemoSection("并排看") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ComparePane("普通圆角", RoundedCornerShape(36.dp), cs.error, Modifier.weight(1f))
-                    ComparePane("连续圆角", MochiRoundedRectangle(36.dp), cs.primary, Modifier.weight(1f))
+                    ComparePane("普通圆角", CompareRoundedShape, cs.error, Modifier.weight(1f))
+                    ComparePane("连续圆角", CompareG2Shape, cs.primary, Modifier.weight(1f))
                 }
             }
         }
         demoItem {
             DemoSection("超椭圆图标") {
-                val shape = MochiSuperellipse(5f)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    listOf(
-                        DemoIcons.CAMERA to cs.tertiaryContainer,
-                        DemoIcons.HEART to cs.primaryContainer,
-                        DemoIcons.NOTE to cs.secondaryContainer,
-                    ).forEach { (g, c) ->
-                        Box(Modifier.size(64.dp).background(c, shape), contentAlignment = Alignment.Center) {
-                            Glyph(g, cs.onSurface, size = 30)
-                        }
+                    Box(Modifier.size(64.dp).background(cs.tertiaryContainer, SuperellipseShape), contentAlignment = Alignment.Center) {
+                        Glyph(DemoIcons.CAMERA, cs.onSurface, size = 30)
+                    }
+                    Box(Modifier.size(64.dp).background(cs.primaryContainer, SuperellipseShape), contentAlignment = Alignment.Center) {
+                        Glyph(DemoIcons.HEART, cs.onSurface, size = 30)
+                    }
+                    Box(Modifier.size(64.dp).background(cs.secondaryContainer, SuperellipseShape), contentAlignment = Alignment.Center) {
+                        Glyph(DemoIcons.NOTE, cs.onSurface, size = 30)
                     }
                     Box(Modifier.size(96.dp)) {
-                        Box(Modifier.fillMaxSize().background(cs.surfaceContainerHighest, shape))
-                        Canvas(Modifier.fillMaxSize()) { drawComb(outlinePath(shape), cs.tertiary, scale = 3f) }
+                        Box(Modifier.fillMaxSize().background(cs.surfaceContainerHighest, SuperellipseShape))
+                        CurvatureComb(SuperellipseShape, cs.tertiary, scale = 3f)
                     }
                 }
             }
@@ -119,18 +131,17 @@ fun CornersPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     val outer = 40.dp
                     val p = padding.dp
+                    val r1 = MochiConcentric.inner(outer, p)
+                    val r2 = MochiConcentric.inner(r1, p)
+                    val r3 = MochiConcentric.inner(r2, p)
+                    val innermostShape = remember(r3) { MochiRoundedRectangle(r3) }
                     Layer(outer, p, cs.primaryContainer) {
-                        Layer(MochiConcentric.inner(outer, p), p, cs.secondaryContainer) {
-                            Layer(MochiConcentric.inner(MochiConcentric.inner(outer, p), p), p, cs.tertiaryContainer) {
+                        Layer(r1, p, cs.secondaryContainer) {
+                            Layer(r2, p, cs.tertiaryContainer) {
                                 Box(
                                     Modifier
                                         .size(width = 120.dp, height = 56.dp)
-                                        .background(
-                                            cs.surface,
-                                            MochiRoundedRectangle(
-                                                MochiConcentric.inner(MochiConcentric.inner(MochiConcentric.inner(outer, p), p), p),
-                                            ),
-                                        ),
+                                        .background(cs.surface, innermostShape),
                                     contentAlignment = Alignment.Center,
                                 ) { Text("同心", style = ts.subhead, color = cs.onSurface) }
                             }
@@ -148,27 +159,54 @@ private fun ComparePane(label: String, shape: Shape, color: Color, modifier: Mod
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).padding(18.dp)) {
             Box(Modifier.fillMaxSize().background(cs.surfaceContainerHighest, shape))
-            Canvas(Modifier.fillMaxSize()) { drawComb(outlinePath(shape), color, scale = 2.2f) }
+            CurvatureComb(shape, color, scale = 2.2f)
         }
         Text(label, style = MochiTheme.textStyles.footnote, color = cs.onSurfaceVariant)
     }
 }
 
-/** 同心时内圆角 = 外圆角 − p，否则与外圆角相同 */
+private class DynamicRoundedCache {
+    var radius = Dp.Unspecified
+    var size = Size.Unspecified
+    var outline: Outline? = null
+}
+
+/** 同心时内圆角 = 外圆角 − p，否则与外圆角相同；动画进度延迟至 drawBehind 读取 */
 @Composable
 private fun NestedPane(label: String, p: Dp, concentric: Boolean, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
-    val outer = 32.dp
-    val inner by animateDpAsState(if (concentric) MochiConcentric.inner(outer, p) else outer, spring(), label = "inner")
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(120.dp)
-                .background(cs.primaryContainer, MochiRoundedRectangle(outer))
+                .background(cs.primaryContainer, NestedOuterShape)
                 .padding(p),
         ) {
-            Box(Modifier.fillMaxSize().background(cs.surface, MochiRoundedRectangle(inner)))
+            if (!concentric) {
+                Box(Modifier.fillMaxSize().background(cs.surface, NestedOuterShape))
+            } else {
+                val innerState = animateDpAsState(MochiConcentric.inner(NestedOuterRadius, p), NestedInnerSpring, label = "inner")
+                val surfaceColor = rememberUpdatedState(cs.surface)
+                val cache = remember { DynamicRoundedCache() }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .drawBehind {
+                            val r = innerState.value
+                            val outline = if (cache.radius == r && cache.size == size && cache.outline != null) {
+                                cache.outline!!
+                            } else {
+                                MochiRoundedRectangle(r).createOutline(size, layoutDirection, this).also {
+                                    cache.radius = r
+                                    cache.size = size
+                                    cache.outline = it
+                                }
+                            }
+                            drawOutline(outline, surfaceColor.value)
+                        },
+                )
+            }
         }
         Text(label, style = MochiTheme.textStyles.footnote, color = cs.onSurfaceVariant)
     }
@@ -176,58 +214,143 @@ private fun NestedPane(label: String, p: Dp, concentric: Boolean, modifier: Modi
 
 @Composable
 private fun Layer(radius: Dp, padding: Dp, color: Color, content: @Composable () -> Unit) {
-    Box(Modifier.background(color, MochiRoundedRectangle(radius)).padding(padding), contentAlignment = Alignment.Center) { content() }
+    val shape = remember(radius) { MochiRoundedRectangle(radius) }
+    Box(Modifier.background(color, shape).padding(padding), contentAlignment = Alignment.Center) { content() }
 }
 
 /** 形状在当前画布大小下的轮廓 */
-private fun DrawScope.outlinePath(shape: Shape): Path = when (val o = shape.createOutline(size, LayoutDirection.Ltr, this)) {
-    is Outline.Generic -> o.path
-    is Outline.Rounded -> Path().apply { addRoundRect(o.roundRect) }
-    is Outline.Rectangle -> Path().apply { addRect(o.rect) }
+private fun outlinePath(shape: Shape, size: Size, density: Density): Path =
+    when (val o = shape.createOutline(size, LayoutDirection.Ltr, density)) {
+        is Outline.Generic -> o.path
+        is Outline.Rounded -> Path().apply { addRoundRect(o.roundRect) }
+        is Outline.Rectangle -> Path().apply { addRect(o.rect) }
+    }
+
+/** 曲率梳：沿轮廓等距取点往外画线，长度 ∝ 曲率，齿尖连成包络线；按尺寸和形状缓存为两条 Path，重绘零分配。 */
+@Composable
+private fun CurvatureComb(shape: Shape, color: Color, modifier: Modifier = Modifier, scale: Float = 1f) {
+    val colorState = rememberUpdatedState(color)
+    val drawModifier = remember(shape, scale, colorState) {
+        Modifier.drawWithCache {
+            val path = outlinePath(shape, size, this)
+            val pm = PathMeasure()
+            pm.setPath(path, true)
+            val len = pm.length
+            val teethPath = Path()
+            val envelopePath = Path()
+            if (len > 0f) {
+                val n = 360
+                val step = len / n
+                val cx = size.width / 2f
+                val cy = size.height / 2f
+                // 齿长 = 曲率 × k，上限取短边的 1/8，不画出卡片
+                val k = size.minDimension * size.minDimension * 0.012f * scale
+                val maxTooth = size.minDimension * 0.12f
+                val xs = FloatArray(n)
+                val ys = FloatArray(n)
+                for (i in 0 until n) {
+                    val p = pm.getPosition(i * step)
+                    xs[i] = p.x
+                    ys[i] = p.y
+                }
+                // 三点外接圆算曲率（比切线差分稳）；5 点无分配中值滤波去掉曲线拼接处极小折角造成的尖刺
+                val raw = FloatArray(n) { i ->
+                    val i0 = (i - 2 + n) % n
+                    val i2 = (i + 2) % n
+                    val dx1 = xs[i] - xs[i0]
+                    val dy1 = ys[i] - ys[i0]
+                    val dx2 = xs[i2] - xs[i]
+                    val dy2 = ys[i2] - ys[i]
+                    val dx3 = xs[i2] - xs[i0]
+                    val dy3 = ys[i2] - ys[i0]
+                    val a = hypot(dx1, dy1)
+                    val bb = hypot(dx2, dy2)
+                    val c = hypot(dx3, dy3)
+                    val cross = abs(dx1 * dy3 - dy1 * dx3)
+                    if (a * bb * c <= 1e-6f) 0f else 2f * cross / (a * bb * c)
+                }
+                val curv = FloatArray(n) { i ->
+                    median5(
+                        raw[(i - 2 + n) % n],
+                        raw[(i - 1 + n) % n],
+                        raw[i],
+                        raw[(i + 1) % n],
+                        raw[(i + 2) % n],
+                    )
+                }
+                for (i in 0..n) {
+                    val idx = i % n
+                    val px = xs[idx]
+                    val py = ys[idx]
+                    // 取朝外的那条法线
+                    val t = pm.getTangent(idx * step)
+                    var nx = -t.y
+                    var ny = t.x
+                    if ((px - cx) * nx + (py - cy) * ny < 0f) {
+                        nx = -nx
+                        ny = -ny
+                    }
+                    val l = hypot(nx, ny).coerceAtLeast(1e-4f)
+                    val d = (curv[idx] * k).coerceAtMost(maxTooth)
+                    val tx = px + nx / l * d
+                    val ty = py + ny / l * d
+                    if (i % 3 == 0) {
+                        teethPath.moveTo(px, py)
+                        teethPath.lineTo(tx, ty)
+                    }
+                    if (i == 0) envelopePath.moveTo(tx, ty) else envelopePath.lineTo(tx, ty)
+                }
+            }
+            val teethStroke = Stroke(1.dp.toPx())
+            val envelopeStroke = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            onDrawBehind {
+                if (!teethPath.isEmpty) {
+                    val c = colorState.value
+                    drawPath(teethPath, c.copy(alpha = 0.35f), style = teethStroke)
+                    drawPath(envelopePath, c, style = envelopeStroke)
+                }
+            }
+        }
+    }
+    Spacer(modifier.fillMaxSize().then(drawModifier))
 }
 
-/** 曲率梳：沿轮廓等距取点往外画线，长度 ∝ 曲率，齿尖连成包络线 */
-private fun DrawScope.drawComb(path: Path, color: Color, scale: Float = 1f) {
-    val pm = PathMeasure()
-    pm.setPath(path, true)
-    val len = pm.length
-    if (len <= 0f) return
-    val n = 360
-    val step = len / n
-    val center = Offset(size.width / 2f, size.height / 2f)
-    // 齿长 = 曲率 × k，上限取短边的 1/8，不画出卡片
-    val k = size.minDimension * size.minDimension * 0.012f * scale
-    val maxTooth = size.minDimension * 0.12f
-    val pts = Array(n) { pm.getPosition(it * step) }
-    // 三点外接圆算曲率（比切线差分稳）；5 点中值滤波去掉曲线拼接处极小折角造成的尖刺
-    val raw = FloatArray(n) { i ->
-        val p0 = pts[(i - 2 + n) % n]
-        val p1 = pts[i]
-        val p2 = pts[(i + 2) % n]
-        val a = (p1 - p0).getDistance()
-        val bb = (p2 - p1).getDistance()
-        val c = (p2 - p0).getDistance()
-        val cross = abs((p1.x - p0.x) * (p2.y - p0.y) - (p1.y - p0.y) * (p2.x - p0.x))
-        if (a * bb * c <= 1e-6f) 0f else 2f * cross / (a * bb * c)
+/** 5 个浮点数的无分配中位数（排序网络取第 3 大） */
+private fun median5(v0: Float, v1: Float, v2: Float, v3: Float, v4: Float): Float {
+    var a = v0
+    var b = v1
+    var c = v2
+    var d = v3
+    var e = v4
+    if (a > b) {
+        val t = a
+        a = b
+        b = t
     }
-    val curv = FloatArray(n) { i -> FloatArray(5) { j -> raw[(i + j - 2 + n) % n] }.sorted()[2] }
-    val tips = ArrayList<Offset>(n + 1)
-    val tooth = color.copy(alpha = 0.35f)
-    for (i in 0..n) {
-        val idx = i % n
-        val p = pts[idx]
-        // 取朝外的那条法线
-        val t = pm.getTangent(idx * step)
-        var nx = -t.y
-        var ny = t.x
-        if ((p.x - center.x) * nx + (p.y - center.y) * ny < 0f) {
-            nx = -nx
-            ny = -ny
-        }
-        val l = hypot(nx, ny).coerceAtLeast(1e-4f)
-        val tip = p + Offset(nx / l, ny / l) * (curv[idx] * k).coerceAtMost(maxTooth)
-        if (i % 3 == 0) drawLine(tooth, p, tip, strokeWidth = 1.dp.toPx())
-        tips += tip
+    if (d > e) {
+        val t = d
+        d = e
+        e = t
     }
-    for (i in 1 until tips.size) drawLine(color, tips[i - 1], tips[i], strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
+    if (a > d) {
+        val t = a
+        a = d
+        d = t
+    }
+    if (b > e) {
+        val t = b
+        b = e
+        e = t
+    }
+    if (b > c) {
+        val t = b
+        b = c
+        c = t
+    }
+    if (c > d) {
+        val t = c
+        c = d
+        d = t
+    }
+    return if (b > c) b else c
 }

@@ -3,19 +3,19 @@
 
 package ui.feice.mochi.demo.pages
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.MochiCarousel
 import ui.feice.mochi.basic.MochiPageControl
 import ui.feice.mochi.basic.Text
@@ -44,8 +44,12 @@ fun CarouselPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val pager = rememberPagerState { Stories.size }
     var page by rememberSaveable { mutableIntStateOf(3) }
-    val scope = rememberCoroutineScope()
-    val pos = remember { androidx.compose.animation.core.Animatable(3f) }
+    val pos = remember { Animatable(page.toFloat()) }
+    LaunchedEffect(page) {
+        if (pos.targetValue != page.toFloat()) {
+            pos.animateTo(page.toFloat(), MochiMotionTokens.Control)
+        }
+    }
     DemoPage(entry, modifier) {
         demoItem {
             DemoSection("轮播", container = false) {
@@ -82,12 +86,7 @@ fun CarouselPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     MochiPageControl(
                         pageCount = 15,
                         position = { pos.value },
-                        onPageSelect = {
-                            page = it
-                            scope.launch {
-                                pos.animateTo(it.toFloat(), androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 500f))
-                            }
-                        },
+                        onPageSelect = { page = it },
                         modifier = Modifier.semantics { contentDescription = "页面指示器演示" },
                     )
                 }

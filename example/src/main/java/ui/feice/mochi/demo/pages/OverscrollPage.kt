@@ -17,10 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,6 +33,7 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
+import ui.feice.mochi.effect.mask.mochiScrollFadeMask
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.mochiContainedScroll
 import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
@@ -66,10 +66,15 @@ fun OverscrollPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
         demoItem {
             DemoSection("相簿", footer = "横着拖出两端。", padding = 0.dp) {
+                val listState = rememberLazyListState()
                 val effect = rememberMochiOverscrollEffect()
                 val fling = MochiScrollDefaults.flingBehavior()
                 LazyRow(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .mochiScrollFadeMask(listState, extent = 16.dp, vertical = false)
+                        .mochiContainedScroll(effect),
+                    state = listState,
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     flingBehavior = fling,

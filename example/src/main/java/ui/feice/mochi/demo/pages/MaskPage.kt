@@ -15,8 +15,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -81,6 +80,7 @@ fun MaskPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                         .mochiScrollFadeMask(list, extent.dp, vertical = false),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    flingBehavior = MochiScrollDefaults.flingBehavior(),
                 ) {
                     items(Tags.size) { i ->
                         Text(
@@ -101,13 +101,16 @@ fun MaskPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 "任意容器",
                 padding = 0.dp,
             ) {
+                val bg = remember(cs.primaryContainer, cs.tertiaryContainer) {
+                    Brush.linearGradient(listOf(cs.primaryContainer, cs.tertiaryContainer))
+                }
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .height(160.dp)
                         // 按卡片轮廓裁一下，四角才是圆的
                         .clip(MochiTheme.shapes.extraLarge)
-                        .background(Brush.linearGradient(listOf(cs.primaryContainer, cs.tertiaryContainer))),
+                        .background(bg),
                 ) {
                     Column(
                         Modifier
@@ -129,12 +132,15 @@ fun MaskPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 footer = "需要 Android 13 以上。",
                 padding = 0.dp,
             ) {
+                val bg = remember(cs.tertiaryContainer, cs.primaryContainer) {
+                    Brush.linearGradient(listOf(cs.tertiaryContainer, cs.primaryContainer))
+                }
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .height(200.dp)
                         .clip(MochiTheme.shapes.extraLarge)
-                        .background(Brush.linearGradient(listOf(cs.tertiaryContainer, cs.primaryContainer))),
+                        .background(bg),
                 ) {
                     Column(
                         Modifier

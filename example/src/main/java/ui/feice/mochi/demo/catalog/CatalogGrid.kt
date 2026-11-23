@@ -28,12 +28,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.collections.immutable.ImmutableList
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.about.AboutButton
 import ui.feice.mochi.demo.common.AppIcon
 import ui.feice.mochi.demo.common.CatalogIconShape
 import ui.feice.mochi.demo.common.iconColors
-import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.effect.content.mochiBlurReveal
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.glass.mochiBackdropSource
@@ -56,11 +56,13 @@ import ui.feice.mochi.theme.mochiOpticalLeading
 
 /** 首页一个标签的目录，向上滚动时大标题交接到紧凑顶栏。 */
 @Composable
-internal fun CatalogGrid(title: String, entries: List<CatalogEntry>, state: LazyGridState = rememberLazyGridState()) {
-    val countSubtitle = "共 ${entries.size} 个"
+internal fun CatalogGrid(title: String, entries: ImmutableList<CatalogEntry>, state: LazyGridState = rememberLazyGridState()) {
+    val countSubtitle = remember(entries.size) { "共 ${entries.size} 个" }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     MochiTabReselectHandler { state.animateScrollToItem(0) }
     val edgeProgress = MochiScrollEdgeDefaults.progress(state)
+    val titleProgress = remember(state) { { catalogTitleProgress(state) } }
+    val largeTitleReveal = remember(titleProgress) { { 1f - titleProgress() } }
     // 顶栏按钮是玻璃时，取样的是这份列表录制
     val barBackdrop = rememberMochiBarBackdrop()
     Box(Modifier.fillMaxSize()) {
@@ -80,9 +82,9 @@ internal fun CatalogGrid(title: String, entries: List<CatalogEntry>, state: Lazy
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "catalog-title", span = { GridItemSpan(2) }) {
+            item(key = "catalog-title", span = { GridItemSpan(2) }, contentType = "header") {
                 Column(
-                    Modifier.padding(top = 24.dp, bottom = 8.dp).mochiBlurReveal({ 1f - catalogTitleProgress(state) }),
+                    Modifier.padding(top = 24.dp, bottom = 8.dp).mochiBlurReveal(largeTitleReveal),
                 ) {
                     Text(
                         title,
@@ -96,13 +98,13 @@ internal fun CatalogGrid(title: String, entries: List<CatalogEntry>, state: Lazy
                     )
                 }
             }
-            items(entries, key = { it.id }) { CatalogCard(it) }
+            items(entries, key = { it.id }, contentType = { "card" }) { CatalogCard(it) }
         }
         MochiTitleBar(
             title,
             subtitle = countSubtitle,
             actions = { AboutButton() },
-            titleProgress = { catalogTitleProgress(state) },
+            titleProgress = titleProgress,
             // 底色和渐隐跟着内容是否滚进顶栏下面（比小标题出现得早）：一滚上去状态栏后面就有底色
             backgroundProgress = edgeProgress,
             backdrop = barBackdrop,
@@ -112,7 +114,7 @@ internal fun CatalogGrid(title: String, entries: List<CatalogEntry>, state: Lazy
 
 private fun catalogTitleProgress(state: LazyGridState): Float {
     if (state.firstVisibleItemIndex > 0) return 1f
-    val header = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == 0 } ?: return 0f
+    val header = state.layoutInfo.visibleItemsInfo.firstOrNull()?.takeIf { it.index == 0 } ?: return 0f
     val height = header.size.height.toFloat()
     if (height <= 0f) return 0f
     val progress = (state.firstVisibleItemScrollOffset / height * 2f - 1f).coerceIn(0f, 1f)
@@ -123,11 +125,18 @@ private fun catalogTitleProgress(state: LazyGridState): Float {
 @Composable
 private fun CatalogCard(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val ts = MochiTheme.textStyles
+    val titleStyle = remember(ts.titleMedium) { ts.titleMedium.emphasized() }
     val nav = MochiNavigator.current
     val bg = MochiDefaults.groupedContainer()
     val radius = 28.dp
     val shape = MochiTheme.shapes.extraLarge
     val glow = rememberMochiGlowState()
+    val onClick: () -> Unit = remember(nav, entry.id) {
+        {
+            nav?.push(entry.id, from = entry.id)
+            Unit
+        }
+    }
     Column(
         modifier
             .fillMaxWidth()
@@ -135,16 +144,13 @@ private fun CatalogCard(entry: CatalogEntry, modifier: Modifier = Modifier) {
             .mochiPressDeform()
             // 不裁切：G2 路径的抗锯齿裁切每次变形都要在 CPU 上重做遮罩，滚动和转场时很费电
             .background(bg, shape)
-            .mochiAnimateHeight(shape)
             .height(184.dp)
             .mochiPressGlow(glow, shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                nav?.push(entry.id, from = entry.id)
-            }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(16.dp),
     ) {
         AppIcon(entry.glyph, entry.iconColors(), 56.dp, Modifier, shape = CatalogIconShape)
         Spacer(Modifier.weight(1f))
-        Text(entry.title, style = ts.titleMedium.emphasized(), modifier = Modifier)
+        Text(entry.title, style = titleStyle, modifier = Modifier)
     }
 }

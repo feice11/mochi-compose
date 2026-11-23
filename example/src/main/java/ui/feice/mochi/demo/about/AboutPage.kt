@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -36,8 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -102,17 +102,19 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
     val charge = remember { Animatable(0f) }
     var taps by remember { mutableIntStateOf(0) }
     var egg by remember { mutableStateOf<RibbonEggState?>(null) }
-    var root by remember { mutableStateOf(Offset.Zero) }
-    var dango by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    // 不写进 State：侧推转场和滚动期间每帧坐标在变，只在长按触发彩蛋时换算一次
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(2) }
 
     fun startEgg() {
-        val lc = dango ?: return
-        val center = lc.positionInRoot() + Offset(lc.size.width / 2f, lc.size.height / 2f) - root
+        val box = coords[0] ?: return
+        val mark = coords[1] ?: return
+        if (!box.isAttached || !mark.isAttached) return
+        val center = box.localPositionOf(mark, Offset(mark.size.width / 2f, mark.size.height / 2f))
         egg = RibbonEggState(center)
     }
 
-    Box(modifier.fillMaxSize().onGloballyPositioned { root = it.positionInRoot() }) {
-        var more by remember { mutableStateOf(false) }
+    Box(modifier.fillMaxSize().onPlaced { coords[0] = it }) {
+        var more by rememberSaveable { mutableStateOf(false) }
         MochiLazyCompactTitleScaffold(
             title = "关于",
             modifier = Modifier.ribbonEggEffect(egg),
@@ -123,7 +125,7 @@ internal fun AboutPage(modifier: Modifier = Modifier) {
                     Box(
                         Modifier
                             .size(136.dp)
-                            .onGloballyPositioned { dango = it }
+                            .onPlaced { coords[1] = it }
                             .pointerInput(Unit) {
                                 awaitEachGesture {
                                     awaitFirstDown()

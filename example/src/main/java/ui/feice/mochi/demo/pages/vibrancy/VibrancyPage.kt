@@ -8,7 +8,6 @@ import android.graphics.Color as AndroidColor
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -32,23 +30,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
+import kotlin.math.floor
+import kotlin.math.roundToInt
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -67,10 +69,12 @@ import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import ui.feice.mochi.ios.IosVibrancy
 import ui.feice.mochi.ios.IosVibrancyLevel
-import ui.feice.mochi.ios.IosVibrant
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.emphasized
+
+private val ComparisonCardShape = MochiRoundedRectangle(24.dp)
 
 /** 混合模式文字（iOS vibrancy）对照：左边同不透明度的纯色，右边按 iOS 27 CoreMaterial 混合矩阵（[IosVibrancy]）取色 */
 @Composable
@@ -108,64 +112,38 @@ private fun plainAlpha(level: IosVibrancyLevel): Float = when (level) {
     IosVibrancyLevel.Quaternary -> 0.18f
 }
 
-/** iOS 文字样式里主题没有的几档（字号 / 行高照 iOS 的 Dynamic Type 默认值），字体跟主题 */
-private object Ios {
-    @Composable fun title1(): TextStyle = MochiTheme.textStyles.body.copy(
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
-        fontWeight = FontWeight.Bold,
-    )
-
-    @Composable fun title2(): TextStyle = MochiTheme.textStyles.body.copy(
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        fontWeight = FontWeight.Bold,
-    )
-
-    @Composable fun caption1(): TextStyle = MochiTheme.textStyles.body.copy(fontSize = 12.sp, lineHeight = 16.sp)
-
-    @Composable fun caption2(): TextStyle = MochiTheme.textStyles.body.copy(
-        fontSize = 11.sp,
-        lineHeight = 13.sp,
-        fontWeight = FontWeight.Bold,
-    )
-
-    /** 眉标：小号半粗、略加字距 */
-    @Composable fun eyebrow(): TextStyle = MochiTheme.textStyles.footnote.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em)
-}
-
 private val PrimaryOnDark = IosVibrancy.primary(isDark = true)
 private val PrimaryOnLight = IosVibrancy.primary(isDark = false)
 
-/** 材质的色矩阵：背后乘 [scale] 再加 [offset]（0..1），等于叠一层不透明度 1 − scale 的纯色 */
-private fun tintMatrix(scale: Float, offset: Float) = listOf(
-    scale, 0f, 0f, 0f, offset,
-    0f, scale, 0f, 0f, offset,
-    0f, 0f, scale, 0f, offset,
-    0f, 0f, 0f, 1f, 0f,
-)
+private data class LumaKey(val photo: Int, val top: Float, val bottom: Float)
 
-/** 照片 [top]..[bottom] 行范围的平均亮度（0..1），没算完前是 null */
+private val LumaCache = HashMap<LumaKey, Float>()
+
+/** 照片 [top]..[bottom] 行范围的平均亮度（0..1），批量取像素并缓存结果 */
 @Composable
 private fun photoLuma(@DrawableRes photo: Int, top: Float, bottom: Float): Float? {
     val resources = LocalContext.current.resources
-    val luma by produceState<Float?>(null, photo) {
-        value = withContext(Dispatchers.Default) {
+    val key = LumaKey(photo, top, bottom)
+    val cached = synchronized(LumaCache) { LumaCache[key] }
+    val luma by produceState(cached, key) {
+        if (value != null) return@produceState
+        val computed = withContext(Dispatchers.Default) {
             val bitmap = BitmapFactory.decodeResource(resources, photo, BitmapFactory.Options().apply { inSampleSize = 8 })
-            val x0 = 0
-            val x1 = bitmap.width
-            val y0 = (bitmap.height * top).toInt()
-            val y1 = (bitmap.height * bottom).toInt()
-            var sum = 0.0
-            for (y in y0 until y1) {
-                for (x in x0 until x1) {
-                    val c = bitmap.getPixel(x, y)
-                    sum += (0.2126 * AndroidColor.red(c) + 0.7152 * AndroidColor.green(c) + 0.0722 * AndroidColor.blue(c)) / 255.0
-                }
-            }
+            val w = bitmap.width.coerceAtLeast(1)
+            val y0 = (bitmap.height * top).toInt().coerceIn(0, bitmap.height)
+            val y1 = (bitmap.height * bottom).toInt().coerceIn(y0, bitmap.height)
+            val rows = (y1 - y0).coerceAtLeast(1)
+            val pixels = IntArray(w * rows)
+            bitmap.getPixels(pixels, 0, w, 0, y0, w, rows)
             bitmap.recycle()
-            (sum / ((x1 - x0) * (y1 - y0))).toFloat()
+            var sum = 0.0
+            for (c in pixels) {
+                sum += (0.2126 * AndroidColor.red(c) + 0.7152 * AndroidColor.green(c) + 0.0722 * AndroidColor.blue(c)) / 255.0
+            }
+            (sum / pixels.size).toFloat()
         }
+        synchronized(LumaCache) { LumaCache[key] = computed }
+        value = computed
     }
     return luma
 }
@@ -173,12 +151,16 @@ private fun photoLuma(@DrawableRes photo: Int, top: Float, bottom: Float): Float
 /** 深浅的分界：材质区平均亮度低于它就用深色材质、白字 */
 private const val DarkBelow = 0.5f
 
-/** 两组 4×5 矩阵按 [t] 逐项插值（0 = [a]，1 = [b]） */
-private fun lerpMatrix(a: List<Float>, b: List<Float>, t: Float) = List(20) { a[it] + (b[it] - a[it]) * t }
+/** 两组 4×5 矩阵按 [t] 逐项插值（0 = [a]，1 = [b]）；两端静止时直接复用原列表零分配 */
+private fun lerpMatrix(a: List<Float>, b: List<Float>, t: Float): List<Float> = when {
+    t <= 0f -> a
+    t >= 1f -> b
+    else -> List(20) { a[it] + (b[it] - a[it]) * t }
+}
 
-/** 当前照片的深浅（0 浅 … 1 深）：换照片时 600ms 过渡，第一次量完直接到位 */
+/** 当前照片的深浅（0 浅 … 1 深）读取器：换照片时 600ms 过渡，延迟至绘制/叶节点读取，不触发整卡重组 */
 @Composable
-private fun rememberDarkness(@DrawableRes photo: Int, top: Float, bottom: Float): Float {
+private fun rememberDarknessProvider(@DrawableRes photo: Int, top: Float, bottom: Float): () -> Float {
     val luma = photoLuma(photo, top, bottom)
     val darkness = remember { Animatable(-1f) }
     LaunchedEffect(luma) {
@@ -186,110 +168,189 @@ private fun rememberDarkness(@DrawableRes photo: Int, top: Float, bottom: Float)
         val target = if (luma < DarkBelow) 1f else 0f
         if (darkness.value < 0f) darkness.snapTo(target) else darkness.animateTo(target, tween(600))
     }
-    return darkness.value.coerceAtLeast(0f)
+    return remember(darkness) { { darkness.value.coerceAtLeast(0f) } }
 }
-
-/** 浅色、深色材质之间按 [darkness] 插值 */
-private fun materialTint(darkness: Float, darkScale: Float) = lerpMatrix(tintMatrix(0.6f, 0.4f), tintMatrix(darkScale, 0f), darkness)
 
 /** primary 级的纯色：浅色黑、深色白，按 [darkness] 过渡 */
 private fun primaryColor(darkness: Float) = lerp(PrimaryOnLight, PrimaryOnDark, darkness)
 
 /** 照片卡片上的活力文字 / 图标：矩阵在浅色、深色两组之间按 [darkness] 过渡；primary 级是纯色 */
 @Composable
-private fun Vibrant(backdrop: MochiBackdrop, level: IosVibrancyLevel, darkness: Float, content: @Composable BoxScope.() -> Unit) {
+private fun Vibrant(backdrop: MochiBackdrop, level: IosVibrancyLevel, darkness: () -> Float, content: @Composable BoxScope.() -> Unit) {
+    val d = darkness()
     val light = IosVibrancy.label(level, isDark = false)
     val dark = IosVibrancy.label(level, isDark = true)
-    val matrix = if (light != null && dark != null) lerpMatrix(light, dark, darkness) else null
-    CompositionLocalProvider(LocalContentColor provides primaryColor(darkness)) {
+    val matrix = if (light != null && dark != null) lerpMatrix(light, dark, d) else null
+    CompositionLocalProvider(LocalContentColor provides primaryColor(d)) {
         // 字压在已经糊开的材质上，取样不用再模糊
         MochiVibrant(backdrop, matrix, content = content)
     }
 }
 
-/** 4×5 矩阵（偏移按 0..1）转成 Android 的颜色滤镜（偏移按 0..255） */
-private fun List<Float>.toColorFilter() = ColorFilter.colorMatrix(
-    ColorMatrix(
-        FloatArray(20) { i ->
-            if (i % 5 ==
-                4
-            ) {
-                this[i] * 255f
-            } else {
-                this[i]
-            }
-        },
-    ),
-)
+private val LightMaterialColorFilter = materialColorFilter(0f, 0.7f)
+private val DarkMaterialColorFilter = materialColorFilter(1f, 0.7f)
 
-/** 照片轮播背景：清晰照片上叠一层预模糊材质，整块录进 [backdrop] 给混合字取样，不做实时模糊 */
+/** 浅色（scale=0.6, offset=0.4）与深色（scale=darkScale, offset=0）材质按 [darkness] 合成的颜色滤镜 */
+private fun materialColorFilter(darkness: Float, darkScale: Float, reuse: FloatArray = FloatArray(20)): ColorFilter {
+    val scale = 0.6f + (darkScale - 0.6f) * darkness
+    val offset = 0.4f * (1f - darkness) * 255f
+    reuse.fill(0f)
+    reuse[0] = scale
+    reuse[4] = offset
+    reuse[6] = scale
+    reuse[9] = offset
+    reuse[12] = scale
+    reuse[14] = offset
+    reuse[18] = 1f
+    return ColorFilter.colorMatrix(ColorMatrix(reuse))
+}
+
+/** 照片轮播背景：清晰照片上叠一层预模糊材质，分段标准 drawImage 绘制（仅 20% 过渡带局部离屏，下半部零离屏），darkness 仅在 draw 阶段读取 */
 @Composable
 private fun PhotoCarouselBackground(
     backdrop: MochiBackdrop,
     @DrawableRes photo: Int,
     sharp: Map<Int, ImageBitmap>,
     soft: Map<Int, ImageBitmap>,
-    tint: List<Float>,
-    stops: Array<Pair<Float, Color>>,
+    darkness: () -> Float,
     modifier: Modifier = Modifier,
 ) {
-    val filter = tint.toColorFilter()
     Box(modifier.mochiBackdropSource(backdrop)) {
         SqueezeSlide(photo, Modifier.fillMaxSize()) { CarouselPhoto(it, sharp) }
-        SqueezeSlide(
-            photo,
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
-                },
-        ) { res ->
-            soft[res]?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, colorFilter = filter) }
+        SqueezeSlide(photo, Modifier.fillMaxSize()) { res ->
+            val bitmap = soft[res]
+            if (bitmap != null) {
+                SoftMaterialOverlay(bitmap, darkness, Modifier.fillMaxSize())
+            }
         }
     }
+}
+
+@Composable
+private fun SoftMaterialOverlay(bitmap: ImageBitmap, darkness: () -> Float, modifier: Modifier = Modifier) {
+    val tempMatrix = remember { FloatArray(20) }
+    val layerPaint = remember { Paint() }
+    val drawModifier = remember(bitmap, darkness, tempMatrix, layerPaint) {
+        Modifier.drawWithCache {
+            val scale = maxOf(size.width / bitmap.width, size.height / bitmap.height)
+            val dstW = (bitmap.width * scale).roundToInt().coerceAtLeast(1)
+            val dstH = (bitmap.height * scale).roundToInt().coerceAtLeast(1)
+            val dstOffset = IntOffset(
+                ((size.width - dstW) / 2f).roundToInt(),
+                ((size.height - dstH) / 2f).roundToInt(),
+            )
+            val dstSize = IntSize(dstW, dstH)
+            // 整像素对齐过渡带底边 y1，确保局部 saveLayer 与下方 clipRect 零接缝、零硬切边
+            val y0 = floor(size.height * 0.3f)
+            val y1 = floor(size.height * 0.5f)
+            val transitionBounds = Rect(0f, y0, size.width, y1)
+            val transitionTopLeft = Offset(0f, y0)
+            val transitionSize = Size(size.width, (y1 - y0).coerceAtLeast(0f))
+            val maskBrush = Brush.verticalGradient(
+                0f to Color.Transparent,
+                1f to Color.Black,
+                startY = y0,
+                endY = y1,
+            )
+            onDrawBehind {
+                if (size.width <= 0f || size.height <= 0f) return@onDrawBehind
+                val d = darkness()
+                val colorFilter = when {
+                    d <= 0f -> LightMaterialColorFilter
+                    d >= 1f -> DarkMaterialColorFilter
+                    else -> materialColorFilter(d, darkScale = 0.7f, reuse = tempMatrix)
+                }
+                // [0, 0.3h] 完全透明直接跳过；[0.3h, 0.5h] 仅对 20% 过渡带开局部 saveLayer 做渐隐
+                if (y1 > y0) {
+                    val canvas = drawContext.canvas
+                    canvas.saveLayer(transitionBounds, layerPaint)
+                    try {
+                        drawImage(
+                            image = bitmap,
+                            dstOffset = dstOffset,
+                            dstSize = dstSize,
+                            colorFilter = colorFilter,
+                            filterQuality = FilterQuality.Low,
+                        )
+                        drawRect(
+                            brush = maskBrush,
+                            topLeft = transitionTopLeft,
+                            size = transitionSize,
+                            blendMode = BlendMode.DstIn,
+                        )
+                    } finally {
+                        canvas.restore()
+                    }
+                }
+                // [0.5h, 1.0h] 下半部不透明区零 saveLayer，直接裁切绘制并开启硬件双线性过滤
+                if (size.height > y1) {
+                    clipRect(0f, y1, size.width, size.height) {
+                        drawImage(
+                            image = bitmap,
+                            dstOffset = dstOffset,
+                            dstSize = dstSize,
+                            colorFilter = colorFilter,
+                            filterQuality = FilterQuality.Low,
+                        )
+                    }
+                }
+            }
+        }
+    }
+    Spacer(modifier.then(drawModifier))
 }
 
 @Composable
 private fun ComparisonCard(level: IosVibrancyLevel, @DrawableRes photo: Int) {
     val sharp = rememberPreloadedPhotos(ComparisonPhotos)
     val soft = rememberBlurredPhotos(ComparisonPhotos)
-    val darkness = rememberDarkness(photo, 0.45f, 1f)
+    val darkness = rememberDarknessProvider(photo, 0.45f, 1f)
     val backdrop = rememberMochiBackdrop(Color.Black)
-    Box(Modifier.fillMaxWidth().height(320.dp).clip(MochiRoundedRectangle(24.dp))) {
+    Box(Modifier.fillMaxWidth().height(320.dp).clip(ComparisonCardShape)) {
         PhotoCarouselBackground(
             backdrop,
             photo,
             sharp,
             soft,
-            tint = materialTint(darkness, darkScale = 0.7f),
-            stops = arrayOf(0f to Color.Transparent, 0.3f to Color.Transparent, 0.5f to Color.Black, 1f to Color.Black),
+            darkness = darkness,
             modifier = Modifier.fillMaxSize(),
         )
         Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(20.dp),
             horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            val plain = primaryColor(darkness).let { it.copy(alpha = it.alpha * plainAlpha(level)) }
-            ComparisonColumn("纯色", primaryColor(darkness), Modifier.weight(1f)) {
-                CompositionLocalProvider(LocalContentColor provides plain) { Sample() }
+            ComparisonColumn("纯色", darkness, Modifier.weight(1f)) {
+                PlainSample(level, darkness)
             }
-            ComparisonColumn("混合", primaryColor(darkness), Modifier.weight(1f)) {
+            ComparisonColumn("混合", darkness, Modifier.weight(1f)) {
                 Vibrant(backdrop, level, darkness) { Sample() }
             }
         }
     }
 }
 
+@Composable
+private fun PlainSample(level: IosVibrancyLevel, darkness: () -> Float) {
+    val primary = primaryColor(darkness())
+    val plain = primary.copy(alpha = primary.alpha * plainAlpha(level))
+    CompositionLocalProvider(LocalContentColor provides plain) { Sample() }
+}
+
 /** 一列：小标签始终用主文字色，下面是被对照的内容 */
 @Composable
-private fun ComparisonColumn(label: String, labelColor: Color, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun ComparisonColumn(label: String, darkness: () -> Float, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val ts = MochiTheme.textStyles
+    val labelStyle = remember(ts.labelSmall) { ts.labelSmall.emphasized() }
     Column(modifier) {
-        Text(label, style = Ios.caption2(), color = labelColor)
+        ComparisonLabel(label, labelStyle, darkness)
         Spacer(Modifier.height(12.dp))
         content()
     }
+}
+
+@Composable
+private fun ComparisonLabel(label: String, style: TextStyle, darkness: () -> Float) {
+    Text(label, style = style, color = primaryColor(darkness()))
 }
 
 /** 被对照的内容，颜色取 LocalContentColor */

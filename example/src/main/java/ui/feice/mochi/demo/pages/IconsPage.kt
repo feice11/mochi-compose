@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,6 +113,7 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     var gridStyle by rememberSaveable { mutableIntStateOf(0) }
     var picked by rememberSaveable { mutableStateOf("heart") }
 
+    val catalogByName = remember(catalog) { catalog?.associateBy { it.name }.orEmpty() }
     val results = remember(catalog, query, category) {
         val all = catalog.orEmpty().filter { Categories[category].matches(it.name) }
         MochiIonicons.search(all, query)
@@ -126,14 +128,24 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
     }
     val columns = ((LocalConfiguration.current.screenWidthDp - 32 - 20) / 68).coerceIn(4, 8)
+    val sectionRows = remember(sections, columns) {
+        sections.map { (title, icons) -> Triple(title, icons.size, icons.chunked(columns)) }
+    }
     // 网格前面有几项：头部卡片、试一试、搜索与筛选
     val gridStart = 3
-    val headerIndex = remember(sections, columns) {
+    val headerIndex = remember(sectionRows) {
         var i = gridStart
-        sections.map { (_, icons) -> i.also { i += 1 + (icons.size + columns - 1) / columns } }
+        sectionRows.map { (_, _, rows) -> i.also { i += 1 + rows.size } }
     }
     val letters = remember(sections) { sections.map { if (it.first == "品牌") "#" else it.first }.toImmutableList() }
     val showIndex by remember(query) { derivedStateOf { query.isBlank() && list.firstVisibleItemIndex >= gridStart - 1 } }
+    val cellLabelStyle = remember(ts.labelSmall) { ts.labelSmall.copy(textAlign = TextAlign.Center) }
+    val onPickIcon = remember(sheet) {
+        { name: String ->
+            picked = name
+            sheet.show()
+        }
+    }
 
     DemoPage(
         entry,
@@ -164,14 +176,11 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 )
             }
         }
-        sections.forEach { (title, icons) ->
+        sectionRows.forEach { (title, count, rows) ->
             item(key = "h-$title", contentType = "header") {
-                MochiListSectionHeader(if (title == "结果") "${icons.size} 个结果" else title, Modifier.keepBelow(0.dp))
+                MochiListSectionHeader(if (title == "结果") "$count 个结果" else title, Modifier.keepBelow(0.dp))
             }
-            iconRows(title, icons, columns, StyleValues[gridStyle]) { name ->
-                picked = name
-                sheet.show()
-            }
+            iconRows(title, rows, columns, StyleValues[gridStyle], cellLabelStyle, reserveIndexBar = query.isBlank(), onPick = onPickIcon)
         }
         demoItem(key = "usage") {
             DemoSection("用法") {
@@ -186,7 +195,7 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
     }
 
-    IconSheet(sheet, picked, onCopy = { code ->
+    IconSheet(sheet, picked, catalogByName[picked], onCopy = { code ->
         context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Mochi", code))
         toast.show("已复制代码", subtitle = code)
     })
@@ -198,6 +207,7 @@ fun IconsPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 private fun TryIt(name: String, onNext: () -> Unit) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
+    val tryTitleStyle = remember(ts.titleMedium) { ts.titleMedium.copy(textAlign = TextAlign.Center) }
     val context = LocalContext.current
     var style by rememberSaveable { mutableIntStateOf(0) }
     var weight by rememberSaveable { mutableIntStateOf(3) }
@@ -218,7 +228,7 @@ private fun TryIt(name: String, onNext: () -> Unit) {
             Box(
                 Modifier
                     .size(132.dp)
-                    .background(cs.primaryContainer, MochiRoundedRectangle(36.dp))
+                    .background(cs.primaryContainer, TryItTileShape)
                     .mochiBounce(bounce.takeIf { it > 0 }),
                 contentAlignment = Alignment.Center,
             ) {
@@ -235,7 +245,7 @@ private fun TryIt(name: String, onNext: () -> Unit) {
         }
         MochiBlurText(
             name,
-            style = ts.titleMedium.copy(textAlign = TextAlign.Center),
+            style = tryTitleStyle,
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center,
         )
@@ -253,39 +263,38 @@ private fun TryIt(name: String, onNext: () -> Unit) {
             MochiButton(onNext, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("换一个") }
         }
     }
-    Column {
-        MochiListCard {
-            MochiListSliderRow(
-                value = weight.toFloat(),
-                onValueChange = { weight = it.roundToInt() },
-                valueRange = 0f..8f,
-                steps = 7,
-                title = "粗细",
-                valueText = WeightNames[weight],
-                supportingText = "列表行里自动取标题的字重",
-            )
-        }
+    MochiListCard {
+        MochiListSliderRow(
+            value = weight.toFloat(),
+            onValueChange = { weight = it.roundToInt() },
+            valueRange = 0f..8f,
+            steps = 7,
+            title = "粗细",
+            valueText = WeightNames[weight],
+            supportingText = "列表行里自动取标题的字重",
+        )
     }
 }
 
 /** 网格：每行一项（懒加载），一行 [columns] 个 */
 private fun LazyListScope.iconRows(
     section: String,
-    icons: List<MochiIconInfo>,
+    rows: List<List<MochiIconInfo>>,
     columns: Int,
     style: MochiIconStyle,
+    labelStyle: TextStyle,
+    reserveIndexBar: Boolean,
     onPick: (String) -> Unit,
 ) {
-    val rows = icons.chunked(columns)
     rows.forEachIndexed { r, row ->
         item(key = "$section-$r-${row.first().name}", contentType = "icons") {
             // 首末列贴两边、中间等距：按格子等分居中会两边各空半格，和卡片对不齐
             Layout(
-                content = { row.forEach { info -> IconCell(info.name, style, onPick) } },
+                content = { row.forEach { info -> IconCell(info.name, style, labelStyle, onPick) } },
                 modifier = Modifier
                     .then(if (r < rows.lastIndex) Modifier.keepBelow(8.dp) else Modifier)
                     .fillMaxWidth()
-                    .padding(end = MochiIndexBarDefaults.Width),
+                    .then(if (reserveIndexBar) Modifier.padding(end = MochiIndexBarDefaults.Width) else Modifier),
             ) { measurables, constraints ->
                 val total = constraints.maxWidth
                 val tile = TileSize.roundToPx()
@@ -312,17 +321,19 @@ private fun Modifier.keepBelow(gap: Dp): Modifier {
 }
 
 @Composable
-private fun IconCell(name: String, style: MochiIconStyle, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun IconCell(name: String, style: MochiIconStyle, labelStyle: TextStyle, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
-    val ts = MochiTheme.textStyles
     var taps by remember { mutableIntStateOf(0) }
+    val onClick = remember(name, onPick) {
+        {
+            taps++
+            onPick(name)
+        }
+    }
     Column(
         modifier
             .mochiPressDeform()
-            .clickable(interactionSource = null, indication = null) {
-                taps++
-                onPick(name)
-            }
+            .clickable(interactionSource = null, indication = null, onClick = onClick)
             .semantics { contentDescription = name },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -330,14 +341,14 @@ private fun IconCell(name: String, style: MochiIconStyle, onPick: (String) -> Un
         Box(
             Modifier
                 .size(TileSize)
-                .background(MochiDefaults.groupedContainer(), MochiRoundedRectangle(16.dp)),
+                .background(MochiDefaults.groupedContainer(), IconTileShape),
             contentAlignment = Alignment.Center,
         ) {
             MochiIonicon(name, Modifier.mochiBounce(taps.takeIf { it > 0 }), style = style, tint = cs.onSurface, size = 28.dp)
         }
         Text(
             name,
-            style = ts.labelSmall.copy(textAlign = TextAlign.Center),
+            style = labelStyle,
             color = cs.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -346,17 +357,20 @@ private fun IconCell(name: String, style: MochiIconStyle, onPick: (String) -> Un
     }
 }
 
-/** 图标详情面板 */
+/** 图标详情面板：复用外层已异步加载的 [info]，且矢量解析推迟到面板内容真正组合时执行 */
 @Composable
-private fun IconSheet(state: MochiSheetState, name: String, onCopy: (String) -> Unit) {
-    val cs = MochiTheme.colorScheme
-    val ts = MochiTheme.textStyles
-    val context = LocalContext.current
+private fun IconSheet(state: MochiSheetState, name: String, info: MochiIconInfo?, onCopy: (String) -> Unit) {
     var style by rememberSaveable { mutableIntStateOf(0) }
-    val info = remember(name) { MochiIonicons.catalog(context).firstOrNull { it.name == name } }
-    val vector = remember(name, style) { MochiIonicons.vector(context, name, StyleValues[style]) }
-    val code = if (style == 0) "MochiIonicon(\"$name\")" else "MochiIonicon(\"$name\", style = MochiIconStyle.${StyleValues[style].name})"
     MochiSheet(state) {
+        val cs = MochiTheme.colorScheme
+        val ts = MochiTheme.textStyles
+        val context = LocalContext.current
+        val vector = remember(name, style) { MochiIonicons.vector(context, name, StyleValues[style]) }
+        val code = if (style == 0) {
+            "MochiIonicon(\"$name\")"
+        } else {
+            "MochiIonicon(\"$name\", style = MochiIconStyle.${StyleValues[style].name})"
+        }
         MochiSheetScaffold(
             header = {
                 MochiSheetHeader(
@@ -373,7 +387,7 @@ private fun IconSheet(state: MochiSheetState, name: String, onCopy: (String) -> 
                 Box(
                     Modifier
                         .size(120.dp)
-                        .background(MochiDefaults.groupedContainer(), MochiRoundedRectangle(32.dp)),
+                        .background(MochiDefaults.groupedContainer(), SheetTileShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (vector != null) MochiMorphIcon(vector, tint = cs.onSurface, size = 76.dp)
@@ -436,3 +450,6 @@ private val StyleValues = listOf(MochiIconStyle.Outline, MochiIconStyle.Filled, 
 private val WeightNames = listOf("极细", "纤细", "细", "常规", "中等", "半粗", "粗", "特粗", "极粗")
 
 private val TileSize = 56.dp
+private val IconTileShape = MochiRoundedRectangle(16.dp)
+private val TryItTileShape = MochiRoundedRectangle(36.dp)
+private val SheetTileShape = MochiRoundedRectangle(32.dp)

@@ -6,12 +6,10 @@ package ui.feice.mochi.starter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -20,10 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -41,6 +35,7 @@ import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
+import ui.feice.mochi.icons.MochiIonicon
 import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
@@ -51,7 +46,6 @@ import ui.feice.mochi.navigation.MochiNavHost
 import ui.feice.mochi.navigation.mochiNavSource
 import ui.feice.mochi.navigation.rememberMochiNavigator
 import ui.feice.mochi.theme.ColorSchemeMode
-import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.ThemeController
@@ -140,7 +134,11 @@ fun MochiAppStarter(modifier: Modifier = Modifier) {
                         },
                     ) {
                         item {
-                            MochiBlurText(if (editing) "正在编辑" else "选择一项查看详情", style = MochiTheme.textStyles.bodyLarge)
+                            MochiBlurText(
+                                if (editing) "正在编辑" else "选择一项查看详情",
+                                modifier = Modifier.padding(horizontal = MochiListDefaults.TextRowPadding),
+                                style = MochiTheme.textStyles.bodyLarge,
+                            )
                         }
                         item {
                             MochiListCard {
@@ -196,7 +194,7 @@ fun MochiAppStarter(modifier: Modifier = Modifier) {
                                 MochiListRow("展开说明", trailing = { MochiSwitch(expanded, { expanded = it }) })
                                 MochiBlurVisibility(expanded) {
                                     Column(
-                                        Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                                        Modifier.padding(horizontal = MochiListDefaults.TextRowPadding, vertical = 12.dp),
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
                                         Text("卡片与内容一起平滑改变高度。", style = MochiTheme.textStyles.bodyLarge)
@@ -221,54 +219,14 @@ private fun starterTitle(route: String): String = when (route) {
     else -> route
 }
 
-private enum class StarterGlyph { Edit, Check, Refresh }
+private enum class StarterGlyph(val iconName: String, val optical: Boolean = true) {
+    Edit("create"),
+    Check("checkmark", optical = false),
+    Refresh("refresh"),
+}
 
-/** Small self-contained icons; reuse the same enum values as stable contentKey values. */
+/** Built-in Ionicons from mochi-icons; reuse the enum values as stable contentKey values. */
 @Composable
 private fun StarterIcon(glyph: StarterGlyph) {
-    val tint = LocalContentColor.current
-    Canvas(Modifier.size(22.dp)) {
-        val path = Path().apply {
-            when (glyph) {
-                StarterGlyph.Edit -> {
-                    moveTo(size.width * 0.2f, size.height * 0.8f)
-                    lineTo(size.width * 0.25f, size.height * 0.6f)
-                    lineTo(size.width * 0.7f, size.height * 0.15f)
-                    lineTo(size.width * 0.85f, size.height * 0.3f)
-                    lineTo(size.width * 0.4f, size.height * 0.75f)
-                    close()
-                }
-
-                StarterGlyph.Check -> {
-                    moveTo(size.width * 0.2f, size.height * 0.5f)
-                    lineTo(size.width * 0.42f, size.height * 0.72f)
-                    lineTo(size.width * 0.8f, size.height * 0.26f)
-                }
-
-                StarterGlyph.Refresh -> {
-                    moveTo(size.width * 0.8f, size.height * 0.4f)
-                    cubicTo(
-                        size.width * 0.7f,
-                        size.height * 0.05f,
-                        size.width * 0.15f,
-                        size.height * 0.15f,
-                        size.width * 0.2f,
-                        size.height * 0.6f,
-                    )
-                    cubicTo(
-                        size.width * 0.25f,
-                        size.height * 0.9f,
-                        size.width * 0.7f,
-                        size.height * 0.9f,
-                        size.width * 0.8f,
-                        size.height * 0.65f,
-                    )
-                    moveTo(size.width * 0.62f, size.height * 0.4f)
-                    lineTo(size.width * 0.82f, size.height * 0.4f)
-                    lineTo(size.width * 0.82f, size.height * 0.2f)
-                }
-            }
-        }
-        drawPath(path, tint, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
+    MochiIonicon(glyph.iconName, size = 22.dp, optical = glyph.optical)
 }

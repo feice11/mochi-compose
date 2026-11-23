@@ -31,10 +31,11 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
-import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.emphasized
+
+private val PhotoCardShape = MochiRoundedRectangle(20.dp)
 
 /** 长按预览：长按卡片弹出操作菜单 */
 @Composable
@@ -43,24 +44,30 @@ fun ContextMenuPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val items = remember {
         listOf(
             MochiItem("拷贝", icon = { Glyph(DemoIcons.NOTE, it) }),
-            MochiItem("分享", icon = { Glyph(DemoIcons.SHARE, it) }),
+            MochiItem(
+                "分享",
+                icon = { Glyph(DemoIcons.SHARE, it) },
+                submenu = kotlinx.collections.immutable.persistentListOf(
+                    MochiItem("原图", onClick = { last = "已选择分享原图" }),
+                    MochiItem("缩略图", onClick = { last = "已选择分享缩略图" }),
+                ),
+            ),
             MochiItem("收藏", icon = { Glyph(DemoIcons.HEART, it) }),
             MochiItem("删除", destructive = true, icon = { Glyph(DemoIcons.TRASH, it) }),
         )
     }
-    val shape = MochiRoundedRectangle(20.dp)
     DemoPage(entry, modifier) {
         demoItem {
             DemoSection("试一试", footer = last ?: "长按一张卡片，不松手也能滑到菜单项上选。", container = false) {
-                Photos.chunked(2).forEach { row ->
+                PhotoRows.forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         row.forEach { photo ->
                             MochiContextMenu(
                                 items = items,
                                 onItemClick = { last = "「${photo.title}」：${items[it].label}" },
-                                shape = shape,
+                                shape = PhotoCardShape,
                                 modifier = Modifier.weight(1f),
-                            ) { PhotoCard(photo, shape) }
+                            ) { PhotoCard(photo, PhotoCardShape) }
                         }
                     }
                 }
@@ -78,21 +85,24 @@ private val Photos = listOf(
     Photo("夜空", Tone.Neutral, DemoIcons.MOON),
 )
 
+private val PhotoRows = Photos.chunked(2)
+
 @Composable
 private fun PhotoCard(photo: Photo, shape: androidx.compose.ui.graphics.Shape) {
     val colors = photo.tone.tile()
+    val ts = MochiTheme.textStyles
+    val titleStyle = remember(ts.titleMedium) { ts.titleMedium.emphasized() }
     Box(
         Modifier
             .fillMaxWidth()
             .background(colors.container, shape)
-            .mochiAnimateHeight(shape)
             .aspectRatio(0.8f),
         contentAlignment = Alignment.BottomStart,
     ) {
         Glyph(photo.icon, colors.content, Modifier.align(Alignment.TopEnd).padding(14.dp), size = 28, filled = true)
         Column(Modifier.padding(14.dp)) {
-            Text(photo.title, style = MochiTheme.textStyles.titleMedium.emphasized(), color = colors.content)
-            Text("长按查看操作", style = MochiTheme.textStyles.bodySmall, color = colors.content.copy(alpha = 0.75f))
+            Text(photo.title, style = titleStyle, color = colors.content)
+            Text("长按查看操作", style = ts.bodySmall, color = colors.content.copy(alpha = 0.75f))
         }
     }
 }

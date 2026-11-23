@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Mochi</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main id="stage" class="stage" aria-label="Mochi 实时三维动态短片">
+    <canvas id="gl-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+
+    <!-- 2.39:1 宽银幕遮幅（默认开启影院构图，可按 C 切换全画幅） -->
+    <div id="letterbox-top" class="letterbox letterbox-top" aria-hidden="true"></div>
+    <div id="letterbox-bottom" class="letterbox letterbox-bottom" aria-hidden="true"></div>
+
+    <!-- 极简启幕层（背后直接实时渲染微距 3D 雕塑呼吸） -->
+    <section id="curtain" class="curtain" aria-label="开始播放">
+      <div class="curtain-inner">
+        <h1 class="curtain-title">Mochi</h1>
+        <div class="curtain-actions">
+          <button id="btn-enter" class="btn-primary" type="button">
+            <span class="btn-dot"></span>
+            <span>播放</span>
+          </button>
+          <button id="btn-enter-muted" class="btn-ghost" type="button">静音</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 默认彻底隐藏的极简控制条（按 H 或轻移光标至底部呼出） -->
+    <aside id="hud" class="hud hud-hidden" aria-label="播放控制">
+      <div class="hud-bottom">
+        <button id="btn-play" class="hud-icon-btn" type="button" title="播放或暂停 (Space)" aria-label="播放或暂停">
+          <span id="icon-play">❚❚</span>
+        </button>
+
+        <div id="scrubber" class="scrubber" role="slider" aria-label="进度" aria-valuemin="0" aria-valuemax="44" aria-valuenow="0" tabindex="0">
+          <div class="scrubber-track">
+            <div id="scrubber-fill" class="scrubber-fill"></div>
+            <div id="scrubber-thumb" class="scrubber-thumb"></div>
+          </div>
+        </div>
+
+        <span id="hud-timecode" class="hud-time tabular">00:00 / 00:44</span>
+
+        <div class="hud-tools">
+          <button id="btn-mute" class="hud-pill-btn active" type="button" title="声音 (M)">有声</button>
+          <button id="btn-scope" class="hud-pill-btn" type="button" title="宽银幕 (C)">宽银幕</button>
+          <button id="btn-record" class="hud-pill-btn" type="button" title="录制视频 (R)">录制</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="./bundle.js" defer></script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import ui.feice.mochi.basic.MochiTabBarDefaults
 import ui.feice.mochi.basic.MochiTabItem
 import ui.feice.mochi.demo.about.AboutPage
@@ -41,15 +42,16 @@ fun DemoApp(controller: ThemeController, modifier: Modifier = Modifier) {
                 route == GlassPresetRoute -> GlassPresetPage()
 
                 // 兼容旧版本保存的路由（一镜到底说明页已删），进侧推页
-                route == "peer" || route.startsWith("app/") -> catalog.first { it.id == "push" }.let { it.page(it) }
+                route == "peer" || route.startsWith("app/") ->
+                    catalog.firstOrNull { it.id == "push" }?.let { it.page(it) } ?: HomeScreen(controller)
 
-                route.startsWith("push/") -> PushStepPage(route.removePrefix("push/").toInt())
+                route.startsWith("push/") -> PushStepPage(route.removePrefix("push/").toIntOrNull() ?: 1)
 
-                route.startsWith("bar/") -> SharedBarStepPage(route.removePrefix("bar/").toInt())
+                route.startsWith("bar/") -> SharedBarStepPage(route.removePrefix("bar/").toIntOrNull() ?: 1)
 
                 else -> {
-                    val entry = catalog.first { it.id == route }
-                    entry.page(entry)
+                    val entry = catalog.firstOrNull { it.id == route }
+                    if (entry != null) entry.page(entry) else HomeScreen(controller)
                 }
             }
         }
@@ -61,7 +63,7 @@ internal fun routeTitle(route: String): String = when {
     route == "home" -> "首页"
     route == "about" -> "关于"
     route == GlassPresetRoute -> "玻璃样式"
-    route == "peer" || route.startsWith("app/") -> catalog.first { it.id == "push" }.title
+    route == "peer" || route.startsWith("app/") -> catalog.firstOrNull { it.id == "push" }?.title ?: route
     route.startsWith("push/") -> "第 ${route.removePrefix("push/")} 页"
     route.startsWith("bar/") -> sharedBarTitle(route.removePrefix("bar/").toIntOrNull() ?: 0)
     else -> catalog.firstOrNull { it.id == route }?.title ?: route
@@ -92,10 +94,14 @@ private fun HomeScreen(controller: ThemeController, modifier: Modifier = Modifie
         behavior = MochiTabBarDefaults.iconOnlyBehavior(selectedLabelOnly = true),
     ) { page ->
         when (page) {
-            0 -> CatalogGrid("组件", catalog.filter { it.group == CatalogGroup.Components })
-            1 -> CatalogGrid("效果", catalog.filter { it.group == CatalogGroup.Effects })
-            2 -> CatalogGrid("导航", catalog.filter { it.group == CatalogGroup.Navigation })
+            0 -> CatalogGrid("组件", ComponentEntries)
+            1 -> CatalogGrid("效果", EffectEntries)
+            2 -> CatalogGrid("导航", NavigationEntries)
             else -> ThemeTab(controller)
         }
     }
 }
+
+private val ComponentEntries = catalog.filter { it.group == CatalogGroup.Components }.toImmutableList()
+private val EffectEntries = catalog.filter { it.group == CatalogGroup.Effects }.toImmutableList()
+private val NavigationEntries = catalog.filter { it.group == CatalogGroup.Navigation }.toImmutableList()

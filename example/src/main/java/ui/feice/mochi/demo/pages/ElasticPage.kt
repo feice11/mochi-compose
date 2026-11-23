@@ -21,10 +21,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,14 +37,13 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInParent
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
@@ -118,7 +117,7 @@ private fun LockScreen() {
                 .align(Alignment.BottomCenter)
                 .padding(12.dp)
                 .fillMaxWidth()
-                .onGloballyPositioned { card = it.boundsInParent() }
+                .onPlaced { card = it.boundsInParent() }
                 .mochiRubberBand(rubber)
                 .background(cs.surfaceContainerHighest, MochiConcentric.shape(extraInset = 12.dp))
                 .padding(14.dp),
@@ -142,9 +141,14 @@ private fun LockScreen() {
 private fun FocusSwitch() {
     val cs = MochiTheme.colorScheme
     val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
-    val pos = remember { Animatable(0f) }
     var on by rememberSaveable { mutableStateOf(false) }
+    val pos = remember { Animatable(if (on) 1f else 0f) }
+    LaunchedEffect(on) {
+        val target = if (on) 1f else 0f
+        if (pos.targetValue != target) {
+            pos.animateTo(target, MochiMotions.responseSpring(0.5f, 0.6f))
+        }
+    }
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
@@ -153,7 +157,6 @@ private fun FocusSwitch() {
             .semantics { contentDescription = "勿扰模式" }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 on = !on
-                scope.launch { pos.animateTo(if (on) 1f else 0f, MochiMotions.responseSpring(0.5f, 0.6f)) }
             }
             .padding(8.dp),
     ) {

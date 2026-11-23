@@ -47,27 +47,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.translate
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.cos
@@ -78,7 +75,6 @@ import ui.feice.mochi.basic.LocalMochiFontCrossfade
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiButton
 import ui.feice.mochi.basic.MochiButtonDefaults
-import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiMiniature
 import ui.feice.mochi.basic.MochiPageControl
 import ui.feice.mochi.basic.MochiSelectFrame
@@ -88,6 +84,7 @@ import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.DemoAppearance
 import ui.feice.mochi.demo.DemoStyle
 import ui.feice.mochi.demo.NothingMode
+import ui.feice.mochi.demo.TopBarStyleRow
 import ui.feice.mochi.demo.about.DangoMark
 import ui.feice.mochi.demo.common.AppIcon
 import ui.feice.mochi.demo.common.DemoIcons
@@ -96,6 +93,7 @@ import ui.feice.mochi.demo.common.DemoSettingsSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.tile
+import ui.feice.mochi.demo.isDark
 import ui.feice.mochi.demo.theme.GlassLabel
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.mochiBlur
@@ -110,27 +108,18 @@ import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.MochiBackButton
 import ui.feice.mochi.navigation.MochiTitleBarDefaults
-import ui.feice.mochi.nothing.NothingColors
-import ui.feice.mochi.nothing.nothingColorScheme
-import ui.feice.mochi.nothing.nothingControlPalette
 import ui.feice.mochi.picker.MochiSeedPalette
+import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.ColorSchemeMode
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.LocalMochiControlPalette
 import ui.feice.mochi.theme.MochiDefaults
-import ui.feice.mochi.theme.MochiGlassStyle
 import ui.feice.mochi.theme.MochiGraphics
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.emphasized
 import ui.feice.mochi.theme.isDark
 import ui.feice.mochi.utils.rememberMochiHaptics
-
-internal fun NothingMode.isDark(systemDark: Boolean): Boolean = when (this) {
-    NothingMode.Light -> false
-    NothingMode.Dark -> true
-    NothingMode.System -> systemDark
-}
 
 /** 首次引导层（参照 iOS 26 设置助理），没走完引导时盖在 App 上面。 */
 @Composable
@@ -160,9 +149,9 @@ internal fun OnboardingLayer(appearance: DemoAppearance) {
             .mochiBlur(continuous = true) { 24.dp * (1f - open.value) }
             .graphicsLayer {
                 val p = open.value
-                val radius = (1f - p).coerceIn(0f, 1f) * 44.dp.toPx()
-                shape = WindowShape(0f, size.height, radius / density)
-                clip = p < 0.999f
+                val moving = p < 0.999f
+                clip = moving
+                if (moving) shape = MochiRoundedRectangle(((1f - p).coerceIn(0f, 1f) * 44f).dp)
             }
             // 挡住底下 App 的触摸
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
@@ -170,19 +159,6 @@ internal fun OnboardingLayer(appearance: DemoAppearance) {
         // 引导在 DemoApp 的越界回弹范围外，自己包一层；换字体时各文字原位模糊替换，不做整屏转场
         CompositionLocalProvider(LocalMochiFontCrossfade provides true) {
             ProvideMochiOverscroll { DemoOnboarding(appearance) }
-        }
-    }
-}
-
-/** 竖直方向裁出 [top]~[bottom] 一段的连续曲率（G2）圆角窗口，[radius] 单位 dp */
-private class WindowShape(private val top: Float, private val bottom: Float, private val radius: Float) : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val h = (bottom - top).coerceAtLeast(0f)
-        val inner = MochiRoundedRectangle(radius.coerceAtLeast(0f).dp).createOutline(Size(size.width, h), layoutDirection, density)
-        return when (inner) {
-            is Outline.Generic -> Outline.Generic(Path().apply { addPath(inner.path, Offset(0f, top)) })
-            is Outline.Rounded -> Outline.Rounded(inner.roundRect.translate(Offset(0f, top)))
-            is Outline.Rectangle -> Outline.Rectangle(inner.rect.translate(Offset(0f, top)))
         }
     }
 }
@@ -398,7 +374,7 @@ private fun WelcomePage(appearance: DemoAppearance, t: () -> Float, lead: Long) 
         GlassDango(Modifier.size(168.dp), startDelay)
         Spacer(Modifier.height(20.dp))
         HandwrittenHello(
-            if (appearance.style == DemoStyle.Nothing) NothingColors.Accent else MochiTheme.colorScheme.primary,
+            MochiTheme.colorScheme.primary,
             Modifier.fillMaxWidth().height(96.dp),
             startDelay = startDelay,
         )
@@ -472,7 +448,7 @@ private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
     PageColumn {
         PageHeading("选择主题", "主题决定配色和控件样式。", t)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            listOf(DemoStyle.Mochi to "Mochi", DemoStyle.Nothing to "Nothing").forEachIndexed { index, (style, label) ->
+            listOf(DemoStyle.Mochi to "Mochi", DemoStyle.Ios to "iOS").forEachIndexed { index, (style, label) ->
                 Column(Modifier.weight(1f).pop(t, 2 + index), horizontalAlignment = Alignment.CenterHorizontally) {
                     val selected = appearance.style == style
                     MochiSelectFrame(selected, cornerRadius = 30.dp, modifier = Modifier.fillMaxWidth().aspectRatio(0.56f), onClick = {
@@ -490,29 +466,19 @@ private fun StylePage(appearance: DemoAppearance, t: () -> Float) {
                 }
             }
         }
-        Spacer(Modifier.height(MochiListDefaults.SectionSpacing))
-        MochiListSection(modifier = Modifier.pop(t, 4)) {
-            MochiListRow("iOS", checked = appearance.style == DemoStyle.Ios, onClick = {
-                if (appearance.style != DemoStyle.Ios) {
-                    haptics.confirm()
-                    appearance.style = DemoStyle.Ios
-                }
-            })
-        }
     }
 }
 
 /** 主题卡片里的缩小版界面，套用卡片自己的主题、当前的明暗 */
 @Composable
 private fun StylePreview(style: DemoStyle, appearance: DemoAppearance) {
-    val nothing = style == DemoStyle.Nothing
     val dark = MochiTheme.colorScheme.isDark
-    val colors = if (nothing) nothingColorScheme(dark) else appearance.controller.colorScheme(dark)
+    val colors = appearance.colorScheme(dark, style)
     val textStyles = MochiTheme.textStyles
     CompositionLocalProvider(
-        LocalMochiControlPalette provides if (nothing) nothingControlPalette(dark) else null,
+        LocalMochiControlPalette provides appearance.controlPalette(dark, style),
     ) {
-        MochiTheme(colors = colors, textStyles = textStyles) {
+        MochiTheme(colors = colors, textStyles = textStyles, systemBarAppearance = false) {
             MochiMiniature(scale = 0.56f) {
                 Column(
                     Modifier.fillMaxSize().background(MochiDefaults.groupedBackground()).padding(horizontal = 16.dp, vertical = 28.dp),
@@ -547,13 +513,6 @@ private fun StylePreview(style: DemoStyle, appearance: DemoAppearance) {
                         {
                         },
                         Modifier.fillMaxWidth(),
-                        colors = if (nothing) {
-                            nothingButton()
-                        } else {
-                            ui.feice.mochi.basic.MochiButtonDefaults.colors(
-                                MochiButtonStyle.Filled,
-                            )
-                        },
                     ) {
                         Text("继续")
                     }
@@ -562,12 +521,6 @@ private fun StylePreview(style: DemoStyle, appearance: DemoAppearance) {
         }
     }
 }
-
-@Composable
-private fun nothingButton() = ui.feice.mochi.basic.MochiButtonDefaults.colors(MochiButtonStyle.Filled).copy(
-    container = NothingColors.Accent,
-    content = Color.White,
-)
 
 // ---------- 第 3 页：外观 ----------
 
@@ -659,52 +612,65 @@ private fun AppearancePage(appearance: DemoAppearance, t: () -> Float) {
 private fun MaterialSettings(appearance: DemoAppearance) {
     DemoSettingsSection("材质") {
         MochiListRow(GlassLabel, trailing = { MochiSwitch(appearance.glass, { appearance.glass = it }) })
-        MochiListRow(
-            "顶栏模糊",
-            trailing = { MochiSwitch(appearance.blurEffects, { appearance.blurEffects = it }) },
-        )
+        TopBarStyleRow(appearance.topBarStyle) { appearance.topBarStyle = it }
     }
 }
 
-/** 明暗缩略图；自动 = 斜分一半浅一半深 */
+/** 明暗缩略图（G2 连续圆角缓存绘制）；自动 = 斜分一半浅一半深 */
 @Composable
 private fun ShadeThumb(shade: Shade, accent: Color) {
-    Canvas(Modifier.fillMaxSize()) {
-        fun screen(dark: Boolean) {
-            val bg = if (dark) Color(0xFF111111) else Color(0xFFF2F2F7)
-            val card = if (dark) Color(0xFF2A2A2C) else Color.White
-            val bar = if (dark) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.12f)
-            drawRect(bg)
-            val pad = size.width * 0.12f
-            val w = size.width - pad * 2f
-            val r = CornerRadius(size.width * 0.08f)
-            drawRoundRect(bar, Offset(pad, size.height * 0.1f), Size(w * 0.55f, size.height * 0.035f), r)
-            drawRoundRect(card, Offset(pad, size.height * 0.2f), Size(w, size.height * 0.28f), r)
-            for (k in 0 until 3) {
-                val y = size.height * (0.24f + k * 0.08f)
-                drawCircle(if (k == 0) accent else bar, size.width * 0.045f, Offset(pad + w * 0.14f, y + size.height * 0.015f))
-                drawRoundRect(bar, Offset(pad + w * 0.28f, y), Size(w * 0.5f, size.height * 0.03f), r)
-            }
-            drawRoundRect(card, Offset(pad, size.height * 0.53f), Size(w, size.height * 0.16f), r)
-            drawRoundRect(accent, Offset(pad, size.height * 0.82f), Size(w, size.height * 0.08f), CornerRadius(size.height))
-        }
-        when (shade) {
-            Shade.Light -> screen(false)
-
-            Shade.Dark -> screen(true)
-
-            Shade.Auto -> {
-                screen(false)
+    Spacer(
+        Modifier
+            .fillMaxSize()
+            .drawWithCache {
+                val pad = size.width * 0.12f
+                val w = (size.width - pad * 2f).coerceAtLeast(0f)
+                val r = (size.width * 0.08f).toDp()
+                val rectShape = MochiRoundedRectangle(r)
+                val topBarOutline = rectShape.createOutline(Size(w * 0.55f, size.height * 0.035f), layoutDirection, this)
+                val card1Outline = rectShape.createOutline(Size(w, size.height * 0.28f), layoutDirection, this)
+                val rowLineOutline = rectShape.createOutline(Size(w * 0.5f, size.height * 0.03f), layoutDirection, this)
+                val card2Outline = rectShape.createOutline(Size(w, size.height * 0.16f), layoutDirection, this)
+                val buttonOutline = MochiCapsule.createOutline(Size(w, size.height * 0.08f), layoutDirection, this)
                 val cut = Path().apply {
                     moveTo(size.width, 0f)
                     lineTo(size.width, size.height)
                     lineTo(0f, size.height)
                     close()
                 }
-                clipPath(cut) { screen(true) }
-            }
-        }
-    }
+                onDrawBehind {
+                    fun screen(dark: Boolean) {
+                        val bg = if (dark) Color(0xFF111111) else Color(0xFFF2F2F7)
+                        val card = if (dark) Color(0xFF2A2A2C) else Color.White
+                        val bar = if (dark) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.12f)
+                        drawRect(bg)
+                        translate(pad, size.height * 0.1f) { drawOutline(topBarOutline, bar) }
+                        translate(pad, size.height * 0.2f) { drawOutline(card1Outline, card) }
+                        for (k in 0 until 3) {
+                            val y = size.height * (0.24f + k * 0.08f)
+                            drawCircle(
+                                if (k == 0) accent else bar,
+                                size.width * 0.045f,
+                                Offset(pad + w * 0.14f, y + size.height * 0.015f),
+                            )
+                            translate(pad + w * 0.28f, y) { drawOutline(rowLineOutline, bar) }
+                        }
+                        translate(pad, size.height * 0.53f) { drawOutline(card2Outline, card) }
+                        translate(pad, size.height * 0.82f) { drawOutline(buttonOutline, accent) }
+                    }
+                    when (shade) {
+                        Shade.Light -> screen(false)
+
+                        Shade.Dark -> screen(true)
+
+                        Shade.Auto -> {
+                            screen(false)
+                            clipPath(cut) { screen(true) }
+                        }
+                    }
+                }
+            },
+    )
 }
 
 @Composable
@@ -809,8 +775,6 @@ private fun DonePage(appearance: DemoAppearance, t: () -> Float, active: Boolean
 }
 
 private fun summary(appearance: DemoAppearance): String = when (appearance.style) {
-    DemoStyle.Nothing -> "Nothing · ${appearance.nothingMode.shade().summary()}"
-
     DemoStyle.Ios -> "iOS · ${appearance.nothingMode.shade().summary()}"
 
     DemoStyle.Mochi -> {

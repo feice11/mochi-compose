@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.MochiBadgedBox
 import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonDefaults
+import ui.feice.mochi.basic.MochiButtonGroup
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
@@ -46,10 +48,12 @@ fun BadgePage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     BadgedAppIcon("收藏", DemoIcons.HEART, Tone.Primary, if (dot) "" else null)
                     BadgedAppIcon("通讯录", DemoIcons.USER, Tone.Secondary, if (count > 0) (count * 37).toString() else null)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MochiButton({ count++ }, style = MochiButtonStyle.Tonal) { Text("+1") }
-                    MochiButton({ count = (count - 1).coerceAtLeast(0) }, style = MochiButtonStyle.Tonal) { Text("−1") }
-                    MochiButton({ dot = !dot }, style = MochiButtonStyle.Tonal) { Text("红点") }
+                MochiButtonGroup {
+                    MochiButton({ count++ }, style = MochiButtonStyle.Glass) { Text("+1") }
+                    MochiButton({ count = (count - 1).coerceAtLeast(0) }, style = MochiButtonStyle.Glass) { Text("−1") }
+                    MochiButton({
+                        dot = !dot
+                    }, style = MochiButtonStyle.Glass, behavior = MochiButtonDefaults.behavior(fuseGroup = "dot")) { Text("红点") }
                     MochiButton({ count = 0 }, style = MochiButtonStyle.Text) { Text("清除") }
                 }
             }

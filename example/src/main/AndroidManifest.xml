@@ -12,6 +12,7 @@
         <profileable android:shell="true" />
         <activity
             android:name=".MainActivity"
+            android:colorMode="wideColorGamut"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

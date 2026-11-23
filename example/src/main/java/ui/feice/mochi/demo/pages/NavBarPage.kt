@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -22,6 +23,7 @@ import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.Tone
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.demo.common.tile
+import ui.feice.mochi.demo.routeTitle
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
@@ -36,20 +38,27 @@ fun NavBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     var query by rememberSaveable { mutableStateOf("") }
     var editing by rememberSaveable { mutableStateOf(false) }
-    val shown = Settings.filter { query.isBlank() || it.first.contains(query.trim(), ignoreCase = true) }
+    val trimmed = query.trim()
+    val shown = remember(trimmed) { Settings.filter { trimmed.isEmpty() || it.first.contains(trimmed, ignoreCase = true) } }
+    val groupedRows = remember(shown) {
+        Groups.mapNotNull { (header, names) ->
+            val rows = shown.filter { it.first in names }
+            if (rows.isEmpty()) null else header to rows
+        }
+    }
 
     MochiLazyCompactTitleScaffold(
         title = entry.title,
         modifier = modifier,
-        subtitle = if (query.isBlank()) "${shown.size} 项设置" else "找到 ${shown.size} 项",
-        navigationIcon = { MochiBackButton() },
+        subtitle = if (trimmed.isEmpty()) "${shown.size} 项设置" else "找到 ${shown.size} 项",
+        navigationIcon = { MochiBackButton(history = ::routeTitle) },
         actions = {
             MochiBarButton(if (editing) "完成" else "编辑", onClick = { editing = !editing }, navId = "navbar.primary")
         },
         searchBar = { MochiSearchBar(query, { query = it }) },
     ) {
         if (shown.isEmpty()) {
-            demoItem {
+            demoItem(key = "empty") {
                 MochiEmptyState(
                     "无结果",
                     Modifier.fillMaxWidth().padding(top = 48.dp, bottom = 24.dp),
@@ -58,31 +67,28 @@ fun NavBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 )
             }
         }
-        demoItem {
-            Groups.forEach { (header, names) ->
-                val rows = shown.filter { it.first in names }
-                if (rows.isNotEmpty()) {
-                    MochiListSection(header = if (query.isBlank()) header else null) {
-                        rows.forEach { (name, glyph) ->
-                            MochiListRow(
-                                name,
-                                onClick = {},
-                                chevron = !editing,
-                                leading = {
-                                    AppIcon(
-                                        glyph,
-                                        Tone.Neutral.tile(),
-                                        MochiListDefaults.LeadingSize,
-                                        corner = MochiListDefaults.LeadingCorner,
-                                    )
-                                },
-                            )
-                        }
+        groupedRows.forEach { (header, rows) ->
+            demoItem(key = "group-$header") {
+                MochiListSection(header = if (trimmed.isEmpty()) header else null) {
+                    rows.forEach { (name, glyph) ->
+                        MochiListRow(
+                            name,
+                            onClick = {},
+                            chevron = !editing,
+                            leading = {
+                                AppIcon(
+                                    glyph,
+                                    Tone.Neutral.tile(),
+                                    MochiListDefaults.LeadingSize,
+                                    corner = MochiListDefaults.LeadingCorner,
+                                )
+                            },
+                        )
                     }
                 }
             }
         }
-        demoItem {
+        demoItem(key = "footer") {
             MochiListSectionFooter("聚焦搜索栏后，拖动内容可以收起键盘。")
         }
     }

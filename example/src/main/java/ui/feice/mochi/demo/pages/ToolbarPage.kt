@@ -29,6 +29,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.persistentListOf
 import ui.feice.mochi.basic.MochiBarButton
@@ -70,6 +72,7 @@ fun ToolbarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val first = remember { FocusRequester() }
     val second = remember { FocusRequester() }
     val focus = LocalFocusManager.current
+    val moreItems = remember { persistentListOf(MochiItem("复制"), MochiItem("重命名"), MochiItem("删除")) }
     Box(modifier.fillMaxSize()) {
         DemoPage(entry) {
             demoItem {
@@ -77,12 +80,22 @@ fun ToolbarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     ToolbarStage { edge ->
                         MochiBottomToolbar(Modifier.align(Alignment.BottomCenter), edgeColor = edge, windowInsets = WindowInsets(0)) {
                             MochiBarGroup {
-                                MochiBarGroupItem({}) { Glyph(DemoIcons.BACK, cs.onSurface, size = 20) }
-                                MochiBarGroupItem({}) { Glyph(DemoIcons.CHEVRON_RIGHT, cs.onSurface, size = 20) }
+                                MochiBarGroupItem({}, Modifier.semantics { contentDescription = "后退" }) {
+                                    Glyph(DemoIcons.BACK, cs.onSurface, size = 20)
+                                }
+                                MochiBarGroupItem({}, Modifier.semantics { contentDescription = "前进" }) {
+                                    Glyph(DemoIcons.CHEVRON_RIGHT, cs.onSurface, size = 20)
+                                }
                             }
                             Spacer(Modifier.weight(1f))
-                            MochiBarIconButton({}) { Glyph(DemoIcons.SHARE, cs.onSurface) }
-                            MochiBarIconButton({}) { Glyph(DemoIcons.PLUS, cs.onSurface) }
+                            MochiBarGroup {
+                                MochiBarGroupItem({}, Modifier.semantics { contentDescription = "分享" }) {
+                                    Glyph(DemoIcons.SHARE, cs.onSurface)
+                                }
+                                MochiBarGroupItem({}, Modifier.semantics { contentDescription = "新建" }) {
+                                    Glyph(DemoIcons.PLUS, cs.onSurface)
+                                }
+                            }
                         }
                     }
                 }
@@ -91,14 +104,21 @@ fun ToolbarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 DemoSection("浮动工具栏", padding = 0.dp) {
                     ToolbarStage { _ ->
                         MochiFloatingToolbar(Modifier.align(Alignment.BottomCenter), windowInsets = WindowInsets(0)) {
-                            MochiBarGroupItem({}) { Glyph(DemoIcons.SHARE, cs.onSurface) }
-                            MochiBarGroupItem({}) { Glyph(DemoIcons.PIN, cs.onSurface) }
-                            MochiBarGroupItem({}) { Glyph(DemoIcons.PLUS, cs.onSurface) }
+                            MochiBarGroupItem({}, Modifier.semantics { contentDescription = "分享" }) {
+                                Glyph(DemoIcons.SHARE, cs.onSurface)
+                            }
+                            MochiBarGroupItem({}, Modifier.semantics { contentDescription = "置顶" }) {
+                                Glyph(DemoIcons.PIN, cs.onSurface)
+                            }
+                            MochiBarGroupItem({}, Modifier.semantics { contentDescription = "新建" }) {
+                                Glyph(DemoIcons.PLUS, cs.onSurface)
+                            }
                             MochiBarGroupDropdownItem(
                                 expanded = menu,
                                 onExpandedChange = { menu = it },
-                                items = persistentListOf(MochiItem("复制"), MochiItem("重命名"), MochiItem("删除")),
+                                items = moreItems,
                                 onItemClick = {},
+                                modifier = Modifier.semantics { contentDescription = "更多" },
                             ) { Glyph(DemoIcons.CHEVRON_RIGHT, cs.onSurface, size = 20) }
                         }
                     }
@@ -133,7 +153,11 @@ fun ToolbarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                             onQueryChange = { query = it },
                             modifier = Modifier.align(Alignment.BottomCenter),
                             edgeColor = edge,
-                            trailing = { MochiBarIconButton({}) { Glyph(DemoIcons.PLUS, cs.onSurface) } },
+                            trailing = {
+                                MochiBarIconButton({}, Modifier.semantics { contentDescription = "新建" }) {
+                                    Glyph(DemoIcons.PLUS, cs.onSurface)
+                                }
+                            },
                         )
                     }
                 }

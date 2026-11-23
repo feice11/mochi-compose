@@ -5,6 +5,7 @@ package ui.feice.mochi.demo.common
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -99,6 +100,7 @@ internal object DemoIcons {
     val AVATAR = DemoIcon("person-circle")
     val GAUGE = DemoIcon("speedometer")
     val ICONS = DemoIcon("shapes")
+    val SHAPES = DemoIcon("sparkles")
 
     // 目录：导航
     val NAVBAR = DemoIcon("compass")
@@ -151,10 +153,28 @@ enum class Tone { Primary, Secondary, Tertiary, Neutral }
 @Composable
 internal fun Tone.tile(): IconColors {
     val cs = MochiTheme.colorScheme
-    return when (this) {
-        Tone.Primary -> IconColors(cs.primaryContainer, cs.onPrimaryContainer)
-        Tone.Secondary -> IconColors(cs.secondaryContainer, cs.onSecondaryContainer)
-        Tone.Tertiary -> IconColors(cs.tertiaryContainer, cs.onTertiaryContainer)
-        Tone.Neutral -> IconColors(cs.surfaceContainerHighest, cs.onSurfaceVariant)
+    val container: Color
+    val content: Color
+    when (this) {
+        Tone.Primary -> {
+            container = cs.primaryContainer
+            content = cs.onPrimaryContainer
+        }
+
+        Tone.Secondary -> {
+            container = cs.secondaryContainer
+            content = cs.onSecondaryContainer
+        }
+
+        Tone.Tertiary -> {
+            container = cs.tertiaryContainer
+            content = cs.onTertiaryContainer
+        }
+
+        Tone.Neutral -> {
+            container = cs.surfaceContainerHighest
+            content = cs.onSurfaceVariant
+        }
     }
+    return remember(container, content) { IconColors(container, content) }
 }

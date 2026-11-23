@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,8 +31,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.Text
@@ -42,9 +46,11 @@ import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurCrossfade
-import ui.feice.mochi.effect.mask.MochiFadeEdges
-import ui.feice.mochi.effect.mask.mochiFadeMask
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
+import ui.feice.mochi.effect.mask.mochiScrollFadeMask
+import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.list.MochiListSectionFooter
@@ -94,10 +100,12 @@ private val Chats = listOf(
 fun SidebarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val outer = MochiNavigator.current
     val sidebar = rememberMochiSidebarState()
+    val sidebarList = rememberLazyListState()
     val nav = rememberMochiNavigator("chat")
     var style by rememberSaveable { mutableStateOf(MochiSidebarStyle.Push) }
     var current by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
+    val sentByChat = remember { HashMap<Int, SnapshotStateList<String>>() }
     val cs = MochiTheme.colorScheme
 
     MochiSidebarLayout(
@@ -112,14 +120,17 @@ fun SidebarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     sidebar.close()
                 }) { Glyph(DemoIcons.EDIT, cs.onSurface, size = 18) }
             }
-            val shown = Chats.filter { query.isBlank() || it.title.contains(query.trim()) }
+            val shown = remember(query) { Chats.filter { query.isBlank() || it.title.contains(query.trim()) } }
+            val grouped = remember(shown) { shown.groupBy { it.group } }
             LazyColumn(
                 Modifier
                     .weight(1f)
-                    .mochiFadeMask(MochiFadeEdges.vertical()),
+                    .mochiScrollFadeMask(sidebarList),
+                state = sidebarList,
                 contentPadding = PaddingValues(bottom = 12.dp),
+                flingBehavior = MochiScrollDefaults.flingBehavior(),
             ) {
-                shown.groupBy { it.group }.forEach { (group, chats) ->
+                grouped.forEach { (group, chats) ->
                     item(key = "h-$group") { MochiSidebarSectionHeader(group) }
                     items(chats, key = { it.id }) { chat ->
                         MochiSidebarItem(
@@ -154,8 +165,10 @@ fun SidebarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 
                 else -> ChatScreen(
                     chat = Chats.getOrNull(current),
+                    sentMessages = { id -> sentByChat.getOrPut(id) { mutableStateListOf() } },
                     onMenu = { sidebar.open() },
                     onNew = { current = -1 },
+                    onSend = { id, msg -> sentByChat.getOrPut(id) { mutableStateListOf() }.add(msg) },
                 )
             }
         }
@@ -164,28 +177,37 @@ fun SidebarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
+private fun ChatScreen(
+    chat: Chat?,
+    sentMessages: (Int) -> List<String>,
+    onMenu: () -> Unit,
+    onNew: () -> Unit,
+    onSend: ((Int, String) -> Unit)? = null,
+) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
-    val sent = remember(chat?.id) { mutableStateListOf<String>() }
+    val activeId = chat?.id ?: -1
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + MochiTitleBarDefaults.Height
-    // 每个对话各自保存滚动位置，顶栏底色跟当前对话走
+    // 每个对话各自保存滚动位置与已发送消息，切对话淡出期间旧消息不消失
     val listStates = remember { HashMap<Int, LazyListState>() }
-    val current = listStates.getOrPut(chat?.id ?: -1) { LazyListState() }
+    val current = listStates.getOrPut(activeId) { LazyListState() }
+    val barBackdrop = rememberMochiBarBackdrop()
     Box(
         Modifier
             .fillMaxSize()
             .background(MochiDefaults.groupedBackground()),
     ) {
         Column(Modifier.fillMaxSize()) {
-            MochiBlurCrossfade(chat?.id ?: -1, Modifier.weight(1f).fillMaxWidth()) { id ->
+            MochiBlurCrossfade(activeId, Modifier.weight(1f).fillMaxWidth().mochiBackdropSource(barBackdrop)) { id ->
                 val c = Chats.getOrNull(id)
                 val listState = listStates.getOrPut(id) { LazyListState() }
+                val sent = sentMessages(id)
                 LazyColumn(
                     Modifier.fillMaxSize().mochiScrollEdgeBlur(top, MochiScrollEdgeDefaults.progress(listState)),
                     state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
+                    flingBehavior = MochiScrollDefaults.flingBehavior(),
                 ) {
                     if (c == null) {
                         item {
@@ -208,7 +230,7 @@ private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
             }
             DemoComposerRow(
                 "问点什么",
-                { sent.add(it) },
+                { onSend?.invoke(activeId, it) },
                 Modifier
                     // 浮动侧边栏会藏起小白条，用不随显隐变化的安全区，输入栏才不跳
                     .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
@@ -219,8 +241,23 @@ private fun ChatScreen(chat: Chat?, onMenu: () -> Unit, onNew: () -> Unit) {
         MochiTitleBar(
             title = chat?.title ?: "新对话",
             backgroundProgress = MochiScrollEdgeDefaults.progress(current),
-            navigationIcon = { MochiBarIconButton(onClick = onMenu, navId = "sidebar-menu") { Glyph(DemoIcons.SIDEBAR, cs.onSurface) } },
-            actions = { MochiBarIconButton(onClick = onNew, navId = "sidebar-new") { Glyph(DemoIcons.EDIT, cs.onSurface, size = 20) } },
+            backdrop = barBackdrop,
+            navigationIcon = {
+                MochiBarIconButton(
+                    onClick = onMenu,
+                    modifier = Modifier.semantics { contentDescription = "打开侧边栏" },
+                    navId = "sidebar-menu",
+                    contentKey = DemoIcons.SIDEBAR,
+                ) { Glyph(DemoIcons.SIDEBAR, cs.onSurface) }
+            },
+            actions = {
+                MochiBarIconButton(
+                    onClick = onNew,
+                    modifier = Modifier.semantics { contentDescription = "新对话" },
+                    navId = "sidebar-new",
+                    contentKey = DemoIcons.EDIT,
+                ) { Glyph(DemoIcons.EDIT, cs.onSurface, size = 20) }
+            },
         )
     }
 }

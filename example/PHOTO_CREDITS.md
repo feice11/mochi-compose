@@ -1,8 +1,8 @@
-# 示例 App 照片来源 / Photo credits
+# 示例应用照片来源 / Photo Credits
 
-「主题 › 液态玻璃」预览和「效果 › 混合字」对照里的风景照，全部来自 Wikimedia Commons，许可为 CC0 或公有领域。缩到 1080px 宽、转成 WebP，放在 `src/main/res/drawable-nodpi/scenery_*.webp`。
+示例应用「主题 › 玻璃样式」预览与「效果 › 混合字」对照中使用的风景照片来自 Wikimedia Commons，采用 CC0 或公有领域（Public domain）许可。图片统一缩放至 1080px 宽并转换为 WebP 格式，存放于 `example/src/main/res/drawable-nodpi/scenery_*.webp`。
 
-The scenery photos in the Theme › Liquid Glass preview and the Effects › Vibrancy comparison all come from Wikimedia Commons under CC0 or the public domain. They were resized to 1080px wide, converted to WebP and stored as `src/main/res/drawable-nodpi/scenery_*.webp`.
+The scenery photographs used in the Theme › Glass styles preview and the Effects › Vibrancy comparison in the catalog app come from Wikimedia Commons under CC0 or public-domain dedications. Each image is resized to 1080px wide, encoded as WebP, and stored under `example/src/main/res/drawable-nodpi/scenery_*.webp`.
 
 | 文件 / File | 原图 / Source | 作者 / Author | 许可 / License |
 |---|---|---|---|

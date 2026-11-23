@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -27,13 +26,17 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
+import ui.feice.mochi.demo.common.DemoFooterSlot
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.demoItem
+import ui.feice.mochi.effect.mask.mochiScrollFadeMask
+import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.mochiContainedScroll
 import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
 import ui.feice.mochi.list.MochiIndexBar
+import ui.feice.mochi.list.MochiIndexBarDefaults
+import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
-import ui.feice.mochi.list.MochiListSectionFooter
 import ui.feice.mochi.list.MochiListSectionHeader
 import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
@@ -58,10 +61,13 @@ fun IndexBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 ) {
                     val overscroll = rememberMochiOverscrollEffect()
                     LazyColumn(
-                        Modifier.mochiContainedScroll(overscroll),
+                        Modifier
+                            .mochiScrollFadeMask(listState)
+                            .mochiContainedScroll(overscroll),
                         state = listState,
                         overscrollEffect = overscroll,
-                        contentPadding = PaddingValues(end = 24.dp),
+                        flingBehavior = MochiScrollDefaults.flingBehavior(),
+                        contentPadding = PaddingValues(end = MochiIndexBarDefaults.Width),
                     ) {
                         Contacts.forEach { (l, names) ->
                             item(key = "h-$l") {
@@ -69,7 +75,7 @@ fun IndexBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                                     l,
                                     style = MochiTheme.textStyles.footnote,
                                     color = cs.onSurfaceVariant,
-                                    modifier = Modifier.padding(start = 22.dp, top = 12.dp, bottom = 4.dp),
+                                    modifier = Modifier.padding(start = MochiListDefaults.TextRowPadding, top = 12.dp, bottom = 4.dp),
                                 )
                             }
                             names.forEach { name -> item(key = name) { MochiListRow(name) } }
@@ -82,10 +88,10 @@ fun IndexBarPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                             val target = headerIndex(Letters[i])
                             if (target >= 0) scope.launch { listState.scrollToItem(target) }
                         },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                        modifier = Modifier.align(Alignment.CenterEnd),
                     )
                 }
-                MochiListSectionFooter(if (letter.isEmpty()) "按住右边的字母上下滑动。" else "已跳到 $letter。")
+                DemoFooterSlot(if (letter.isEmpty()) "按住右边的字母上下滑动。" else "已跳到 $letter。")
             }
         }
     }

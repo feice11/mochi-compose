@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -118,6 +120,9 @@ internal fun RibbonEggOverlay(state: RibbonEggState, onClose: () -> Unit, modifi
         }
     }
 
+    val fallbackClip = remember { Path() }
+    val fallbackRibbon = remember { Path() }
+
     Box(
         modifier
             .fillMaxSize()
@@ -146,16 +151,27 @@ internal fun RibbonEggOverlay(state: RibbonEggState, onClose: () -> Unit, modifi
                     }
                 }
             }
-            .then(if (state.shader == null || !MochiGraphics.shaders) Modifier.drawBehind { drawRibbonsFallback(state) } else Modifier),
+            .then(
+                if (state.shader == null || !MochiGraphics.shaders) {
+                    Modifier.drawBehind { drawRibbonsFallback(state, fallbackClip, fallbackRibbon) }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
-        MochiBarIconButton(
-            onClick = ::close,
-            modifier = Modifier
+        // 透明度挂在包含外边距的容器上，避免按按钮边界开离屏层裁切玻璃外阴影
+        Box(
+            Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(16.dp)
-                .graphicsLayer { alpha = ((state.open.value - 0.5f) / 0.5f).coerceIn(0f, 1f) },
-        ) { Glyph(DemoIcons.CLOSE, MochiTheme.colorScheme.onSurface, size = 20) }
+                .graphicsLayer { alpha = ((state.open.value - 0.5f) / 0.5f).coerceIn(0f, 1f) }
+                .padding(16.dp),
+        ) {
+            MochiBarIconButton(
+                onClick = ::close,
+                modifier = Modifier.semantics { contentDescription = "关闭" },
+            ) { Glyph(DemoIcons.CLOSE, MochiTheme.colorScheme.onSurface, size = 20) }
+        }
     }
 }
 
@@ -182,24 +198,29 @@ internal class RibbonShader private constructor(private val shader: RuntimeShade
 
 // 降级画法（Android 12 及以下）
 
-private fun DrawScope.drawRibbonsFallback(s: RibbonEggState) {
+private fun DrawScope.drawRibbonsFallback(s: RibbonEggState, clip: Path, ribbon: Path) {
     val o = s.open.value.coerceIn(0f, 1f)
     if (o <= 0f) return
     val m = min(size.width, size.height)
     val far = hypot(size.width, size.height)
-    clipPath(Path().apply { addOval(Rect(s.origin, o * far)) }) {
+    clip.reset()
+    clip.addOval(Rect(s.origin, o * far))
+    clipPath(clip) {
         for (k in 0 until 3) {
             val ang = RibbonAngles[k]
+            val cosA = cos(ang)
+            val sinA = sin(ang)
             val base = (size.height * 0.45f - s.origin.y) + (k - 1) * m * 0.32f
-            val path = Path()
+            ribbon.reset()
             var x = -far
             while (x <= far) {
                 val y = base + sin(x / m * 1.5f + s.time * 0.35f + k * 2.1f) * m * 0.13f
-                val p = s.origin + Offset(cos(ang) * x - sin(ang) * y, sin(ang) * x + cos(ang) * y)
-                if (x == -far) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+                val px = s.origin.x + cosA * x - sinA * y
+                val py = s.origin.y + sinA * x + cosA * y
+                if (x == -far) ribbon.moveTo(px, py) else ribbon.lineTo(px, py)
                 x += 12f
             }
-            drawPath(path, Dango.Balls[k].copy(alpha = 0.35f), style = Stroke(m * 0.06f, cap = StrokeCap.Round))
+            drawPath(ribbon, Dango.Balls[k].copy(alpha = 0.35f), style = Stroke(m * 0.06f, cap = StrokeCap.Round))
         }
     }
 }

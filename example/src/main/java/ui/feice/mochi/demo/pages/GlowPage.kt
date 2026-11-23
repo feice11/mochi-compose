@@ -27,16 +27,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.AppIcon
-import ui.feice.mochi.demo.common.Caption
 import ui.feice.mochi.demo.common.DemoIcon
 import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
@@ -83,6 +84,9 @@ private fun ControlCenter(spec: MochiGlowSpec) {
     var lock by rememberSaveable { mutableStateOf(true) }
     var camera by rememberSaveable { mutableStateOf(false) }
     val outer = MochiConcentric.shape()
+    val ts = MochiTheme.textStyles
+    val bodyBold = remember(ts.body) { ts.body.emphasized() }
+    val subheadBold = remember(ts.subhead) { ts.subhead.emphasized() }
     // 关着的圆钮比块底色再深一层，否则融成一片
     val inner = MochiDefaults.fill().compositeOver(MochiTheme.colorScheme.surfaceContainerHighest)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -111,12 +115,12 @@ private fun ControlCenter(spec: MochiGlowSpec) {
                 Column(Modifier.align(Alignment.TopStart).padding(16.dp)) {
                     AppIcon(DemoIcons.STAR, Tone.Tertiary.tile(), 48.dp)
                     Spacer(Modifier.height(12.dp))
-                    Text("海边落日", style = MochiTheme.textStyles.body.emphasized(), color = LocalContentColor.current, maxLines = 1)
-                    Text("Mochi 乐队", style = MochiTheme.textStyles.footnote, color = MochiTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    Text("海边落日", style = bodyBold, color = LocalContentColor.current, maxLines = 1)
+                    Text("Mochi 乐队", style = ts.footnote, color = MochiTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
                 MochiBlurText(
                     if (playing) "正在播放" else "已暂停",
-                    style = MochiTheme.textStyles.footnote,
+                    style = ts.footnote,
                     color = MochiTheme.colorScheme.primary,
                     modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
                 )
@@ -134,10 +138,10 @@ private fun ControlCenter(spec: MochiGlowSpec) {
                 ) {
                     Glyph(DemoIcons.MOON, LocalContentColor.current, size = 24, filled = true)
                     Column {
-                        Text("专注模式", style = MochiTheme.textStyles.subhead.emphasized(), color = LocalContentColor.current)
+                        Text("专注模式", style = subheadBold, color = LocalContentColor.current)
                         MochiBlurText(
                             if (focus) "已开启勿扰" else "关闭",
-                            style = MochiTheme.textStyles.footnote,
+                            style = ts.footnote,
                             color = LocalContentColor.current.copy(alpha = 0.7f),
                         )
                     }
@@ -164,7 +168,7 @@ private fun RoundToggle(
     }
 }
 
-/** 能按的控制块：开着用主色，按住时形变并发光 */
+/** 能按的控制块：开着用主色，按住时形变并发光；底色动画延迟到 drawBehind 读，点击不逐帧重组整块 */
 @Composable
 private fun GlowTile(
     spec: MochiGlowSpec,
@@ -178,16 +182,22 @@ private fun GlowTile(
 ) {
     val cs = MochiTheme.colorScheme
     val glow = rememberMochiGlowState(spec)
-    val bg by animateColorAsState(if (on) cs.primary else off, label = "tile")
-    val fg by animateColorAsState(if (on) cs.onPrimary else cs.onSurface, label = "tileContent")
+    val bgState = animateColorAsState(if (on) cs.primary else off, label = "tile")
+    val fgState = animateColorAsState(if (on) cs.onPrimary else cs.onSurface, label = "tileContent")
+    val bgDraw = remember(shape, bgState) {
+        Modifier.drawWithCache {
+            val outline = shape.createOutline(size, layoutDirection, this)
+            onDrawBehind { drawOutline(outline, bgState.value) }
+        }
+    }
     Box(
         modifier
             .semantics { contentDescription = label }
             .mochiPressDeform()
-            .background(bg, shape)
+            .then(bgDraw)
             .mochiPressGlow(glow, shape)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
     ) {
-        CompositionLocalProvider(LocalContentColor provides fg) { content() }
+        CompositionLocalProvider(LocalContentColor provides fgState.value) { content() }
     }
 }

@@ -39,6 +39,7 @@ import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.Glyph
 import ui.feice.mochi.demo.common.demoItem
+import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.mochiContainedScroll
 import ui.feice.mochi.effect.overscroll.rememberMochiOverscrollEffect
@@ -52,47 +53,59 @@ fun RefreshPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val items = remember { mutableStateListOf(*Notes.toTypedArray()) }
     var counter by rememberSaveable { mutableIntStateOf(1) }
+    var clearEpoch by remember { mutableIntStateOf(0) }
     DemoPage(entry, modifier) {
         demoItem {
             DemoSection("下拉刷新", padding = 0.dp) {
                 val overscroll = rememberMochiOverscrollEffect()
                 val list = rememberLazyListState()
-                // 传 listState：刷新结束时钉住第 0 项，新插入的笔记才露得出来
+                // 传 listState：刷新结束时钉住第 0 项，新插入的笔记才露得出来；代次守卫防止刷新中途清空后幽灵回写
                 val refresh = rememberMochiRefreshState(overscroll, list) {
+                    val epoch = clearEpoch
                     delay(1200)
-                    items.add(0, "新笔记 ${counter++}")
+                    if (epoch == clearEpoch) {
+                        items.add(0, "新笔记 ${counter++}")
+                    }
                 }
                 Box(Modifier.fillMaxWidth().height(380.dp).clip(MochiTheme.shapes.extraLarge).semantics { contentDescription = "刷新列表" }) {
-                    if (items.isEmpty()) {
-                        MochiEmptyState(
-                            "没有笔记",
-                            Modifier.align(Alignment.Center),
-                            message = "新建的笔记会出现在这里。",
-                            icon = { Glyph(DemoIcons.NOTE, cs.onSurfaceVariant, size = 48) },
-                            action = {
-                                MochiButton({ items.addAll(Notes) }, style = MochiButtonStyle.Tonal) { Text("加载示例") }
-                            },
-                        )
-                    } else {
-                        LazyColumn(
-                            Modifier.fillMaxSize().mochiRefreshHold(refresh).mochiContainedScroll(overscroll),
-                            state = list,
-                            overscrollEffect = overscroll,
-                            flingBehavior = MochiScrollDefaults.flingBehavior(),
-                            contentPadding = PaddingValues(vertical = 8.dp),
-                        ) {
-                            items(items, key = { it }) { title ->
-                                MochiListRow(title, subtitle = "今天", modifier = Modifier.animateItem())
+                    MochiBlurCrossfade(items.isEmpty(), Modifier.fillMaxSize()) { empty ->
+                        if (empty) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                MochiEmptyState(
+                                    "没有笔记",
+                                    message = "新建的笔记会出现在这里。",
+                                    icon = { Glyph(DemoIcons.NOTE, cs.onSurfaceVariant, size = 48) },
+                                    action = {
+                                        MochiButton({ items.addAll(Notes) }, style = MochiButtonStyle.Tonal) { Text("加载示例") }
+                                    },
+                                )
+                            }
+                        } else {
+                            Box(Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    Modifier.fillMaxSize().mochiRefreshHold(refresh).mochiContainedScroll(overscroll),
+                                    state = list,
+                                    overscrollEffect = overscroll,
+                                    flingBehavior = MochiScrollDefaults.flingBehavior(),
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                ) {
+                                    items(items, key = { it }) { title ->
+                                        MochiListRow(title, subtitle = "今天", modifier = Modifier.animateItem())
+                                    }
+                                }
+                                MochiRefreshIndicator(refresh, Modifier.align(Alignment.TopCenter))
                             }
                         }
-                        MochiRefreshIndicator(refresh, Modifier.align(Alignment.TopCenter))
                     }
                 }
             }
         }
         demoItem {
             MochiListSection(footer = "清空后点「加载示例」恢复。") {
-                MochiListRow("清空列表", onClick = { items.clear() }, destructive = true)
+                MochiListRow("清空列表", onClick = {
+                    clearEpoch++
+                    items.clear()
+                }, destructive = true)
             }
         }
     }

@@ -3,7 +3,9 @@
 
 package ui.feice.mochi.demo.pages.vibrancy
 
+import android.content.res.Resources
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -76,17 +78,38 @@ internal fun <T> SqueezeSlide(target: T, modifier: Modifier = Modifier, content:
     }
 }
 
-/** 轮播照片在后台先解码：painterResource 会在主线程现解码，卡在换图那一帧 */
+private val PreloadedPhotoCache = LruCache<Int, ImageBitmap>(4)
+
+/** 轮播照片在后台按屏幕宽度降采样解码并缓存：painterResource 会在主线程现解码，卡在换图那一帧 */
 @Composable
 internal fun rememberPreloadedPhotos(photos: List<Int>): Map<Int, ImageBitmap> {
     val resources = LocalContext.current.resources
-    val loaded by produceState(emptyMap<Int, ImageBitmap>(), photos) {
+    val targetWidth = resources.displayMetrics.widthPixels.coerceAtLeast(1)
+    val initial = synchronized(PreloadedPhotoCache) {
+        photos.mapNotNull { res -> PreloadedPhotoCache.get(res)?.let { res to it } }.toMap()
+    }
+    val loaded by produceState(initial, photos) {
         for (res in photos) {
-            val bitmap = withContext(Dispatchers.IO) { BitmapFactory.decodeResource(resources, res).asImageBitmap() }
+            if (res in value) continue
+            val cached = synchronized(PreloadedPhotoCache) { PreloadedPhotoCache.get(res) }
+            val bitmap = cached ?: withContext(Dispatchers.IO) { decodeSampledBitmap(resources, res, targetWidth) }.also {
+                synchronized(PreloadedPhotoCache) { PreloadedPhotoCache.put(res, it) }
+            }
             value = value + (res to bitmap)
         }
     }
     return loaded
+}
+
+private fun decodeSampledBitmap(resources: Resources, res: Int, reqWidth: Int): ImageBitmap {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeResource(resources, res, bounds)
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= reqWidth) {
+        sample *= 2
+    }
+    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+    return BitmapFactory.decodeResource(resources, res, opts).asImageBitmap()
 }
 
 /** 轮播里的一张照片，铺满裁切 */

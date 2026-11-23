@@ -23,6 +23,7 @@ import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.demoItem
+import ui.feice.mochi.effect.content.MochiBlurCrossfade
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.icons.MochiIconStyle
@@ -86,11 +87,13 @@ fun ChipPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
         demoItem {
             DemoSection("可移除", footer = "点芯片移除。") {
-                if (filters.isEmpty()) {
-                    Text("没有筛选条件", style = ts.subhead, color = cs.onSurfaceVariant)
-                } else {
-                    MochiChipGroup(wrap = true, contentPadding = PaddingValues(0.dp)) {
-                        filters.forEach { f -> MochiRemovableChip(f, onRemove = { filters = filters - f }) }
+                MochiBlurCrossfade(filters.isEmpty()) { empty ->
+                    if (empty) {
+                        Text("没有筛选条件", style = ts.subhead, color = cs.onSurfaceVariant)
+                    } else {
+                        MochiChipGroup(wrap = true, contentPadding = PaddingValues(0.dp)) {
+                            filters.forEach { f -> MochiRemovableChip(f, onRemove = { filters = filters - f }) }
+                        }
                     }
                 }
                 MochiButton({ filters = AllFilters }, style = MochiButtonStyle.Tonal, enabled = filters != AllFilters) { Text("恢复全部条件") }

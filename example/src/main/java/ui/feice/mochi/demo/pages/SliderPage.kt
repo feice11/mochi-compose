@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import ui.feice.mochi.basic.MochiIntensitySlider
-import ui.feice.mochi.basic.MochiSlider
 import ui.feice.mochi.basic.MochiStepSlider
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry

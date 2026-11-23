@@ -129,7 +129,7 @@ class NothingAppearanceRegression {
     fun catalogCountsSurviveCollapseAndIntroductionsStayClean() {
         val prefs = inst.targetContext.getSharedPreferences("home-catalog-regression", 0)
         try {
-            for (style in listOf(DemoStyle.Mochi, DemoStyle.Nothing)) {
+            for (style in listOf(DemoStyle.Mochi, DemoStyle.Ios)) {
                 val appearance = DemoAppearance(prefs).apply {
                     this.style = style
                     nothingMode = NothingMode.Light
@@ -210,16 +210,21 @@ class NothingAppearanceRegression {
         val prefs = inst.targetContext.getSharedPreferences("appearance-regression", 0)
         prefs.edit().clear().commit()
         try {
+            prefs.edit().putString("style", "Nothing").putBoolean("topBarBlur", false).commit()
             val a = DemoAppearance(prefs)
+            assertEquals(ui.feice.mochi.theme.MochiTopBarStyle.SolidFade, a.topBarStyle)
             assertEquals(DemoStyle.Mochi, a.style)
+            assertTrue(a.nothingPalette)
+            a.nothingPalette = false
             a.controller.colorSchemeMode = ui.feice.mochi.theme.ColorSchemeMode.MonetDark
             a.controller.paletteStyle = ui.feice.mochi.theme.PaletteStyle.Expressive
             a.controller.contrastLevel = 0.123456789
-            a.style = DemoStyle.Nothing
+            a.style = DemoStyle.Ios
             a.nothingMode = NothingMode.Light
             a.persist()
             val restored = DemoAppearance(prefs)
-            assertEquals(DemoStyle.Nothing, restored.style)
+            assertEquals(DemoStyle.Ios, restored.style)
+            assertFalse(restored.nothingPalette)
             assertEquals(NothingMode.Light, restored.nothingMode)
             assertEquals(a.controller.colorSchemeMode, restored.controller.colorSchemeMode)
             assertEquals(a.controller.paletteStyle, restored.controller.paletteStyle)

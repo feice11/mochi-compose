@@ -4,28 +4,24 @@
 package ui.feice.mochi.demo.common
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -33,46 +29,61 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlinx.collections.immutable.toImmutableList
+import ui.feice.mochi.anim.MochiMotionTokens
 import ui.feice.mochi.basic.MochiSegmentedControl
 import ui.feice.mochi.basic.MochiSegmentedDefaults
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.routeTitle
+import ui.feice.mochi.effect.content.MochiBlurText
+import ui.feice.mochi.effect.content.MochiBlurVisibility
 import ui.feice.mochi.effect.content.mochiAnimateHeight
 import ui.feice.mochi.effect.content.mochiBlurReveal
 import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBarBackdrop
 import ui.feice.mochi.effect.mask.mochiScrollEdgeBlur
+import ui.feice.mochi.effect.mask.mochiScrollFadeMask
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.list.LocalMochiListItemSpacing
 import ui.feice.mochi.list.MochiListDefaults
-import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
-import ui.feice.mochi.list.MochiListSectionFooter
 import ui.feice.mochi.list.MochiListSectionHeader
+import ui.feice.mochi.list.mochiListDivider
 import ui.feice.mochi.navigation.MochiBackButton
+import ui.feice.mochi.navigation.MochiScrollEdgeDefaults
 import ui.feice.mochi.navigation.MochiTitleBar
 import ui.feice.mochi.shape.MochiConcentricContainer
 import ui.feice.mochi.shape.MochiRoundedRectangle
@@ -82,6 +93,14 @@ import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiIcon
 import ui.feice.mochi.theme.MochiTheme
 import ui.feice.mochi.theme.mochiOpticalLeading
+
+private class DemoTitleGeometry {
+    var page: LayoutCoordinates? = null
+    var measured: Boolean = false
+    var measuredBarBottom: Float = Float.NaN
+    var bottom0 by mutableFloatStateOf(0f)
+    var height by mutableFloatStateOf(1f)
+}
 
 /** 演示页骨架：大标题 + [content] 里的 [DemoSection]，滚过大标题后顶栏出现小标题。 */
 @Composable
@@ -96,23 +115,44 @@ internal fun DemoPage(
     val density = LocalDensity.current
 
     // 大标题在滚动内容里的底边（不随滚动变）和顶栏底边（屏幕坐标），折叠大标题的交接用。
-    // 头部卡片是第 0 项：滚过第 0 项以后大标题早就整个钻到顶栏下面了，按滚了很远算
-    fun scrolled(): Float = if (list.firstVisibleItemIndex > 0) Float.MAX_VALUE / 4f else list.firstVisibleItemScrollOffset.toFloat()
-    var titleBottom0 by remember { mutableFloatStateOf(0f) }
-    var titleH by remember { mutableFloatStateOf(1f) }
     // 页面自己的坐标系：大标题位置按它算，不用 positionInRoot——打开转场里整页在缩放，
-    // 按根坐标算每帧都在变，大标题的模糊图层会跟着每帧更新
-    val page = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    // 按根坐标算每帧都在变，大标题的模糊图层会跟着每帧更新；几何值只在绘制阶段读取，避免触发重组
+    val geometry = remember { DemoTitleGeometry() }
     val barBottomPx = WindowInsets.statusBars.getTop(density) + with(density) { TopBarHeight.toPx() }
-
-    // 大标题露在顶栏下面的比例：1 = 整个在顶栏下方，0 = 底边刚好到顶栏下沿。大标题按它淡出、小标题按它淡入，两段交叠
-    fun titleUnder(): Float = (titleBottom0 - scrolled() - barBottomPx) / titleH.coerceAtLeast(1f)
+    val barBottomDp = with(density) { barBottomPx.toDp() }
+    // 同步接入 GlassScrollWhile：滚动任意演示页时顶栏玻璃自动切到运动分辨率
+    val edgeProgress = MochiScrollEdgeDefaults.progress(list, extent = 8.dp)
+    val largeTitleReveal = remember(list, geometry, barBottomPx) {
+        {
+            val bottom0 = geometry.bottom0
+            if (bottom0 <= 0f) {
+                1f
+            } else {
+                val scrolled = if (list.firstVisibleItemIndex > 0) Float.MAX_VALUE / 4f else list.firstVisibleItemScrollOffset.toFloat()
+                smoothstep(0.2f, 1f, (bottom0 - scrolled - barBottomPx) / geometry.height.coerceAtLeast(1f))
+            }
+        }
+    }
+    val barTitleProgress = remember(list, geometry, barBottomPx) {
+        {
+            val bottom0 = geometry.bottom0
+            if (bottom0 <= 0f) {
+                0f
+            } else {
+                val scrolled = if (list.firstVisibleItemIndex > 0) Float.MAX_VALUE / 4f else list.firstVisibleItemScrollOffset.toFloat()
+                1f - smoothstep(-0.1f, 0.5f, (bottom0 - scrolled - barBottomPx) / geometry.height.coerceAtLeast(1f))
+            }
+        }
+    }
     // 正文录成背景来源，浮在上面的返回按钮是玻璃时从这里取样（主题没开玻璃时为 null，不多录）
     val backdrop = rememberMochiBarBackdrop()
     Box(
         modifier
             .fillMaxSize()
-            .onPlaced { page[0] = it }
+            .onPlaced {
+                if (geometry.page?.size != it.size) geometry.measured = false
+                geometry.page = it
+            }
             .background(MochiDefaults.groupedBackground()),
     ) {
         val navBottom = WindowInsets.navigationBars.getBottom(density)
@@ -122,13 +162,13 @@ internal fun DemoPage(
                     .fillMaxSize()
                     .mochiBackdropSource(backdrop)
                     // 滚到顶栏下面的内容自己均匀模糊（iOS 27 的顶栏）
-                    .mochiScrollEdgeBlur(with(density) { barBottomPx.toDp() }) { scrolled() / (8.dp.value * density.density) }
+                    .mochiScrollEdgeBlur(barBottomDp, edgeProgress)
                     .imePadding(),
                 state = list,
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-                    top = with(density) { barBottomPx.toDp() } + 8.dp,
+                    top = barBottomDp + 8.dp,
                     bottom = with(density) { navBottom.toDp() } + 40.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(MochiListDefaults.SectionSpacing),
@@ -144,27 +184,39 @@ internal fun DemoPage(
                             .padding(horizontal = MochiListDefaults.TextRowPadding)
                             .mochiOpticalLeading(ts.largeTitle)
                             .onPlaced {
-                                val y = page[0]?.localPositionOf(it, Offset.Zero)?.y ?: return@onPlaced
-                                titleBottom0 = y + it.size.height + scrolled()
-                                titleH = it.size.height.toFloat()
+                                if (list.firstVisibleItemIndex != 0) return@onPlaced
+                                val nextHeight = it.size.height.toFloat()
+                                // 大标题静态底边与高度不随滚动变化：已测得且高度与顶栏底边未变时直接跳过 localPositionOf
+                                if (geometry.measured &&
+                                    abs(geometry.height - nextHeight) < 1f &&
+                                    abs(geometry.measuredBarBottom - barBottomPx) < 1f
+                                ) {
+                                    return@onPlaced
+                                }
+                                val page = geometry.page?.takeIf { p -> p.isAttached } ?: return@onPlaced
+                                val y = page.localPositionOf(it, Offset.Zero).y
+                                val nextBottom0 = y + nextHeight + list.firstVisibleItemScrollOffset
+                                if (abs(geometry.bottom0 - nextBottom0) >= 1f) geometry.bottom0 = nextBottom0
+                                if (abs(geometry.height - nextHeight) >= 1f) geometry.height = nextHeight
+                                geometry.measuredBarBottom = barBottomPx
+                                geometry.measured = true
                             }
                             // 滚进顶栏下面时模糊淡出，和顶栏小标题的模糊淡入交接（跟着滚动位置走）
-                            .mochiBlurReveal({ if (titleBottom0 <= 0f) 1f else smoothstep(0.2f, 1f, titleUnder()) }),
+                            .mochiBlurReveal(largeTitleReveal),
                     )
                 }
                 content()
             }
         }
         overlay?.invoke(this)
-        val fadePx = with(density) { 8.dp.toPx() }
         // 用库的 MochiTitleBar：自己拼顶栏时玻璃返回按钮的描边会透出没叠渐隐的正文
         MochiTitleBar(
             title = entry.title,
             navigationIcon = { MochiBackButton(history = ::routeTitle) },
             barHeight = TopBarHeight,
             // 大标题钻到顶栏下面以后模糊淡入（iOS 26）
-            titleProgress = { if (titleBottom0 <= 0f) 0f else 1f - smoothstep(-0.1f, 0.5f, titleUnder()) },
-            backgroundProgress = { scrolled() / fadePx },
+            titleProgress = barTitleProgress,
+            backgroundProgress = edgeProgress,
             backdrop = backdrop,
         )
     }
@@ -195,7 +247,7 @@ internal fun DemoSection(
     footer: String? = null,
     padding: Dp = 16.dp,
     container: Boolean = true,
-    animateHeight: Boolean = true,
+    animateHeight: Boolean = false,
     clip: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -206,7 +258,27 @@ internal fun DemoSection(
         } else {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
         }
-        if (footer != null) MochiListSectionFooter(footer)
+        DemoFooterSlot(footer)
+    }
+}
+
+/** 分组下方说明：文字变化走模糊替换，从空到非空走模糊渐显；从未使用页尾时零节点开销。 */
+@Composable
+internal fun DemoFooterSlot(footer: String?, modifier: Modifier = Modifier) {
+    var everShown by remember { mutableStateOf(footer != null) }
+    if (footer != null) everShown = true
+    if (!everShown) return
+    var lastText by remember { mutableStateOf(footer.orEmpty()) }
+    if (footer != null) lastText = footer
+    MochiBlurVisibility(footer != null, modifier = modifier, contentAlignment = Alignment.TopStart) {
+        MochiBlurText(
+            lastText,
+            style = MochiTheme.textStyles.footnote,
+            color = MochiTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .padding(horizontal = MochiListDefaults.TextRowPadding)
+                .padding(top = MochiListDefaults.FooterGap),
+        )
     }
 }
 
@@ -218,27 +290,18 @@ internal fun DemoSettingsSection(
     footer: String? = null,
     content: @Composable DemoSettingsScope.() -> Unit,
 ) {
-    BoxWithConstraints(modifier.fillMaxWidth()) {
-        val scope = remember(maxWidth) { DemoSettingsScope(maxWidth) }
-        MochiListSection(header = title, footer = footer) { scope.content() }
+    Column(modifier.fillMaxWidth()) {
+        MochiListSection(header = title) { DemoSettingsScope.content() }
+        DemoFooterSlot(footer)
     }
 }
 
 /** 行布局模式由作用域显式传递，避免控件依赖隐式环境或在通用卡片里叠加行内边距。 */
-internal class DemoSettingsScope(private val cardWidth: Dp) {
+internal object DemoSettingsScope {
     @Composable
     fun <T> Toggles(label: String, options: List<Pair<String, T>>, value: T, onChange: (T) -> Unit) {
-        SettingsToggles(label, options, value, cardWidth, onChange)
+        SettingsToggles(label, options, value, onChange)
     }
-}
-
-/** 给标题保留实际字宽，控件只能用剩下的宽度，不能把标题挤进圆角或挤没。 */
-@Composable
-private fun settingsControlWidth(label: String, cardWidth: Dp): Dp {
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val labelWidth = with(density) { measurer.measure(label, MochiTheme.textStyles.body).size.width.toDp() }
-    return (cardWidth - MochiListDefaults.TextRowPadding * 2 - labelWidth - 8.dp).coerceAtLeast(0.dp)
 }
 
 /** 自定义内容舞台；设置行使用 DemoSettingsSection，不在这里复制列表的布局算法。 */
@@ -246,7 +309,7 @@ private fun settingsControlWidth(label: String, cardWidth: Dp): Dp {
 internal fun DemoCard(
     modifier: Modifier = Modifier,
     padding: Dp = 16.dp,
-    animateHeight: Boolean = true,
+    animateHeight: Boolean = false,
     corner: Dp = SectionCorner,
     shape: Shape = MochiTheme.shapes.extraLarge,
     clip: Boolean = true,
@@ -257,7 +320,7 @@ internal fun DemoCard(
             modifier
                 .fillMaxWidth()
                 .background(MochiDefaults.groupedContainer(), shape)
-                .mochiAnimateHeight(shape, enabled = animateHeight)
+                .then(if (animateHeight) Modifier.mochiAnimateHeight(shape) else Modifier)
                 // 没有内边距时裁进卡片形状，否则自带底色的内容会盖掉圆角。连续圆角裁剪每帧重建遮罩，内容自己画角时传 clip = false
                 .then(if (padding == 0.dp && clip) Modifier.clip(shape) else Modifier)
                 .padding(padding),
@@ -270,6 +333,7 @@ internal fun DemoCard(
 /** 目录入口与详情介绍卡片共用的应用图标轮廓。 */
 internal val CatalogIconShape: Shape = MochiSuperellipse(5f)
 
+@Immutable
 internal class IconColors(val container: Color, val content: Color)
 
 /** 菜单导航类用主色调、控件类用次色调、效果类用第三色调 */
@@ -284,30 +348,37 @@ internal fun AppIcon(
     size: Dp,
     modifier: Modifier = Modifier,
     corner: Dp = size * 0.3f,
-    shape: Shape = MochiRoundedRectangle(corner),
+    shape: Shape? = null,
 ) {
+    val resolvedShape = shape ?: remember(corner) { MochiRoundedRectangle(corner) }
     Box(
         modifier
             .size(size)
-            .background(colors.container, shape),
+            .background(colors.container, resolvedShape),
         contentAlignment = Alignment.Center,
     ) { Glyph(glyph, colors.content, size = (size.value * 0.6f).toInt(), filled = true) }
 }
 
 @Composable
 internal fun Code(code: String, modifier: Modifier = Modifier) {
-    // 不换行、横向滚动，长行不会折出孤零零的「)」
+    // 不换行、横向滚动，长行不会折出孤零零的「)」；溢出侧平滑渐隐
+    val scroll = rememberScrollState()
+    val bodySmall = MochiTheme.textStyles.bodySmall
+    val codeStyle = remember(bodySmall) {
+        bodySmall.copy(
+            fontFamily = FontFamily.Monospace,
+            lineHeight = TextUnit(20f, TextUnitType.Sp),
+        )
+    }
     Text(
         code,
-        style = MochiTheme.textStyles.bodySmall.copy(
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            lineHeight = androidx.compose.ui.unit.TextUnit(20f, androidx.compose.ui.unit.TextUnitType.Sp),
-        ),
+        style = codeStyle,
         color = MochiTheme.colorScheme.onSurface,
         softWrap = false,
         modifier = modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .mochiScrollFadeMask(scroll, extent = 16.dp, vertical = false)
+            .horizontalScroll(scroll),
     )
 }
 
@@ -325,20 +396,50 @@ internal fun Caption(text: String, modifier: Modifier = Modifier) {
     Text(text, style = MochiTheme.textStyles.bodyMedium, color = MochiTheme.colorScheme.onSurfaceVariant, modifier = modifier)
 }
 
-/** 设置行：标题 + 行尾分段选择器（宽度按标题实际字宽让出来） */
+/** 设置行：标题 + 行尾分段选择器，单遍 Layout 先测标题再把剩余宽度分给分段控件，零子组合 */
 @Composable
-private fun <T> SettingsToggles(label: String, options: List<Pair<String, T>>, value: T, rowWidth: Dp, onChange: (T) -> Unit) {
+private fun <T> SettingsToggles(label: String, options: List<Pair<String, T>>, value: T, onChange: (T) -> Unit) {
     val labels = remember(options) { options.map { it.first }.toImmutableList() }
-    val maxWidth = settingsControlWidth(label, rowWidth)
-    MochiListRow(label, trailing = {
-        MochiSegmentedControl(
-            selectedIndex = options.indexOfFirst { it.second == value }.coerceAtLeast(0),
-            onSelect = { onChange(options[it].second) },
-            items = labels,
-            modifier = Modifier.widthIn(max = maxWidth),
-            behavior = ToggleBehavior,
+    val body = MochiTheme.textStyles.body
+    val color = MochiTheme.colorScheme.onSurface
+    val density = LocalDensity.current
+    val minHeight = maxOf(
+        MochiListDefaults.RowMinHeight,
+        with(density) { body.lineHeight.takeIf { it.isSp }?.toDp() ?: MochiListDefaults.SymbolWidth } +
+            MochiListDefaults.RowVerticalPadding * 2,
+    )
+    val currentOnChange by rememberUpdatedState(onChange)
+    val onSelect = remember(options) { { index: Int -> currentOnChange(options[index].second) } }
+    val rowModifier = remember { Modifier.fillMaxWidth().mochiListDivider(MochiListDefaults.TextRowPadding) }
+    Layout(
+        modifier = rowModifier,
+        content = {
+            Text(label, style = body, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            MochiSegmentedControl(
+                selectedIndex = options.indexOfFirst { it.second == value }.coerceAtLeast(0),
+                onSelect = onSelect,
+                items = labels,
+                behavior = ToggleBehavior,
+            )
+        },
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val padH = MochiListDefaults.RowPadding.roundToPx()
+        val padV = MochiListDefaults.RowVerticalPadding.roundToPx()
+        val gap = 8.dp.roundToPx()
+        val contentWidth = (width - padH * 2).coerceAtLeast(0)
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val labelPlaceable = measurables[0].measure(loose.copy(maxWidth = contentWidth))
+        val controlMax = (contentWidth - labelPlaceable.width - gap).coerceAtLeast(0)
+        val controlPlaceable = measurables[1].measure(loose.copy(maxWidth = controlMax))
+        val height = constraints.constrainHeight(
+            maxOf(minHeight.roundToPx(), labelPlaceable.height + padV * 2, controlPlaceable.height + padV),
         )
-    })
+        layout(width, height) {
+            labelPlaceable.placeRelative(padH, (height - labelPlaceable.height) / 2)
+            controlPlaceable.placeRelative(width - padH - controlPlaceable.width, (height - controlPlaceable.height) / 2)
+        }
+    }
 }
 
 private val ToggleBehavior = MochiSegmentedDefaults.behavior(height = 32.dp, segmentPadding = 12.dp)
@@ -346,18 +447,28 @@ private val ToggleBehavior = MochiSegmentedDefaults.behavior(height = 32.dp, seg
 @Composable
 internal fun Chevron(up: Boolean) {
     val color = LocalContentColor.current
-    val rotation by animateFloatAsState(if (up) 180f else 0f, spring(dampingRatio = 0.6f, stiffness = 800f), label = "chevron")
-    MochiIcon("chevron-down", Modifier.size(16.dp).graphicsLayer { rotationZ = rotation }, tint = color) { slot ->
-        Canvas(slot) {
-            val p = androidx.compose.ui.graphics.Path().apply {
-                moveTo(size.width * 0.22f, size.height * 0.38f)
-                lineTo(size.width * 0.5f, size.height * 0.64f)
-                lineTo(size.width * 0.78f, size.height * 0.38f)
-            }
-            drawPath(p, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
+    val rotation = animateFloatAsState(if (up) 180f else 0f, MochiMotionTokens.Settle, label = "chevron")
+    val rotated by remember(up) { derivedStateOf { up || rotation.value != 0f } }
+    val iconModifier = Modifier
+        .size(16.dp)
+        .then(if (rotated) Modifier.graphicsLayer { rotationZ = rotation.value } else Modifier)
+    MochiIcon("chevron-down", iconModifier, tint = color) { slot ->
+        val colorState = rememberUpdatedState(color)
+        Spacer(
+            slot.drawWithCache {
+                val path = Path().apply {
+                    moveTo(size.width * 0.22f, size.height * 0.38f)
+                    lineTo(size.width * 0.5f, size.height * 0.64f)
+                    lineTo(size.width * 0.78f, size.height * 0.38f)
+                }
+                val stroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                onDrawBehind { drawPath(path, colorState.value, style = stroke) }
+            },
+        )
     }
 }
+
+private val MoreDotFractions = floatArrayOf(0.23f, 0.5f, 0.77f)
 
 /** 「更多」的三个点（选择列表、导航栏的按钮共用） */
 @Composable
@@ -365,7 +476,10 @@ internal fun MoreDots(color: Color = LocalContentColor.current) {
     MochiIcon("ellipsis-horizontal", Modifier.size(22.dp), tint = color) { slot ->
         Canvas(slot) {
             val r = size.width * 0.085f
-            listOf(0.23f, 0.5f, 0.77f).forEach { x -> drawCircle(color, r, Offset(size.width * x, size.height / 2)) }
+            val cy = size.height / 2f
+            for (x in MoreDotFractions) {
+                drawCircle(color, r, Offset(size.width * x, cy))
+            }
         }
     }
 }

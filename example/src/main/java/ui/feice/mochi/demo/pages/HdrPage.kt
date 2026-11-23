@@ -5,7 +5,7 @@ package ui.feice.mochi.demo.pages
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,12 +22,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import ui.feice.mochi.basic.MochiButton
@@ -35,12 +38,13 @@ import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
-import ui.feice.mochi.demo.common.Caption
+import ui.feice.mochi.demo.common.DemoFooterSlot
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.DemoSection
 import ui.feice.mochi.demo.common.demoItem
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
+import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.hdr.MochiEdgeGlow
 import ui.feice.mochi.effect.hdr.MochiHdrPalette
 import ui.feice.mochi.list.MochiListRow
@@ -81,31 +85,35 @@ fun HdrPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
 @Composable
 private fun StatusSection() {
     val supported = MochiHdr.supported
-    MochiListSection(
-        header = "状态",
-        footer = if (supported) {
-            "亮度余量是屏幕此刻能比普通白色亮多少倍。"
-        } else {
-            "这台设备不支持 HDR 界面，需要 Android 14 以上和 HDR 屏幕。"
-        },
-    ) {
-        MochiListRow("HDR 高光", trailing = { MochiSwitch(MochiHdr.enabled && supported, { MochiHdr.enabled = it }, enabled = supported) })
-        val head = (MochiHdr.headroom * 10f).roundToInt()
-        var last by rememberSaveable { mutableIntStateOf(head) }
-        val dir = if (head >= last) 1 else -1
-        LaunchedEffect(head) { last = head }
-        MochiListRow(
-            "亮度余量",
-            trailing = {
-                MochiCounterText("×%d.%d".format(head / 10, head % 10), dir, color = MochiTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth()) {
+        MochiListSection(header = "状态") {
+            MochiListRow("HDR 高光", trailing = {
+                MochiSwitch(MochiHdr.enabled && supported, { MochiHdr.enabled = it }, enabled = supported)
+            })
+            val head = (MochiHdr.headroom * 10f).roundToInt()
+            var last by rememberSaveable { mutableIntStateOf(head) }
+            val dir = if (head >= last) 1 else -1
+            LaunchedEffect(head) { last = head }
+            MochiListRow(
+                "亮度余量",
+                trailing = {
+                    MochiCounterText("×%d.%d".format(head / 10, head % 10), dir, color = MochiTheme.colorScheme.onSurfaceVariant)
+                },
+            )
+            MochiListSliderRow(
+                MochiHdr.strength,
+                { MochiHdr.strength = it },
+                enabled = MochiHdr.enabled && supported,
+                title = "强度",
+                valueText = "${(MochiHdr.strength * 100).roundToInt()}%",
+            )
+        }
+        DemoFooterSlot(
+            when {
+                !supported -> "这台设备不支持 HDR 界面，需要 Android 14 以上和 HDR 屏幕。"
+                MochiHdr.enabled && MochiHdr.headroom <= 1f -> "系统尚未报告可用的 HDR 亮度余量，高光可能和普通白色一样亮。"
+                else -> "亮度余量是屏幕当前报告的 HDR 与 SDR 白色亮度比。"
             },
-        )
-        MochiListSliderRow(
-            MochiHdr.strength,
-            { MochiHdr.strength = it },
-            enabled = MochiHdr.enabled && supported,
-            title = "强度",
-            valueText = "${(MochiHdr.strength * 100).roundToInt()}%",
         )
     }
 }
@@ -143,45 +151,47 @@ private val Palettes = listOf(
     "白" to MochiHdrPalette.White,
 )
 
-/** 颜色预设圆点 */
+/** 颜色预设圆点：可点热区 ≥ 44dp、去默认水波纹、带按压形变且缓存渐变画刷 */
 @Composable
 private fun PalettePicker(selected: Int, onSelect: (Int) -> Unit) {
+    val cs = MochiTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Palettes.forEachIndexed { i, (name, pal) ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                val colors = pal.colors + pal.colors.first()
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .border(
-                            if (selected ==
-                                i
-                            ) {
-                                2.dp
-                            } else {
-                                1.dp
-                            },
-                            if (selected ==
-                                i
-                            ) {
-                                MochiTheme.colorScheme.primary
-                            } else {
-                                MochiTheme.colorScheme.outlineVariant
-                            },
-                            CircleShape,
-                        )
-                        .padding(5.dp)
-                        .clip(CircleShape)
-                        .background(Brush.sweepGradient(colors))
-                        // 白色预设在白卡片上也看得出轮廓
-                        .border(1.dp, MochiTheme.colorScheme.outlineVariant, CircleShape)
-                        .clickable { onSelect(i) },
-                )
+            val sweep = remember(pal) { Brush.sweepGradient(pal.colors + pal.colors.first()) }
+            val isSelected = selected == i
+            Column(
+                modifier = Modifier
+                    .mochiPressDeform()
+                    .selectable(
+                        selected = isSelected,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.RadioButton,
+                        onClick = { onSelect(i) },
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .border(
+                                if (isSelected) 2.dp else 1.dp,
+                                if (isSelected) cs.primary else cs.outlineVariant,
+                                CircleShape,
+                            )
+                            .padding(5.dp)
+                            .clip(CircleShape)
+                            .background(sweep)
+                            // 白色预设在白卡片上也看得出轮廓
+                            .border(1.dp, cs.outlineVariant, CircleShape),
+                    )
+                }
                 Text(
                     name,
                     style = MochiTheme.textStyles.footnote,
-                    color = MochiTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }

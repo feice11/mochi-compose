@@ -9,13 +9,12 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,7 +22,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,9 +33,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import ui.feice.mochi.anim.MochiMotions
 import ui.feice.mochi.anim.mochiSpring
@@ -95,62 +91,80 @@ private val Shots = listOf(
     Shot("IMG_2051", DemoIcons.HEART),
 )
 
+private val StageHeight = 400.dp
+private val AlbumWidth = 200.dp
+private val AlbumHeight = 56.dp
+private val AlbumBottomPadding = 24.dp
+private val PhotoSize = 150.dp
+private val PhotoTopPadding = 36.dp
+private val AbsorbSpring = MochiMotions.responseSpring(0.32f, 1f)
+private val AppearSpring = MochiMotions.responseSpring(0.4f, 0.62f)
+private val ReturnSpring = mochiSpring<Offset>(400, bounce = 0.25)
+
 @Composable
 private fun AlbumStage() {
     // 颈部最粗能到多少
-    val fuse = 28f
+    val fuse = 28.dp
     val cs = MochiTheme.colorScheme
+    val ts = MochiTheme.textStyles
+    val shadows = MochiTheme.shadows
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val haptics = rememberMochiHaptics(MochiHapticProfile.IosLike)
     val renderer = rememberMochiMetaballRenderer()
-    var pointer by remember { mutableStateOf(Offset.Zero) }
-    val glow = rememberMochiGlowState(pointer = { pointer })
-    val drag = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
-    // 被吸进相簿的进度、下一张弹出来的进度（都是 0..1）
+    val pointerState = remember { mutableStateOf(Offset.Zero) }
+    val glow = rememberMochiGlowState(pointer = { pointerState.value })
+    val dragging = remember { mutableStateOf(false) }
+    val dragTarget = remember { mutableStateOf(Offset.Zero) }
+    val dragAnim = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    // 被吸进相簿的进度、下一张弹出来的进度（都是 0..1），仅在 drawBehind / graphicsLayer 阶段读取，拖动与动画零重组
     val absorb = remember { Animatable(0f) }
     val appear = remember { Animatable(1f) }
     var count by rememberSaveable { mutableIntStateOf(12) }
     var shot by rememberSaveable { mutableIntStateOf(0) }
     // Keep semantic alpha: the shared renderer owns both bodies, including their overlap.
-    val colors = MochiMetaballColors(a = cs.secondaryContainer, b = cs.tertiaryContainer, shadow = cs.shadow)
-    BoxWithConstraints(
+    val colors = remember(cs.secondaryContainer, cs.tertiaryContainer, cs.shadow) {
+        MochiMetaballColors(a = cs.secondaryContainer, b = cs.tertiaryContainer, shadow = cs.shadow)
+    }
+    val shadow = remember(shadows, density, cs.isDark) { shadows.floating.resolve(density, cs.isDark) }
+    val albumWPx = with(density) { AlbumWidth.toPx() }
+    val albumHPx = with(density) { AlbumHeight.toPx() }
+    val albumBottomOffsetPx = with(density) { (AlbumBottomPadding + AlbumHeight).toPx() }
+    val photoSizePx = with(density) { PhotoSize.toPx() }
+    val photoTopPx = with(density) { PhotoTopPadding.toPx() }
+    val photoCornerPx = with(density) { 28.dp.toPx() }
+    val fuseRangePx = with(density) { 48.dp.toPx() }
+    val fuseMaxPx = with(density) { fuse.toPx() }
+    val centerDeltaY = with(density) { (StageHeight - AlbumBottomPadding - AlbumHeight / 2 - (PhotoTopPadding + PhotoSize / 2)).toPx() }
+    val shotStyle = remember(ts.footnote) { ts.footnote.emphasized() }
+    val countFormat = remember { { v: Long -> "$v 张照片" } }
+
+    fun currentDrag(): Offset = if (dragging.value) dragTarget.value else dragAnim.value
+
+    Box(
         Modifier
             .fillMaxWidth()
-            .height(400.dp),
+            .height(StageHeight),
     ) {
-        val w = with(density) { maxWidth.toPx() }
-        val h = with(density) { maxHeight.toPx() }
-        val px = { v: Float -> with(density) { v.dp.toPx() } }
-        val a = Rect(Offset((w - px(200f)) / 2f, h - px(80f)), Size(px(200f), px(56f)))
-        val b0 = Rect(Offset((w - px(150f)) / 2f, px(36f)), Size(px(150f), px(150f)))
-        // 照片当前矩形：拖动位移，吸入时收向胶囊中心成圆，新照片按比例弹出
-        val k = absorb.value
-        val dragged = b0.translate(drag.value)
-        val sinkSide = a.height
-        val center = dragged.center + (a.center - dragged.center) * k
-        val side = (dragged.width + (sinkSide - dragged.width) * k) * appear.value.coerceAtLeast(0.01f)
-        val b = Rect(center.x - side / 2f, center.y - side / 2f, center.x + side / 2f, center.y + side / 2f)
-        val corner = px(28f) + (side / 2f - px(28f)) * k
-        val near = proximityFuse(a, b, px(48f))
-        val frame = MochiMetaballFrame(
-            a = MochiBlob(a, a.height / 2f),
-            b = MochiBlob(b, corner.coerceAtMost(side / 2f)),
-            fuse = px(fuse) * maxOf(near, k),
-        )
-        val shadow = MochiTheme.shadows.floating.resolve(density, cs.isDark)
-        val latestNear by rememberUpdatedState(near)
         Box(
             Modifier
                 .fillMaxSize()
-                .pointerInput(b0) {
+                .pointerInput(albumWPx, albumHPx, albumBottomOffsetPx, photoSizePx, photoTopPx, fuseRangePx) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
-                        if (absorb.isRunning || appear.isRunning || !b0.translate(drag.value).contains(down.position)) {
+                        val w = size.width.toFloat()
+                        val h = size.height.toFloat()
+                        val a = Rect(Offset((w - albumWPx) / 2f, h - albumBottomOffsetPx), Size(albumWPx, albumHPx))
+                        val b0 = Rect(Offset((w - photoSizePx) / 2f, photoTopPx), Size(photoSizePx, photoSizePx))
+                        val startDrag = currentDrag()
+                        if (absorb.isRunning || appear.isRunning || !b0.translate(startDrag).contains(down.position)) {
                             return@awaitEachGesture
                         }
-                        pointer = down.position
+                        dragTarget.value = startDrag
+                        dragging.value = true
+                        pointerState.value = down.position
                         scope.launch {
+                            dragAnim.stop()
                             glow.press(
                                 radius = MochiGlowDefaults.radius(b0.size, this@pointerInput),
                                 intensity = MochiGlowDefaults.SurfaceIntensity,
@@ -161,55 +175,81 @@ private fun AlbumStage() {
                             val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                             if (!c.pressed) break
                             val d = c.position - last
-                            scope.launch { drag.snapTo(drag.value + d) }
+                            dragTarget.value += d
                             last = c.position
-                            pointer = c.position
+                            pointerState.value = c.position
                             c.consume()
                         }
-                        scope.launch { glow.release() }
-                        if (latestNear > 0.5f) {
-                            scope.launch {
-                                absorb.animateTo(1f, MochiMotions.responseSpring(0.32f, 1f))
+                        val finalDrag = dragTarget.value
+                        val near = proximityFuse(a, b0.translate(finalDrag), fuseRangePx)
+                        scope.launch {
+                            glow.release()
+                            dragAnim.snapTo(finalDrag)
+                            dragging.value = false
+                            if (near > 0.5f) {
+                                absorb.animateTo(1f, AbsorbSpring)
                                 haptics.confirm()
                                 count++
                                 shot = (shot + 1) % Shots.size
-                                drag.snapTo(Offset.Zero)
+                                dragAnim.snapTo(Offset.Zero)
+                                dragTarget.value = Offset.Zero
                                 appear.snapTo(0f)
                                 absorb.snapTo(0f)
-                                appear.animateTo(1f, MochiMotions.responseSpring(0.4f, 0.62f))
+                                appear.animateTo(1f, AppearSpring)
+                            } else {
+                                dragAnim.animateTo(Offset.Zero, ReturnSpring)
                             }
-                        } else {
-                            scope.launch { drag.animateTo(Offset.Zero, mochiSpring(400, bounce = 0.25)) }
                         }
                     }
                 }
-                .drawBehind { drawMochiMetaball(renderer, frame, colors, shadow, smoothing = 1f, glow = glow) },
+                .drawBehind {
+                    val a = Rect(Offset((size.width - albumWPx) / 2f, size.height - albumBottomOffsetPx), Size(albumWPx, albumHPx))
+                    val b0 = Rect(Offset((size.width - photoSizePx) / 2f, photoTopPx), Size(photoSizePx, photoSizePx))
+                    // 照片当前矩形：拖动位移，吸入时收向胶囊中心成圆，新照片按比例弹出
+                    val k = absorb.value
+                    val dragged = b0.translate(currentDrag())
+                    val center = dragged.center + (a.center - dragged.center) * k
+                    val side = (dragged.width + (albumHPx - dragged.width) * k) * appear.value.coerceAtLeast(0.01f)
+                    val b = Rect(center.x - side / 2f, center.y - side / 2f, center.x + side / 2f, center.y + side / 2f)
+                    val corner = photoCornerPx + (side / 2f - photoCornerPx) * k
+                    val near = proximityFuse(a, b, fuseRangePx)
+                    val frame = MochiMetaballFrame(
+                        a = MochiBlob(a, albumHPx / 2f),
+                        b = MochiBlob(b, corner.coerceAtMost(side / 2f)),
+                        fuse = fuseMaxPx * maxOf(near, k),
+                    )
+                    drawMochiMetaball(renderer, frame, colors, shadow, smoothing = 1f, glow = glow)
+                },
         )
-        val toDp = { v: Float -> with(density) { v.toDp() } }
         Box(
             Modifier
-                .offset { IntOffset(a.left.roundToInt(), a.top.roundToInt()) }
-                .size(toDp(a.width), toDp(a.height)),
+                .align(Alignment.BottomCenter)
+                .padding(bottom = AlbumBottomPadding)
+                .size(AlbumWidth, AlbumHeight),
             contentAlignment = Alignment.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Glyph(DemoIcons.GRID, cs.onSecondaryContainer, size = 20, filled = true)
                 MochiCounterText(
                     count.toLong(),
-                    style = MochiTheme.textStyles.labelLarge,
+                    style = ts.labelLarge,
                     color = cs.onSecondaryContainer,
-                    format = { "$it 张照片" },
+                    format = countFormat,
                 )
             }
         }
         Column(
             Modifier
-                .offset { IntOffset(b0.left.roundToInt(), b0.top.roundToInt()) }
-                .size(toDp(b0.width), toDp(b0.height))
+                .align(Alignment.TopCenter)
+                .padding(top = PhotoTopPadding)
+                .size(PhotoSize)
                 .graphicsLayer {
-                    val s = side / b0.width
-                    translationX = b.center.x - b0.center.x
-                    translationY = b.center.y - b0.center.y
+                    val k = absorb.value
+                    val d = currentDrag()
+                    val side = (photoSizePx + (albumHPx - photoSizePx) * k) * appear.value.coerceAtLeast(0.01f)
+                    val s = side / photoSizePx
+                    translationX = d.x * (1f - k)
+                    translationY = d.y * (1f - k) + centerDeltaY * k
                     scaleX = s
                     scaleY = s
                     alpha = (1f - k * 2.5f).coerceIn(0f, 1f)
@@ -218,7 +258,7 @@ private fun AlbumStage() {
             verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
         ) {
             Glyph(Shots[shot].icon, cs.onTertiaryContainer, size = 44, filled = true)
-            MochiBlurText(Shots[shot].name, style = MochiTheme.textStyles.footnote.emphasized(), color = cs.onTertiaryContainer)
+            MochiBlurText(Shots[shot].name, style = shotStyle, color = cs.onTertiaryContainer)
         }
     }
 }

@@ -9,18 +9,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,6 +40,7 @@ import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
 import ui.feice.mochi.demo.common.AppIcon
+import ui.feice.mochi.demo.common.DemoFooterSlot
 import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
 import ui.feice.mochi.demo.common.Glyph
@@ -91,10 +96,9 @@ fun ListPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     }
 
     var boldText by rememberSaveable { mutableStateOf(false) }
-    val baseStyles = MochiTheme.textStyles
-    val rowStyles = if (boldText) baseStyles.copy(body = baseStyles.body.copy(fontWeight = FontWeight.SemiBold)) else baseStyles
     val order = remember { mutableStateListOf("相机", "照片", "备忘录", "日历", "天气") }
     val reorder = rememberMochiReorderState { from, to -> order.add(to, order.removeAt(from)) }
+    val storageTitleStyle = remember(ts.titleMedium) { ts.titleMedium.emphasized() }
     DemoPage(entry, modifier) {
         demoItem {
             MochiListCard {
@@ -105,7 +109,7 @@ fun ListPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Row(Modifier.fillMaxWidth()) {
-                        Text("储存空间快满了", style = ts.titleMedium.emphasized(), modifier = Modifier.weight(1f).alignByBaseline())
+                        Text("储存空间快满了", style = storageTitleStyle, modifier = Modifier.weight(1f).alignByBaseline())
                         Text("58.2 / 64 GB", style = ts.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.alignByBaseline())
                     }
                     MochiProgressBar(0.91f)
@@ -159,27 +163,7 @@ fun ListPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            MochiTheme(MochiTheme.colorScheme, rowStyles, MochiTheme.shapes, MochiTheme.motionScheme) {
-                MochiListSection(
-                    header = "符号图标",
-                ) {
-                    MochiListRow(
-                        "粗体文字",
-                        trailing = { MochiSwitch(boldText, { boldText = it }) },
-                        leading = { Glyph(DemoIcons.NOTE, LocalContentColor.current) },
-                        leadingStyle = MochiListLeadingStyle.Symbol,
-                    )
-                    SymbolRows.forEach { (label, icon) ->
-                        MochiListRow(
-                            label,
-                            onClick = {},
-                            chevron = true,
-                            leading = { Glyph(icon, LocalContentColor.current) },
-                            leadingStyle = MochiListLeadingStyle.Symbol,
-                        )
-                    }
-                }
-            }
+            SymbolIconSection(boldText, onBoldChange = { boldText = it })
         }
         demoItem {
             MochiListSection(header = "可展开") {
@@ -211,62 +195,73 @@ fun ListPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
             }
         }
         demoItem {
-            MochiListSection(header = "通知方式", footer = NotifyFooters[notify]) {
-                listOf("关闭", "通知", "询问").forEachIndexed { i, label ->
-                    MochiListRow(label, onClick = { notify = i }, checked = notify == i)
+            Column(Modifier.fillMaxWidth()) {
+                MochiListSection(header = "通知方式") {
+                    NotifyModes.forEachIndexed { i, label ->
+                        MochiListRow(label, onClick = { notify = i }, checked = notify == i)
+                    }
                 }
+                DemoFooterSlot(NotifyFooters[notify])
             }
         }
         demoItem {
-            MochiListSection(
-                header = "左滑操作",
-                footer = if (removed == 0) "往左或往右滑一行；左滑到底直接删除。" else "删了 $removed 封",
-            ) {
-                mails.forEach { mail ->
-                    androidx.compose.runtime.key(mail.first) {
-                        MochiSwipeRow(
-                            actions = listOf(
-                                MochiSwipeAction("删除", cs.error, onClick = {
-                                    mails.remove(mail)
-                                    removed++
-                                }, removesRow = true),
-                                MochiSwipeAction(if (mail.first in flagged) "取消标记" else "标记", cs.tertiary, onClick = {
-                                    if (!flagged.remove(mail.first)) flagged.add(mail.first)
-                                }, contentColor = cs.onTertiary),
-                            ),
-                            leadingActions = listOf(
-                                MochiSwipeAction(if (mail.first in read) "未读" else "已读", cs.primary, onClick = {
-                                    if (!read.remove(mail.first)) read.add(mail.first)
-                                }, contentColor = cs.onPrimary),
-                                MochiSwipeAction(if (mail.first in pinned) "取消置顶" else "置顶", cs.secondary, onClick = {
-                                    if (!pinned.remove(mail.first)) pinned.add(mail.first)
-                                }, contentColor = cs.onSecondary),
-                            ),
-                            dividerInset = MochiListDefaults.TextRowPadding,
-                        ) {
-                            MochiListRow(
-                                mail.first,
-                                subtitle = mail.second,
-                                value = mail.third,
-                                onClick = {},
-                                titleTrailing = { MailUnreadIndicator(unread = mail.first !in read) },
-                                status = {
-                                    MailStatusChips(
-                                        pinned = mail.first in pinned,
-                                        flagged =
-                                            mail.first in flagged,
-                                    )
-                                },
-                            )
+            Column(Modifier.fillMaxWidth()) {
+                MochiListSection(header = "左滑操作") {
+                    mails.forEach { mail ->
+                        key(mail.first) {
+                            val isFlagged = mail.first in flagged
+                            val isRead = mail.first in read
+                            val isPinned = mail.first in pinned
+                            val actions = remember(mail, isFlagged, cs.error, cs.tertiary, cs.onTertiary) {
+                                listOf(
+                                    MochiSwipeAction("删除", cs.error, onClick = {
+                                        mails.remove(mail)
+                                        removed++
+                                    }, removesRow = true),
+                                    MochiSwipeAction(if (isFlagged) "取消标记" else "标记", cs.tertiary, onClick = {
+                                        if (!flagged.remove(mail.first)) flagged.add(mail.first)
+                                    }, contentColor = cs.onTertiary),
+                                )
+                            }
+                            val leadingActions = remember(mail, isRead, isPinned, cs.primary, cs.onPrimary, cs.secondary, cs.onSecondary) {
+                                listOf(
+                                    MochiSwipeAction(if (isRead) "未读" else "已读", cs.primary, onClick = {
+                                        if (!read.remove(mail.first)) read.add(mail.first)
+                                    }, contentColor = cs.onPrimary),
+                                    MochiSwipeAction(if (isPinned) "取消置顶" else "置顶", cs.secondary, onClick = {
+                                        if (!pinned.remove(mail.first)) pinned.add(mail.first)
+                                    }, contentColor = cs.onSecondary),
+                                )
+                            }
+                            MochiSwipeRow(
+                                actions = actions,
+                                leadingActions = leadingActions,
+                                dividerInset = MochiListDefaults.TextRowPadding,
+                            ) {
+                                MochiListRow(
+                                    mail.first,
+                                    subtitle = mail.second,
+                                    value = mail.third,
+                                    onClick = {},
+                                    titleTrailing = { MailUnreadIndicator(unread = !isRead) },
+                                    status = {
+                                        MailStatusChips(
+                                            pinned = isPinned,
+                                            flagged = isFlagged,
+                                        )
+                                    },
+                                )
+                            }
                         }
                     }
+                    if (mails.isEmpty()) {
+                        MochiListRow("全部删完了", onClick = {
+                            mails.addAll(Mails)
+                            removed = 0
+                        }, value = "恢复", colors = MochiListDefaults.colors(secondary = cs.primary))
+                    }
                 }
-                if (mails.isEmpty()) {
-                    MochiListRow("全部删完了", onClick = {
-                        mails.addAll(Mails)
-                        removed = 0
-                    }, value = "恢复", colors = MochiListDefaults.colors(secondary = cs.primary))
-                }
+                DemoFooterSlot(if (removed == 0) "往左或往右滑一行；左滑到底直接删除。" else "删了 $removed 封")
             }
         }
         demoItem {
@@ -315,7 +310,52 @@ fun ListPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     }
 }
 
+/** 符号图标分组：默认关闭粗体时不挂载嵌套 MochiTheme，避免滚过该项时触发窗口属性效果栈变动；开启时用 movableContentOf 保住开关动画 */
+@Composable
+private fun SymbolIconSection(boldText: Boolean, onBoldChange: (Boolean) -> Unit) {
+    val currentOnBoldChange by rememberUpdatedState(onBoldChange)
+    val baseStyles = MochiTheme.textStyles
+    val boldStyles = remember(baseStyles) { baseStyles.copy(body = baseStyles.body.copy(fontWeight = FontWeight.SemiBold)) }
+    val sectionContent = remember {
+        movableContentOf { isBold: Boolean ->
+            MochiListSection(header = "符号图标") {
+                MochiListRow(
+                    "粗体文字",
+                    trailing = { MochiSwitch(isBold, { currentOnBoldChange(it) }) },
+                    leading = { Glyph(DemoIcons.NOTE, LocalContentColor.current) },
+                    leadingStyle = MochiListLeadingStyle.Symbol,
+                )
+                SymbolRows.forEach { (label, icon) ->
+                    MochiListRow(
+                        label,
+                        onClick = {},
+                        chevron = true,
+                        leading = { Glyph(icon, LocalContentColor.current) },
+                        leadingStyle = MochiListLeadingStyle.Symbol,
+                    )
+                }
+            }
+        }
+    }
+    if (boldText) {
+        MochiTheme(
+            colors = MochiTheme.colorScheme,
+            textStyles = boldStyles,
+            shapes = MochiTheme.shapes,
+            motionScheme = MochiTheme.motionScheme,
+            systemBarAppearance = false,
+            materials = MochiTheme.materials,
+        ) {
+            sectionContent(true)
+        }
+    } else {
+        sectionContent(false)
+    }
+}
+
 private val LazyContacts = List(100) { it }
+private val NotifyModes = listOf("关闭", "通知", "询问")
+private val MarkSpring = MochiMotions.responseSpring(0.3f, 0.6f)
 
 private val Devices = listOf(
     Triple("MacBook Pro", "MacBook Pro 13 英寸", DemoIcons.LAPTOP),
@@ -363,15 +403,28 @@ internal fun MailUnreadIndicator(unread: Boolean) {
 
 @Composable
 private fun MarkDot(shown: Boolean, color: Color) {
-    val k by animateFloatAsState(if (shown) 1f else 0f, MochiMotions.responseSpring(0.3f, 0.6f), label = "mark")
+    val kState = animateFloatAsState(if (shown) 1f else 0f, MarkSpring, label = "mark")
+    val settledHidden by remember { derivedStateOf { kState.value == 0f } }
+    val settledVisible by remember { derivedStateOf { kState.value == 1f } }
+    if (settledHidden) {
+        Spacer(Modifier.size(10.dp))
+        return
+    }
     Box(
         Modifier
             .size(10.dp)
-            .graphicsLayer {
-                scaleX = k
-                scaleY = k
-                alpha = k.coerceIn(0f, 1f)
-            }
+            .then(
+                if (settledVisible) {
+                    Modifier
+                } else {
+                    Modifier.graphicsLayer {
+                        val k = kState.value
+                        scaleX = k
+                        scaleY = k
+                        alpha = k.coerceIn(0f, 1f)
+                    }
+                },
+            )
             .background(color, CircleShape),
     )
 }

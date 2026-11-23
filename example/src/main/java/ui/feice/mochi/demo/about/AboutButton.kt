@@ -6,6 +6,8 @@ package ui.feice.mochi.demo.about
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.navigation.MochiNavigator
@@ -15,7 +17,12 @@ import ui.feice.mochi.theme.MochiTheme
 @Composable
 internal fun AboutButton() {
     val nav = MochiNavigator.current
-    MochiBarIconButton(onClick = { nav?.push("about") }, navId = "about") {
+    MochiBarIconButton(
+        onClick = { nav?.push("about") },
+        modifier = Modifier.semantics { contentDescription = "关于" },
+        navId = "about",
+        contentKey = "about",
+    ) {
         DangoMark(Modifier.size(24.dp), tint = MochiTheme.colorScheme.primary)
     }
 }

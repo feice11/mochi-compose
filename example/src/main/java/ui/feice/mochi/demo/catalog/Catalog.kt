@@ -4,6 +4,7 @@
 package ui.feice.mochi.demo.catalog
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import ui.feice.mochi.demo.common.DemoIcon
 import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.Tone
@@ -39,6 +40,7 @@ import ui.feice.mochi.demo.pages.PopoverPage
 import ui.feice.mochi.demo.pages.PushPage
 import ui.feice.mochi.demo.pages.RefreshPage
 import ui.feice.mochi.demo.pages.SegmentedPage
+import ui.feice.mochi.demo.pages.ShapesPage
 import ui.feice.mochi.demo.pages.SharedBarPage
 import ui.feice.mochi.demo.pages.SheetPage
 import ui.feice.mochi.demo.pages.SidebarPage
@@ -63,6 +65,7 @@ enum class CatalogGroup(val title: String) {
  * id 同时是路由和卡片的转场 key。
  * @param glyph 卡片和页面头部的图标（见 [DemoIcons]），目录里每项一个、不重复
  */
+@Immutable
 class CatalogEntry(
     val id: String,
     val title: String,
@@ -293,6 +296,14 @@ val catalog: List<CatalogEntry> = listOf(
         glyph = DemoIcons.ICONS,
         tone = Tone.Tertiary,
         page = { IconsPage(it) },
+    ),
+    CatalogEntry(
+        id = "shapes",
+        title = "形状与变形",
+        group = CatalogGroup.Components,
+        glyph = DemoIcons.SHAPES,
+        tone = Tone.Tertiary,
+        page = { ShapesPage(it) },
     ),
     // —— 导航 ——
     CatalogEntry(

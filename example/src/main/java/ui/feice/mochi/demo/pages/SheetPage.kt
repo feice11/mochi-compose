@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,6 +27,7 @@ import ui.feice.mochi.basic.MochiBarButton
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiButton
 import ui.feice.mochi.basic.MochiButtonDefaults
+import ui.feice.mochi.basic.MochiButtonGroup
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiSheet
 import ui.feice.mochi.basic.MochiSheetDetent
@@ -57,15 +57,22 @@ import ui.feice.mochi.theme.MochiTheme
 fun SheetPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val both = rememberMochiSheetState()
     val large = rememberMochiSheetState(detents = listOf(MochiSheetDetent.Large))
+    var active by remember { mutableStateOf(both) }
     var last by remember { mutableStateOf<String?>(null) }
 
-    // 两个面板共用一个「后面的页面」：哪个更靠前就按哪个缩
-    DemoPage(entry, modifier.mochiSheetBackdrop(both).mochiSheetBackdrop(large)) {
+    // 稳定挂接 mochiSheetBackdrop：空闲时零 GraphicsLayer，切换面板仅原地更新 state，避免动态增删根修饰符链
+    DemoPage(entry, modifier.mochiSheetBackdrop(active)) {
         demoItem {
             DemoSection("试一试", footer = last ?: "往上拉到全屏，往下甩关闭。") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MochiButton(onClick = { both.show() }, modifier = Modifier.weight(1f)) { Text("半屏 / 全屏") }
-                    MochiButton(onClick = { large.show() }, modifier = Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("只有全屏") }
+                MochiButtonGroup(Modifier.fillMaxWidth()) {
+                    MochiButton(onClick = {
+                        active = both
+                        both.show()
+                    }, modifier = Modifier.weight(1f), style = MochiButtonStyle.ProminentGlass) { Text("半屏 / 全屏") }
+                    MochiButton(onClick = {
+                        active = large
+                        large.show()
+                    }, modifier = Modifier.weight(1f), style = MochiButtonStyle.Glass) { Text("只有全屏") }
                 }
             }
         }
@@ -135,7 +142,7 @@ private fun NetworkSheet(state: MochiSheetState, onDismiss: (String) -> Unit) {
 
                         "security" -> {
                             MochiListCard {
-                                listOf("无", "WPA2", "WPA3").forEach { value ->
+                                SecurityOptions.forEach { value ->
                                     MochiListRow(value, checked = security == value, onClick = { security = value })
                                 }
                             }
@@ -151,7 +158,7 @@ private fun NetworkSheet(state: MochiSheetState, onDismiss: (String) -> Unit) {
 
                         "ip" -> {
                             MochiListCard {
-                                listOf("自动（DHCP）", "手动").forEach { value ->
+                                IpOptions.forEach { value ->
                                     MochiListRow(value, checked = ip == value, onClick = { ip = value })
                                 }
                             }
@@ -162,6 +169,9 @@ private fun NetworkSheet(state: MochiSheetState, onDismiss: (String) -> Unit) {
         }
     }
 }
+
+private val SecurityOptions = listOf("无", "WPA2", "WPA3")
+private val IpOptions = listOf("自动（DHCP）", "手动")
 
 private fun networkTitle(route: String): String = when (route) {
     "security" -> "安全性"

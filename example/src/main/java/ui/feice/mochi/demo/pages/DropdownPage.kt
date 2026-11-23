@@ -73,6 +73,31 @@ fun DropdownPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val curveItems = remember { MochiMotions.all.map { MochiItem(it.name) }.toImmutableList() }
     val sortItems = remember(sorts) { sorts.map { MochiItem(it) }.toImmutableList() }
     val longItems = remember { List(80) { MochiItem("选项 ${it + 1}") }.toImmutableList() }
+    val moreItems = remember(sorts, sortIndex) {
+        persistentListOf(
+            MochiItem("拷贝链接", onClick = { toast.show("已拷贝链接") }, icon = { Glyph(DemoIcons.LINK, it) }),
+            MochiItem("置顶", onClick = { toast.show("已置顶") }, icon = { Glyph(DemoIcons.PIN, it) }),
+            MochiItem("重命名", onClick = { toast.show("进入重命名") }, icon = { Glyph(DemoIcons.EDIT, it) }),
+            MochiItem(
+                "排序",
+                submenu = sorts.mapIndexed { index, title ->
+                    MochiItem(title, checked = sortIndex == index, onClick = {
+                        sortIndex = index
+                        toast.show("按「$title」排序")
+                    })
+                }.toImmutableList(),
+            ),
+            MochiItem("删除", onClick = { toast.show("已移到回收站") }, destructive = true, icon = { Glyph(DemoIcons.TRASH, it) }),
+        )
+    }
+    val fabItems = remember {
+        persistentListOf(
+            MochiItem("新建笔记", icon = { Glyph(DemoIcons.NOTE, it) }),
+            MochiItem("拍照", icon = { Glyph(DemoIcons.CAMERA, it) }),
+            MochiItem("扫描文稿", icon = { Glyph(DemoIcons.SCAN, it) }),
+            MochiItem("录音", icon = { Glyph(DemoIcons.MIC, it) }),
+        )
+    }
 
     DemoPage(entry, modifier) {
         demoItem {
@@ -108,14 +133,8 @@ fun DropdownPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                         MochiIconDropdown(
                             expanded = open == "more",
                             onExpandedChange = { open = if (it) "more" else null },
-                            items = persistentListOf(
-                                MochiItem("拷贝链接", icon = { Glyph(DemoIcons.LINK, it) }),
-                                MochiItem("置顶", icon = { Glyph(DemoIcons.PIN, it) }),
-                                MochiItem("重命名", icon = { Glyph(DemoIcons.EDIT, it) }),
-                                MochiItem("分享", icon = { Glyph(DemoIcons.SHARE, it) }),
-                                MochiItem("删除", destructive = true, icon = { Glyph(DemoIcons.TRASH, it) }),
-                            ),
-                            onItemClick = { toast.show(listOf("已拷贝链接", "已置顶", "进入重命名", "打开分享面板", "已移到回收站")[it]) },
+                            items = moreItems,
+                            onItemClick = {},
                             modifier = Modifier,
                             behavior = behavior(MochiOpenMode.Cover, MochiAlign.End),
                             motion = motion,
@@ -139,19 +158,14 @@ fun DropdownPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                         ) {
                             MochiBlurText("排序：${sorts[sortIndex]}", style = ts.labelLarge)
                             Spacer(Modifier.width(8.dp))
-                            Chevron(up = open != "sort")
+                            Chevron(up = open == "sort")
                         }
 
                         MochiIconDropdown(
                             expanded = open == "fab",
                             onExpandedChange = { open = if (it) "fab" else null },
-                            items = persistentListOf(
-                                MochiItem("新建笔记", icon = { Glyph(DemoIcons.NOTE, it) }),
-                                MochiItem("拍照", icon = { Glyph(DemoIcons.CAMERA, it) }),
-                                MochiItem("扫描文稿", icon = { Glyph(DemoIcons.SCAN, it) }),
-                                MochiItem("录音", icon = { Glyph(DemoIcons.MIC, it) }),
-                            ),
-                            onItemClick = { toast.show(listOf("新建了一条笔记", "打开相机", "打开文稿扫描", "开始录音")[it]) },
+                            items = fabItems,
+                            onItemClick = { toast.show(FabMessages[it]) },
                             modifier = Modifier,
                             colors = MochiDropdownDefaults.dropdownColors(
                                 buttonColor = cs.primaryContainer,
@@ -184,14 +198,19 @@ fun DropdownPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
         }
         demoItem {
             DemoSettingsSection("交互") {
-                Toggles("打开方式", listOf("按下即开" to MochiTrigger.Press, "长按开" to MochiTrigger.LongPress), trigger) { trigger = it }
-                Toggles("展开形式", listOf("按场景" to null, "全部分离" to MochiOpenMode.Detach, "全部包裹" to MochiOpenMode.Cover), forceMode) {
+                Toggles("打开方式", TriggerOptions, trigger) { trigger = it }
+                Toggles("展开形式", OpenModeOptions, forceMode) {
                     forceMode = it
                     open = null
                 }
-                Toggles("按压反馈", listOf("放大+发光" to MochiPressStyle.Grow, "缩小" to MochiPressStyle.Shrink), pressStyle) { pressStyle = it }
+                Toggles("按压反馈", PressStyleOptions, pressStyle) { pressStyle = it }
             }
         }
     }
     MochiToastHost(toast)
 }
+
+private val FabMessages = listOf("新建了一条笔记", "打开相机", "打开文稿扫描", "开始录音")
+private val TriggerOptions = listOf("按下即开" to MochiTrigger.Press, "长按开" to MochiTrigger.LongPress)
+private val OpenModeOptions = listOf("按场景" to null, "全部分离" to MochiOpenMode.Detach, "全部包裹" to MochiOpenMode.Cover)
+private val PressStyleOptions = listOf("放大+发光" to MochiPressStyle.Grow, "缩小" to MochiPressStyle.Shrink)

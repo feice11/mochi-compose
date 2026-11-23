@@ -3,9 +3,12 @@
 
 package ui.feice.mochi.demo.pages
 
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,19 +25,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.random.Random
 import kotlinx.coroutines.delay
 import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonDefaults
+import ui.feice.mochi.basic.MochiButtonGroup
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiIconButton
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.demo.catalog.CatalogEntry
-import ui.feice.mochi.demo.common.Caption
 import ui.feice.mochi.demo.common.DemoIcon
 import ui.feice.mochi.demo.common.DemoIcons
 import ui.feice.mochi.demo.common.DemoPage
@@ -54,13 +58,28 @@ import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
 
 /** 内容变换：图标变形、文字模糊替换、计数器、流式文字、景深切换 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
     val cs = MochiTheme.colorScheme
     val ts = MochiTheme.textStyles
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    // 计时状态提升到列表外并按真实单调时钟推进：滑出视口不停表，窗口进后台零唤醒
+    var running by rememberSaveable { mutableStateOf(false) }
+    var baseSeconds by rememberSaveable { mutableLongStateOf(0L) }
+    var startedAtMs by rememberSaveable { mutableLongStateOf(0L) }
+    var seconds by rememberSaveable { mutableLongStateOf(0L) }
+    LaunchedEffect(running, windowFocused) {
+        if (!running || !windowFocused) return@LaunchedEffect
+        while (true) {
+            val elapsedMs = (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0L)
+            seconds = baseSeconds + elapsedMs / 1000L
+            delay(1000L - (elapsedMs % 1000L))
+        }
+    }
 
     DemoPage(entry, modifier) {
-        demoItem {
+        demoItem(key = "icons") {
             DemoSection("图标") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     IconCycle(listOf(DemoIcons.PLUS, DemoIcons.CLOSE, DemoIcons.CHECK))
@@ -87,7 +106,7 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 }
             }
         }
-        demoItem {
+        demoItem(key = "blur-text") {
             DemoSection("文字模糊替换") {
                 val states = remember { listOf("未连接", "正在连接…", "已连接") }
                 var i by rememberSaveable { mutableIntStateOf(0) }
@@ -119,7 +138,7 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 }
             }
         }
-        demoItem {
+        demoItem(key = "visibility") {
             DemoSection("出现与消失") {
                 var shown by rememberSaveable { mutableStateOf(true) }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -143,17 +162,19 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 }
             }
         }
-        demoItem {
+        demoItem(key = "counter") {
             DemoSection("数字计数器") {
                 var n by rememberSaveable { mutableLongStateOf(128L) }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    val counterStyle = ts.largeTitle.copy(fontSize = 56.sp, lineHeight = 64.sp)
+                    val counterStyle = ts.displayLarge.copy(fontFeatureSettings = "tnum")
                     MochiCounterText(n, style = counterStyle)
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MochiButton({ n = (n - 1).coerceAtLeast(0) }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("−1") }
-                    MochiButton({ n += 1 }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("+1") }
-                    MochiButton({ n = Random.nextLong(0, 100_000) }, Modifier.weight(1f)) { Text("随机") }
+                MochiButtonGroup(Modifier.fillMaxWidth()) {
+                    MochiButton({ n = (n - 1).coerceAtLeast(0) }, Modifier.weight(1f), style = MochiButtonStyle.Glass) { Text("−1") }
+                    MochiButton({ n += 1 }, Modifier.weight(1f), style = MochiButtonStyle.Glass) { Text("+1") }
+                    MochiButton({
+                        n = Random.nextLong(0, 100_000)
+                    }, Modifier.weight(1f), style = MochiButtonStyle.ProminentGlass) { Text("随机") }
                 }
                 val price = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
                 var cents by rememberSaveable { mutableLongStateOf(129_900L) }
@@ -170,14 +191,6 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                         Text("改价")
                     }
                 }
-                var running by rememberSaveable { mutableStateOf(false) }
-                var seconds by rememberSaveable { mutableLongStateOf(0L) }
-                LaunchedEffect(running) {
-                    while (running) {
-                        delay(1000)
-                        seconds++
-                    }
-                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("计时", style = ts.body)
                     Spacer(Modifier.weight(1f))
@@ -188,11 +201,20 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                         )
                     })
                     Spacer(Modifier.padding(start = 12.dp))
-                    MochiButton({ running = !running }, style = MochiButtonStyle.Tonal) { MochiBlurText(if (running) "暂停" else "开始") }
+                    MochiButton({
+                        if (running) {
+                            baseSeconds = seconds
+                            running = false
+                        } else {
+                            baseSeconds = seconds
+                            startedAtMs = SystemClock.elapsedRealtime()
+                            running = true
+                        }
+                    }, style = MochiButtonStyle.Tonal) { MochiBlurText(if (running) "暂停" else "开始") }
                 }
             }
         }
-        demoItem {
+        demoItem(key = "fly-in") {
             DemoSection("流式文字", footer = "点播放，播完再点改写结尾。") {
                 val script = remember { listOf("今天", "今天天", "今天天气", "今天天气真", "今天天气真不错", "今天天气真不错，我们去公园走走吧") }
                 var step by rememberSaveable { mutableIntStateOf(-1) }
@@ -217,17 +239,21 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 ) {
                     MochiFlyInText(line, style = ts.body)
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MochiButtonGroup(Modifier.fillMaxWidth()) {
                     MochiButton({
                         corrected = false
                         step = 0
-                    }, Modifier.weight(1f)) { Text("播放") }
-                    MochiButton({ corrected = !corrected }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("改写结尾") }
-                    MochiButton({ step = -1 }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("清空") }
+                    }, Modifier.weight(1f), style = MochiButtonStyle.ProminentGlass) { Text("播放") }
+                    MochiButton({ corrected = !corrected }, Modifier.weight(1f), style = MochiButtonStyle.Glass) { Text("改写结尾") }
+                    MochiButton({
+                        step = -1
+                    }, Modifier.weight(1f), style = MochiButtonStyle.Glass, behavior = MochiButtonDefaults.behavior(fuseGroup = "clear")) {
+                        Text("清空")
+                    }
                 }
             }
         }
-        demoItem {
+        demoItem(key = "depth") {
             DemoSection("景深切换") {
                 val steps = remember {
                     listOf(
@@ -240,12 +266,13 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                 }
                 var k by rememberSaveable { mutableIntStateOf(0) }
                 val firstDepth = remember { MochiBlurTransitions.Depth.copy(blur = 4.dp) }
-                Row(
+                FlowRow(
                     Modifier
                         .fillMaxWidth()
                         .background(cs.surfaceVariant, MochiTheme.shapes.medium)
                         .padding(horizontal = 8.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     steps[k].forEachIndexed { i, word ->
                         MochiBlurCrossfade(
@@ -255,9 +282,11 @@ fun ContentPage(entry: CatalogEntry, modifier: Modifier = Modifier) {
                         ) { Text(it, style = ts.body) }
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MochiButton({ k = (k + 1) % steps.size }, Modifier.weight(1f)) { Text("打下一个字母") }
-                    MochiButton({ k = 0 }, Modifier.weight(1f), style = MochiButtonStyle.Tonal) { Text("重来") }
+                MochiButtonGroup(Modifier.fillMaxWidth()) {
+                    MochiButton({
+                        k = (k + 1) % steps.size
+                    }, Modifier.weight(1f), style = MochiButtonStyle.ProminentGlass) { Text("打下一个字母") }
+                    MochiButton({ k = 0 }, Modifier.weight(1f), style = MochiButtonStyle.Glass) { Text("重来") }
                 }
             }
         }
