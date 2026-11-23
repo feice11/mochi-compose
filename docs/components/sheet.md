@@ -1,139 +1,272 @@
 # MochiSheet
 
-The iOS bottom sheet. With glass in the theme it is glass at medium height and turns opaque when pulled to full screen (see "Glass" below).
+In `ui.feice.mochi.basic`. An iOS-style modal bottom sheet supporting `Medium` (floating half-screen) and `Large` (full-height) detents. When sheet glass is configured in the theme (`MochiTheme.materials.sheetGlass`), the sheet renders liquid glass at the medium detent and crossfades smoothly to an opaque surface as it expands to full height.
 
-- Medium: the sheet floats 8dp from the sides and bottom, using its original single continuous rounded outline. Each top corner uses the original `max(physicalRadius, 32dp) - floatingInset` radius, capped at a fixed 48dp.
-- Large: edge to edge up to just below the status bar, filling through the navigation area to the window bottom. The page behind it (the one with `mochiSheetBackdrop`) shrinks from its top edge into a rounded card that peeks out above the sheet, over black.
-- Drag: the whole sheet drags and follows the finger. Past the highest detent it is held by a rubber band; on release it snaps to the nearest detent by projected velocity, and a hard fling down dismisses it.
-- Tapping outside dismisses it. From the moment it starts closing, taps go to the page behind it without waiting for the closing animation. With an internal navigator, Back pops the internal page first; it dismisses the sheet only at the root.
+- **`Medium` (floating)**: The top edge rests halfway up the window while the left, right, and bottom edges float `8.dp` inside the window bounds within a single continuous rounded (G2) outline.
+- **`Large` (full-height)**: The top edge stops `12.dp` below the status bar or display cutout, and the left, right, and bottom edges extend flush to the window edges. An underlying root page carrying `Modifier.mochiSheetBackdrop(state)` reveals a black backdrop, scales down to `0.93×` from its top-center origin, shifts below the status bar, and peeks out as a rounded card above the sheet.
+- **Dragging and snapping**: The entire sheet surface drags vertically with the finger. Pulling upward past the highest detent applies a rubber-band stretch (`48.dp` max pull); releasing snaps to the nearest detent by projected velocity (emitting a light haptic tick when switching between `Medium` and `Large`), while a fast downward fling hands its velocity directly to the dismiss animation.
+- **Scrim tap and Back dismissal**: Tapping outside on the dimmed scrim (`MochiDefaults.scrim()`) dismisses the sheet. From the moment dismissal begins, touches pass straight through to the page behind without waiting for the exit animation to finish. Calling `state.show()` during dismissal or predictive back smoothly reverses from the current position and scale. When paired with an internal navigator, Back pops inner subpages first and dismisses the sheet only at the settled root page.
 
 ## Usage
 
-```kotlin
-val sheet = rememberMochiSheetState()          // medium + large
-Page(Modifier.mochiSheetBackdrop(sheet))       // the page behind
-MochiSheet(sheet, onDismiss = { … }) {
-    MochiSheetHeader("Title")
-    MochiSheetContent { … }                    // scrolls by itself when it does not fit; do not add another scroll container
-}
-// Fixed header with content scrolling underneath: MochiSheetScaffold(header = { MochiSheetHeader("Title") }) { … }
-Button(onClick = { sheet.show() })
-```
+### `MochiSheetHeader` and `MochiSheetContent`
 
-`MochiSheetContent` scrolls vertically when it does not fit: pushing up first raises the sheet to its highest detent, then scrolls the content; dragging down with the content at the top moves the sheet, and releasing snaps to the nearest detent by velocity (as on iOS).
-
-Large only: `rememberMochiSheetState(detents = listOf(MochiSheetDetent.Large))`.
-
-Cards inside the sheet use the same `MochiListDefaults.colors()` as other grouped option cards: white in light mode and the shared grouped container in dark mode. Do not override them with `surfaceContainerHigh`.
-
-## Parameters
-
-| Parameter | Description |
-|---|---|
-| state | `rememberMochiSheetState(detents, initial)`; `show()` / `hide()` / `isVisible` |
-| onDismiss | Called after the dismiss animation |
-| color | Sheet color, `MochiDefaults.sheetBackground()` by default: the elevated grouped background (iOS `systemGroupedBackground` at the elevated level). Inside the sheet `LocalMochiElevated` is true, so `MochiListCard` uses the elevated card color and stays one step apart from the sheet in light and dark |
-| grabber | The small bar at the top |
-| hideNavigationBar | Hide system navigation icons while floating, true by default; the bar background remains transparent independently of this setting |
-| navigator | The same navigator used by the internal `MochiNavHost`; internal pages handle Back first |
-
-## Navigation inside a sheet
-
-The demo is in the Navigation category. It includes Join Network → Advanced → IP Settings, plus a Security page.
+Place `MochiSheetHeader` above `MochiSheetContent` inside `MochiSheet` for standard sheet layouts:
 
 ```kotlin
-val nav = rememberMochiNavigator("network")
-MochiSheet(sheet, navigator = nav) {
-    MochiNavHost(
-        nav,
-        // Leave corners unset to inherit the sheet's current transition corners
-        spec = MochiNavDefaults.spec(pushBackdrop = MochiDefaults.sheetBackground()),
-    ) { route ->
-        // A page contains MochiSheetHeader and its own content.
-        // Reuse navId="sheet.leading" / "sheet.trailing" on each header's buttons.
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import ui.feice.mochi.basic.MochiBarIconButton
+import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonDefaults
+import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.basic.MochiSheet
+import ui.feice.mochi.basic.MochiSheetContent
+import ui.feice.mochi.basic.MochiSheetHeader
+import ui.feice.mochi.basic.MochiSwitch
+import ui.feice.mochi.basic.Text
+import ui.feice.mochi.basic.mochiSheetBackdrop
+import ui.feice.mochi.basic.rememberMochiSheetState
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.list.MochiListRow
+import ui.feice.mochi.list.MochiListSection
+
+val sheet = rememberMochiSheetState() // Medium + Large by default
+var autoJoin by remember { mutableStateOf(true) }
+
+Box(Modifier.mochiSheetBackdrop(sheet)) {
+    MochiButton(onClick = { sheet.show() }) {
+        Text("Open Sheet")
     }
 }
-nav.push("advanced") // no source: side push with shared header buttons
-```
 
-Use a navigator dedicated to the sheet. Passing it to both components prevents the sheet's Back handler from taking an internal return. The last internal page's closing animation also consumes repeated Back events instead of accidentally closing the sheet. At the settled root, Back closes the sheet. In the demo, the root's close/check buttons morph into a back icon and Done capsule on internal pages; their actions return one level. Closing and reopening starts at the root again.
-
-The internal `MochiNavHost` inherits the sheet's current transition corners by default. Floating sheets use four rounded corners. Once full-height bottom fill is active, side pushes keep only the top two corners rounded and both bottom corners at zero, including upward overpull and its spring return. Leave `corners` unset; passing `None` explicitly disables the transition corners. The corner callback is read during drawing, without recomposing the page for each drag frame. At rest, the sheet's outer surface owns the clipping.
-
-## Header and concentric corners
-
-```kotlin
-MochiSheet(sheet) {
+MochiSheet(
+    state = sheet,
+    onDismiss = { /* Called after the dismiss animation finishes and unmounts */ },
+) {
     MochiSheetHeader(
-        "Join Network",
-        navigationIcon = { MochiBarIconButton(onClick = { sheet.hide() }) { Icon(close) } },
-        actions = { MochiBarIconButton(onClick = { … }, colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled)) { Icon(check) } },
+        title = "Join Network",
+        navigationIcon = {
+            MochiBarIconButton(onClick = { sheet.hide() }) {
+                MochiIonicon("close", contentDescription = "Close")
+            }
+        },
+        actions = {
+            MochiBarIconButton(
+                onClick = {
+                    save()
+                    sheet.hide()
+                },
+                colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled),
+            ) {
+                MochiIonicon("checkmark", contentDescription = "Confirm")
+            }
+        },
     )
-    …
+    MochiSheetContent {
+        MochiListSection {
+            MochiListRow("Auto-Join", trailing = { MochiSwitch(autoJoin, { autoJoin = it }) })
+        }
+    }
 }
 ```
 
-`MochiSheetHeader` retains its original concentric layout: 44dp controls sit at equal top/side insets of `max(12dp, sheetTopRadius - 22dp)`, without extra bottom padding. Buttons and title share a horizontal centerline, with the title centered on the sheet. The grabber floats 6dp below the top edge, independently of header layout. Top radii follow `min(48dp, max(physicalRadius, 32dp) - floatingInset)`. The fixed 48dp maximum comes from the reference device's 58dp radius minus 10dp; do not subtract 10dp on every device. Small-corner devices retain the original radius, and devices without physical corner data retain the 32dp fallback.
+- **Coordinated nested scrolling**: `MochiSheetContent` includes vertical scrolling—do not wrap another vertical scroll container inside or around it. When content overflows, dragging upward raises the sheet to its highest detent before scrolling the body; dragging downward once scrolled to the top moves the sheet itself and snaps or dismisses by velocity on release.
+- **Full-height only**: Pass `rememberMochiSheetState(detents = listOf(MochiSheetDetent.Large))`.
+- **Elevated grouped card colors**: `MochiSheet` provides `LocalMochiElevated = true`. Option cards and list sections inside a sheet use standard `MochiListDefaults.colors()` (white in light mode and the elevated grouped container in dark mode, staying one tone step above the sheet background in both modes); do not manually override card colors with `surfaceContainerHigh`.
 
-Wrap the content below the header in `MochiSheetContent { … }`: its sides line up with the outer edge of the header buttons and it keeps the same gap below the header (both are the same concentric inset and follow the corner radius). The header has no bottom padding of its own, so content placed directly under it touches the close button and does not line up with it.
+### Floating Header (`MochiSheetScaffold`)
 
-Releasing a drag onto a different detent (medium ↔ large) gives a light haptic tick.
-
-## Header floating over the content (MochiSheetScaffold)
-
-When the content is long and should scroll under the header, use `MochiSheetScaffold`: the header (usually `MochiSheetHeader`) stays fixed on top and the content scrolls underneath it.
+Use `MochiSheetScaffold` when long body content should scroll underneath a pinned header:
 
 ```kotlin
 MochiSheet(sheet) {
     MochiSheetScaffold(
         header = {
             MochiSheetHeader(
-                "Color",
-                navigationIcon = { MochiBarIconButton(onClick = { sheet.hide() }) { Icon(close) } },
+                title = "Color",
+                navigationIcon = {
+                    MochiBarIconButton(onClick = { sheet.hide() }) {
+                        MochiIonicon("close", contentDescription = "Close")
+                    }
+                },
             )
         },
     ) {
-        MochiListSection { … }
-        MochiListSection { … }
+        MochiListSection { /* Option rows */ }
+        MochiListSection { /* Additional rows */ }
     }
 }
 ```
 
-- At the top it looks the same as `MochiSheetHeader` + `MochiSheetContent`
-- Once content scrolls under the header, the header area gets the same treatment as the page top bar: an even blur covered with a translucent sheet background, a hard edge and a very faint hairline. The edge sits 8dp below the bottom of the header buttons. Glass sheets cover it with the solid sheet's background color too
-- The content's sides use the concentric inset, as in `MochiSheetContent`; with `contentPadding` it uses that padding's start, end and bottom instead
-- Parameters: `header`, `modifier`, `scrollState` (default `rememberScrollState()`), `contentPadding` (default null), `verticalArrangement` (default `spacedBy(16.dp)`), `content`
-- Scrolling and sheet dragging when the content does not fit work as in `MochiSheetContent`; do not add another scroll container. `MochiColorPicker` now uses it; the older `MochiSheetHeader` + `MochiSheetContent` form still works
+- At scroll offset zero, spacing and concentric alignment match `MochiSheetHeader` + `MochiSheetContent`.
+- Once content scrolls beneath the header, the header band applies the same scroll-edge effect as page top bars (`mochiScrollEdgeBlur` + `mochiScrollEdgeFade`): under the default frosted style, an even blur is covered by a translucent solid sheet fill (`surfaceContainer` in light mode, `surfaceContainerLow` in dark mode—including inside liquid-glass sheets) and ends in a hairline divider `8.dp` below the bottom of the header controls.
+- Body content uses the dynamic concentric inset on the start, end, and bottom by default, or uses the start, end, and bottom values of `contentPadding` when supplied. Built-in scrolling coordinates with sheet dragging under the same nested-scroll rules; do not add another scroll container.
 
-## Navigation bar, predictive back, closing
+## Parameters
 
-- While a sheet is composed, its window navigation-bar background and divider are transparent, with enforced navigation-bar contrast disabled on Android 10+. Full-height sheets still show navigation icons over the sheet surface. This is independent of `hideNavigationBar`: false keeps the same transparent appearance. Restore the original colors, divider and contrast policy when the last sheet releases the window; overlapping sheets share the override. Content retains its `navigationBarsIgnoringVisibility` safe area.
+### `MochiSheet`
 
-- `hideNavigationBar = true` (default): a sheet supporting the medium detent hides the system navigation bar (gesture handle) as soon as opening is requested, and again as it leaves full height downward. It does not wait for the spring to settle. The bar returns near full height or when closing; a large-only sheet keeps it visible. A swipe from the bottom edge still shows it temporarily. The sheet's own bottom padding ignores visibility, so content doesn't jump.
-- Navigation safe padding applies to content only. Enable bottom fill directly when the animation to the large detent completes, and retain it when a gesture starts at the settled large detent. Keep this state during upward overpull and its spring return: the same surface continues to the window bottom without the old content-height cap. Clear it only when dragging downward away from the large detent, closing or starting predictive back. Initial opening and downward movement retain the original single continuous rounded outline; no extra fill layer or system elevation shadow is drawn.
-- Predictive back: the sheet shrinks toward its bottom edge as you drag; release to close, slide back to cancel.
-- Fixed: dragging the sheet while it was opening interrupted the animation and stopped the sheet from listening to `hide()`, so it could no longer be closed. Interrupted animations now just stop, and calling `show()` while it is closing reverses it.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `state` | `MochiSheetState` | Required | Sheet state controller created via `rememberMochiSheetState`. |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the sheet surface container inside the window overlay. |
+| `onDismiss` | `() -> Unit` | `{}` | Invoked after the dismiss animation completes and the overlay unmounts. |
+| `color` | `Color` | `MochiDefaults.sheetBackground()` | Sheet surface color (elevated grouped background, matching iOS elevated `systemGroupedBackground`). |
+| `grabber` | `Boolean` | `true` | Draws a centered `36.dp × 5.dp` drag indicator `6.dp` below the top edge without consuming layout height. |
+| `hideNavigationBar` | `Boolean` | `true` | Hides system navigation-bar icons and the gesture pill while floating when `Medium` is in `detents`; independent of the transparent navigation-bar background policy. |
+| `navigator` | `MochiNavigator?` | `null` | Navigator instance shared with an internal `MochiNavHost`; inner subpages and active exit transitions handle Back first. |
+| `content` | `@Composable ColumnScope.() -> Unit` | Required | Sheet content (typically `MochiSheetHeader` + `MochiSheetContent`, `MochiSheetScaffold`, or `MochiNavHost`). |
 
-- Keep the entire page behind the sheet (`mochiSheetBackdrop`); do not crop its lower half to a rectangular band. At the start of expansion its corner outlines match the physical screen circles. Both the radii and Bezier control points then interpolate continuously with expansion progress; only at the full detent do they reach the sheet's continuous top-left/top-right corner shapes (48dp on a device reporting 58dp physical corners). The bottom corners use the corresponding top-side targets too, and all radii compensate for scale. Do not abruptly switch between circular and continuous shapes. Returning to medium resets the backing layer's transform and clipping.
+### `rememberMochiSheetState`, `MochiSheetState`, and Backdrop Modifier
 
-## Keyboard
+`rememberMochiSheetState` parameters:
 
-When a field in the sheet raises the keyboard, the sheet rises with the keyboard animation frame by frame, up to the top of the full-height detent; whatever is still covered is given up at the bottom of the content, so the field scrolls above the keyboard starting together with it. The navigation bar inset is subtracted, so it doesn't stack with the bottom padding. Closing the sheet with the keyboard open clears focus first, so the keyboard and the sheet go down together. A downward fling hands its velocity to the closing animation.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `detents` | `List<MochiSheetDetent>` | `listOf(MochiSheetDetent.Medium, MochiSheetDetent.Large)` | Allowed resting height detents (falls back to `listOf(MochiSheetDetent.Large)` if empty). |
+| `initial` | `MochiSheetDetent` | `detents.first()` | Target detent when opening the sheet. |
 
-## Glass
+`MochiSheetState` members and companion modifier:
 
-When the theme has a glass material (`MochiTheme.materials.sheetGlass`), the sheet background follows iOS 26 (UIKitCore, reverse engineered, `SheetLayoutInfo`): below the large detent it is a regular `_UIViewGlass` (subvariant "sheet"); at the large detent it is the opaque system background. The glass samples the page under the sheet without the dimming, which only covers what lies outside the glass (sampling the dimmed page through the recipe's whitening face matrix turns it grey); sheet glass does not flip shade with the backdrop and follows the theme.
+| Name | Type / Signature | Description |
+|---|---|---|
+| `isVisible` | `Boolean` | Whether the sheet is currently requested to be visible (becomes `false` as soon as `hide()` starts closing). |
+| `show()` | `fun show()` | Opens the sheet, smoothly reversing in place if called mid-dismissal or mid-back gesture. |
+| `hide()` | `fun hide()` | Dismisses the sheet. |
+| `Modifier.mochiSheetBackdrop(state)` | `(MochiSheetState) -> Modifier` | Applied to the root page behind the sheet to scale, shift, and round it into a stacked card as the sheet approaches `Large`. |
 
-- Pages keep using `MochiDefaults.sheetBackground()` / `groupedBackground()` as their background. Read inside a glass sheet they are transparent and the sheet draws the background, so pages need no branch on the glass switch. Read them inside the sheet (in the `MochiSheet { … }` content); read outside, they return the opaque color.
-- Natively the two backgrounds switch outright; here the opaque color fades in with the progress toward full screen (an approximation).
-- During navigation inside the sheet pages are transparent, so the lower page fades out as the new page covers it and the two never overlap (an approximation; the native behavior was not recovered). At full screen it behaves like an opaque sheet.
-- When floating, the 8pt inset and 32pt minimum corner radius match `_UISheetPresentationMetrics` mediumSheetInset / minimumFloatingCornerRadii.
+### `MochiSheetHeader`
 
-## Performance
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `title` | `String` | Required | Single-line title centered across the full sheet width (`MochiTheme.textStyles.navTitle`, ellipsized on overflow). |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the header layout container. |
+| `navigationIcon` | `(@Composable () -> Unit)?` | `null` | Leading `44.dp` bar control slot (outer glass button shadow is suppressed automatically). |
+| `actions` | `(@Composable () -> Unit)?` | `null` | Trailing `44.dp` bar action slot (outer glass button shadow is suppressed automatically). |
 
-- Page outlines, dimming scrims and side-push shadows use the sheet's current visible height, including the full-height navigation area. Do not substitute the inset-reduced body height. Floating sheets place both bottom corners on the visible bottom edge, rather than below it at the stable content box's bottom. Full-height sheets still round only the top two corners.
-- Navigation layers resize with the visible surface; page content retains its highest-detent measurement and original bottom safe area. Insets constrain content, not shadows or dimming. Do not add bottom safe padding outside the internal `MochiNavHost`.
+### `MochiSheetContent`
 
-- Content is measured at the highest detent's fixed height and reused during vertical drags. Only the surface viewport changes height; content is not repeatedly reflowed as it is revealed. Width changes still remeasure as the floating side insets close.
-- The show animation starts after the sheet's first frame has been drawn (creating the overlay is the heaviest frame).
-- Navigation-bar visibility follows the requested floating/full state, independently of spring activity; content reserves `navigationBarsIgnoringVisibility` padding throughout.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the scrollable body column. |
+| `verticalArrangement` | `Arrangement.Vertical` | `Arrangement.spacedBy(16.dp)` | Vertical arrangement and spacing between child items. |
+| `content` | `@Composable ColumnScope.() -> Unit` | Required | Scrollable body content with dynamic four-sided concentric insets aligned to header controls. |
+
+### `MochiSheetScaffold`
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `header` | `@Composable () -> Unit` | Required | Header pinned above the scrolling content (typically `MochiSheetHeader`). |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the outer scaffold container. |
+| `scrollState` | `ScrollState` | `rememberScrollState()` | Scroll state for the vertical body column. |
+| `contentPadding` | `PaddingValues?` | `null` | Custom start, end, and bottom padding override; `null` uses the dynamic concentric inset. |
+| `verticalArrangement` | `Arrangement.Vertical` | `Arrangement.spacedBy(16.dp)` | Vertical arrangement and spacing between child items. |
+| `content` | `@Composable ColumnScope.() -> Unit` | Required | Body content that scrolls underneath the header. |
+
+## Multi-Page Navigation Inside a Sheet
+
+Create a dedicated `MochiNavigator` for the sheet and pass it to both `MochiSheet` and the internal `MochiNavHost`:
+
+```kotlin
+val nav = rememberMochiNavigator("network")
+
+MochiSheet(sheet, navigator = nav) {
+    MochiNavHost(
+        navigator = nav,
+        // Leave corners as null to inherit the sheet's active transition corners
+        spec = MochiNavDefaults.spec(pushBackdrop = MochiDefaults.sheetBackground()),
+    ) { route ->
+        Column(Modifier.fillMaxSize()) {
+            when (route) {
+                "network" -> {
+                    MochiSheetHeader(
+                        title = "Join Network",
+                        navigationIcon = {
+                            MochiBarIconButton(
+                                onClick = { sheet.hide() },
+                                navId = "sheet.leading",
+                                contentKey = "close",
+                            ) { MochiIonicon("close", contentDescription = "Close") }
+                        },
+                        actions = {
+                            MochiBarButton(
+                                text = "Next",
+                                onClick = { nav.push("advanced") },
+                                navId = "sheet.trailing",
+                            )
+                        },
+                    )
+                    MochiSheetContent { /* Root page content */ }
+                }
+                "advanced" -> {
+                    MochiSheetHeader(
+                        title = "Advanced",
+                        navigationIcon = {
+                            MochiBackButton(onClick = { nav.pop() })
+                        },
+                        actions = {
+                            MochiBarButton(
+                                text = "Done",
+                                onClick = { nav.pop() },
+                                navId = "sheet.trailing",
+                            )
+                        },
+                    )
+                    MochiSheetContent { /* Subpage content */ }
+                }
+            }
+        }
+    }
+}
+```
+
+- **Back order and shared toolbar**: Sharing the dedicated `MochiNavigator` between `MochiSheet` and `MochiNavHost` routes Back and predictive back gestures to internal pages first. While the last subpage is still animating out (`navigator.isTransitioning`), repeated Back events are absorbed so the sheet never closes prematurely; Back dismisses the sheet only after settling on the root route. Header controls with stable `navId` and `contentKey` values (`MochiBackButton` participates automatically) stay in the header and morph in place across push transitions.
+- **Inherited transition corners**: Leave `corners = null` on the internal `MochiNavHost` (do not pass `MochiScreenCorners.None`, which explicitly disables transition corner clipping). Corner radii are read lazily during drawing without per-frame recomposition:
+  - While floating (`Medium` or mid-drag), push transitions clip all four corners, placing both bottom corners on the sheet's current visible bottom edge.
+  - Once settled at `Large` with bottom fill active (including upward rubber-band overpull and spring return), push transitions round only the top two corners and keep both bottom corners square (`0px`) so transitions never cut gaps in the navigation bar area.
+  - At rest, clipping is owned solely by the outer sheet surface without an extra static clip layer.
+- **No under-page dimming and separated surface height**: Push transitions inside a sheet neither dim the outgoing lower page nor cast an edge shadow on the incoming page, separating pages cleanly with the continuous rounded outline alone. Transition layers resize with the sheet's full visible height (including the bottom navigation bar area at `Large`), while page content stays measured at the fixed safe height of the highest detent (minus navigation bar and keyboard overlap). Do not add extra bottom safe-area padding outside the internal `MochiNavHost`.
+
+## Concentric Geometry, System Bars, and Keyboard
+
+### Corner Formula and Bottom Fill
+
+- **Floating inset and top corners**: At `Medium`, the left, right, and bottom edges float `8.dp` from the window edges (closing linearly to `0.dp` with `largeness`, matching `mediumSheetInset` in iOS 26 `_UISheetPresentationMetrics`). Each top corner radius follows:
+  `min(48.dp, max(physicalRadius, 32.dp) - floatingGap)`
+  The `48.dp` cap is a fixed maximum derived from a `58.dp` physical-corner reference display (`58.dp - 10.dp`); displays with smaller physical radii keep their unreduced value without subtracting `10.dp`, and displays reporting zero physical radius fall back to `32.dp`.
+- **Bottom corners and full-height bottom fill**: While floating or dragging downward, bottom corners follow `max(physicalRadius, 32.dp) - floatingGap` to stay concentric with physical screen corners. When the animation to `Large` settles (or a drag starts from a settled `Large` detent), bottom fill engages: bottom corners drop to `0px` and remain square across upward overpull and spring return so a single continuous surface reaches the window bottom without seams or system elevation shadows (`shadowElevation = 0f`). Dragging downward away from `Large`, closing, or starting predictive back clears bottom fill immediately.
+- **Backdrop interpolation (`mochiSheetBackdrop`)**: Preserves the complete underlying page without cropping its lower half. At the start of expansion from `Medium`, corner outlines match circular physical screen arcs; both corner radii and continuous-curvature Bezier control points interpolate continuously with `largeness`, converging at `Large` to the sheet's top-left and top-right continuous corner radii on both top and bottom (divided by the `0.93×` scale factor), and reset cleanly upon returning to `Medium`.
+- **Fixed content measurement and first-frame settle**: Sheet body content is measured at the highest detent's fixed height and reused across vertical drag frames, changing only the outer surface viewport height without reflowing text or cards (remeasuring only when horizontal width changes as the `8.dp` side insets close). On initial open, the spring animation waits for the first overlay frame to compose, lay out, and draw (`awaitFrameSettle`) so opening frames never stutter.
+
+### Header and Content Concentric Insets
+
+- `MochiSheetHeader` positions `44.dp` (`MochiButtonDefaults.BarItemSize`) leading and trailing controls at equal top, start, and end insets of `max(12.dp, sheetTopRadius - 22.dp)` so circular buttons sit concentrically inside the sheet's top corners. Controls and the centered title share a horizontal centerline with zero bottom padding on the header itself. The grabber is drawn `6.dp` below the top edge independently of header layout.
+- `MochiSheetContent` applies the same `max(12.dp, sheetTopRadius - 22.dp)` concentric inset to its start, end, top (gap below header controls), and bottom, aligning body edges with the outer edge of header buttons and updating placement without recomposition as corner radii change.
+
+### System Navigation Bar and Predictive Back
+
+- **Transparent window navigation bar**: While any `MochiSheet` is composed, the Activity window's navigation-bar background and divider (Android 9+) are set to transparent and `isNavigationBarContrastEnforced` (Android 10+) is disabled so full-height sheet backgrounds extend cleanly behind navigation icons. This policy is independent of `hideNavigationBar` (`false` retains the transparent bar); multiple sheets share the window override via reference counting and restore the window's original settings when the last sheet unmounts.
+- **Hiding the navigation bar while floating**: When `hideNavigationBar = true` and `Medium` is in `detents`, the system navigation bar (gesture pill) hides immediately when opening is requested or when dragging downward below `Large` (swiping up from the bottom edge reveals it transiently), and reappears at `Large` or upon closing; `Large`-only sheets keep it visible throughout. Sheet content always reserves `WindowInsets.navigationBarsIgnoringVisibility` (plus horizontal `displayCutout` insets in landscape), preventing layout jumps when bar visibility changes.
+- **Predictive back**: Swiping system Back at the root shrinks the sheet toward its visible bottom-center (down to `90%` scale); releasing dismisses, and canceling springs back.
+
+### Keyboard Tracking
+
+When a text field inside the sheet opens the software keyboard, the sheet tracks `WindowInsets.ime` frame by frame in two stages:
+
+1. **Whole-sheet lift**: While below `Large`, the sheet translates upward (`keyboardLift`) to ride above the keyboard up to `largeTop`, adjusting placement offset alone without mutating `state.top`, detent snapping, or `mochiSheetBackdrop` progress.
+2. **Content viewport reduction**: Any keyboard overlap remaining once lifted to `largeTop` (subtracting the already-reserved navigation-bar safe inset so bottom padding never double-stacks) reduces the measured content height of both `MochiSheet` and internal `MochiNavHost` pages, scrolling focused fields above the keyboard in lockstep while the outer sheet surface stays anchored to the window bottom.
+
+Dismissing the sheet while the keyboard is open clears focus first (`clearFocus(force = true)`) so the keyboard and sheet animate down together.
+
+## Liquid Glass
+
+When sheet glass is active in the theme (`MochiTheme.materials.sheetGlass`, resolving `sheet ?: bar`), the sheet background follows iOS 26 UIKit `SheetLayoutInfo`:
+
+- **Floating glass to full-height opaque crossfade**: Below `Large`, the sheet renders regular liquid glass (`_UIViewGlass` `"sheet"`) sampling the undimmed window backdrop (`LocalGlassSources.current.overlay`), while the scrim dims only the area outside the sheet so glass whitening never turns pre-dimmed content gray. Sheet glass locks its tone to the active theme (`adaptive = false`), ignoring backdrop luminance. As the sheet approaches `Large`, the opaque `color` fades in linearly with `largeness` until fully opaque at full height (a continuous approximation of UIKit's discrete switch).
+- **Automatic background transparency inside sheets**: Reading `MochiDefaults.sheetBackground()` or `MochiDefaults.groupedBackground()` inside `MochiSheet { ... }` returns `Color.Transparent`, and `MochiDefaults.groupedContainer()` returns a translucent card fill (`55%` alpha in light mode, `45%` in dark mode) so grouped cards let the sheet's glass show through without per-page glass conditionals. Call these functions **inside** the `MochiSheet` content lambda; calling them outside returns their standard opaque colors.
+- **Inner navigation on glass**: At medium height inside a glass sheet, page backgrounds are transparent and the outgoing lower page fades out proportionally (`1 - cover * (1 - opaque)`) as an incoming pushed page covers it so translucent pages never overlap; at `Large`, transitions behave identically to an opaque sheet.

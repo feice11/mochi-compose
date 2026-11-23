@@ -1,174 +1,249 @@
 # 内容变换
 
-内容换掉时不瞬切，这是全库的规范（见文末）。包 `ui.feice.mochi.effect.content` 提供下面这些 API：
+Mochi 组件遵循「离散内容变更不瞬切」的统一规范：图标、文字、角标与数字在状态更新时通过原位变形、模糊替换或滚轮过渡完成切换；用户拖拽时逐帧连续变化的读数（如滑块实时数值）则直接更新，以免滞后于手指。相关 API 位于 `ui.feice.mochi.effect.content` 包（弹簧与无障碍辅助位于 `ui.feice.mochi.anim`）。
 
-| 场景 | API | 样子 |
+| 场景 | API | 过渡行为 |
 |---|---|---|
-| 图标换成另一个 | `MochiMorphIcon(icon)` | 原位变形：每一笔一一对应着挪过去（SF Symbols 的 magic replace） |
-| 文字换成别的 | `MochiBlurText(text)` | 模糊替换：旧的变糊、缩小、淡出，新的从糊里清晰起来 |
-| 出现 / 消失 | `MochiBlurVisibility(visible) { … }` | 从更小、更糊、透明里长出来，消失时原路退回 |
-| 数字变化 | `MochiCounterText(value)` | 计数器：变了的位像滚轮一样转过去（变大往前、变小往回），越快越糊，落定时回弹一点 |
-| 流式文字 | `MochiFlyInText(text)` | 一段段长出来的字像软纸带一样从近处飞进来、卷平落定，后面的字被改掉时旧字退开淡出 |
-| 任意内容 | `MochiBlurCrossfade(state) { … }` | 通用的模糊替换，上面几个都建在它上面 |
-| 图标描绘 | `MochiDrawIcon(icon, drawn)` | SF Symbols 7 的 Draw On / Off：笔画一笔笔画出来 / 擦掉 |
-| 图标弹一下 | `Modifier.mochiBounce(trigger)` | SF Symbols 的 bounce：先压扁再带回弹地弹起 |
-| 跟着滚动显隐 | `Modifier.mochiBlurReveal({ v })` | 按一个连续进度模糊淡入淡出（折叠大标题用它） |
+| 图标切换 | `MochiMorphIcon` | 原位轮廓配对变形（类 SF Symbols Magic Replace），中段叠加微弱模糊 |
+| 图标描绘 | `MochiDrawIcon` | 描边轮廓按顺序逐笔画出或擦除（类 SF Symbols Draw On / Off），填充部分同步淡入淡出 |
+| 图标回弹 | `Modifier.mochiBounce` | 触发值变化时先快速下压再带弹性回弹（类 SF Symbols Bounce） |
+| 文本替换 | `MochiBlurText` | 旧文本模糊缩小淡出，新文本在原位从模糊中清晰浮现 |
+| 显隐切换 | `MochiBlurVisibility` | 从缩小、模糊、透明状态生长出现，隐藏时原路收回并平滑推拉相邻布局 |
+| 任意内容替换 | `MochiBlurCrossfade` | 通用原位模糊交叉组件，`MochiBlurText` 与 `MochiBlurVisibility` 基于它构建 |
+| 数字增减 | `MochiCounterText` | 发生变化的数位按 `0–9` 弧面滚轮转动，速度越快越模糊，落定带轻微回弹 |
+| 流式文本 | `MochiFlyInText` | 追加字符如软纸带从近处飞入并卷平落定，修改或清空的旧字符向远处退开淡出 |
+| 滚动联动显隐 | `Modifier.mochiBlurReveal` | 按 `0f..1f` 连续进度实时控制透明度、模糊与位移，无计时器延迟 |
 
-示例 app「效果 → 内容变换」里每种都能点着试。
+## 图标变形、描绘与回弹
 
-## 图标原位变形
+### 原位变形（`MochiMorphIcon`）
 
 ```kotlin
-MochiMorphIcon(if (dark) moonIcon else sunIcon, tint = …, size = 24.dp)
+MochiMorphIcon(
+    icon = if (isDark) moonVector else sunVector,
+    tint = MochiTheme.colorScheme.onSurface,
+    size = 24.dp,
+)
 ```
 
-- 把 `ImageVector` 拆成一条条轮廓（会算上分组的平移 / 缩放 / 旋转），每条沿着轮廓均匀取 96 个点。
-- 新旧两个图标的轮廓按「中心距离 + 长度差」配对，填充的只和填充的配、描边的只和描边的配；
-  闭合轮廓会转一下起点，让点和点对上时挪动最少（不翻方向，挖空的洞不会被填上）。
-- 对不上的笔画从自己的中心长出来，或缩回中心消失，描边的粗细也跟着变。
-- 变到一半会轻轻糊一下（默认 1.5dp），掩盖中间形状不规整的那一刻。
-- 途中又换图标时，从当前形状接着变，不会跳。
+`MochiMorphIcon` 将 `ImageVector` 拆解为独立轮廓（合并分组的平移、缩放与旋转变换），每条轮廓均匀采样 `96` 个顶点：
 
-| 参数 | 说明 | 默认值 |
-|---|---|---|
-| tint | 整个图标用一种颜色画 | `LocalContentColor` |
-| size | 边长，视口按图标自己的 viewport 缩放 | 24.dp |
-| spec | 变形的弹簧 | `MochiMorphIconDefaults.Spring`（`MochiSprings.snappy(300)`） |
-| blur | 变到一半时的最大模糊 | 1.5.dp |
+- **同类轮廓配对**：填充轮廓仅与填充轮廓配对，描边轮廓仅与描边轮廓配对，按「中心距离 + 长度差」贪心匹配；闭合轮廓自动旋转起点使对应顶点移动总路程最短，同时保持绕向不变以保留镂空孔洞。
+- **增减笔画与中段模糊**：未配对的笔画从自身几何中心生长或收缩消失，描边线宽同步插值；过渡中点叠加正弦曲线模糊（默认峰值 `1.5dp`）柔化中间过渡形态。中途再次切换图标时从当前插值形态连续接力。
+- **大跨度图标替代方案**：当两个图标几何结构差异过大、不适合逐笔变形时，改用模糊替换：`MochiBlurCrossfade(iconName) { MochiIonicon(it, size = 24.dp) }`。
 
-两个图标差别很大，不想看到中间形状时，改用模糊替换：`MochiBlurCrossfade(icon) { Icon(it) }`。
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `icon` | `ImageVector` | 必填 | 目标矢量图标 |
+| `modifier` | `Modifier` | `Modifier` | 修饰符 |
+| `tint` | `Color` | `LocalContentColor.current` | 图标整体着色 |
+| `size` | `Dp` | `24.dp` | 图标边长，内部按 `ImageVector` 自身 `viewport` 等比缩放 |
+| `spec` | `AnimationSpec<Float>` | `MochiMorphIconDefaults.Spring` | 变形弹簧，默认 `MochiSprings.snappy(300)` |
+| `blur` | `Dp` | `MochiMorphIconDefaults.Blur`（`1.5.dp`） | 变形至一半时的峰值模糊半径（Android 12+） |
+
+### 逐笔描绘（`MochiDrawIcon`）
+
+```kotlin
+MochiDrawIcon(
+    icon = checkVector,
+    drawn = isCompleted,
+    size = 32.dp,
+    initiallyDrawn = false,
+)
+```
+
+`drawn` 变为 `true` 时，描边轮廓沿路径方向从起点画至终点，相邻笔画按 `stagger`（默认 `0.12f`）依次错开启动；变为 `false` 时原路擦除，填充轮廓同步淡入淡出。设 `initiallyDrawn = false` 可在首次挂载时即播放描绘动画。默认动画曲线为临界阻尼弹簧 `MochiDrawIconDefaults.Spring`（响应时间 `0.7s`，阻尼比 `1f`）。
+
+### 触发回弹（`Modifier.mochiBounce`）
+
+```kotlin
+MochiIonicon(
+    name = "heart",
+    modifier = Modifier.mochiBounce(trigger = tapCount.takeIf { it > 0 }, depth = 0.2f),
+)
+```
+
+每当 `trigger` 变为新的非 `null` 且非 `false` 值时，元素先在 `70ms` 内下压至 `1 - depth`（默认 `0.8f`），随后按 `MochiMotionTokens.Bounce`（响应时间 `0.34s`，阻尼比 `0.55f`）回弹至原尺寸。首次组合不会触发回弹。常用于点按反馈图标或刚切换选中的标签栏图标。
 
 ## 模糊替换
 
-```kotlin
-MochiBlurText(status)                                   // 文字
-MochiBlurVisibility(hasBadge) { Badge() }               // 出现 / 消失
-MochiBlurCrossfade(state, contentAlignment = Alignment.CenterStart) { Content(it) }
-```
-
-- 新旧内容叠在原位交叉进行，透明度走 smoothstep，淡到一半时已经糊开，不会看到两份清楚的字叠在一起。
-- 占的大小按两份内容的显出程度加权过渡：文字变长变短、内容出现消失时，旁边的东西被平滑推开。
-- 途中又换回来，那份内容从当前的样子接着变清晰。
-
-`MochiBlurTransition` 参数：
-
-| 参数 | 说明 | 默认值 |
-|---|---|---|
-| blur | 完全隐去时的模糊半径 | 8.dp |
-| scale | 完全隐去时的缩放（新内容从这个大小长到原大） | 0.9 |
-| exitScale | 旧内容消失时缩到多大；和 scale 分开设就是景深切换 | 同 scale |
-| slide | 完全隐去时沿方向的位移（按内容高度算） | 0 |
-| enter / exit | 出现 / 消失的动画 | `MochiSprings.snappy(300)`：300ms、回弹 0.15。缩放和位移看得到收尾那一点点回弹，透明度和模糊截断 |
-
-内置四种：`MochiBlurTransitions.Replace`（替换）、`Appear`（出现消失，缩放 0.8、模糊 10dp）、`Counter`（数字滚动，位移 0.55 倍高度、模糊 5dp、不缩放）、`Subtle`（轻替换：模糊 3dp、缩放 0.97，旧的 160ms 让开、新的 220ms 清楚）、`Depth`（景深切换：不模糊，旧的缩到 0.96、140ms 淡掉，新的晚 60ms 从 1.03 缩回原大，和键盘 emoji 面板的切换一样）。
-
-`Depth` 适合换得很勤、又要看得出换了的地方（输入法候选）：只动缩放和透明度，不开模糊图层；要带一点模糊时 `MochiBlurTransitions.Depth.copy(blur = 4.dp)`，只给最显眼的那一块用。
-
-一屏里很多文字跟着打字一起换（输入法候选、搜索联想、筛选结果）时用 `Subtle`：`Replace` 在这种地方太抢眼，每块文字都要开模糊图层，十几块一起换会掉帧。
-
-## 减弱动态效果
-
-系统关了动画（动画缩放为 0）、或者应用在根部提供 `LocalMochiReduceMotion provides true` 时，`MochiBlurCrossfade` / `MochiBlurText`、`MochiFlyInText`、菜单和弹出框的弹性都直接到位。自己写的动画用 `mochiReduceMotion()` 判断。
-
-## 换字体
+`MochiBlurText`、`MochiBlurVisibility` 与通用的 `MochiBlurCrossfade` 在同一位置叠加新旧内容交叉过渡：
 
 ```kotlin
-CompositionLocalProvider(LocalMochiFontCrossfade provides true) { … }
+// 文本替换（相同字符串不会重复触发）
+MochiBlurText(
+    text = statusText,
+    style = MochiTheme.textStyles.body,
+)
+
+// 角标或行内元素显隐（占位尺寸从 0 平滑过渡至目标大小）
+MochiBlurVisibility(visible = hasUnread) {
+    MochiBadge(text = "New")
+}
+
+// 任意状态内容替换
+MochiBlurCrossfade(
+    targetState = currentStage,
+    transition = MochiBlurTransitions.Replace,
+    contentAlignment = Alignment.CenterStart,
+) { stage ->
+    StageSummary(stage)
+}
 ```
 
-打开后，这棵子树里的 `Text` 换字体（字族、字重、字号这些排版属性）时原位模糊替换：只有文字自己在糊，不用整屏截图做模糊转场。颜色变化不算换字体，照常跟着配色插值。默认关闭：整页文字同时模糊替换会多出很多模糊图层，主题页那种整屏换装用 `MochiThemeRevealState.crossfade`。示例的引导页（选择主题、衬线体标题）打开了它。
+透明度按 `smoothstep` 变化，半透明交汇处新旧两层都已充分模糊，不会出现两层清晰文字重影。新旧内容尺寸相同时过渡期间跳过父级重排；尺寸不同时按各层显出程度加权计算占位宽高，平滑推开相邻元素。中途切回旧状态时直接从当前进度反向恢复清晰。
+
+### `MochiBlurTransition` 参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `blur` | `Dp` | `8.dp` | 完全隐去时的模糊半径（Android 12+；低版本保留透明度、缩放与位移） |
+| `scale` | `Float` | `0.9f` | 新内容入场起始缩放比例（默认也作为旧内容退场目标缩放） |
+| `slide` | `Float` | `0f` | 完全隐去时沿 `direction`（`+1` 向上、`-1` 向下、`0` 原位）偏移的内容高度倍数 |
+| `enter` | `AnimationSpec<Float>` | `MochiSprings.snappy(300)` | 新内容入场动画曲线（透明度与模糊截断在 `0..1`，微回弹体现在缩放与位移上） |
+| `exit` | `AnimationSpec<Float>` | `MochiSprings.snappy(300)` | 旧内容退场动画曲线（不透明度低于 `0.01f` 时提前移除图层以释放离屏缓冲） |
+| `overflow` | `Dp` | `0.dp` | 内容超出自身布局边界的绘制边距；包裹液态玻璃时传 `mochiGlassOverflow()` 防止外阴影被裁成直角 |
+| `exitScale` | `Float` | `scale` | 旧内容退场缩至的比例；与 `scale` 分离设置可构成前后景深切换 |
+
+### `MochiBlurTransitions` 五种内置预设
+
+| 预设 | `blur` | `scale` / `exitScale` | `slide` | 入场 / 退场时序 | 适用场景 |
+|---|---|---|---|---|---|
+| `Replace` | `8.dp` | `0.9f` / `0.9f` | `0f` | `snappy(300)` / `snappy(300)` | 常规按钮文案、行尾状态值、图标原位替换（`MochiBlurText` 与 `MochiBlurCrossfade` 默认值） |
+| `Appear` | `10.dp` | `0.8f` / `0.8f` | `0f` | `snappy(300)` / `snappy(300)` | 角标、提示说明、状态胶囊的出现与消失（`MochiBlurVisibility` 默认值） |
+| `Subtle` | `3.dp` | `0.97f` / `0.97f` | `0f` | `snappy(220)` / `snappy(160)` | 同屏多处文本随输入高频刷新（输入法候选词、搜索联想、实时筛选结果），缩短模糊图层驻留时间 |
+| `Depth` | `0.dp` | `1.03f` / `0.96f` | `0f` | 延迟 `60ms` 弹簧 / `140ms` 淡出 | 前后景深面板切换（如键盘按键区与面板切换）或高频无模糊替换；需微模糊时可对主焦点用 `Depth.copy(blur = 4.dp)` |
+| `Counter` | `5.dp` | `1.0f` / `1.0f` | `0.55f` | `spring(0.58f, 380f)` / `snappy(300)` | 纵向滑动带落定回弹的数位与符号过渡（`MochiCounterText` 默认值） |
 
 ## 数字计数器
 
-```kotlin
-MochiCounterText(count)
-MochiCounterText(cents, format = { "¥" + NumberFormat.getInstance().format(it / 100) })
-MochiCounterText("%02d:%02d".format(m, s), direction = 1)   // 自己格式化好的文字
-```
-
-- 各位从右往左对齐着比，只有变了的位滚动。每一位是一个 0–9 循环的滚轮：差几格就滚几格（6 变 1 依次经过 5、4、3、2），绝对值变大往前滚（新数字从下面上来），变小往回滚；`direction` 为 0 时走近的那边。
-- 滚轮画在一段圆弧上，越靠中心越大，边缘按屏幕位置淡出，静止时只看到一行。运动效果都由速度驱动：越快越小、越淡、越糊，停下才清晰；模糊走 `mochiBlur`（连续半径），上限锁在滚一格的程度。
-- 弹簧按「还剩几格 + 现在多快」现算：滚一格和滚九格的回弹一样大（约 0.09 格），长距离不拖；连按时接着当前速度滚，掉头时冻住运动量，模糊不会中途闪清楚。越过目标后目标背后的数字不画，回弹也露不出来。
-- 位数变多时新的高位从下面升上来、宽度从 0 长出来；变少时那一位沉下去、宽度缩回 0，旁边的数字被平滑推开。退到一半又变回来时同一格从半路升回去。
-- 数字以外的字符（¥、逗号、单位）变了做模糊替换（`transition`）。
-- 自动用等宽数字（`tnum`），个位来回变时整串不会左右抖。字体、字号、颜色来自 `style` / `color`，静止时和同一行的 `Text` 完全重合。读屏读整串文字。
-
-## 流式文字
+`MochiCounterText` 按数位拆分展示动态数值，适用于数量、金额、计时器与百分比：
 
 ```kotlin
-MochiFlyInText(partialTranscript)
-MochiFlyInText(answer, style = MochiTheme.textStyles.body, leadingGap = 8.dp)
+// 数值自动判断滚动方向（绝对值增大向上滚，减小向下滚）
+MochiCounterText(value = count.toLong())
+
+// 自定义货币或千分位格式化
+MochiCounterText(
+    value = cents,
+    format = { "¥" + NumberFormat.getInstance().format(it / 100) },
+)
+
+// 自行格式化字符串并显式指定方向（+1 向前、-1 向后、0 取最短路径）
+MochiCounterText(
+    text = "%02d:%02d".format(minutes, seconds),
+    direction = 1,
+)
 ```
 
-给一段一段长出来的文字用：语音转写的半句、逐字吐出的回答、正在组的拼音。整段换成别的文字仍然用 `MochiBlurText`。
+- **右对齐逐位滚轮**：字符串从右向左逐位比对，仅发生变化的数位转动。每位数字对应一个 `0–9` 循环弧面滚轮（例如 `6` 变 `1` 依次滚过 `5、4、3、2`），滚动速度越快字形略微缩小、变淡并叠加连续半径模糊（`mochiBlur`），停稳后完全清晰。
+- **恒定过冲与连按接力**：滚轮弹簧根据剩余格数与当前速度实时求解，滚 `1` 格与滚 `9` 格保持一致的轻微落定回弹（约 `0.09` 格）；连续点击时继承当前动量，中途反向时锁定运动模糊量避免半途闪清。
+- **位数增减与排版对齐**：多出的高位从下方升起且宽度由 `0` 平滑展开，少掉的高位向下沉落收回，相邻字符随之平滑移动；非数字字符（货币符号、千分位逗号、单位）变化时执行 `transition` 模糊替换。内部自动启用等宽数字特性（`tnum`）防止数值变化时横向抖动，并为无障碍读屏暴露完整合并字符串。
 
-- 和上一次的文字从头比，没变的字不动；往后接上的字从左到右一个接一个起飞（间隔 45ms，几个字叠着飞），从近处、下面、糊的状态飞到自己的位置，一边飞一边从底边往上卷平，像一条软纸带。每个字的进度是一根阻尼 0.45 的弹簧，冲过头约两成时贴着底边压扁一点再弹回来。
-- 前面的字被改掉时，从改动处起当新字飞进来：已经落定的旧字往上、往远处退开并糊掉淡出；还在飞的字被换掉时，新字接着它的进度飞，旧字沿原轨迹飞完、很快淡出，飞行不被打断。
-- 只占一行。放不下时靠右显示最新的字，左边渐隐，往左让出的距离用弹簧滚过去；清空时字退开淡出，宽度变 0。
-- 飞的字会画出这一行的范围（近处的字大、在下面），外面的容器不要裁它的上、下、左边。
-- `motionBlur = false` 只飞、不糊：字很少、换得很勤（正在组的拼音）时更清爽，飞行、卷曲、回弹照旧。
-- 模糊是每个字预先画好的两张小图（清楚、糊）按速度交叉，形变用 `drawBitmapMesh` 贴网格，不需要 Android 12，落定后按普通文字画。读屏读整段文字；系统关了动画时字直接出现。
+## 流式文字（`MochiFlyInText`）
 
-## 图标描绘
+`MochiFlyInText` 为逐段增长的单行流式文本（实时语音转写、逐词流式回复、拼音组词）提供纸带飞入动画；整段替换为另一句文案时请使用 `MochiBlurText`。
 
 ```kotlin
-MochiDrawIcon(checkIcon, drawn = done, tint = …, size = 40.dp)
+MochiFlyInText(text = partialTranscript)
+
+MochiFlyInText(
+    text = composingPinyin,
+    style = MochiTheme.textStyles.body,
+    leadingGap = 8.dp,
+    motionBlur = false,
+)
 ```
 
-描边的笔画沿着自己的方向从起点画到终点，后一笔比前一笔晚一点（`stagger`，默认整段的 12%）；`drawn = false` 时原路擦掉。填充的部分跟着淡入淡出。`initiallyDrawn = false` 时第一次出现就从空白画出来。
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `text` | `String` | 必填 | 当前流式文本（按 Unicode 码点切分，不会截断双字符序列） |
+| `modifier` | `Modifier` | `Modifier` | 修饰符 |
+| `color` | `Color` | `Color.Unspecified` | 文本颜色；未指定时依次取 `style.color` 与 `LocalContentColor.current` |
+| `style` | `TextStyle` | `LocalTextStyle.current` | 单行文本排版样式 |
+| `leadingGap` | `Dp` | `0.dp` | 文本非空时的左侧间距；文本为空时整体宽度归零 |
+| `motionBlur` | `Boolean` | `true` | 高速飞行期间是否混合动态模糊纹理；短文本高频改动（如拼音组词）可设为 `false` |
 
-## 弹一下
+- **软纸带飞入与中途纠错**：与上一帧字符串从头比对，未变前缀保持静止；新追加字符自左向右每隔 `45ms` 依次起飞，从近处偏下位置沿透视网格（`drawBitmapMesh`）向上卷平，落定时以阻尼比 `0.45` 的弹簧产生约 `20%` 过冲微压扁后回弹。若识别结果修改了前文，已落定的旧片段向远处上方模糊淡出，尚在飞行中的被替换字符把当前飞行进度交接给新字符并在 `140ms` 内淡出，飞行轨迹不被打断。
+- **单行溢出与裁切边界**：文本超出可用宽度时自动靠右展示最新字符，左侧生成 `28dp` 平滑渐隐并通过弹簧滚动让位；清空字符串时旧字退开淡出且宽度收回 `0`。飞行中的字符会超出单行上下与左侧边界，父容器不要裁切其上、下、左边。
+- **全版本兼容**：模糊基于每字符预光栅化的清晰与半分辨率模糊位图按速度混合（LRU 缓存最近 `96` 个字形），落定后合并为常规单次文本绘制，无需 Android 12+。
 
-`Modifier.mochiBounce(trigger)`：`trigger` 每变成一个新的、非 null / 非 false 的值就弹一下（70ms 压到 `1 − depth`，再用 0.38s / 0.45 的弹簧弹回），第一次组合不弹。点按后的图标用 `taps.takeIf { it > 0 }`，标签栏用「是否选中」。
+## 滚动联动显隐（`mochiBlurReveal`）
 
-## 跟着滚动显隐
+折叠大标题与顶栏小标题等与滚动位移绑定的元素使用 `mochiBlurReveal` 按连续进度 `0f..1f` 驱动透明度、模糊和纵向偏移，手势停在半途时画面同步停在对应进度：
 
-`Modifier.mochiBlurReveal(visible = { v }, blur = 4.dp, rise = 0.dp)` 按一个 0..1 的进度设透明度、模糊和位移，不走计时器：和滚动位置绑定的显隐（折叠大标题、顶栏小标题）用它，拖到一半就停在一半。`visible` 在摆放 / 绘制阶段读，不重组。
+```kotlin
+// 推荐：Modifier 版本在内部缓存模糊纹理，滚动平移时不重复计算模糊
+Text(
+    text = title,
+    modifier = Modifier.mochiBlurReveal(
+        visible = { collapseProgress() },
+        blur = 4.dp,
+        rise = 6.dp,
+    ),
+)
 
-还有一个 `GraphicsLayerScope.mochiBlurReveal(v)`，可以和别的图层属性写在同一个 graphicsLayer 块里，但模糊直接设在那一层上，这一层每帧移动、缩放时会每帧重新模糊；能用 Modifier 版本时优先用它。要和缩放这类属性一起用时，把缩放写在外面那层：`Modifier.graphicsLayer { scaleX = s }.mochiBlurReveal({ v })`。
+// 需叠加缩放等额外变换时，将变换放在外层 graphicsLayer
+Box(
+    Modifier
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .mochiBlurReveal(visible = { progress }),
+)
+```
 
-## 模糊的开销
+`visible` 在摆放与绘制阶段读取，不会触发重组。另提供 `GraphicsLayerScope.mochiBlurReveal(visible, blur = 4.dp, rise = 0.dp)` 重载供合并写入已有 `graphicsLayer` 块，但该重载直接将 `RenderEffect` 挂在当前层上，图层每帧平移或缩放时会重新计算模糊；常规场景优先使用 `Modifier.mochiBlurReveal`。
 
-`Modifier.mochiBlur { 半径 }` 给内容加模糊。库里所有内容变换（模糊替换、出现消失、滚动显隐、标签栏文字）都走它。
+## 字体交叉替换与减弱动态效果
 
-- 半径大时降采样：内容画到 1/2、1/4 或 1/8 分辨率上，用等效的小半径模糊，再放大画回来。放大时插值带来的那一点模糊会从低分辨率的半径里扣掉，整体模糊程度和原分辨率一样，误差不到 5%。半径小（快清楚）时按原分辨率，收尾不发虚。
-- 默认按 1.5 倍分档：一次过渡每层只重新模糊 8 次左右。模糊结果画进一层缓存（四周留出外溢的那圈），档位不变的帧里这一层怎么移动、缩放、淡化，都只合成这张图。直接设 `renderEffect` 时，系统渲染线程只在内容、效果和图层自己坐标里的裁剪范围都不变时才复用上一帧，图层一动就每帧重新模糊。
-- `continuous = true`：半径逐帧连续变化、不分档，给整页推进推出这类大面积模糊用（分档会看到一级一级地跳）。半径本来每帧都在变，这时不再套缓存层：手机 GPU 每多一层离屏就多一次渲染目标切换，比省下的像素更贵。
-- 半径为 0 时不建任何图层，静止时没有额外开销。
-- 位移、缩放写在它外面的 graphicsLayer 里，透明度用 `mochiBlurAlpha(alpha, 半径)` 设：`Modifier.graphicsLayer { mochiBlurAlpha(a, r); scaleX = s }.mochiBlur { r }`。模糊生效时，透明度直接乘在模糊后的那张图上，不再为透明度单独开一层整块离屏。真机上这一层离屏比模糊本身还贵。
-- 裁剪放在它里面，模糊外溢的软边会留着；放在它外面，外溢会被一起裁掉。
-- 内容画出自己边界时（玻璃的外阴影）传 `overflow`：`mochiBlur(overflow = mochiGlassOverflow()) { r }`，模糊替换、出现消失用 `MochiBlurTransitions.Replace.copy(overflow = mochiGlassOverflow())`。模糊图层按这一圈往外多录，半透明时也不开按内容范围的离屏层，过渡中阴影不会被切成直角矩形。只包文字、图标时不用传，多录的那圈也要模糊。
-- 启动时在后台把每一档模糊在看不见的离屏画布上画一次，渲染线程先编好着色器，第一次出现的模糊过渡不再因为现编程序掉帧。
-- 换主题的揭开转场照旧逐帧连续变化半径，不走这里。
+### 局部字体交叉替换（`LocalMochiFontCrossfade`）
 
-## 兼容性
+```kotlin
+CompositionLocalProvider(LocalMochiFontCrossfade provides true) {
+    OnboardingPreviewCard()
+}
+```
 
-模糊用的是 `RenderEffect`，要 Android 12（API 31）以上。更低的系统只有淡入淡出、缩放和位移，变形本身不受影响。
+将 `ui.feice.mochi.basic.LocalMochiFontCrossfade` 设为 `true` 后，子树内的 Mochi `Text` 在字族、字重、字号等排版属性（不含颜色）变化时自动在原位执行模糊替换，而颜色变化仍走常规配色插值。该开关默认为 `false`，避免整页大量文本同时创建离屏模糊图层；仅包含少量预览文本的区域（如引导页切换主题字体）适合局部开启，整屏换装请使用 [`MochiThemeRevealState.crossfade`](effects.md#主题揭开)。
 
-## 规范：内容变化不瞬切
+### 减弱动态效果（`LocalMochiReduceMotion`）
 
-库里的组件和示例都遵守：
+`LocalMochiReduceMotion`（`Boolean?`，默认为 `null`）默认跟随系统动画开关（`ANIMATOR_DURATION_SCALE == 0f`）；也可在应用根部提供 `CompositionLocalProvider(LocalMochiReduceMotion provides true)` 显式开启。启用后，所有内容变换组件以及下拉菜单、弹出层的弹性动画都会跳过过渡直接展示目标态。自定义动画可通过 `ui.feice.mochi.anim.mochiReduceMotion()` 读取当前状态。
 
-1. 图标换图标：用 `MochiMorphIcon` 原位变形；形状差太多就用 `MochiBlurCrossfade` 模糊替换。不要直接换掉。
-2. 文字换文字：用 `MochiBlurText`（按钮文字、状态、行尾的值……）；一屏里很多文字跟着打字一起换时传 `MochiBlurTransitions.Subtle`；一段段长出来的文字用 `MochiFlyInText`。
-3. 出现 / 消失：小块内容（角标、提示文字、行内图标）用 `MochiBlurVisibility`，旁边的东西被平滑推开。
-4. 数字变化：用 `MochiCounterText`（数量、价格、计时、百分比）。
-5. 例外：用户正在拖动、一帧一变的数值（比如滑块旁边的读数）直接显示，不做过渡，不然会拖着尾巴跟不上手。
-6. 系统关了动画时，这些过渡都瞬间完成。
+## 模糊性能与弹簧预设
 
-目前已经接上的：
-- 库：列表行尾的值、顶栏按钮的文字、提示的标题和副标题模糊替换；提示图标切换与增减也模糊过渡，独立于整条进出场；右下角的状态 chip 模糊显隐；大标题页的副标题模糊替换，折叠大标题模糊交接；标签栏数字角标按计数器滚动，选中的图标弹一下；步进器的值按计数器滚动
-- 示例：演示页的折叠大标题模糊交接；选择列表按钮的文字、分段选择器的标题和步数、导航栏页的副标题都按规范过渡
+### 缓存与降采样模糊（`mochiBlur`）
 
-## 弹簧
+库内内容变换统一通过 `Modifier.mochiBlur` 执行模糊（Android 12+ 生效，更低系统自动跳过模糊仅保留透明度、缩放与位移；模糊半径为 `0` 时不分配任何离屏图层）：
 
-`MochiSprings` 用「时长 + 回弹」写 SwiftUI 的四种预设（`mochiSpring(durationMillis, bounce)`：刚度 = (2π / 时长)²，阻尼比 = 1 − 回弹；回弹为负时 = 1 / (1 + 回弹)）：
+```kotlin
+val overflow = mochiGlassOverflow()
 
-| 预设 | 回弹 | 默认时长 |
-|---|---|---|
-| `smooth` | 0 | 500ms |
-| `crisp` | 0.1 | 300ms |
-| `snappy` | 0.15 | 500ms |
-| `bouncy` | 0.3 | 500ms |
+Box(
+    Modifier
+        .graphicsLayer {
+            mochiBlurAlpha(alpha = currentAlpha, blur = currentRadius)
+            scaleX = currentScale
+            scaleY = currentScale
+        }
+        .mochiBlur(overflow = overflow) { currentRadius },
+)
+```
 
-内容变换（模糊替换、计数器、图标变形）统一用 `MochiSprings.snappy(300)`。
+- **自适应降采样**：大半径模糊自动将内容缩小至 `1/2`、`1/4` 或 `1/8` 分辨率，扣除双线性放大带来的插值柔化后以等效小半径执行高斯模糊再放大回原尺寸（整体误差小于 `5%`，像素填充量减少 `4–64` 倍）；接近清晰的小半径恢复全分辨率以保证收尾锐利。
+- **分档纹理缓存与连续模式**：默认 `continuous = false` 将半径按 `1.5×` 比例分档，一次完整过渡每层仅重算约 `8` 次模糊，并将结果存入带 `3σ` 外溢边距的离屏缓存层，档位不变时的平移、缩放与淡化仅合成缓存纹理。整页推入推出等大面积模糊可传 `continuous = true` 逐帧连续改变半径并省去外层缓存切换。`MochiTheme` 启动时会在后台线程预热各档模糊着色器，避免首次过渡编译掉帧。
+- **零额外离屏透明度（`mochiBlurAlpha`）**：在外层 `graphicsLayer` 中调用 `mochiBlurAlpha(alpha, blur, continuous)`，模糊激活期间自动切换为 `CompositingStrategy.ModulateAlpha`，将不透明度直接乘在已缓存的单张模糊纹理上，省去手机 GPU 上高昂的整层透明度离屏开销。
+- **外溢边距与裁切顺序**：包裹带外投影的液态玻璃时传入 `overflow = mochiGlassOverflow()`（或在 `MochiBlurTransition` 中设置 `overflow = mochiGlassOverflow()`），使离屏层额外录制外部阴影范围而不将其裁成直角。需要将模糊软边一并裁掉时把 `clip` 放在 `mochiBlur` 外侧；需要保留模糊软边时放在内侧。
+
+### `MochiSprings` 弹簧预设
+
+`ui.feice.mochi.anim.MochiSprings` 与 `mochiSpring(durationMillis, bounce, visibilityThreshold)` 采用「周期时长 + 回弹量」定义弹簧（刚度 $k = (2\pi / \text{duration})^2$；当 $\text{bounce} \ge 0$ 时阻尼比 $\zeta = 1 - \text{bounce}$，当 $\text{bounce} < 0$ 时 $\zeta = 1 / (1 + \text{bounce})$）：
+
+| 预设函数 | 基础回弹量（`bounce`） | 默认时长（`durationMillis`） | 特性说明 |
+|---|---|---|---|
+| `MochiSprings.smooth` | `0.0` | `500` | 临界阻尼，平滑落定无过冲 |
+| `MochiSprings.crisp` | `0.1` | `300` | 短促收敛，带极轻微回弹 |
+| `MochiSprings.snappy` | `0.15` | `500` | 干脆利落；内容变换（模糊替换、计数器退场、图标变形）统一使用 `MochiSprings.snappy(300)` |
+| `MochiSprings.bouncy` | `0.3` | `500` | 明显弹性过冲（可通过 `extraBounce` 参数进一步增减回弹量） |

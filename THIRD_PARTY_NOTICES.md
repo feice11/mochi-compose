@@ -1,48 +1,47 @@
-# Third-party notices
+# Third-Party Notices
 
-## Liquid Glass (liquid.refract.im)
+## Liquid Glass (`liquid.refract.im`)
 
-The liquid glass shaders, recipe constants, press feedback values and morph trajectories in
-`mochi-compose/src/main/java/ui/feice/mochi/effect/glass/engine/` (`LiquidShaders.kt`, `LiquidRecipe.kt`,
-`LiquidPress.kt`, `LiquidTracks.kt`) and the bloom choreography in `effect/glass/MochiGlassGroup.kt` are ported
-from the publicly deployed page https://liquid.refract.im/launch/ (GLASS_FS, DOWN_FS, recipe(), tintMatrix(),
-cornerK(), PRESS, PGLOW, TRACKS, MORPH_BLUR). That page's author derived the values from macOS 27 QuartzCore.
-The page carries no open-source license; this port is used and published with the author's permission.
+- **Source**: https://liquid.refract.im/launch/
+- **License**: Proprietary / no open-source license; ported and published with the author's permission.
 
-## Kyant Backdrop inverse layer transform
+The liquid glass shaders, recipe constants, press feedback curves, and morph trajectories in `mochi-compose/src/main/java/ui/feice/mochi/effect/glass/engine/` (`LiquidShaders.kt`, `LiquidRecipe.kt`, `LiquidPress.kt`, `LiquidTracks.kt`) and the bloom choreography in `mochi-compose/src/main/java/ui/feice/mochi/effect/glass/MochiGlassGroup.kt` are ported from the publicly deployed WebGL implementation at https://liquid.refract.im/launch/ (`GLASS_FS`, `DOWN_FS`, `recipe()`, `tintMatrix()`, `cornerK()`, `PRESS`, `PGLOW`, `TRACKS`, `MORPH_BLUR`), whose author derived the parameters from macOS 27 QuartzCore.
 
-`GlassInverseLayerScope.kt` adapts `InverseLayerScope.kt` from
-`io.github.kyant0:backdrop:1.0.6`, by Kyant.
-Project: https://github.com/Kyant0/AndroidLiquidGlass
-License: Apache License 2.0 (see this repository's LICENSE).
-It preserves the upstream inverse-transform behavior for shared backdrop textures.
+## Kyant Backdrop (`AndroidLiquidGlass`)
+
+- **Author**: Kyant
+- **Artifact**: `io.github.kyant0:backdrop:1.0.6`
+- **Project**: https://github.com/Kyant0/AndroidLiquidGlass
+- **License**: Apache License 2.0 (see [LICENSE](LICENSE))
+
+Backdrop capture and drawing in `mochi-compose/src/main/java/ui/feice/mochi/effect/glass/` (`MochiBackdrop.kt`, `GlassMotion.kt`, `MochiVibrant.kt`, `engine/GlassBody.kt`, `engine/LiquidNode.kt`) use `io.github.kyant0:backdrop:1.0.6`, including `MochiCombinedBackdrop` in `GlassMotion.kt`, which adapts upstream `CombinedBackdrop` while exposing constituent layers for rigid-motion tracking.
 
 ## Cresto / Glasense Overscroll
 
-Authors: Kyant & Nevoit (Nevodev/Cresto contributors)
-Repository: https://github.com/Nevodev/Cresto
-Pinned revision: 74564563a686106d76d7d9a403dd994a4fbcb6a7
-Source: https://github.com/Nevodev/Cresto/tree/74564563a686106d76d7d9a403dd994a4fbcb6a7/glasense-ui/src/main/java/com/nevoit/glasense/core/interaction/overscroll
-License: Apache License 2.0 (see LICENSE-Cresto.txt)
+- **Authors**: Kyant & Nevoit (Nevodev/Cresto contributors)
+- **Repository**: https://github.com/Nevodev/Cresto
+- **Pinned revision**: `74564563a686106d76d7d9a403dd994a4fbcb6a7`
+- **Source**: https://github.com/Nevodev/Cresto/tree/74564563a686106d76d7d9a403dd994a4fbcb6a7/glasense-ui/src/main/java/com/nevoit/glasense/core/interaction/overscroll
+- **License**: Apache License 2.0 (see [`mochi-compose/src/main/resources/META-INF/mochi-compose/LICENSE-Cresto.txt`](mochi-compose/src/main/resources/META-INF/mochi-compose/LICENSE-Cresto.txt))
 
-Includes adaptations of OffsetOverscrollEffect.kt and the exponential formula
-from util/ProgressConverter.kt. Modified by mochi-compose contributors:
-- package and internal visibility; Mochi public API retained as a delegating facade;
-- live spring/curve parameters and observable visible offset/axis for title/refresh;
-- measured viewport size and standard Compose layer placement instead of SingleLayout;
-- optional scope and visible-offset callback for custom dropdown scrolling;
-- reset support for programmatic dropdown positioning.
-The upstream scrolling, spring velocity handoff, frame timing probe and
-isInProgress=false behavior are retained. Mochi's existing fling deceleration
-(0.998, stop near rest at 1dp/s) remains a separate policy.
+`mochi-compose/src/main/java/ui/feice/mochi/effect/overscroll/cresto/OffsetOverscrollEffect.kt` adapts `OffsetOverscrollEffect.kt` and the exponential progress formula from `util/ProgressConverter.kt`. Modifications by `mochi-compose` contributors:
 
-## Ionicons (mochi-icons module)
+- Package relocation and `internal` visibility, with Mochi's public overscroll API retained as a delegating facade.
+- Live spring and curve parameters, plus observable visible offset and axis for collapsing titles and pull-to-refresh.
+- Measured viewport sizing and standard Compose layer placement in place of `SingleLayout`.
+- Optional external coroutine scope and visible-offset callbacks for custom dropdown scrolling.
+- Programmatic reset support for dropdown positioning.
 
-Version: 8.1.0 (npm package `ionicons@8.1.0`, sha256 of the tarball
-6ec604a301f9bb1a59ccc72a746cbb369bae87c5b45f6c67904dc878d9efb8b5)
-Project: https://github.com/ionic-team/ionicons
-License: MIT, Copyright (c) 2015-present Ionic (see `mochi-icons/src/main/assets/mochi-icons/LICENSE-ionicons.txt`).
-`mochi-icons/tools/build_ionicons.py` converts `dist/svg` into path data: shapes become paths,
-arc flags are re-spaced, inherited fill/stroke attributes are resolved, and the one 16×16 icon is
-scaled to the 512 grid. The artwork itself is unchanged. Chinese search keywords
-(`ionicons-zh.txt`, from `tools/zh_keywords.py`) are original to mochi-compose.
+Upstream scroll handling, spring velocity handoff, frame-timing probing, and `isInProgress = false` semantics are preserved. Mochi's fling deceleration policy (`0.998`, stopping near rest at `1dp/s`) remains separate.
+
+## Ionicons (`mochi-icons` module)
+
+- **Version**: `8.1.0` (npm package `ionicons@8.1.0`, tarball SHA-256 `6ec604a301f9bb1a59ccc72a746cbb369bae87c5b45f6c67904dc878d9efb8b5`)
+- **Project**: https://github.com/ionic-team/ionicons
+- **License**: MIT, Copyright (c) 2015-present Ionic (see [`mochi-icons/src/main/assets/mochi-icons/LICENSE-ionicons.txt`](mochi-icons/src/main/assets/mochi-icons/LICENSE-ionicons.txt))
+
+`mochi-icons/tools/build_ionicons.py` converts upstream `dist/svg` files into compact vector path records: basic SVG shapes are converted to paths, compressed arc flags are re-spaced for Compose's `PathParser`, inherited fill and stroke attributes are resolved, and the single `16x16` icon is scaled to the `512` coordinate grid without altering the artwork. Chinese search keywords (`ionicons-zh.txt`, generated by `mochi-icons/tools/zh_keywords.py`) are original to `mochi-compose`.
+
+## Nothing Appearance Assets (`mochi-nothing` module)
+
+Font provenance, firmware asset status, and the SIL Open Font License 1.1 notice for Inter (`mochi-nothing/src/main/assets/licenses/Inter-OFL.txt`) in the optional `mochi-nothing` module are documented in [mochi-nothing/ASSET_NOTICES.md](mochi-nothing/ASSET_NOTICES.md).

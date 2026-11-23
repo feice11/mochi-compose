@@ -1,280 +1,338 @@
 # Theme
 
-[Optional Nothing appearance: colors, fonts and semantic icons](nothing-theme.md). [Optional iOS appearance and glass materials](ios-theme.md).
+In `ui.feice.mochi.theme`. For optional appearance modules, see [Nothing appearance](nothing-theme.md) and [iOS appearance and glass materials](ios-theme.md). When building an application, start with [Theme integration in the application integration guide](application-integration.md#theme-integration-once-at-the-root-no-theme-branches-in-pages): mount the theme once at the root and keep appearance or material branches out of individual screens.
 
-`MochiTheme` provides Material 3 Expressive color, type, shape and motion tokens. Library components read only from it and never hardcode colors.
-
-Building an app? Start with [theme integration in the app integration guide](application-integration.md): wire the theme once at the root and keep appearance branches out of pages.
-
-## Materials: liquid glass and blur
-
-`MochiTheme(materials = …)` decides whether floating bars are solid or glass and whether content scrolled under the top bar is blurred. Materials are independent of colors, so the Mochi, Nothing and iOS appearances can all use them, each with its own switch:
-
-```kotlin
-MochiTheme(
-    colors = colors,
-    // Liquid glass; the scroll-edge blur is on by default (scrollEdge = MochiScrollEdge.Default)
-    materials = mochiGlassMaterials(),
-) { … }
-
-// Or the mochi-ios form with two switches
-MochiTheme(colors = colors, materials = iosMaterials(glass = glassOn, blur = blurOn)) { … }
-```
-
-- Glass: tab bars (search field and accessory included) and other floating bars, plus the buttons in bars, menus, sheets and alerts, are glass; off means a solid capsule with a shadow. It never restyles page content: buttons in content are glass only with a glass style (`MochiButtonStyle.ProminentGlass` and friends), and solid styles such as `Filled` always stay solid; see [Button](../components/button.md)
-- `scrollEdge` / `blur`: following the iOS 27 top bar, once content scrolls under the top bar the whole bar area is evenly blurred, covered with a translucent page background, cut off hard at the bar's bottom edge, with a very faint hairline there. It is the same in every appearance, and the bar's text does not change color. The default is `MochiScrollEdge.Default` (`blur` 16dp, background opacity 0.78 light / 0.72 dark). With null (`iosMaterials(blur = false)`) or on Android 12 and below there is no blur under the bar and the background is nearly opaque (0.94), with the same hard edge and hairline. The bottom bar only gets a page-background gradient, without blur
-- The default is `MochiMaterials()`: no glass, scroll-edge blur on
-
-Components read the materials (`MochiTheme.materials`); pages never check the switches. To keep one region free of glass use `MochiMaterialsScope(MochiMaterials()) { … }`, which swaps only the materials and leaves colors and type alone. Glass re-renders what is behind it every frame and costs more power, so let users opt in and tell them the cost first.
-
-### Liquid glass (`MochiGlass`)
-
-Liquid glass and scroll-edge blur can be switched on and off independently.
-
-The rendering pipeline is ported from the WebGL liquid glass at [liquid.refract.im](https://liquid.refract.im/launch/) (recipes its author sampled from macOS 27 QuartzCore; see THIRD_PARTY_NOTICES) and runs as AGSL on Android 13+, with every floating-point constant kept as is:
-
-- Shape: an analytic supercircle (continuous corner) distance field; nearby pieces merge through a polynomial smooth union with the neck gradient corrected
-- Backdrop: sampled at 0.5 × screen density texels per pt, with a 13-tap downsampled blur pyramid read between two levels by radius
-- Body: inner refraction (quarter-circle bevel) with distance-dependent blur, outer refraction, backdrop filter (darken in dark, lighten in light), face matrix with luma compensation, edge bleed
-- Edges and outside: drop shadow, ring shadow, stroke key/fill highlight, the @2 diffuse highlight
-- Tint, press feedback (matrix layer plus a Gaussian glow under the finger) and adaptive light/dark from the backdrop luma
-
-The parameters follow the short side of the glass (pt) continuously, as they do natively, so you pick a style and a tint rather than tuning fields:
-
-| Parameter | Meaning |
-|---|---|
-| `style` | `MochiGlassStyle.Regular` or `Thick`. Regular has a light and a dark face; shadow, ring shadow and edge bleed appear only past a 64dp short side. Thick keeps Regular's refraction, bleed, shadow and rim, raises the blur to 16pt, and lets much less of the backdrop through: 25% in light mode (saturation 1.8, a tenth brighter, over a near-white base) and 30% in dark mode (black lifted to 32/255, white only reaching 0.43). These values are approximations |
-| `tint` | Tint, or null. A color matrix interpolated by backdrop luma (not a translucent overlay); the alpha is the tint layer opacity |
-| `adaptive` | Flip to the other shade over very dark or very bright content: in light mode below 0.1 to dark and back above 0.3; in dark mode above 0.9 to light and back below 0.7; sampled every 250 ms. `LocalMochiGlassDark` reports the current shade. Applies to small glass (bars, controls, buttons, `MochiGlassGroup`); menus, alerts and sheets always follow the theme shade |
-| `spacing` | Distance at which pieces start to merge, 8dp by default (GlassEffectContainer spacing) |
-| `fallback` | Solid color without a backdrop source; defaults by style and shade |
-
-`MochiGlassDefaults` holds the presets: `Regular`, `Thick` and `TintedBlue` (system blue). There is no dark tint: dark glass follows the theme's dark mode. `mochiGlassMaterials(glass, menu)` builds the whole set: bars, controls and sheets use `glass`; selection lists (menus) and alerts use the more solid `menu` (`Thick` by default).
-
-Text on glass uses the web version's three colors from `MochiGlassContent`: `label` (black 86% on light glass, white 94% on dark glass; titles, body, icons), `secondary` (50% / 58%, secondary text) and `separator` (10% / 14%, separators, off-state wells, slider tracks), each taking the glass's current shade (`LocalMochiGlassDark.current`). Untinted glass provides `label` as `LocalContentColor` to its content; when it flips shade the color fades over 180 ms after 110 ms and snaps back on return. Menus and alerts use the same color. Accent colors such as blue and red follow the theme.
-
-The full effect needs Android 13+; Android 12 gets the system blur plus the face matrix; older systems draw the `fallback` color.
-
-`MochiGlassSurface`, `MochiGlassCapsule` and `MochiGlassBlobs` draw a single piece of glass, defaulting to the theme's material. `MochiGlassGroup` is a glass container: create pieces with `rememberMochiGlassGroupState()` and `item()`, move them with `place` (position and size are sprung), grow one out of another or pull it back with `bloom` (the SwiftUI glassEffectID trajectories the web version recorded frame by frame, with the content blurred along the native curve), show or hide without a trajectory with `pop`, spring in from an offset and smaller scale (or a given size) with `appear`, hide at once with `hide`, and `press` / `release` for the 1.875% press scale plus glow; `item()` takes `MochiGlassSpring`s to replace the default position and size springs (12.9 / 0.7, 11.9 / 0.7); fade the whole group with `MochiGlassGroup`'s `alpha`; place each piece's content with `Modifier.mochiGlassItem(state, item)`. The demo app's Theme › Materials › Liquid glass demos rebuilds the web showcase's seven scenes one to one.
+`MochiTheme` provides Material 3 Expressive color, typography, G2 continuous-corner shape, motion, material, and shadow tokens. Every component in the library reads its styling tokens from `MochiTheme`, with no hardcoded colors or corner radii.
 
 ## Usage
 
+Mount `MochiTheme` at the root with a `ThemeController` to observe runtime changes to the seed color, palette algorithm, and light/dark mode:
+
 ```kotlin
+import androidx.compose.runtime.remember
+import ui.feice.mochi.theme.ColorSchemeMode
+import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.ThemeController
+
 setContent {
     val controller = remember { ThemeController(ColorSchemeMode.MonetSystem) }
     MochiTheme(controller = controller) {
-        // content
+        App()
     }
 }
 ```
 
-If you don't need runtime switching, pass a color scheme directly:
+When runtime switching is unnecessary, pass a `MochiColorScheme` directly:
 
 ```kotlin
-MochiTheme(colors = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) { … }
+MochiTheme(
+    colors = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
+) {
+    App()
+}
 ```
 
-Reading tokens:
+Read active tokens inside composables through `MochiTheme`:
 
 ```kotlin
 MochiTheme.colorScheme.primaryContainer
 MochiTheme.textStyles.bodyLarge
 MochiTheme.shapes.largeIncreased
 MochiTheme.motionScheme.defaultSpatial
+MochiTheme.materials.bar
+MochiTheme.shadows.floating
 ```
 
-`MochiTheme` also provides `LocalContentColor` (= onSurface) and `LocalTextStyle` (= bodyLarge) at the root. The library's `Text` uses them by default, so text outside any container is still readable in dark mode.
+`MochiTheme` also provides `LocalContentColor` (`colors.onSurface`) and `LocalTextStyle` (`textStyles.bodyLarge`) at the root, ensuring `Text` and icons placed outside explicit surface containers render with legible foreground colors in both light and dark modes.
 
-The outermost `MochiTheme` also keeps status and navigation bar icons in step with light/dark (dark icons on a light theme, light icons on a dark one), so apps no longer write `WindowCompat.getInsetsController(…).isAppearanceLightStatusBars`. The window is written only when light/dark changes, and nested themes forcing dark (a photo viewer, say) do not change the whole window. Screens that need their own icon colors, such as full-screen video, pass `systemBarAppearance = false` at that level or set the colors themselves; recomposition will not undo it.
+`MochiTheme` tracks window ownership per `Activity` `Window`. By default (`systemBarAppearance = true`), each window's outermost `MochiTheme` synchronizes status and navigation bar icon brightness with `colors.isDark` (dark icons on light themes, light icons on dark themes), writing to the window only when light/dark state or a full-screen sheet backdrop override changes—so apps do not need to call `WindowCompat.getInsetsController(…).isAppearanceLightStatusBars`. Nested `MochiTheme` subtrees that force dark mode (such as a photo viewer) leave the window-level icons untouched, and multiple `Activity` windows stay independent; screens that manage system bar icons directly can pass `systemBarAppearance = false`. On Android 8.0+ (API 26+) wide-gamut displays, the outermost `MochiTheme` also requests `COLOR_MODE_WIDE_COLOR_GAMUT` and restores the initial window mode on disposal.
 
-## Demo palette
+### `MochiTheme` parameters
 
-The theme demo pairs solid primary, secondary and tertiary colors with their containers in a grid separated by narrow 2dp gutters in the grouped-card color. There is no color blending, border or outer padding. The grid uses the exact same `extraLarge` outer shape as the card (28dp by default); individual samples have square internal corners. Labels remain centered with matching `on*` foregrounds. Narrow windows and large fonts switch to one column, with equal row heights measured from content. Painting and relative label placement share the same pixel-rounded gutters, including RTL. The separate surface ladder retains its compact five solid bands from `surfaceContainerLowest` through `surfaceContainerHighest`, with numbered, baseline-aligned labels and no blending.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `controller` / `colors` | `ThemeController` / `MochiColorScheme` | `remember { ThemeController() }` | Runtime controller (with built-in `420ms` scheme transitions) or an explicit color scheme |
+| `textStyles` | `MochiTextStyles` | `defaultTextStyles()` | MD3 type scale plus iOS 26 positional text styles |
+| `shapes` | `MochiShapes` | `defaultShapes()` | G2 continuous-curvature shape scale |
+| `motionScheme` | `MochiMotionScheme` | `defaultMotionScheme()` | Spatial and effects spring tokens plus the menu motion preset |
+| `systemBarAppearance` | `Boolean` | `true` | Whether the outermost theme updates status and navigation bar icon appearance |
+| `materials` | `MochiMaterials` | `LocalMochiMaterials.current` | Liquid glass and top-bar scroll-edge configuration for bars and overlays |
+| `shadows` | `MochiShadows` | `LocalMochiShadows.current` | Dual-layer soft shadow level table |
+| `content` | `@Composable () -> Unit` | Required | Composable hierarchy scoped to the theme |
+
+## Materials: liquid glass and scroll edge
+
+`MochiTheme(materials = …)` controls whether floating bars and overlays render as liquid glass and how content scrolling beneath a top bar is blurred and masked. Materials are decoupled from color schemes, so the Mochi, Nothing, and iOS appearances can each turn liquid glass and scroll-edge blur on or off independently:
+
+```kotlin
+// Enable liquid glass across bars and overlays; scroll-edge blur is on by default (MochiScrollEdge.Default)
+MochiTheme(
+    colors = colors,
+    materials = mochiGlassMaterials(),
+) {
+    App()
+}
+
+// Or use the two-switch helper from mochi-ios
+MochiTheme(
+    colors = colors,
+    materials = iosMaterials(glass = glassOn, blur = blurOn),
+) {
+    App()
+}
+```
+
+`MochiMaterials` assigns materials by UI role and resolves unset slots in fallback order:
+
+| Property | Type | Default / Fallback | Scope |
+|---|---|---|---|
+| `bar` | `MochiGlass?` | `null` (solid) | Floating tab bars (including the search orb, expanded search field, and accessory bar) |
+| `control` | `MochiGlass?` | `null` (falls back to `bar`) | Bar text/icon buttons, bar button groups, back buttons, bottom toolbars, bar search fields, and body buttons explicitly styled as glass |
+| `menu` | `MochiGlass?` | `null` (falls back to `bar`) | Dropdown menus, context menus, and popovers |
+| `alert` | `MochiGlass?` | `null` (falls back to `menuGlass`) | Alert and confirmation dialogs |
+| `sheet` | `MochiGlass?` | `null` (falls back to `bar`) | Bottom sheets (renders glass at floating detents and crossfades to the opaque sheet background at full screen) |
+| `scrollEdge` | `MochiScrollEdge?` | `MochiScrollEdge.Default` | Top-bar scroll-edge blur and background mask |
+
+- **Scope boundary**: `MochiMaterials` styles only floating bars, menus, sheets, dialogs, and controls inside bars—never ordinary body content. Search fields in lists and segmented controls remain solid or translucent-filled, and body buttons draw glass only when given `MochiButtonStyle.ProminentGlass` or `MochiButtonStyle.Glass` while `controlGlass != null`; solid styles such as `Filled` and `Tonal` always stay solid (see [Button](../components/button.md)).
+- **Top-bar scroll edge (`MochiScrollEdge`)**: `MochiScrollEdge.Default` uses `MochiTopBarStyle.Frosted`: on Android 13+ (API 33+), once content scrolls under the top bar, the bar region blurs uniformly (`blur = 16.dp`), overlays a translucent page background (`fill = 0.78f` light / `fillDark = 0.72f` dark), clips cleanly at the bottom edge, and draws a `0.5dp` (minimum `1px`) hairline. Call `MochiScrollEdge.of(style)` to select `GradientBlur` (iOS 26.5 shadow-edge variable blur), `TranslucentFade`, or `SolidFade`. Passing `scrollEdge = null` (for example `iosMaterials(blur = false)`) or running on Android 12 and below falls back to `SolidFade` (an opaque page background behind the bar that fades smoothly over `extent` below the edge). Bottom bars always use a page-background gradient mask without blur.
+- **Defaults and local overrides**: Omitting `materials` defaults to `MochiMaterials()` (solid surfaces with `MochiScrollEdge.Default` enabled). Wrap a subtree such as a `WebView` screen in `MochiMaterialsScope(MochiMaterials()) { … }` to swap materials locally without resetting colors or typography. Because liquid glass samples and composites the backdrop every frame, it consumes more power than solid surfaces; expose it as a user-controlled option and note the battery trade-off.
+
+### Liquid glass (`MochiGlass`)
+
+The liquid glass pipeline is ported from the WebGL implementation at [liquid.refract.im](https://liquid.refract.im/launch/) (recipes sampled from macOS 27 QuartzCore; see `THIRD_PARTY_NOTICES`) and executes on Android 13+ (API 33+) as a three-pass AGSL pipeline with the original floating-point constants preserved:
+
+- **Analytic SDF and smooth union**: Supercircle continuous-corner signed distance field; nearby pieces merge via a polynomial smooth union with gradient-corrected necks.
+- **Blur pyramid**: Captures the backdrop at `0.5 × density` texels per pt, builds a 13-tap downsampled pyramid, and interpolates between adjacent mip levels by blur radius.
+- **Refraction and face**: Quarter-circle bevel inner refraction with distance-dependent blur, outer refraction, backdrop darken/lighten filter, light and dark face color matrices with luma compensation, and edge bleed on large surfaces.
+- **Rim lighting and shadows**: Drop shadow, ring shadow, stroke key/fill highlights, and `@2` diffuse highlights.
+- **Interaction and adaptation**: Luma-interpolated tint matrices, press saturation matrix plus finger-centered Gaussian glow, and adaptive shade flipping from backdrop luma.
+
+Optical parameters scale continuously with the short side of the glass (in pt), so `MochiGlass` exposes style and tint selection without per-uniform tuning:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `style` | `MochiGlassStyle` | `MochiGlassStyle.Regular` | Optical recipe: `Regular`, `Thick`, or `Frosted` (see below) |
+| `tint` | `Color?` | `null` | Tint color (matching SwiftUI `.tint(_:)`); applies a luma-interpolated color matrix weighted by `tint.alpha`, or `null` for untinted glass |
+| `adaptive` | `Boolean` | `true` | Automatically flips glass shade over very dark or bright backdrops, sampling every `250ms` with dual hysteresis thresholds (light mode flips to dark below `0.1` and back above `0.3`; dark mode flips to light above `0.9` and back below `0.7`). Exposes the active shade via `LocalMochiGlassDark`. Active on small glass (`bar`, `control`, buttons, `MochiGlassGroup`); menus, alerts, and sheets stay locked to the theme shade |
+| `spacing` | `Dp` | `8.dp` | Distance threshold at which adjacent glass pieces begin merging (`GlassEffectContainer` spacing) |
+| `fallback` | `Color?` | `null` | Solid fallback color used without a backdrop source or on Android 11 and below; `null` resolves style- and shade-specific defaults via `fallbackColor(dark)` |
+
+`MochiGlassStyle` optical variants:
+
+| Style | Blur and Refraction | Face Matrix and Typical Use |
+|---|---|---|
+| `Regular` | `8pt` blur with inner and outer refraction; drop shadow, ring shadow, and edge bleed engage once the short side exceeds `64dp` | Standard light and dark face matrices. Used for tab bars, bar buttons, search fields, and floating sheets |
+| `Thick` | Retains `Regular`'s inner/outer refraction, edge bleed, shadows, and rim lighting while raising the blur radius to `16pt` | Parameters fitted from iOS 26/27 renders to transmit far less backdrop: light mode transmits `25%` (`1.8×` saturation, `+10%` brightness over a near-white base with a `0.72` floor); dark mode transmits `30%` (`1.5×` saturation, black lifted to `32/255`, white capped near `0.43`). Used for dropdowns, context menus, and alert dialogs |
+| `Frosted` | Disables inner/outer refraction and edge bleed (`0`), blurring the backdrop uniformly in place at `8pt` | Retains `Regular`'s face matrix, backdrop filter, `@2` diffuse highlights, stroke rim lighting, and shadows. Used when distortion-free frosted glass is preferred |
+
+`MochiGlassDefaults` provides `Regular`, `Thick`, and `TintedBlue` (system blue `0xFF0A84FF` over regular glass). `mochiGlassMaterials(glass, menu, scrollEdge)` builds a complete `MochiMaterials` set: bars, controls, and sheets use `glass` (`Regular` by default), while menus and alerts use `menu` (defaulting to `glass` when `glass.style == MochiGlassStyle.Frosted`, and `Thick` otherwise).
+
+Foreground content on glass uses the three-tier palette in `MochiGlassContent`, parameterized by `LocalMochiGlassDark.current`: `label` (`86%` black on light glass, `94%` white on dark glass; titles, body text, icons), `secondary` (`50%` / `58%`; supporting labels), `separator` (`10%` / `14%`; hairlines, off-state wells, slider tracks), plus `accent(color, dark)` (which lifts lightness on light glass for legibility). Untinted glass provides `label` as `LocalContentColor`, fading over `180ms` after a `110ms` delay when flipping away from the theme shade and snapping back on return.
+
+Platform tiers: Android 13+ (API 33+) runs the full AGSL pipeline; Android 12 (API 31–32) applies system `RenderEffect` blur plus the face color matrix; Android 11 and below draw the solid `fallbackColor`.
+
+For custom glass primitives in `ui.feice.mochi.effect.glass`, `MochiGlassSurface`, `MochiGlassCapsule`, and `MochiGlassBlobs` render single or fused glass shapes, while `MochiGlassGroup` and `rememberMochiGlassGroupState()` coordinate multi-piece sprung glass containers (`item()` with default `MochiGlassSpring` values `12.9f / 0.7f` for position and `11.9f / 0.7f` for size, `place`, `bloom` along recorded SwiftUI `glassEffectID` trajectories, `pop`, `appear`, `hide`, `press` / `release` with `1.875%` press scale and glow, and `Modifier.mochiGlassItem(state, item)` for item content).
 
 ## ThemeController
 
-| Property | Type | Description | Default |
+`ThemeController` holds observable state for dynamic color generation. Updating any property at runtime interpolates the scheme in Oklab space over `420ms` (continuing from the in-flight colors if changed mid-transition; `LocalMochiColorScheme` tracks readers so only scopes reading `MochiTheme.colorScheme` recompose, and only roles whose colors changed are interpolated):
+
+| Property | Type | Default | Description |
 |---|---|---|---|
-| colorSchemeMode | `ColorSchemeMode` | See the table below | `System` |
-| keyColor | `Color` | Seed color | `DefaultKeyColor` (teal) |
-| paletteStyle | `PaletteStyle` | `TonalSpot` / `Expressive` / `Vibrant` / `Content` / `Fidelity` / `Neutral` | `TonalSpot` |
-| contrastLevel | `Double` | Contrast, -1 to 1 | `0.0` |
+| `colorSchemeMode` | `ColorSchemeMode` | `ColorSchemeMode.System` | Brightness and wallpaper seed mode (see table below) |
+| `keyColor` | `Color` | `DefaultKeyColor` (`0xFF2B6A5A`) | Seed color for static modes or pre-Android 12 fallback; pairs with the [Monet seed palette](../components/color-picker.md#monet-seed-palette) |
+| `paletteStyle` | `PaletteStyle` | `PaletteStyle.TonalSpot` | Dynamic scheme variant: `TonalSpot`, `Expressive`, `Vibrant`, `Content`, `Fidelity`, `Neutral` |
+| `contrastLevel` | `Double` | `0.0` | Contrast level from `-1.0` to `1.0` |
 
-All properties are observable state; changing them at runtime recomposes the UI. Changing the seed, palette style or light/dark transitions the whole scheme smoothly over about 0.4 s instead of swapping instantly; a change mid-transition continues from the current colors. To pick a seed, use the [Monet seed palette](../components/color-picker.md#monet-seed-palette).
+| `ColorSchemeMode` | Description |
+|---|---|
+| `System` / `Light` / `Dark` | Generated from `keyColor`; follows system brightness, always light, or always dark |
+| `MonetSystem` / `MonetLight` / `MonetDark` | Uses the Android 12+ (API 31+) wallpaper accent (`system_accent1_500`) as the seed, falling back to `keyColor` on Android 11 and below |
 
-Serif for some text: `defaultTextStyles().withSerifDisplay()` switches the large title, nav title and the display / headline levels to the system serif (CJK falls back to a Song/Ming face); body text, lists and buttons are unchanged. For the Nothing theme, `nothingTextStyles(serifDisplay = false)` turns off its default serif titles.
+Schemes follow the Material 2025 specification (`materialkolor` `SPEC_2025`, cached in a bounded 64-entry LRU cache), with light-mode grouped neutral surfaces lifted (`surfaceContainer` tone `95`, `surfaceContainerLow` tone `97`) and `onSurfaceVariant` resolved from the neutral palette at `L* − 4` for secondary caption contrast.
 
-To preview a different brightness, use `controller.colorScheme(isDark)`: the same seed, palette style and contrast with the brightness you specify (`currentColorScheme()` uses the brightness of the current mode). For example, a theme preview card drawn in a dark UI should itself be dark.
-
-The overload that takes a scheme directly (`MochiTheme(colors = …)`, e.g. when you switch between two themes yourself) does not transition on its own; wrap it in `animateMochiColorScheme`:
+- **Brightness-specific previews**: `controller.currentColorScheme()` resolves brightness from `colorSchemeMode`; call `controller.colorScheme(isDark)` to generate a scheme for an explicit brightness using the same seed, palette style, and contrast (for example, rendering dark preview cards inside a dark settings screen).
+- **Manual scheme transitions and theme reveal**: The direct `MochiTheme(colors = …)` overload does not animate scheme changes automatically; wrap `scheme` in `animateMochiColorScheme(target, animate)`. When pairing full-screen appearance or dark-mode switches with [theme reveal](effects.md#theme-reveal) (`MochiThemeRevealHost`), pass `animate = !reveal.isRevealing` so the new frame exposed through the expanding mask already has its final colors:
 
 ```kotlin
 val reveal = rememberMochiThemeRevealState()
 MochiThemeRevealHost(reveal) {
-    MochiTheme(colors = animateMochiColorScheme(scheme, animate = !reveal.isRevealing)) { App() }
+    MochiTheme(
+        colors = animateMochiColorScheme(scheme, animate = !reveal.isRevealing),
+    ) {
+        App()
+    }
 }
 ```
 
-With `animate = false` the target scheme is used as is. Pass it that way while a [theme reveal](effects.md#theme-reveal) is running (switching theme or light/dark): the new frame showing through the hole must already have its final colors.
-
-| ColorSchemeMode | Description |
-|---|---|
-| `System` / `Light` / `Dark` | Generated from keyColor; follow system / always light / always dark |
-| `MonetSystem` / `MonetLight` / `MonetDark` | Android 12+ uses the wallpaper color as the seed, older versions fall back to keyColor |
-
-Schemes follow the Material 2025 color spec (MD3 Expressive), generated with materialkolor.
-
 ## MochiColorScheme
 
-The full set of MD3 color roles: `primary`, `onPrimary`, `primaryContainer`, `onPrimaryContainer`, `inversePrimary`, `secondary*`, `tertiary*`, `background`, `onBackground`, `surface`, `onSurface`, `surfaceVariant`, `onSurfaceVariant`, `surfaceTint`, `inverseSurface`, `inverseOnSurface`, `error*`, `outline`, `outlineVariant`, `scrim`, `shadow`, `surfaceBright`, `surfaceDim`, `surfaceContainerLowest` to `surfaceContainerHighest`, plus `isDark`.
+`MochiColorScheme` defines the complete set of MD3 semantic color roles: `primary`, `onPrimary`, `primaryContainer`, `onPrimaryContainer`, `inversePrimary`, `secondary`, `onSecondary`, `secondaryContainer`, `onSecondaryContainer`, `tertiary`, `onTertiary`, `tertiaryContainer`, `onTertiaryContainer`, `background`, `onBackground`, `surface`, `onSurface`, `surfaceVariant`, `onSurfaceVariant`, `surfaceTint`, `inverseSurface`, `inverseOnSurface`, `error`, `onError`, `errorContainer`, `onErrorContainer`, `outline`, `outlineVariant`, `scrim`, `shadow`, `surfaceBright`, `surfaceDim`, `surfaceContainerLowest`, `surfaceContainerLow`, `surfaceContainer`, `surfaceContainerHigh`, `surfaceContainerHighest`, plus `isDark: Boolean`.
 
-| Function | Description |
-|---|---|
-| `lightColorScheme(keyColor, style, contrastLevel)` | Light scheme |
-| `darkColorScheme(keyColor, style, contrastLevel)` | Dark scheme |
+| Function | Defaults | Description |
+|---|---|---|
+| `lightColorScheme(keyColor, style, contrastLevel)` | `DefaultKeyColor`, `PaletteStyle.TonalSpot`, `0.0` | Generates a light `MochiColorScheme` from a seed color |
+| `darkColorScheme(keyColor, style, contrastLevel)` | `DefaultKeyColor`, `PaletteStyle.TonalSpot`, `0.0` | Generates a dark `MochiColorScheme` from a seed color |
 
-Use `copy(...)` to override individual colors.
+Call `scheme.copy(...)` to override individual roles.
 
 ## MochiTextStyles
 
-The MD3 type scale: `displayLarge/Medium/Small`, `headlineLarge/Medium/Small`, `titleLarge/Medium/Small`, `bodyLarge/Medium/Small`, `labelLarge/Medium/Small`.
+`MochiTextStyles` combines the 15-step MD3 type scale (`displayLarge/Medium/Small`, `headlineLarge/Medium/Small`, `titleLarge/Medium/Small`, `bodyLarge/Medium/Small`, `labelLarge/Medium/Small`) with 5 iOS 26 positional text styles shared across all Mochi components:
 
-`TextStyle.emphasized()`: MD3 Expressive emphasized style, same size with one step heavier weight.
+| Positional Style | Size / Line Height / Weight | Typical Use |
+|---|---|---|
+| `largeTitle` | `34sp` / `41sp`, `Bold` | Expanded navigation large titles |
+| `navTitle` | `17sp` / `22sp`, `SemiBold` | Collapsed navigation titles, sheet headers, alert titles and actions |
+| `body` | `17sp` / `22sp`, `Normal` | Standard list row titles and trailing values |
+| `subhead` | `15sp` / `20sp`, `Normal` | Standard list row subtitles |
+| `footnote` | `13sp` / `18sp`, `Normal` | List section footers and segmented control labels |
 
-**Text that doesn't jitter when it moves**: every text style and the library's `Text` default to `TextMotion.Animated`. Android's default (`TextMotion.Static`) hints glyphs and snaps each glyph's position and advance to whole pixels to stay sharp at rest; when text scales, moves, or changes size or letter spacing, each glyph jumps between pixels on its own and the line seems to shake. Animated turns hinting off and uses subpixel positioning with unrounded advances, as smooth as iOS; at rest the difference is barely visible on high-density screens. To get the old behavior in your own `TextStyle`, set `textMotion = TextMotion.Static`.
+Typography extensions:
+
+- `TextStyle.emphasized()`: MD3 Expressive emphasis—keeps the font size and steps the weight up one tier (`Normal` → `Medium`, `Medium` → `SemiBold`).
+- `TextStyle.prominent()`: Sets `fontWeight = FontWeight.Bold`.
+- `MochiTextStyles.withSerifDisplay()`: Switches `display*`, `headline*`, `largeTitle`, and `navTitle` to `FontFamily.Serif` (with platform Song/Ming fallback for CJK) while keeping body, list, and button styles in sans-serif.
+
+### Typography and optical alignment details
+
+- **Subpixel animated text (`TextMotion.Animated`)**: Every built-in style and `ui.feice.mochi.basic.Text` default to `TextMotion.Animated`, disabling pixel-grid glyph hinting in favor of subpixel positioning and unrounded advances so scaling or translating text never jitters character by character. Set `textMotion = TextMotion.Static` on custom styles if static grid hinting is required.
+- **Dynamic font scaling (`minFontScale`)**: `Text(minFontScale = 0.85f)` shrinks the font size down to `fontSize × minFontScale` to fit available width before truncating per `overflow`. Large titles (`0.7f`) and context menu items enable this by default; standard list rows keep the theme font size, truncating titles to one line and allowing up to two subtitle lines.
+- **Centered line boxes and two-line row spacing**: Styles use `LineHeightStyle(Alignment.Center, Trim.None)` so CJK and Latin glyphs sit vertically centered alongside leading icons, switches, checkmarks, and `›` chevrons. Two-line list rows trim outer line-height leading (`Trim.Both`) with a `4.dp` gap (`MochiListDefaults.SupportingTextGap`); see [List spacing](../components/list.md#spacing-ios-26). Menu item icons use a `22.dp` box matched to `17sp` body text.
+- **Optical left alignment (`mochiOpticalLeading`)**: Large bold glyphs carry approximately `0.04em` of built-in left side-bearing that makes them appear slightly indented above card edges. `Modifier.mochiOpticalLeading(style)` shifts the text layer left by `0.04em` without affecting layout measurement and is applied automatically to large titles.
 
 ## MochiShapes
 
-All shapes use the default G2 continuous-curvature corner from [Kyant0/Capsule](https://github.com/Kyant0/Capsule) (`MochiContinuity` is Kyant's `Continuity.Default`):
+All shapes in `MochiShapes` use the G2 continuous-curvature corner profile from [Kyant0/Capsule](https://github.com/Kyant0/Capsule) (`MochiContinuity` matches `Continuity.Default`):
 
-- Straight edge → Bézier transition → arc, with continuous curvature and no sudden jump where the arc starts.
-- When the radius reaches half the short edge, it turns into a capsule (Kyant's capsule profile).
-- To use it yourself: `MochiRoundedRectangle(radius)`, `MochiCapsule`, or `ContinuousRoundedRectangle(radius, MochiContinuity)`.
-- The curve matches Kyant's, but `MochiContinuity` builds the outline path itself: Kyant's own path carries floating-point error where two curve pieces meet, so Skia classifies it as non-convex, and large cards fall back to a CPU-drawn mask that is uploaded as a texture and redrawn every frame while scrolling. Cards and capsules are now convex paths the GPU draws directly (on the theme page, the first frame of each fling dropped from about 16 ms to about 10 ms). To get the same path, use the shapes above rather than calling Kyant's `toPath()` directly.
+- Straight edges blend through Bézier transition curves into circular arcs with continuous curvature, eliminating the sudden highlight break at circular tangents.
+- Radii reaching half the short side form a continuous capsule profile automatically.
+- Construct custom shapes with `MochiRoundedRectangle(radius)`, `MochiCapsule`, or `ContinuousRoundedRectangle(radius, MochiContinuity)`. `MochiContinuity` assembles strictly convex outline paths free of join rounding errors, so Skia renders large cards directly on the GPU without falling back to CPU-rasterized mask textures during scrolling.
 
-| Name | Corner |
-|---|---|
-| extraSmall | 4.dp |
-| small | 8.dp |
-| medium | 12.dp |
-| large | 16.dp |
-| largeIncreased | 20.dp |
-| extraLarge | 28.dp |
-| extraLargeIncreased | 32.dp |
-| extraExtraLarge | 48.dp |
-| full | Capsule (`MochiCapsule`) |
+| Name | Default | Description |
+|---|---|---|
+| `extraSmall` | `4.dp` | Compact inner corners |
+| `small` | `8.dp` | Chips and small elements |
+| `medium` | `12.dp` | Medium nested blocks |
+| `large` | `16.dp` | Standard containers |
+| `largeIncreased` | `20.dp` | Medium-large containers |
+| `extraLarge` | `28.dp` | Cards and dialogs |
+| `extraLargeIncreased` | `32.dp` | Panels and glass menus |
+| `extraExtraLarge` | `48.dp` | Floating sheet top-corner cap |
+| `full` | `MochiCapsule` | Full capsule |
+
+For the normalized polygon library (`MochiExpressiveShapes` covering all 35 Material 3 Expressive shapes plus 5 Mochi extensions), custom polygon builders (`MochiPolygon`), continuous shape morphing (`MochiShapeMorph`, `rememberMochiMorphShape`), and morphing loading indicators (`MochiMorphIndicator`), see [Expressive Shapes and Morphing](../components/shapes.md).
 
 ## Shadow levels (`MochiShadows`)
 
-Components pick a shadow level from the theme; the numbers live in one table, so the whole shadow style changes in one place.
+Components select semantic shadow levels from `MochiTheme.shadows`. Each `MochiShadowLevel` combines a wide, inset ambient Gaussian layer with a tight, soft key contact layer, storing separate light and dark opacity multipliers:
 
-| Level | Used by |
-|---|---|
-| `contact` / `contactPressed` | switch and slider thumbs, the segmented control indicator (one soft layer hugging the part) |
-| `low` | the step slider's knob |
-| `raised` | the tab bar at rest |
-| `lifted` | the held tab bar, index bar, toasts |
-| `floating` | open menus and popovers, alerts, the sidebar (menus interpolate from `rest` while opening; there is none while the entry is held). Same spread as `elevation(1)` but darker: ambient 0.17 light / 0.34 dark, contact 0.06 light / 0.2 dark |
+| Level | Default Profile | Used By |
+|---|---|---|
+| `contact` | Contact layer only (`1.5.dp` offset, `3.dp` blur, `0.5` alpha multiplier) | Resting switch thumbs, slider knobs, segmented control indicators |
+| `contactPressed` | Contact layer only (`3.5.dp` offset, `7.dp` blur, `0.8` alpha multiplier) | Held or dragged switch and slider thumbs |
+| `low` | `elevation(0.2f)` | Step slider knobs |
+| `raised` | `elevation(0.35f)` | Solid tab bars at rest |
+| `lifted` | `elevation(0.6f)` | Held tab bars, alphabet index bars, toasts (`MochiToastHost`) |
+| `floating` | Spread matching `elevation(1f)` with deeper opacity (ambient `0.17` light / `0.34` dark, key `0.06` light / `0.20` dark) | Open dropdowns, context menus, popovers, alerts, and sidebars |
+| `rest` | `elevation(0f)` | Starting interpolation state for expanding menus and popovers |
 
-Each `MochiShadowLevel` is a wide, inset, faint ambient layer plus a very soft contact layer, with separate opacities for light and dark. Swap one level or the whole table:
+Override individual levels or flatten all shadows at the root:
 
 ```kotlin
-MochiTheme(colors = scheme, shadows = MochiShadows(floating = MochiShadows().floating.copy(ambientAlpha = 0.08f))) { App() }
-MochiTheme(colors = scheme, shadows = MochiShadows.None) { App() } // flat
+// Soften floating overlay shadows
+MochiTheme(
+    colors = scheme,
+    shadows = MochiShadows(
+        floating = MochiShadows().floating.copy(ambientAlpha = 0.08f),
+    ),
+) {
+    App()
+}
+
+// Disable all shadows globally
+MochiTheme(colors = scheme, shadows = MochiShadows.None) {
+    App()
+}
 ```
 
-In your own components read `MochiTheme.shadows.<level>.resolve(density, dark, visibility)` and draw it with `drawMochiShadow`; `lerp(a, b, t)` blends two levels for press or expand progress.
+In custom components, call `MochiTheme.shadows.<level>.resolve(density, dark, visibility)` to obtain pixel-space `MochiMetaballShadow` parameters for `drawMochiShadow`, and use `lerp(start, stop, fraction)` to interpolate between levels during press or expansion gestures.
 
 ## Concentric corners
 
-When an element sits inside a container with an inset on all sides, its corner radius is the container's radius minus the inset. The two arcs are concentric, so the gap stays the same all the way around the corner. When the inset is larger than the container's radius, the inner radius falls back to `MochiConcentric.Minimum` (4dp).
+When a child element sits inside a rounded container with uniform `inset` padding, setting its corner radius to `outer - inset` keeps both arcs concentric so the visual gap remains constant around the turn. When `inset` exceeds `outer`, the inner radius clamps to `MochiConcentric.Minimum` (`4.dp`):
 
 ```kotlin
 val corner = 28.dp
 val padding = 16.dp
-MochiConcentricContainer(corner, padding) {
-    Column(Modifier.background(color, MochiRoundedRectangle(corner)).padding(padding)) {
-        Box(Modifier.background(inner, MochiConcentric.shape()))   // 12dp, concentric with the outer shape
+MochiConcentricContainer(corner = corner, padding = padding) {
+    Column(
+        Modifier
+            .background(containerColor, MochiRoundedRectangle(corner))
+            .padding(padding),
+    ) {
+        Box(
+            Modifier.background(innerColor, MochiConcentric.shape()), // 28dp - 16dp = 12dp
+        )
     }
 }
 ```
 
 | API | Description |
 |---|---|
-| `MochiConcentric.inner(outer, inset)` | Computes the inner radius |
-| `MochiConcentricContainer(corner, padding) { }` | Tells the elements inside the outer radius and padding |
-| `MochiConcentric.current` / `MochiConcentric.shape(fallback, extraInset)` | Elements inside get the matching radius or shape; pass `extraInset` one level further in |
-
-The library's dropdown (option highlight = panel radius − padding) and tab bar (bar radius = indicator radius + padding) follow this rule.
-
-## MochiMotionScheme
-
-| Name | Default | Use |
-|---|---|---|
-| fastSpatial | spring(0.6, 800) | Position / size of small elements |
-| defaultSpatial | spring(0.8, 380) | Position / size |
-| slowSpatial | spring(0.8, 200) | Full-screen movement |
-| fastEffects | spring(1.0, 3800) | Opacity / color, fast |
-| defaultEffects | spring(1.0, 1600) | Opacity / color |
-| slowEffects | spring(1.0, 800) | Opacity / color, slow |
-| menu | `MochiMotions.Ios26` | Open / close animation of the metaball menu |
-
-Spatial and effects values come from androidx `ExpressiveMotionTokens`. `MochiMotions` also includes iOS smooth / snappy / bouncy, M3 Standard and M3 Emphasized presets.
-
-### Curve presets (`MochiMotions`)
-
-| Preset | Source | Opening |
-|---|---|---|
-| iOS 26 menu (estimated), default | Tuned by feel | response 0.40s / ζ 0.80; closing 0.30s / ζ 1.0 |
-| iOS smooth / snappy / bouncy | Converted from SwiftUI presets | response 0.5s, ζ 1.0 / 0.85 / 0.7 |
-| M3E expressive (fast / default / slow) | androidx `ExpressiveMotionTokens` | ζ 0.6 k 800 / ζ 0.8 k 380 / ζ 0.8 k 200 |
-| M3 standard | androidx `StandardMotionTokens` | ζ 0.9 k 700 |
-| Jelly | Custom | ζ 0.45 k 300 |
-| M3 Emphasized easing | M3 emphasized decelerate / accelerate | 500ms / 200ms |
-
-Conversion: k = (2π / response)². Closing never overshoots, so progress cannot dip below 0 and flip the menu.
-
-## Dynamic type size
-
-`Text(minFontScale = 0.85f)`: when the text doesn't fit, the font shrinks first (down to font size × minFontScale) and only then truncates per `overflow`. This is how iOS handles titles: a long title would rather get a bit smaller than be cut off. Large titles (70%) and context menu items use this by default; standard list rows retain the theme font size, truncating titles on one line and allowing up to two subtitle lines.
-
-## Aligning text and icons
-
-Type scale line heights are distributed centered (`LineHeightStyle.Alignment.Center`, no trim), so CJK glyphs don't sit low in the line box and line up with the centers of icons, switches, checkmarks and chevrons beside them.
-
-Two-line list rows remove the title and supporting blocks' outer line-height leading with `Trim.Both`, preserving glyphs, theme font sizes and internal subtitle line heights. The block gap is `MochiListDefaults.SupportingTextGap` (4dp, iOS). Leading tiles and trailing symbols stay centered on the whole row. See [List spacing](../components/list.md#spacing-ios-26).
-
-- Large titles use `textStyles.largeTitle` (34sp Bold) and line up with the cards below, with no extra indent
-- Menu item icons get a 22dp box, matching symbols next to 17sp body text
-
-## iOS type styles and shared values
-
-Besides the MD3 scale, `MochiTextStyles` has three styles for iOS positions, and every component uses them instead of picking sizes on its own:
-
-| Style | Value | Used by |
-|---|---|---|
-| largeTitle | 34 / 41, Bold | Large titles |
-| navTitle | 17 / 22, Semibold | Collapsed titles, sheet headers, alert titles and buttons |
-| footnote | 13 / 18 | List footers, segmented control labels |
-
-`MochiDefaults.DisabledAlpha` (0.4) is the single disabled alpha for lists, switches, sliders and segmented controls. `MochiDefaults.scrim()` is the single dim color for dialogs, context menus and sheets.
-
-## Optical left alignment
-
-Large bold glyphs carry built-in left spacing (about 0.04em) that makes them look indented next to an icon or a card edge. `Modifier.mochiOpticalLeading(style)` shifts the text left by that much (layer only, layout unchanged); large titles use it.
-
-`MochiDefaults.groupedBackground()` / `groupedContainer()` are the iOS grouped-style page and card colors: light gray page with white cards in light mode, the darkest surface with a card one step brighter in dark mode. Inside a bottom sheet (`LocalMochiElevated` is true, the iOS elevated level) they switch to the elevated pair: in dark mode the sheet is surfaceContainerLow and cards surfaceContainerHigh; the sheet itself uses `MochiDefaults.sheetBackground()`.
+| `MochiConcentric.inner(outer, inset, minimum)` | Returns `(outer - inset).coerceAtLeast(minimum)`, where `minimum` defaults to `4.dp` |
+| `MochiConcentricContainer(corner, padding) { … }` | Provides the computed concentric inner radius to its composition subtree |
+| `MochiConcentric.current` | Reads the current concentric inner radius `Dp?` (`null` outside a container) |
+| `MochiConcentric.shape(fallback, extraInset)` | Builds a concentric `MochiRoundedRectangle`; pass `extraInset` when nesting another layer inward |
 
 ## Concentric and optical balance
 
-Three rules every component follows when placing things inside a rounded container:
+Components follow three geometric rules when placing elements inside rounded containers:
 
-1. Same shape: inset the container's outline by an even margin to get a concentric inner contour, and give inner rounded shapes that contour's radius (`MochiConcentric.inner(outer, inset)`). Examples: the tab bar indicator, the demo header icon tile.
-2. Different shape: judge an icon or a piece of text by its visual mass (imagine it blurred), not its bounding box, and put that mass on the concentric contour. Examples: the toast icon sits in a square as tall as the content, 10dp from the capsule's end and edges; the search magnifier is as far from the capsule end as from its top and bottom; the back chevron and demo icons are centered on their ink centroid; the list `›` is centered on the real glyph ink.
-3. Near the edges: nothing pokes into a corner. Either push it inward (short first/last list rows get extra space) or round it concentrically.
+1. **Same shape (concentric contours)**: Rounded inner elements derive their radius from `MochiConcentric.inner(outer, inset)`—for example, a block inset `16dp` inside a `28dp` card uses a `12dp` corner, a glass menu highlight inset `10dp` inside a `32dp` panel uses a `22dp` corner, and the tab bar capsule exceeds its selection pill height by twice the bar inset. Settings-style list leading icon tiles use fixed iOS 26.0 (24A435) UIKit metrics (`28dp` tile with a `6.25dp` corner radius inside a `26dp` section card) instead of subtracting row padding.
+2. **Different shape (visual centroid)**: Icons and glyphs align by ink centroid, not by bounding box. Toast leading icons sit inside a content-height square `10dp` from the capsule's start, top, and bottom edges; search magnifiers sit equidistant from the capsule's start and vertical edges; back chevrons and list `›` indicators center on their actual glyph ink bounds.
+3. **Corner clearance**: Elements near container edges stay clear of corner arcs either through sufficient inset or concentric rounding. Standard list cards use a `26dp` corner radius paired with a `52dp` (`2 × 26dp`) minimum row height, giving first, middle, and last rows identical vertical padding without clipping into corners.
 
-`MochiDefaults.fill()` is the iOS system fill (onSurface at 12% in light, 24% in dark) for control tracks: off switches, the unfilled part of sliders and progress bars, and the segmented control track. Being translucent, it stays visible on white cards and gray pages alike. Bar buttons (back, toolbar) use the card color, so they read as white circles on the gray page.
+## MochiMotionScheme
+
+`MochiMotionScheme` separates spatial springs (which allow subtle bounce for position, size, and morphs) from critically damped effects springs (for opacity and color), using values from `androidx` `ExpressiveMotionTokens`:
+
+| Property | Default | Purpose |
+|---|---|---|
+| `fastSpatial` | `spring(dampingRatio = 0.6f, stiffness = 800f)` | Small control position and size changes |
+| `defaultSpatial` | `spring(dampingRatio = 0.8f, stiffness = 380f)` | Standard container position and size transitions |
+| `slowSpatial` | `spring(dampingRatio = 0.8f, stiffness = 200f)` | Large or full-screen spatial movement |
+| `fastEffects` | `spring(dampingRatio = 1.0f, stiffness = 3800f)` | Rapid opacity and color transitions |
+| `defaultEffects` | `spring(dampingRatio = 1.0f, stiffness = 1600f)` | Standard opacity and color transitions |
+| `slowEffects` | `spring(dampingRatio = 1.0f, stiffness = 800f)` | Gentle opacity and color transitions |
+| `menu` | `MochiMotions.Ios26` | Default open/close motion preset for metaball menus |
+
+### Curve presets (`MochiMotions`)
+
+`ui.feice.mochi.anim.MochiMotions` provides menu and morph presets, converting SwiftUI `response` (in seconds) to stiffness via $k = (2\pi / \text{response})^2$:
+
+| Preset | Source | Open / Close Profile |
+|---|---|---|
+| `Ios26` (solid menu default) | Fitted from iOS 26 renders and feel | Open `response = 0.40s`, `ζ = 0.80`; close `0.30s`, `ζ = 1.0` |
+| `Ios27Menu` (glass menu default) | Read from UIKit `AnimationKit` `MorphAnimationSettings` | Open `response = 0.30s`, `ζ = 0.80`; close `0.30s`, `ζ = 0.90`, content delayed `0.03s` |
+| `IosSmooth` / `IosSnappy` / `IosBouncy` | Converted from SwiftUI presets | `response = 0.50s` with open damping ratios `1.0`, `0.85`, and `0.70` |
+| `ExpressiveFast` / `ExpressiveDefault` / `ExpressiveSlow` | `ExpressiveMotionTokens` | `ζ = 0.6, k = 800` / `ζ = 0.8, k = 380` / `ζ = 0.8, k = 200` |
+| `Standard` | `StandardMotionTokens` | `ζ = 0.9, k = 700` |
+| `Jelly` | Custom high-bounce preset | `ζ = 0.45, k = 300` |
+| `Emphasized` | M3 Emphasized cubic Bézier easing | `500ms` decelerate open / `200ms` accelerate close |
+
+Presets built via `MochiMotions.springPreset` use critical damping (`ζ = 1.0`) when closing so progress never dips below `0` and inverts the menu geometry.
+
+## Shared defaults and control palette
+
+- **Grouped surfaces and fills (`MochiDefaults`)**:
+  - `groupedBackground()` / `groupedContainer()`: iOS inset-grouped page and card colors (light gray page with white cards in light mode; deepest surface with one-step-brighter cards in dark mode). Inside bottom sheets (`LocalMochiElevated.current == true`), both automatically step up to the elevated surface pair; inside glass sheets, `groupedBackground()` becomes transparent and `groupedContainer()` becomes translucent so the sheet's glass shows through.
+  - `sheetBackground()`: Bottom sheet surface color (`surfaceContainer` in light mode, `surfaceContainerLow` in dark mode, or transparent inside a glass sheet).
+  - `fill()`: Translucent control track fill (`onSurface` at `12%` in light mode, `24%` in dark mode by default) used for inactive switch tracks, unfilled slider/progress segments, and segmented control wells so tracks remain visible on both white cards and gray pages.
+  - `DisabledAlpha` (`0.4f`) and `scrim()` (`30%` black in light mode, `50%` black in dark mode): Shared disabled opacity and modal backdrop scrim.
+- **Appearance control overrides (`MochiControlPalette`)**: Appearance modules provide `LocalMochiControlPalette` to override switch and slider knobs (`thumb`, `sliderThumb`), inactive tracks (`inactiveTrack`), active switch tracks (`switchTrack`), control wells (`fill`), list row chevrons (`listChevron`), list dividers (`listDivider`), and selected tab tint (`tabSelected`). Roles left as `Color.Unspecified` fall back to Mochi's defaults.
+- **Global graphics tier (`MochiGraphics`)**: `MochiGraphics.level` exposes three observable tiers: `Mid` (keeps system blur and soft shadows while turning off AGSL shaders and reveal feathering to save power), `High` (full pipeline, default), and `Extra` (`1.5×` blur radius multiplier plus requesting the display's highest refresh rate at the current resolution).
 
 ## HDR highlights (experimental)
 
-`MochiHdr.enabled` adds brighter-than-SDR (but never blown-out) highlights while pressing (press glow, metaball press light, switch / slider thumbs) on Android 14+ HDR displays; the outermost `MochiTheme` puts the window into HDR mode. See [HDR highlights](hdr.md).
+Setting `MochiHdr.enabled = true` switches the outermost `MochiTheme` window into extended dynamic range mode on Android 14+ (API 34+) HDR-capable displays (requesting up to `3×` headroom on API 35+), rendering press glows, metaball press lights, held switch and slider thumbs, and `MochiEdgeGlow` brighter than SDR white in linear light without clipping channels. See [HDR highlights](hdr.md).

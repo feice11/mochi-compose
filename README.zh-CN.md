@@ -2,7 +2,7 @@
   <img src="docs/assets/mochi-cover.svg" alt="Mochi Compose" width="100%">
 </p>
 
-<p align="center">Jetpack Compose 组件库：iOS 式的交互和动效、G2 连续圆角、AGSL 液态玻璃。</p>
+<p align="center">Jetpack Compose 界面组件库：iOS 式交互与动效、G2 连续曲率圆角、AGSL 液态玻璃。</p>
 
 <p align="center">
   <a href="https://central.sonatype.com/artifact/io.github.feice11/mochi-compose"><img src="https://img.shields.io/maven-central/v/io.github.feice11/mochi-compose?label=Maven%20Central" alt="Maven Central"></a>
@@ -20,7 +20,7 @@
   <a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-zh.svg" alt="在爱发电赞助 Mochi" height="68"></a>
 </p>
 
-Mochi 是给 Jetpack Compose 应用用的界面库。配色和字阶照 Material 3 Expressive，交互和动效照 iOS 26：控件按住会跟着手指拉伸，菜单从打开它的按钮里长出来，页面侧推和返回都能中途打断。不依赖 `material3`。
+Mochi 是面向 Android 的 Jetpack Compose 界面组件库。配色与字阶遵循 Material 3 Expressive，交互与动效参考 iOS 26：控件按住时随手指弹性拉伸，菜单从触发按钮展开，页面侧推与预测性返回全程使用可打断弹簧。库本身不依赖 `material3`。
 
 <table>
   <tr>
@@ -37,14 +37,14 @@ Mochi 是给 Jetpack Compose 应用用的界面库。配色和字阶照 Material
 dependencies {
     implementation("io.github.feice11:mochi-compose:0.3.0")
 
-    // 按需添加
-    implementation("io.github.feice11:mochi-icons:0.3.0")   // Ionicons 图标
+    // 可选模块
+    implementation("io.github.feice11:mochi-icons:0.3.0")   // Ionicons 矢量图标集
     implementation("io.github.feice11:mochi-ios:0.3.0")     // iOS 外观
     implementation("io.github.feice11:mochi-nothing:0.3.0") // Nothing 外观
 }
 ```
 
-要求 compileSdk 36、Kotlin 2.3。发布在 Maven Central；0.1.x 的旧版本还在 JitPack（`com.github.feice11:mochi-compose`）。
+要求 `compileSdk` 36、`minSdk` 23 与 Kotlin 2.3。构件发布在 Maven Central（组 ID 为 `io.github.feice11`；`0.1.x` 版本保留在 JitPack 的 `com.github.feice11:mochi-compose`）。
 
 ## 用法
 
@@ -68,51 +68,51 @@ setContent {
 }
 ```
 
-玻璃是主题里的一项设置，组件自己读，页面里不用写分支：
+液态玻璃在主题根部统一配置。组件直接读取 `MochiTheme.materials`，页面内无需编写材质分支：
 
 ```kotlin
-MochiTheme(colors = colors, materials = mochiGlassMaterials()) { /* … */ }
+MochiTheme(colors = colors, materials = mochiGlassMaterials()) { /* ... */ }
 ```
 
-新项目可以直接复制 [MochiAppStarter.kt](example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt)：一个能运行的三页骨架，主题、导航和共享顶栏都接好了。[接入指南](docs/zh_CN/guide/application-integration.md) 说明每部分需要怎么接；[llms.txt](llms.txt) 是给编程助手看的精简版。
+新建项目可直接复制 [MochiAppStarter.kt](example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt)。该文件是独立可运行的三页应用骨架，已接好主题、导航、来源卡片转场与共享顶栏。架构与组件选用规则见 [应用接入规范](docs/zh_CN/guide/application-integration.md)；使用编程助手时可提供精简索引 [llms.txt](llms.txt)。
 
 ## 组件
 
-- 控件：[按钮与按钮组](docs/zh_CN/components/button.md)、[选择芯片](docs/zh_CN/components/chip.md)、[分段选择器](docs/zh_CN/components/segmented.md)、[开关](docs/zh_CN/components/switch.md)、[滑块](docs/zh_CN/components/slider.md)、[强度调整条](docs/zh_CN/components/intensity-slider.md)、[步进器](docs/zh_CN/components/stepper.md)、[文字输入](docs/zh_CN/components/textfield.md)
-- 菜单与浮层：[下拉菜单](docs/zh_CN/components/dropdown.md)、[长按预览](docs/zh_CN/components/context-menu.md)、[弹出层](docs/zh_CN/components/popover.md)、[对话框](docs/zh_CN/components/dialog.md)、[提示](docs/zh_CN/components/toast.md)、[底部面板](docs/zh_CN/components/sheet.md)
-- 列表：[分组列表、列表编辑、字母索引](docs/zh_CN/components/list.md)、[下拉刷新](docs/zh_CN/components/refresh.md)、[工具栏](docs/zh_CN/components/toolbar.md)
+- 控件：[按钮、按钮组与下载按钮](docs/zh_CN/components/button.md)、[选择芯片](docs/zh_CN/components/chip.md)、[分段选择器](docs/zh_CN/components/segmented.md)、[开关](docs/zh_CN/components/switch.md)、[滑块](docs/zh_CN/components/slider.md)、[强度调整条](docs/zh_CN/components/intensity-slider.md)、[步进器](docs/zh_CN/components/stepper.md)、[文字输入](docs/zh_CN/components/textfield.md)
+- 菜单与浮层：[下拉菜单](docs/zh_CN/components/dropdown.md)、[上下文菜单](docs/zh_CN/components/context-menu.md)、[弹出层、操作确认与轮盘菜单](docs/zh_CN/components/popover.md)、[对话框](docs/zh_CN/components/dialog.md)、[提示](docs/zh_CN/components/toast.md)、[底部面板](docs/zh_CN/components/sheet.md)
+- 列表与工具栏：[分组列表、列表编辑与字母索引](docs/zh_CN/components/list.md)、[下拉刷新、空状态与加载进度](docs/zh_CN/components/refresh.md)、[底部、浮动与键盘工具栏](docs/zh_CN/components/toolbar.md)
 - 选择器：[滚筒与时间日期](docs/zh_CN/components/picker.md)、[日历](docs/zh_CN/components/calendar.md)、[颜色选择](docs/zh_CN/components/color-picker.md)、[选择卡片](docs/zh_CN/components/select-frame.md)
-- 展示：[轮播](docs/zh_CN/components/pager.md)、[徽标、头像与仪表](docs/zh_CN/components/badge.md)、[图标](docs/zh_CN/components/icons.md)
+- 展示：[轮播与页码指示器](docs/zh_CN/components/pager.md)、[徽标、头像与仪表](docs/zh_CN/components/badge.md)、[图标](docs/zh_CN/components/icons.md)、[表现力形状与动态变形](docs/zh_CN/components/shapes.md)
 - 导航：[大标题与搜索栏](docs/zh_CN/components/navbar.md)、[标签栏](docs/zh_CN/components/tabbar.md)、[侧边栏](docs/zh_CN/components/sidebar.md)、[页面转场与预测性返回](docs/zh_CN/guide/navigation.md)
 
-指南：[主题与材质](docs/zh_CN/guide/theme.md)、[通用效果](docs/zh_CN/guide/effects.md)、[内容变换](docs/zh_CN/guide/content-transitions.md)、[越界回弹](docs/zh_CN/guide/overscroll.md)、[触感](docs/zh_CN/guide/haptics.md)、[iOS 外观](docs/zh_CN/guide/ios-theme.md)、[Nothing 外观](docs/zh_CN/guide/nothing-theme.md)、[HDR 高光](docs/zh_CN/guide/hdr.md)、[兼容性](docs/zh_CN/guide/compatibility.md)。
+指南：[设计理念](docs/zh_CN/guide/philosophy.md)、[设计规范](docs/zh_CN/guide/design-principles.md)、[主题与材质](docs/zh_CN/guide/theme.md)、[通用效果](docs/zh_CN/guide/effects.md)、[内容变换](docs/zh_CN/guide/content-transitions.md)、[越界回弹](docs/zh_CN/guide/overscroll.md)、[触感](docs/zh_CN/guide/haptics.md)、[iOS 外观](docs/zh_CN/guide/ios-theme.md)、[Nothing 外观](docs/zh_CN/guide/nothing-theme.md)、[HDR 高光](docs/zh_CN/guide/hdr.md)、[兼容性](docs/zh_CN/guide/compatibility.md)。
 
 ## 兼容性
 
-只支持 Android，minSdk 23。低版本降级，不会坏：
+仅支持 Android，`minSdk` 23。视觉效果在低版本系统上分级回退，不会抛出运行时异常：
 
-| 功能 | 完整效果 | 降级 |
+| 功能 | 完整支持 | 低版本回退 |
 |---|---|---|
-| 液态玻璃 | Android 13 | Android 12 用系统模糊加颜色矩阵，更低画纯色 |
-| 融球、阴影、融色 | Android 13（`RuntimeShader`） | 两块纯色圆角形状 |
-| 模糊、系统取色 | Android 12 | 淡入淡出和缩放；配色用种子色生成 |
+| 液态玻璃 | Android 13（API 33，AGSL） | Android 12：系统模糊加面色矩阵；Android 11 及以下：纯色表面 |
+| 融球、程序化阴影、颜色融合 | Android 13（`RuntimeShader`） | 独立的连续曲率圆角形状 |
+| 内容模糊、渐进模糊、系统动态取色 | Android 12（`RenderEffect` / Monet） | 透明度与缩放过渡；按种子色生成色板 |
 
-开发者选项里关掉动画时，弹簧和拉伸效果也跟着关。应用也可以自己设 `LocalMochiReduceMotion`。
+在系统「开发者选项」中关闭动画后，弹簧过冲与弹性拉伸效果会自动停用；应用也可通过 `LocalMochiReduceMotion` 主动控制。
 
 ## 稳定性
 
-还没到 1.0。小版本可能有不兼容的改动，每一处都写在 [更新日志](CHANGELOG.md) 的「不兼容」里，并附迁移方法。液态玻璃是 Beta，外观和 API 可能在小版本间调整。公开 API 记在 `<模块>/api/*.api`，CI 会检查。
+Mochi 当前处于 1.0 之前阶段。次版本更新可能包含源码不兼容变更，每处破坏性改动都会记录在 [更新日志](CHANGELOG.md) 的「不兼容」小节并附迁移说明。液态玻璃目前处于 Beta 阶段，渲染细节与 API 可能在次版本间调整。公开 API 签名记录在 `<模块>/api/*.api` 并由 CI 校验。
 
 ## 构建
 
-需要 JDK 17 和 Android SDK 36，截图测试要 JDK 21。
+编译组件库与示例应用需要 JDK 17+ 与 Android SDK 36；运行 JVM 截图测试需要 JDK 21。
 
 ```bash
 ./gradlew :example:assembleRelease
 ./gradlew spotlessApply apiCheck :mochi-compose:verifyRoborazziDebug
 ```
 
-提交改动前请看 [CONTRIBUTING.md](CONTRIBUTING.md)。
+提交 Pull Request 前请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## Star 趋势
 
@@ -125,7 +125,7 @@ MochiTheme(colors = colors, materials = mochiGlassMaterials()) { /* … */ }
 
 ## 赞助
 
-Mochi 由我一个人业余维护。如果它帮你省了事，可以在 [爱发电](https://afdian.com/a/feice) 支持一下。赞助者名单每天自动更新。
+Mochi 由个人在业余时间独立维护。如果它为你节省了开发精力，欢迎在 [爱发电](https://afdian.com/a/feice) 支持维护工作。下方赞助者名单每日自动更新。
 
 <a href="https://afdian.com/a/feice"><img src="docs/assets/sponsor-zh.svg" alt="在爱发电赞助 Mochi" height="68"></a>
 
@@ -149,12 +149,14 @@ Mochi 由我一个人业余维护。如果它帮你省了事，可以在 [爱发
 
 ## 致谢
 
-- [Kyant0/Capsule](https://github.com/Kyant0/Capsule)：连续圆角形状
-- [liquid.refract.im](https://liquid.refract.im/launch/)：液态玻璃渲染移植自这个 WebGL 版本（已获许可）
-- [Bear](https://github.com/mif9499)：计数器的滚动数字
-- [miuix](https://github.com/compose-miuix-ui/miuix)：工程规范参考
-- [Ionicons](https://ionic.io/ionicons)（MIT）：`mochi-icons` 的图标
+- [Kyant0/Capsule](https://github.com/Kyant0/Capsule)：G2 连续曲率圆角形状
+- [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)：背景图层采集（`io.github.kyant0:backdrop`）
+- [Nevodev/Cresto](https://github.com/Nevodev/Cresto)：越界回弹弹簧与阻尼曲线改编
+- [liquid.refract.im](https://liquid.refract.im/launch/)：WebGL 液态玻璃着色器与参数配方来源（已获授权移植）
+- [Bear](https://github.com/mif9499)：计数器的滚动数字过渡
+- [miuix](https://github.com/compose-miuix-ui/miuix)：工程与 API 规范参考
+- [Ionicons](https://ionic.io/ionicons)（MIT）：`mochi-icons` 图标集
 
 ## 许可
 
-[Apache License 2.0](LICENSE)。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+采用 [Apache License 2.0](LICENSE) 授权。第三方源码与素材声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

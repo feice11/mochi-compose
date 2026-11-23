@@ -1,43 +1,92 @@
 # MochiSwitch
 
-Switch with the look and feel of iOS 26 (without glass): a 64×28 track and a 38×24 white capsule thumb, both G2 continuous-curvature capsules.
-
-Thumb and inactive-track defaults read `MochiDefaults.controlThumb()` / `controlTrack()`. Without `LocalMochiControlPalette`, the original white thumb and `fill()` track remain (`fill()` itself can be overridden by `MochiControlPalette.fill`). Appearance presets may override them; explicitly supplied `colors` still take precedence.
-
-- Tap: the thumb slides over with speed, stretching along its motion and squashing with a bounce when it arrives; the track color follows the thumb position continuously.
-- Press: the thumb grows past the track, with a deeper shadow and a glow.
-- Drag: the thumb follows the finger, is held back by a rubber band past either end, and ticks when crossing the middle; on release its position decides on or off.
-- A confirm haptic plays when the state changes.
+In `ui.feice.mochi.basic`. Covers the capsule toggle `MochiSwitch` and the circular check control `MochiCheckbox`. Both are in-content controls rendered with solid tracks and vector geometry without liquid glass.
 
 ## Usage
 
+Use standalone or inside the `trailing` slot of `MochiListRow`:
+
 ```kotlin
-var on by remember { mutableStateOf(false) }
-MochiSwitch(checked = on, onCheckedChange = { on = it })
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import ui.feice.mochi.basic.MochiSwitch
+import ui.feice.mochi.list.MochiListRow
+import ui.feice.mochi.list.MochiListSection
+
+var notifications by remember { mutableStateOf(true) }
+
+MochiListSection {
+    MochiListRow(
+        title = "Allow Notifications",
+        trailing = {
+            MochiSwitch(
+                checked = notifications,
+                onCheckedChange = { notifications = it },
+            )
+        },
+    )
+}
 ```
+
+## Interaction and colors
+
+- **Geometry**: Draws a `64×28dp` outer track and a `38×24dp` inner thumb (`2dp` inset), both using G2 continuous-curvature capsule paths, and publishes concentric bounds to enclosing list cards via `mochiConcentricOutline()`.
+- **Tap to toggle**: Tapping drives the thumb across with spring velocity, stretching along the direction of travel and settling with a slight bounce while interpolating the track color continuously with thumb position.
+- **Press and drag**: Holding enlarges the thumb past the track (`1.22×` width, `1.34×` height) with a deeper shadow and pointer-tracking glow. Dragging horizontally tracks the finger, applies rubber-band resistance beyond either end, and resolves to on or off upon release based on whether the thumb crossed the midpoint.
+- **Haptic feedback**: Plays a confirmation haptic whenever the state changes. Under `MochiHapticProfile.IosLike`, tapping also plays a light tick; dragging across the midpoint ticks at the crossing and skips a duplicate tick on release.
+- **Control palette and disabled state**: `MochiSwitchDefaults.colors()` reads `MochiDefaults.switchTrack()`, `controlTrack()`, and `controlThumb()` from the active theme and `LocalMochiControlPalette` (defaulting to theme `primary` for the active track, `MochiDefaults.fill()` for the inactive track, and `Color.White` for the thumb; `MochiIosTheme` supplies system green for `switchTrack`). Explicit `colors` arguments always take precedence. When `enabled = false`, the entire control composites offscreen at `0.4f` alpha so the track color never bleeds through the thumb.
 
 ## Parameters
 
-| Parameter | Description |
-|---|---|
-| checked / onCheckedChange | State and callback; pass null to make it display-only |
-| enabled | Dimmed and unresponsive when false |
-| colors | `MochiSwitchDefaults.colors(checkedTrack, uncheckedTrack, thumb, thumbShadow)`; the on color is the theme primary by default, pass `MochiSwitchDefaults.IosGreen` for iOS green |
-| gel | Jelly stretch strength, 0 = off |
-| hapticProfile | Haptics |
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `checked` | `Boolean` | Required | Current checked state |
+| `onCheckedChange` | `((Boolean) -> Unit)?` | Required | Callback invoked when state changes; pass `null` for display-only mode so an enclosing row can own the tap target |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the switch |
+| `enabled` | `Boolean` | `true` | Whether the switch is interactive; composites at `0.4f` alpha when `false` |
+| `colors` | `MochiSwitchColors` | `MochiSwitchDefaults.colors()` | Active track, inactive track, thumb, and thumb shadow colors |
+| `gel` | `Float` | `0.6f` | Velocity-based jelly stretch factor; `0f` disables deformation |
+| `hapticProfile` | `MochiHapticProfile` | `MochiHapticProfile.IosLike` | Haptic feedback profile |
 
-Tapping to toggle gives a light tick under the `IosLike` profile too (an iOS switch has haptics); dragging across the middle already ticks, so release doesn't tick again.
+## MochiSwitchDefaults
 
-## Check circle: MochiCheckbox
+| Name | Value | Description |
+|---|---|---|
+| `IosGreen` | `Color(0xFF34C759)` | iOS system green constant for `MochiSwitchDefaults.colors(checkedTrack = MochiSwitchDefaults.IosGreen)` |
 
-An iOS-style round check, for "don't show again", multi-select and the like (drawn the same way as the list edit-mode check): unchecked is a thin ring; checking grows a solid primary disc, draws the tick in one stroke and gives a light haptic.
+`MochiSwitchDefaults.colors(...)` defaults to `checkedTrack = MochiDefaults.switchTrack()`, `uncheckedTrack = MochiDefaults.controlTrack()`, `thumb = MochiDefaults.controlThumb()`, and `thumbShadow = Color.Black.copy(alpha = 0.22f)`.
+
+## MochiCheckbox
+
+Circular check control for multi-select items and "Don't show again" rows, sharing the same drawing implementation as `MochiSelectableRow` in list edit mode. Draws a `1.5dp` ring when unchecked; checking expands a solid disc, strokes the checkmark along its path, and triggers a confirmation haptic.
 
 ```kotlin
-MochiCheckbox(checked, onCheckedChange = { checked = it })
+var dontAskAgain by remember { mutableStateOf(false) }
+
+MochiCheckbox(
+    checked = dontAskAgain,
+    onCheckedChange = { dontAskAgain = it },
+)
 ```
 
-| Parameter | Meaning |
-|---|---|
-| checked / onCheckedChange | State and callback; pass null to only draw it and let the whole row take the click (text and check both tappable) |
-| enabled | Dims and stops responding when off |
-| colors | `MochiCheckboxDefaults.colors(checked, checkmark, ring)`; defaults to primary / onPrimary / translucent onSurfaceVariant |
+When the entire row is clickable, pass `onCheckedChange = null` and handle the click on the row so the label and check circle share a single hit target.
+
+### MochiCheckbox parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `checked` | `Boolean` | Required | Current checked state |
+| `onCheckedChange` | `((Boolean) -> Unit)?` | Required | Callback invoked when toggled; pass `null` to delegate click handling to an enclosing row |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the checkbox |
+| `enabled` | `Boolean` | `true` | Whether the checkbox is interactive; lowers alpha to `0.4f` when `false` |
+| `colors` | `MochiCheckboxColors` | `MochiCheckboxDefaults.colors()` | Checked disc (`checked`), checkmark (`checkmark`), and unchecked ring (`ring`) colors |
+
+### MochiCheckboxDefaults
+
+| Name | Value | Description |
+|---|---|---|
+| `Size` | `24.dp` | Check circle diameter |
+
+`MochiCheckboxDefaults.colors(...)` defaults to `checked = MochiTheme.colorScheme.primary`, `checkmark = MochiTheme.colorScheme.onPrimary`, and `ring = MochiTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)`.

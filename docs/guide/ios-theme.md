@@ -1,14 +1,20 @@
 # iOS appearance and glass materials
 
-`mochi-ios` is an optional local module. It provides iOS system colors, switch colors and the glass material for bars that float over content. Row heights, spacing, corners, navigation, gestures and motion stay Mochi's. In the demo app, choose iOS under Theme → Appearance; Mode picks light, dark or system.
+In `ui.feice.mochi.ios`, published on Maven Central (`io.github.feice11:mochi-ios`). This optional appearance module supplies iOS 26.5 semantic system colors (`IosPalette`), control overrides (`iosControlPalette`), vibrancy compositing (`IosVibrant`), and material switch helpers (`iosMaterials`). List row heights, spacing, G2 continuous corners, navigation gestures, and spring physics remain Mochi's, and typography defaults to Mochi's font families and weights.
 
-The glass itself lives in the core library (liquid glass `MochiGlass`, `MochiMaterials`, `MochiBackdrop`), so any appearance can use it; see [Theme › Materials](theme.md). `iosMaterials(…)` / `MochiIosTheme` give you regular liquid glass by default.
-
-The earlier refractive glass reverse-engineered from iOS 26 / 27 (`MochiLiquidGlass`, `IosGlass*`, `iosLiquidMaterials(…)`) and the mochi glass that followed it are removed, replaced by the liquid glass ported from the web version.
+The liquid glass engine itself lives in `mochi-compose` (`MochiGlass`, `MochiMaterials`, `MochiBackdrop`), so Mochi, Nothing, and iOS appearances can all use it; see [Theme](theme.md). `MochiIosTheme` and `iosMaterials()` enable regular liquid glass and top-bar scroll-edge blur by default.
 
 ## Setup
 
-Inside this repository, add `implementation(project(":mochi-ios"))` and wrap the root:
+Add the Maven Central dependency (or `implementation(project(":mochi-ios"))` when developing inside this repository):
+
+```kotlin
+dependencies {
+    implementation("io.github.feice11:mochi-ios:<version>")
+}
+```
+
+Wrap the root of your UI with `MochiIosTheme`:
 
 ```kotlin
 import androidx.compose.runtime.Composable
@@ -20,44 +26,54 @@ fun ApplicationTheme(content: @Composable () -> Unit) {
 }
 ```
 
-`isDark` follows the system by default. `textStyles`, `shapes`, `motionScheme` and `materials` can be overridden. The module is published to Maven Central as `io.github.feice11:mochi-ios`.
+### `MochiIosTheme` parameters
 
-The iOS and Nothing appearances both use Mochi’s font families and weights by default.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `isDark` | `Boolean` | `isSystemInDarkTheme()` | Whether to use the dark appearance |
+| `highContrast` | `Boolean` | `false` | Enables the palette matching iOS "Increase Contrast" |
+| `textStyles` | `MochiTextStyles` | `defaultTextStyles()` | Typography tokens |
+| `shapes` | `MochiShapes` | `defaultShapes()` | G2 continuous-curvature shape scale |
+| `motionScheme` | `MochiMotionScheme` | `defaultMotionScheme()` | Spatial and effects spring tokens |
+| `glass` | `Boolean` | `true` | Enables liquid glass on floating bars, menus, dialogs, and floating sheets; `false` renders solid surfaces |
+| `blur` | `Boolean` | `true` | Enables top-bar scroll-edge blur (`MochiScrollEdge.Default`); `false` falls back to an opaque fade |
+| `glassMaterial` | `MochiGlass` | `MochiGlassDefaults.Regular` | Glass recipe for bars, bar controls, and sheets (menus and alerts pair with `MochiGlassDefaults.Thick`, or match `Frosted` when `glassMaterial.style == Frosted`) |
+| `materials` | `MochiMaterials` | `iosMaterials(glass, blur, glassMaterial)` | Complete material set override |
+| `content` | `@Composable () -> Unit` | Required | Composable hierarchy scoped to the theme |
 
-`glass` and `blur` are two independent switches (both on by default): without glass the bars are solid, without blur there is no blur under the top bar and its background is nearly opaque.
+### Using `iosMaterials` with other appearances
 
-Materials from `iosMaterials(glass = …, blur = …, glassMaterial = …)` work with any theme: `MochiTheme(materials = …)` or `MochiNothingTheme(materials = …)`. The glass is the liquid glass (`glassMaterial`, `MochiGlassDefaults.Regular` by default; you choose a style and a tint, there is no per-parameter tuning), and the selected tab uses the theme's own accent. The demo's Theme → Materials switches are wired this way, with the glass style and tint taken from the Glass presets (Beta) page.
+`iosMaterials(glass, blur, glassMaterial)` returns a standard `MochiMaterials` instance that plugs into `MochiTheme(materials = …)` or `MochiNothingTheme(materials = …)`. The glass surface itself stays neutral while active accents (such as the selected tab) use each theme's own accent color.
 
-## System colors
+## System colors (`IosPalette`)
 
-`IosPalette` holds the iOS 26.5 system semantic colors (UIKit `UIColor`). The values were resolved one by one on an iPhone 17 Pro Max simulator for light and dark mode, increased contrast and interface level: system colors (red … brown), grays (gray … gray6), `tint`, four label levels (`label` … `quaternaryLabel`), `placeholderText`, `link`, `separator` / `opaqueSeparator`, three plain backgrounds, three grouped backgrounds and four fills. Labels other than `label`, separators and fills are translucent, so the color underneath shows through as on iOS.
+`IosPalette` provides the iOS 26.5 semantic colors (UIKit `UIColor`), resolved individually on an iPhone 17 Pro Max simulator across light/dark mode, standard/increased contrast, and base/elevated interface levels: 12 system colors (`red` through `brown`), 6 grays (`gray` through `gray6`), `tint`, 4 label levels (`label` through `quaternaryLabel`), `placeholderText`, `link`, `separator` / `opaqueSeparator`, 3 plain backgrounds, 3 grouped backgrounds, and 4 fills. Secondary labels, `separator`, and all 4 `fill` levels are translucent so underlying surfaces show through as on iOS.
 
-- `IosPalette.of(isDark, highContrast, elevated)` picks a set: `Light`, `Dark`, `DarkElevated` (in dark mode, presented layers use lighter backgrounds; light mode has no difference), `LightHighContrast`, `DarkHighContrast`, `DarkHighContrastElevated`
-- `MochiIosTheme(highContrast = true)` matches iOS "Increase Contrast"
-- Read `LocalIosPalette.current` to use the iOS colors directly in an app
+- `IosPalette.of(isDark, highContrast, elevated)` selects `Light`, `Dark`, `DarkElevated` (in dark mode, presented layers step up to lighter backgrounds; light mode is unchanged), `LightHighContrast`, `DarkHighContrast`, or `DarkHighContrastElevated`.
+- Read `LocalIosPalette.current` to access raw iOS semantic colors directly inside application composables.
 
-iOS has no Material "container" colors, so `iosColorScheme` maps the roles by how components use them:
+Because iOS has no Material-style accent-tinted low-emphasis containers, `iosColorScheme(isDark, highContrast)` maps Mochi color roles according to how components use them:
 
-| Mochi role | iOS |
+| Mochi Role | iOS Mapping |
 |---|---|
-| primary / onPrimary | `tint` (system blue) / white (filled button) |
-| primaryContainer / text on it | secondarySystemFill / label: iOS has no accent-toned low-emphasis container like Material. Low emphasis is always the gray button's neutral fill with label text; the accent is used only by primary (filled) and `IosButtonColors.tinted` |
-| secondaryContainer / text on it | secondarySystemFill / label: ordinary iOS 26 secondary buttons (gray, bordered, read from the button's background view) are a neutral gray with label text |
-| secondary, tertiary | systemGray, systemIndigo |
-| tertiaryContainer / text on it | tertiarySystemFill / label |
-| error, errorContainer / text on it | systemRed, secondarySystemFill / systemRed |
-| background / onBackground | systemGroupedBackground / label |
-| surface, surfaceVariant | systemBackground, secondarySystemBackground |
-| onSurface, onSurfaceVariant | label, secondaryLabel |
-| Grouped page background / cards | systemGroupedBackground / secondarySystemGroupedBackground |
-| Dialogs and panels in dark mode (surfaceContainerHigh / Highest) | elevated secondary / tertiary backgrounds |
-| outline, outlineVariant | opaqueSeparator, separator |
+| `primary` / `onPrimary` | `tint` (system blue) / white (filled primary button) |
+| `primaryContainer` / `onPrimaryContainer` | `secondaryFill` / `label` (matches the neutral fill and label text of iOS gray buttons; accent colors appear only on filled primary buttons and `IosButtonColors.tinted`) |
+| `secondaryContainer` / `onSecondaryContainer` | `secondaryFill` / `label` (matches iOS 26 bordered / gray secondary buttons) |
+| `secondary`, `tertiary` | `gray`, `indigo` |
+| `tertiaryContainer` / `onTertiaryContainer` | `tertiaryFill` / `label` |
+| `error`, `errorContainer` / `onErrorContainer` | `red`, `secondaryFill` / `red` |
+| `background` / `onBackground` | `groupedBackground` / `label` |
+| `surface`, `surfaceVariant` | `background`, `secondaryBackground` |
+| `onSurface`, `onSurfaceVariant` | `label`, `secondaryLabel` |
+| Grouped page / card (`surfaceContainer` / `Lowest`) | `groupedBackground` / `secondaryGroupedBackground` |
+| Dark-mode dialogs and sheets (`surfaceContainerHigh` / `Highest`) | `DarkElevated` `secondaryBackground` / `tertiaryBackground` |
+| `outline`, `outlineVariant` | `opaqueSeparator`, `separator` |
 
-`iosControlPalette` also sets the control fill (`MochiDefaults.fill()`) to tertiarySystemFill, the list divider to the system separator (translucent, used as-is), and the switch's on-track to system green. The tinted button background (accent at 18% in light, 25% in dark) is `IosButtonColors.tinted`.
+`iosControlPalette(isDark, highContrast)` maps control wells (`MochiDefaults.fill()`) to `tertiaryFill`, list dividers to the translucent `separator`, active switch tracks to system `green`, and inactive switch tracks to `#E9E9EA` (light) / `#39393D` (dark). `IosButtonColors.tinted(color, isDark)` computes the translucent accent fill for tinted buttons (`18%` opacity in light mode, `25%` in dark mode).
 
-## Glass needs a backdrop source
+## Backdrop sources (`MochiBackdrop`)
 
-Glass has to know what is behind it. Add `mochiBackdropSource` to the page content, then provide the same source to the bar:
+Liquid glass requires a recorded backdrop layer of the content behind it. Attach `Modifier.mochiBackdropSource(backdrop)` to the page content and provide the same `MochiBackdrop` to floating bars:
 
 ```kotlin
 import androidx.compose.foundation.layout.Box
@@ -70,89 +86,86 @@ import ui.feice.mochi.effect.glass.mochiBackdropSource
 import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 
 @Composable
-fun HomeScaffold(content: @Composable (Modifier) -> Unit, tabBar: @Composable () -> Unit) {
+fun HomeScaffold(
+    content: @Composable (Modifier) -> Unit,
+    tabBar: @Composable () -> Unit,
+) {
     val backdrop = rememberMochiBackdrop()
     Box(Modifier.fillMaxSize()) {
         content(Modifier.fillMaxSize().mochiBackdropSource(backdrop))
-        CompositionLocalProvider(LocalMochiBackdrop provides backdrop) { tabBar() }
+        CompositionLocalProvider(LocalMochiBackdrop provides backdrop) {
+            tabBar()
+        }
     }
 }
 ```
 
-- The bar must be a sibling of the content, drawn after it, and never inside the source. Otherwise the glass would draw itself.
-- The `background` of `rememberMochiBackdrop(background)` should match the page background. The glass then gets an opaque backdrop, and blurring never reveals the unblurred content under the bar.
-- `MochiTabBar` also takes `backdrop = …` directly, without the CompositionLocal.
-- Without a source, the bar draws the material's `fallback` as a solid color. The layout does not change.
+- **Sibling hierarchy**: Place the floating bar as a sibling drawn after the content—never inside `mochiBackdropSource`, where the glass would sample itself.
+- **Opaque base**: `rememberMochiBackdrop(background)` fills `MochiDefaults.groupedBackground()` behind the recorded content so blurring and refraction never expose unblurred pixels beneath the bar.
+- **Explicit parameter and fallback**: `MochiTabBar` also accepts `backdrop = backdrop` directly. Without a backdrop source, components draw the material's solid `fallbackColor` with identical layout metrics.
 
-## Where glass is used today
+Built-in scaffolds and hosts wire backdrop sources automatically:
 
-`MochiMaterials.bar` applies to the [tab bar](../components/tabbar.md). When the material is glass and there is no search button or accessory, the whole bar becomes the iOS 26 glass tab bar; see "Glass tab bar" in the tab bar docs. `null` means a solid color, which is the default for Mochi and Nothing.
+- **Title scaffolds** (`MochiLargeTitleScaffold`, `MochiCompactTitleScaffold`, and lazy variants) record the post-blur body for the top bar and composite the bar's own translucent background on top so glass bar buttons match the visible bar surface.
+- **Custom lazy list plus `MochiTitleBar`**: Call `val backdrop = rememberMochiBarBackdrop()`, apply `Modifier.mochiBackdropSource(backdrop)` to the list (before `mochiScrollEdgeBlur`), and pass `MochiTitleBar(…, backdrop = backdrop)`. When bar controls are solid, `rememberMochiBarBackdrop()` returns `null` so no extra layer is recorded.
+- **Root navigation host (`MochiNavHost`)**: Records the full screen for window overlays (dropdowns, context menus, popovers, alerts, and bottom sheets); nested overlays opened from inside an existing overlay composite the outer overlay into their backdrop automatically.
 
-Other places each have their own material, falling back in this order when unset:
+## Where glass applies
 
-| Material | Used by | When unset |
+`MochiMaterials` slots cover the following components and fall back in order when unset:
+
+| Material Slot | Covered Components and Behavior | Fallback |
 |---|---|---|
-| `control` | Bar text and icon buttons, button groups, the back button, a search field inside a bar | `bar` |
-| `menu` | Dropdown menus, context menus, popovers | `bar` |
-| `alert` | Alerts and confirmation dialogs | `menu` |
-| `sheet` | Sheets (not wired up yet: pages inside a sheet paint an opaque background that would cover the glass) | `bar` |
+| `bar` | [Tab bar](../components/tabbar.md) (`MochiTabBar`): supports all layouts—including icon-only, inline selected labels, scroll-collapsed circle, trailing search orb / expanded search field, and top accessory bar—sharing one liquid glass recipe and backdrop; pressing inflates the selection indicator into a refractive, chromatic-aberration lens bubble | `null` (solid capsule with shadow) |
+| `control` | Bar text/icon buttons, bar button groups, back buttons, bottom toolbars, bar search fields, and body buttons styled with `ProminentGlass` or `Glass` | `bar` |
+| `menu` | Dropdown menus (`MochiDropdown`), context menus (`MochiContextMenu`), and popovers (`MochiPopoverButton`, `MochiPopoverBox`) | `bar` |
+| `alert` | Alert dialogs (`MochiDialog`) and confirmation dialogs (`MochiConfirmationDialog`) | `menuGlass` |
+| `sheet` | Bottom sheets (`MochiSheet`): renders liquid glass over the un-dimmed page backdrop at floating detents (such as `MochiSheetDetent.Medium`) and crossfades smoothly to the opaque sheet background as it expands to `MochiSheetDetent.Large`; inside a glass sheet, `MochiDefaults.sheetBackground()` and `groupedBackground()` resolve to transparent while `groupedContainer()` becomes translucent (`55%` light / `45%` dark) with zero page-level branches | `bar` |
 
-Bars, controls and sheets use `glass` (`MochiGlassDefaults.Regular` by default); menus and alerts use the more solid `MochiGlassDefaults.Thick`. The parameters follow the short side: bars and buttons are under 64dp and get no shadow or edge bleed; larger menus, sheets and dialogs get them naturally.
+By default, bars, controls, and sheets use `MochiGlassDefaults.Regular`, while menus and alerts use the denser `MochiGlassDefaults.Thick` (or `Frosted` when the base glass uses `MochiGlassStyle.Frosted`). Optical parameters follow the short side continuously: bars and buttons under `64dp` omit drop shadows and edge bleed, while larger menus, sheets, and dialogs enable them automatically.
 
-With menu glass on (`menu` set and the page recorded as a backdrop), dropdowns and context menus switch to the iOS 27 glass menu. The values are read from 24A435's UIKit (`_UIContextMenuPlatformMetrics_Glass` and the cell constraint code), not eyeballed:
+### Glass menu metrics
 
-- Panel corner 32, 10 of padding above and below, single-line rows 42 tall (27 top to baseline + 15 baseline to bottom), default width 250 (a width you pass is kept). The highlight is inset 10 on each side with a 22 corner and slides continuously between rows. There are no separators between items
-- Text sits 28 from both sides. A single-choice menu with a selected item adds 15 on the left for the checkmark, centered at "left margin / 2 + 6". In menus with icons the icon comes before the text, centered at "left margin + 12", and the text starts at "left margin + 36"
-- A dropdown's button morphs straight into the panel, with no metaball neck between them (this menu path in iOS morphs without intermediate shapes)
-- When you don't pass `motion` (the theme default), it becomes `MochiMotions.Ios27Menu`: open with dampingRatio 0.8 and response 0.3, close with 0.9 / 0.3 (AnimationKit `MorphAnimationSettings` liquidMorph / liquidMorphShrink), and the content follows 0.03 s later (secondStepDelay)
+When menu glass is active (`menuGlass != null` with a recorded backdrop), dropdowns and context menus adopt the iOS 27 glass menu geometry and motion read from iOS `24A435` UIKit (`_UIContextMenuPlatformMetrics_Glass` and cell layout constraints):
 
-Glass needs a backdrop source. These are already wired up:
+- `32dp` panel corner radius, `10dp` vertical padding, `42dp` single-line row height (`27dp` top-to-baseline + `15dp` baseline-to-bottom), and `250dp` default width (caller-supplied widths are preserved). Item dividers are omitted, and a `22dp`-corner highlight inset `10dp` horizontally slides continuously across rows.
+- Labels sit `28dp` from both edges. Single-selection menus with a checked item add `15dp` on the start side for the checkmark (centered at `startMargin / 2 + 6dp`); menus with icons place the icon before the label (centered at `startMargin + 12dp`, text starting at `startMargin + 36dp`).
+- Dropdown buttons morph directly into the menu panel without an intermediate metaball neck.
+- When `motion` is left at the theme default, menus use `MochiMotions.Ios27Menu`: open `dampingRatio = 0.8f` / `response = 0.30f`, close `0.9f` / `0.30f` (from AnimationKit `MorphAnimationSettings` `liquidMorph` / `liquidMorphShrink`), with content trailing by `0.03s`.
 
-- Title scaffolds (`MochiLargeTitleScaffold` and friends) record the body, after its blur, for the bar. The bar adds its own translucent background on top for the glass inside it, so the dark hairline matches the background you see
-- For a page built from a lazy list plus `MochiTitleBar`: `val backdrop = rememberMochiBarBackdrop()`, add `Modifier.mochiBackdropSource(backdrop)` to the list (before `mochiScrollEdgeBlur`), and pass `MochiTitleBar(…, backdrop = backdrop)`. `rememberMochiBarBackdrop()` returns null when the theme's buttons are not glass, so nothing extra is recorded
-- The outermost `MochiNavHost` records the whole page for overlays (menus, popovers, alerts). An overlay opened from inside another overlay sees that recording with the outer overlay on top
+### Custom glass primitives and press glow
 
-Controls inside the body (a search field in a list, segmented controls, buttons with solid styles) stay solid: glass cannot sample content that contains itself. For a glass button in content use a glass style (`ProminentGlass` / `Glass`), drawn over a solid canvas; see [Button](../components/button.md).
+Ordinary body controls (list search bars, segmented controls, solid-style buttons) stay solid so glass never samples a layer containing itself. For custom floating surfaces and morphs, use:
 
-Pressing glass adds two layers (measured by the web version from NSGlassEffectView): a saturation matrix that eases to 0.5 in 14 ms and out in 28 ms, and a white Gaussian glow under the finger (sigma 0.675 × the short side) that eases to 0.525 in 60 ms and on release grows to 4× in 65 ms while fading in 62 ms. For your own glass use `MochiGlassSurface(modifier, material, backdrop, cornerRadius, interactionSource) { … }`; passing an `interactionSource` turns it on.
-
-For a single piece of glass use `MochiGlassCapsule(backdrop, modifier, material = MochiTheme.materials.bar) { … }`: a capsule (a circle when width equals height). It is visual only and handles no clicks. The shadow draws outside its bounds: fade it with the glass's own alpha parameter (`alpha` on `MochiGlassGroup`); alpha on its `modifier` clips the shadow into square corners.
-
-To draw several rounded rectangles as one surface that fuses together (a bar shrinking into a capsule, buttons pulled into a capsule or growing out of one), use `MochiGlassBlobs(blobs = { listOf(MochiBlob(rect, radius), …) }, fuse = { radius }, alpha = { … })`. The first blob is the main shape and the rest merge into it in order (up to 11); the closer one is, the thicker the neck, and blobs at least `fuse` apart stay separate. With glass in the theme it is one piece of glass on Android 13+ and one piece per blob on older versions; without glass it draws the bar buttons' solid color with metaball necks between close blobs. It only draws the base; put icons and text on top.
+- `MochiGlassSurface(modifier, material, backdrop, cornerRadius, interactionSource, contentAlignment) { … }`: Rounded-rect or capsule (`cornerRadius = null`) glass surface. Passing an `interactionSource` enables the two-layer press feedback measured from `NSGlassEffectView`: a saturation boost matrix (`14ms` ease-in to `0.5`, `28ms` ease-out) and a finger-centered white Gaussian glow (`sigma = 0.675 × shortSide`, `60ms` ease-in to `0.525`, expanding to `4×` over `65ms` while fading over `62ms` on release).
+- `MochiGlassCapsule(backdrop, modifier, material, contentAlignment) { … }`: Visual-only capsule glass surface (`material` defaults to `MochiTheme.materials.bar`, forming a circle when width equals height) for floating search bars or decorative pills, without touch handling or press deformation.
+- `MochiGlassBlobs(blobs, modifier, fuse, alpha, material, backdrop)`: Renders a list of `MochiBlob(rect, cornerRadius)` shapes as one smooth-union surface (the first blob is the primary body, merging up to 11 partners within `fuse` distance). Renders as one unified glass shader on Android 13+, individual glass shapes on Android 12, and metaball-linked solid shapes when glass is off. Because outer drop shadows extend beyond component bounds, drive group fade-in/out through the `alpha` lambda on `MochiGlassBlobs` or `MochiGlassGroup`; applying layer alpha on an outer `Modifier` clips shadows to a rectangle.
 
 ## Scroll edge effect
 
-Every appearance draws the top bar the iOS 27 way (`mochiScrollEdgeFade` plus `Modifier.mochiScrollEdgeBlur` on the scrolling container; the title scaffolds and `MochiSheetScaffold` already do this):
+Across all appearances, top bars coordinate `Modifier.mochiScrollEdgeFade` on the bar with `Modifier.mochiScrollEdgeBlur` on the scrolling container (wired automatically in title scaffolds and `MochiSheetScaffold`):
 
-- Once content scrolls under the top bar, the whole bar area is evenly blurred (sigma = `MochiScrollEdge.blur` × scroll progress, 16dp by default), not a progressive blur that fades out downward
-- A translucent page background sits on top of the blur (`fill` 0.78 in light, `fillDark` 0.72 in dark) and is cut off hard at the bar's bottom edge
-- A very faint hairline runs along the bar's bottom edge: 10% black in light, 12% white in dark, 0.5dp and at least 1 pixel
-- There is no brightness-based dimming, and the bar's text always uses the theme colors (`MochiScrollEdgeTone` stays for compatibility; `darkText` is always null)
-- With the theme's `scrollEdge` set to null (`iosMaterials(blur = false)`) or on Android 12 and below there is no blur under the bar and the background is nearly opaque (0.94), with the same hard edge and hairline
-- The bottom bar (`mochiScrollEdgeFade(bottom = true)`, under the tab bar) is only a page-background gradient, without blur
+- **Default frosted bar (`MochiTopBarStyle.Frosted`, `MochiScrollEdge.Default`)**: Parameters are fitted from iOS 27 renders. On Android 13+ (API 33+), once content scrolls beneath the top bar, the bar region blurs uniformly (`sigma = blur × scrollProgress`, `16.dp` by default), overlays a translucent page background (`fill = 0.78f` light / `fillDark = 0.72f` dark), clips sharply at the bottom edge, and draws a `0.5dp` (minimum `1px`) hairline (`10%` black in light mode, `12%` white in dark mode). Bar text keeps the theme foreground color (`MochiScrollEdgeTone` remains for binary/source compatibility with `darkText` always `null`).
+- **iOS 26.5 gradient blur (`MochiScrollEdge.of(MochiTopBarStyle.GradientBlur)`)**: Metrics are read from simulator `ScrollEdgeEffectView` (`soft` style) layers. An analytic rectangle-edge shadow mask (top `softness = 21.5.dp`, `50%` line `inset = 3.dp` above the bar's bottom edge; bottom `softnessBottom = 28.dp`, `1.dp` outside the bar) tightened by `1.25 · a − 0.25` drives per-pixel variable blur (`blur = 2.dp`) on Android 13+ and overlays the page background (`fill = fillDark = 0.85f`) through the same mask.
+- **Blur disabled and pre-Android 13 fallback**: When `MochiMaterials.scrollEdge` is `null` (for example `iosMaterials(blur = false)`), when `MochiTopBarStyle.SolidFade` is selected, or on Android 12 and below, top bars skip blurring and fall back to `SolidFade`—painting an opaque page background behind the bar that fades smoothly to transparent over `extent` (`16.dp` by default).
+- **Bottom bars and progressive edge blur**: Bottom bars (`mochiScrollEdgeFade(bottom = true)`, such as beneath a tab bar) always draw a page-background gradient mask without blur. Standalone fade masks (`mochiFadeMask`, `mochiScrollFadeMask`) fade opacity only; combine them with `Modifier.mochiProgressiveBlur` when an edge-strengthening blur is needed on custom containers (see [Effects](effects.md)).
 
-These values were estimated from iOS 27 screenshots, not reverse engineered. Fade masks (`mochiFadeMask`, `mochiScrollFadeMask`) only fade; for a blur that grows toward the edge add `Modifier.mochiProgressiveBlur`, see [Effects](effects.md).
+## Vibrant text and icons (`IosVibrant`)
 
-## Vibrant text and icons
+iOS vibrancy passes backdrop pixels through a `4×5` color matrix to fill text and icon glyphs over photos or materials, preserving backdrop hue while maintaining contrast:
 
-iOS vibrancy: text and icons over a photo or material are not drawn in a fixed color; the color behind them goes through a color matrix and fills the glyphs, keeping the backdrop's hue while separating the brightness.
+- `IosVibrant(backdrop, level, isDark, modifier, blur, fill, contentAlignment) { … }`: `level` is `IosVibrancyLevel.Primary`, `Secondary`, `Tertiary`, or `Quaternary`. With `fill = false` (default, for labels and icons), `Primary` skips backdrop sampling and supplies the solid `IosVibrancy.primary(isDark)` color (white in dark mode, black in light mode at `0.96f` alpha), while `Secondary` through `Quaternary` mask the filtered backdrop with the content glyphs. With `fill = true` (for button or capsule backgrounds), all four levels apply `platformFill` matrices.
+- Matrix constants are read from iOS `24A435` `CoreMaterial` (`platformStroke` and `platformFill`) and exposed via `IosVibrancy.label(level, isDark)`, `IosVibrancy.fill(level, isDark)`, and `IosVibrancy.primary(isDark)`. Pass a positive `blur` radius to pre-blur raw photo backdrops.
+- Built on `MochiVibrant(backdrop, matrix, modifier, blur, contentAlignment) { … }` in `mochi-compose`, which accepts any row-major 20-float `4×5` matrix (`0..1` offsets in the fifth column): Android 12+ (API 31+) blurs and filters the backdrop; Android 10–11 (API 29–30) skip the blur and apply the color matrix via an offscreen layer paint; Android 9 and below draw the content with its normal foreground color.
 
-- `IosVibrant(backdrop, level, isDark, blur = …, fill = false) { Text(…) }`: `level` is `IosVibrancyLevel.Primary` … `Quaternary`. Primary does not read the backdrop; the content color is a solid color (white in dark, black in light, 0.96 opacity). The other levels use the content only as a mask
-- The values are the original 24A435 (iOS 27) CoreMaterial ones: `platformStroke` for text and icons, `platformFill` with `fill = true` (button and capsule backgrounds), one set each for light and dark, in `IosVibrancy.label / fill / primary`
-- iOS lays this over a material (a blurred backdrop); here `blur` blurs the backdrop first to get close. It looks similar but is not pixel-exact
-- Underneath is the core `MochiVibrant(backdrop, matrix, blur) { … }`, which takes any 4×5 color matrix (row-major, the 5th column is a 0..1 offset). On Android 12+ the backdrop is blurred and then filtered; Android 10 and 11 skip the blur but still apply the matrix; below Android 10 the content is drawn as is
-- The sample's "Effects › 混合字" page imitates App Store in-app event cards and Today story cards
+## Rendering pipeline and version fallbacks
 
-## How it is drawn
+Backdrop capture and anti-aliased clipping build on [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) `LayerBackdrop`: page content records into a single display-list layer once per frame and glass surfaces reference it directly, so scrolling updates the glass without recomposing or redrawing the bar.
 
-Capturing the backdrop and clipping to the shape use [Kyant's backdrop](https://github.com/Kyant0/AndroidLiquidGlass). The page content is recorded into a layer every frame; the glass references it and clips to its shape with anti-aliased edges. When the content scrolls, the referenced layer updates by itself and the bar does not redraw.
+On Android 13+, the glass body runs three AGSL passes: the sample pass records the backdrop at `0.5 × density` texels per pt and packs 13-tap downsampled mip levels side by side; the face pass evaluates refraction, mip-interpolated blur, backdrop filtering, face matrices, and edge bleed at `2px` per pt; the finish pass composites drop/ring shadows, stroke and diffuse highlights, tint matrices, and press glow at full resolution.
 
-The glass body is three AGSL passes in `effect/glass/engine` (`LiquidShaders.kt`). The sample layer records the backdrop at 0.5 × screen density texels per pt; each level below halves it with the 13-tap downsample, as many levels as the coarsest blur in the recipe needs. The face pass (refraction, blur, backdrop filter, face matrix, bleed) runs at 2 px per pt; the finish pass (shadows, highlights, tint, press) at full resolution. A RenderEffect shader takes only one input, so the pyramid levels sit side by side in that input and the shader interpolates between two levels by hand.
-
-## Fallbacks
-
-| Condition | Result |
+| Environment / Condition | Liquid Glass Behavior |
 |---|---|
-| Android 13+ | Full effect |
-| Android 12 | System blur plus the face matrix |
-| Below Android 12, or no backdrop source | Solid color (`fallback` when there is no source) |
+| Android 13+ (API 33+, with `MochiGraphics.level >= High`) | Full three-pass AGSL liquid glass (refraction, smooth union, highlights, shadows, press glow) |
+| Android 12–12L (API 31–32) | System `RenderEffect` blur plus the light/dark face color matrix (no refraction or smooth union) |
+| Android 11 and below (API ≤ 30), no backdrop source, or `MochiGraphics.level == Mid` | Draws the solid `MochiGlass.fallbackColor(dark)` surface with identical layout and interaction |

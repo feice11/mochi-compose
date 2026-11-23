@@ -1,218 +1,222 @@
 # Design philosophy
 
-The [design principles](design-principles.md) say *what*: the rules and numbers. The [application integration requirements](application-integration.md) say *how to integrate*: an item-by-item checklist. This page says *why*: the few ideas behind the rules.
+The [design principles](design-principles.md) define the concrete geometric, material, and motion rules; the [application integration guide](application-integration.md) provides an itemized checklist for consuming apps. This page explains the engineering rationale behind those rules.
 
-The rules cannot cover every case. When something is not covered, derive the answer from these ideas. If a derived answer conflicts with the rules, the rules and their [priorities](design-principles.md#priorities-who-wins-when-rules-conflict) win, and the gap gets added to the rules.
+No specification can anticipate every edge case. When a scenario is not explicitly covered, derive the solution from the eight principles below. If a derived answer conflicts with the specification, the specification and its [priority order](design-principles.md#priorities-who-wins-when-rules-conflict) take precedence, and the missing case should be added to the rules.
 
-Each idea comes with how the library applies it, counter-examples and questions to check your own code against. Once the trade-offs make sense, most rules follow without looking them up.
+Each principle lists how the library implements it, common anti-patterns, and a self-check question. Once these trade-offs are clear, most rules follow naturally without looking them up one by one.
 
-## In one sentence
+## Core thesis
 
-> The interface is a believable physical object: touch it and it responds immediately, continuously and reversibly; content returns to where it came from; the library owns every detail, the app only describes its business.
+> The interface behaves as a believable physical object: touch it and it responds immediately, continuously, and reversibly; elements return to where they came from; the library owns the interaction mechanics while the application describes domain logic.
 
-The base is Material 3 Expressive color, type and motion tokens. Interaction and motion follow iOS 26, shapes use Kyant's G2 continuous corners, and engineering habits follow miuix. The sections below say how to choose when these sources conflict.
+Mochi builds on Material 3 Expressive color, typography, and motion tokens, aligns interaction physics and dynamics with iOS 26, shapes contours with Kyant's G2 continuous-curvature corners, and structures its API conventions after miuix. The sections below explain how Mochi resolves trade-offs when these influences diverge.
 
 ---
 
-## 1. Continuity: one object, not a sequence of screenshots
+## 1. Continuity: one evolving object
 
-The user should never see state A jump to state B. They should see the same thing turning from A into B.
+State changes transition the same element continuously across space and form, avoiding abrupt frame cuts.
 
-- No instant content swaps:
-  - `MochiBlurText` for text replacing text.
-  - `MochiMorphIcon` for icon replacing icon.
-  - `MochiBlurVisibility` for appearing and disappearing.
-  - `MochiCounterText` for numbers.
+- In-place content transitions:
+  - `MochiBlurText` for text updates.
+  - `MochiMorphIcon` for icon swaps.
+  - `MochiBlurVisibility` for appearing and disappearing elements.
+  - `MochiCounterText` for numeric changes.
   - `mochiAnimateHeight` for card height changes.
-- Return to where it came from: menus grow out of their button and shrink back along the same path. Pages grow from a card (`mochiNavSource`) to full screen and shrink back into it.
-- Always interruptible: animations are driven only by spring progress. Reversing midway or tapping again continues from the current position and velocity, and never jumps back to the start.
-- Lay out first, then animate: new content composes, lays out, draws and lets the frame rate settle before its entrance animation starts. The library's pages, sheets, dialogs and tab switches already do this. Layout sharing a frame with the first animation frames is an instant swap.
-- Occlusion is continuous too: when a card under a bar opens, the bar fades behind the container with the open progress (`mochiNavOccluder`) instead of being covered at once.
+- Return to origin: menus bloom out of their trigger button and collapse back along the same path; pages expand from a source card (`mochiNavSource`) to full screen and shrink back into that card on Back.
+- Always interruptible: springs drive spatial progress directly. Reversing mid-flight or tapping again continues from the current position and velocity without snapping back to the start.
+- Lay out first, then animate: newly composed content finishes composition, layout, initial draw, and frame-rate stabilization before its entrance animation begins (built into Mochi's pages, bottom sheets, dialogs, and tab transitions). Running layout on the first animation frame causes a visible jump past the start state.
+- Continuous occlusion: when a card underneath a floating bar expands into a page, the bar fades behind the morphing container in step with open progress (`mochiNavOccluder`), avoiding an abrupt cut or clip on frame one.
 
 **Anti-patterns**:
-- Switching with `if (loading) Spinner() else Content()`.
-- Calling `snapTo` after changing a value.
-- Replaying a reverse animation from the start on close.
-- Changing numbers in place.
+- Switching branches directly with `if (loading) Spinner() else Content()`.
+- Calling `snapTo` immediately after updating a target state.
+- Replaying a reverse animation from the beginning on close.
+- Mutating numeric labels in place without a counter transition.
 
-**Self-check**: between this frame and the last one, did any pixel appear or vanish from nowhere?
+**Self-check**: between this frame and the previous frame, did any pixel appear or vanish out of nowhere?
 
-## 2. Tracking first: while the finger moves, the UI is never a frame behind
+## 2. Tracking first: zero-frame lag while the finger moves
 
-The hand is the only physical link between the user and the interface, so tracking matters more than any transition. This is priority number one.
+Direct touch is the user's sole physical link to the interface. Finger tracking outranks every transition effect and sits first in the global priority order.
 
-- Drags follow 1:1. On release, the gesture velocity is handed to the spring.
-- Values that change every frame during a drag display directly, without counter animation. Transitions apply only when the program changes a value after release.
-- Scrolling beats pressing: inside lists, press feedback waits a moment and retracts as soon as scrolling takes over (`awaitMochiPress`).
-- Overscroll uses a rubber band (`ProvideMochiOverscroll`, `MochiScrollDefaults.flingBehavior()`) instead of a hard stop.
-- With system animations off, every elastic effect turns off, but functionality stays.
-
-**Anti-patterns**:
-- Still playing the previous animation while dragging.
-- Sliders that lag behind the finger for looks.
-- Pausing before the bounce-back after release.
-
-**Self-check**: when the finger stops, does the UI stop in the same frame?
-
-## 3. Geometry before feel: align first, then fine-tune
-
-Beauty comes from stable geometric relationships, not from numbers tuned one at a time.
-
-- Continuous corners: `MochiRoundedRectangle` / `MochiCapsule`, radii from `MochiTheme.shapes`. Never `RoundedCornerShape`.
-- Concentric: a rounded element sitting at an inset inside a rounded container has radius = outer radius − inset (`MochiConcentric`).
-- Equal spacing all around: an icon in a capsule sits as far from the end as from the top and bottom.
-- Optical balance stays inside geometry: icons center by ink and text by line-box centers. These are fine adjustments that never override concentricity.
-- Layout owns spacing, content is never scaled: content that does not fit grows naturally. Text is never shrunk or hard-clipped.
+- Drag gestures track 1:1 and hand their release velocity directly to the settling spring.
+- Live readouts that update every frame during a drag render directly without counter animations; transitions run only when code updates a value after release.
+- Scrolling outranks pressing: inside scroll containers, press feedback waits briefly and retracts immediately once a scroll gesture claims the pointer (`awaitMochiPress`).
+- Overscroll applies rubber-band resistance (`ProvideMochiOverscroll`, `MochiScrollDefaults.flingBehavior()`) with no hard stop.
+- When system animations are disabled, elastic effects turn off automatically while all functionality remains intact.
 
 **Anti-patterns**:
-- A lone `offset(y = 2.dp)` so one row looks centered.
-- Deriving a scale from card height.
-- A hard-coded `RoundedCornerShape(12.dp)`.
+- Continuing a previous animation while the finger is actively dragging.
+- Smoothing slider movement so the thumb trails behind the finger.
+- Pausing briefly after finger release before starting the spring return.
 
-**Self-check**: can this number be derived from another size? If not, should it become a token?
+**Self-check**: on the exact frame the finger stops, does the UI stop with it?
 
-## 4. Solid and restrained: believable material, minimal decoration
+## 3. Geometry before feel: establish mathematical alignment, then fine-tune optically
 
-Mochi's material is solid: white cards on a gray base, no glass, no refraction, no background blur. Light appears only where a finger presses.
+Deterministic geometric relationships produce lasting visual order without hand-tuned magic numbers.
 
-- Colors come only from `MochiTheme.colorScheme` and `MochiDefaults` and must work in light and dark. Components never hard-code colors.
-- Gradients appear only where a solid color fades to transparent (scroll edges, fade masks), and they use `MochiSmoothGradient` (an S curve). Gradients are never decoration.
-- Press feedback is a soft glow from the fingertip plus a slight deformation (`mochiPressGlow`, `mochiPressDeform`). No bright outlines, no white blotches.
-- Haptics are few and precise: only when state really changes.
+- G2 continuous-curvature corners: use `MochiRoundedRectangle` and `MochiCapsule` with radii read from `MochiTheme.shapes`; never use `RoundedCornerShape`.
+- Concentric insets: a rounded element inset by padding inside a rounded container uses inner radius = outer radius − inset (`MochiConcentric`).
+- Equal capsule end margins: an icon inside a capsule sits at the same distance from the outer end as from the top and bottom edges.
+- Optical balance within geometric bounds: icons center by actual glyph ink and text aligns symmetrically by line-box centers; optical adjustments fine-tune placement without overriding concentric geometry.
+- Layout absorbs whitespace without scaling content: overflowing text wraps and grows container height naturally without shrinking font sizes or hard-clipping to a fixed height.
 
 **Anti-patterns**:
-- Colorful gradients on cards "to look premium".
-- Translucent button colors.
-- A vibration on every tap.
+- Adding an isolated `offset(y = 2.dp)` to make one row look centered.
+- Back-calculating a scale factor from card height or row count.
+- Hardcoding `RoundedCornerShape(12.dp)`.
 
-**Self-check**: if this decoration were removed, would any information be lost? If not, remove it.
+**Self-check**: can this dimension be derived from surrounding geometry? If not, should it be promoted to a semantic token?
 
-## 5. Implement once, reuse everywhere: the library owns the details
+## 4. Solid canvas and disciplined materials: grounded surfaces, clear hierarchy
 
-Each interaction has exactly one implementation in the library. Reusing it brings every detail along; redrawing your own loses half of them.
+Page backgrounds and content cards always use solid grouped surfaces (`groupedBackground` and `groupedContainer`); body content is never wrapped in decorative glass or colorful gradients. Floating chrome above content (bars, menus, bottom sheets, dialogs, and bar controls) supports optional AGSL liquid glass (`MochiGlass`) and scroll-edge blur (`MochiScrollEdge`, enabled by default) through `MochiTheme(materials = …)`.
 
-- Use the library component, never a redrawn copy of its list or outline:
-  - `MochiDropdown` / `MochiContextMenu` for menus.
+- Read colors exclusively from `MochiTheme.colorScheme` and `MochiDefaults`, supporting both light and dark modes without hardcoded color literals inside components.
+- Keep material boundaries strict: `MochiMaterials` governs floating bars and overlays while lists and body containers stay solid; body buttons default to solid styles (`Filled`, `Tonal`) and render liquid glass only when explicitly given a glass style (`MochiButtonStyle.ProminentGlass` / `Glass`) with control glass enabled in the theme.
+- Restrict gradients to functional solid-to-transparent fades (scroll-edge effects, fade masks) built with S-curve `MochiSmoothGradient`, never as surface decoration.
+- Express press feedback through a soft fingertip glow and subtle follow deformation (`mochiPressGlow`, `mochiPressDeform`), without bright rim outlines or blown-out white spots.
+- Keep haptics sparse and precise, firing only when state commits or an action threshold is crossed.
+
+**Anti-patterns**:
+- Applying colorful gradients or decorative background blur to body cards.
+- Using translucent solid fills as button backgrounds.
+- Triggering haptic vibration on every ordinary tap.
+
+**Self-check**: if this visual decoration is removed, is any hierarchy or information lost? If not, remove it.
+
+## 5. Implement once, reuse everywhere: the library owns the interaction details
+
+Each interaction pattern has a single canonical implementation in the library. Reusing the component brings every gesture, transition, and edge case with it; redrawing a lookalike drops half the behavior.
+
+- Reuse complete library components without reimplementing their shells:
+  - `MochiDropdown` / `MochiContextMenu` for dropdown and context menus.
   - `MochiButton` / `MochiBarIconButton` for buttons.
-  - `MochiListSection` / `MochiListRow` for settings rows.
-- Shared effects live in the `effect/` module (glow, deformation, metaball, content transitions, masks). Components and apps take them from there.
-- One animation owner per property: height, position and similar properties have a single animation. An outer layer never chases an inner one's intermediate values or adds a second smoothing pass.
-- Fix at the root: a visual problem is fixed in a library token or component and written into the rules, never patched with numbers on one page.
+  - `MochiListSection` / `MochiListRow` for settings and key-value rows.
+- Centralize shared visual and gesture primitives in `effect/` (glow, deformation, liquid glass, metaball, content transitions, fade masks) for both library components and apps.
+- One animation owner per property: dimensions such as height or offset are driven by a single animation at a time; outer containers never chase inner intermediate frames or stack a second smoothing pass.
+- Fix defects at the source: resolve visual or alignment issues in library tokens or components and record the rule in the specification; never patch padding on a single screen.
 
 **Anti-patterns**:
-- "A plain button + a hand-drawn overlay" as a menu.
-- Extra padding on one demo card to fix a corner problem.
-- `animateContentSize` wrapped around content that animates its own size.
+- Pairing a plain button with a custom popup surface to mimic a menu.
+- Adding one-off padding to a demo card to hide a corner-alignment bug.
+- Wrapping self-animating content inside an outer `animateContentSize`.
 
-**Self-check**: if the same need comes up elsewhere, can what I wrote be reused directly?
+**Self-check**: when another screen needs this exact interaction, can my implementation be reused directly?
 
-## 6. Effects may degrade, functionality may not
+## 6. Visual effects degrade gracefully; functionality stays complete
 
-On every OS version and every device class, gestures, motion rhythm and results stay the same. Only decoration (metaball, shadows, HDR light) is lost.
+Across OS versions and hardware tiers, gesture tracking, motion cadence, and functional outcomes stay identical; lower tiers simplify only expensive rendering passes (liquid glass, metaball, soft shadows, HDR highlights).
 
-- Degrade effects by API level, not features (see [Compatibility](compatibility.md)).
-- Transitions change only layer properties and never re-lay out per frame.
-- Offscreen layers are only as large as needed and only open when needed.
-- Offscreen compositing sits outside a deformation, so deforming content cannot be cut into straight edges.
-- Heavy work (network, decoding) stays out of composition and measurement. It waits for `rememberMochiNavSettled()`, with `MochiSkeleton` as a placeholder meanwhile.
-
-**Anti-patterns**:
-- Hiding a feature on older versions.
-- A full-screen `saveLayer` every frame.
-- Decoding large images inside `remember {}`.
-
-**Self-check**: on the slowest device, is this interaction still complete?
-
-## 7. Real scenarios speak: give business, not knobs
-
-A component's value shows in real scenarios, not in a tuning panel.
-
-- Demo pages:
-  - Use real scenarios (a lock-screen notification, Control Center, an inbox, an album).
-  - Keep interactions playable.
-  - Keep only one or two parameters that matter most to feel.
-- Integration: choose components by business scenario. Mark the unused ones "not applicable + reason", and never add unrelated features to use every component.
-- Defaults are the answer: `XxxDefaults` holds tuned values. Apps change them only when the business needs it.
+- Gate visual effects by graphics tier and API level while preserving full feature parity (see [Compatibility](compatibility.md)).
+- Drive transitions through `graphicsLayer` properties without per-frame relayout.
+- Enable offscreen compositing buffers only while active and size them tightly to the required bounds.
+- Place offscreen compositing outside elastic deformations so jelly or rubber-band motion is never clipped to straight box edges.
+- Keep heavy work (network I/O, bitmap decoding) out of composition and measurement; defer until `rememberMochiNavSettled()` reports transition completion and display `MochiSkeleton` meanwhile.
 
 **Anti-patterns**:
-- A demo page with a row of stiffness, damping and offset sliders but no real content.
-- A tab bar forced in only to show the component.
+- Hiding an application feature on older Android versions.
+- Allocating a full-screen `saveLayer` on every frame.
+- Decoding large bitmaps synchronously inside `remember {}` or layout measurement.
 
-**Self-check**: without reading any caption, can the user tell what scenario the screen shows?
+**Self-check**: on the slowest supported device, is the interaction flow still complete?
 
-## 8. The rules are alive: find, fix, write down
+## 7. Ground in real scenarios: express domain workflows, minimize tuning knobs
 
-Every fix must answer "how do we never do this again?"
+Validate component quality in realistic domain workflows with minimal tuning controls.
 
-- Fix at the library level. When public behavior changes, update the zh and en docs and the demo together.
-- Write new rules into the [design principles](design-principles.md), stating which priority they fall under.
-- Report verification separately: formatting/compilation, automated tests and device acceptance are distinct. A successful build is not visual or interaction validation.
+- Demo screens:
+  - Frame realistic scenarios (lock-screen notifications, Control Center, inbox lists, photo albums).
+  - Keep interactions live and responsive.
+  - Expose at most one or two parameters that meaningfully shape tactile feel.
+- App integration: select components strictly by product requirements; mark unused checklist items as "not applicable + reason", and never invent features just to exercise extra widgets.
+- Tuned defaults first: `XxxDefaults` provides production-ready metrics, overridden only when domain semantics require it.
+
+**Anti-patterns**:
+- A demo page filled with stiffness, damping, and offset sliders over placeholder boxes.
+- Forcing an unneeded tab bar into an app solely to exercise the component.
+
+**Self-check**: with all explanatory captions hidden, can the user immediately recognize what workflow the screen serves?
+
+## 8. Keep the specification alive: diagnose, fix at the source, document
+
+Every root-cause investigation should prevent the entire class of regression from recurring.
+
+- Resolve defects in the library layer; when public behavior changes, update Chinese docs, English docs, and the sample app together.
+- Codify newly discovered invariants in [Design principles](design-principles.md) under the governing priority tier.
+- Report verification tracks separately: formatting/compilation, automated unit tests, and on-device visual/gesture validation are distinct; a clean build never substitutes for visual or tactile verification.
 
 ---
 
-## Choosing when ideas conflict
+## Resolving conflicts between principles
 
-Resolve conflicts with the [priorities](design-principles.md#priorities-who-wins-when-rules-conflict), roughly:
+When principles pull in opposite directions, apply the [priority order](design-principles.md#priorities-who-wins-when-rules-conflict):
 
-**Tracking and usability > no errors or glitches > geometry > optical balance > no instant swaps > iOS fidelity > performance and compatibility.**
+**Tracking and usability > zero clipping or overexposure > geometry > optical balance > no instant swaps > iOS fidelity > performance and compatibility.**
 
 Examples:
-- Readings jump directly during a drag (tracking > no instant swaps).
-- Large-area HDR light only brightens slightly (no overexposure > iOS fidelity).
+- Slider readouts update directly on every drag frame (tracking > no instant swaps).
+- Large-area HDR soft light brightens conservatively while peak HDR headroom stays on the thin rim line (zero overexposure > iOS fidelity).
 
 ## Decision order when writing code
 
-1. Identify the task: building an app with the library, or modifying the library? Never mix the two checklists.
-2. Find what exists: is there a library component or effect for this? Use it fully, never half of it plus your own drawing.
-3. Use tokens: color, type, corners, spacing and motion come from the theme or `XxxDefaults` whenever possible.
-4. Check continuity: every changing piece of content has a transition (idea 1). Every animation is interruptible, continues from the current state, and has one owner.
-5. Check tracking: gestures are 1:1 during a drag and hand their velocity to the release animation.
-6. Check geometry: corners are concentric, spacing is equal all around, and nothing is clipped.
-7. Check occlusion and layers: bars floating over content register as occluders, and offscreen layers sit outside deformations.
-8. State verification clearly: report what compiled, what was tested and what needs a device, separately.
+1. Identify the workflow: separate "building an app with Mochi" from "modifying the Mochi library" and follow the corresponding checklist.
+2. Check existing primitives: use full library components and `effect/` modifiers directly; do not redraw partial lookalikes.
+3. Read semantic tokens: obtain colors, typography, corner radii, materials, spacing, and motion specs from `MochiTheme` or `XxxDefaults`.
+4. Verify continuity: assign an explicit transition to every changing value (Principle 1); ensure animations are interruptible, preserve velocity, and have a single owner per property.
+5. Verify tracking: confirm drag gestures move 1:1 with the pointer and transfer release velocity into springs.
+6. Verify geometry: check concentric corner radii, equal capsule end insets, and natural multi-line growth without clipping.
+7. Verify occlusion and layer order: register floating chrome with `mochiNavOccluder()` and keep offscreen compositing outside elastic transforms.
+8. Report verification tracks distinctly: state what compiled, what passed automated tests, and what requires on-device inspection.
 
 ## Anti-pattern quick reference
 
-| Anti-pattern | Violates | Use instead |
+| Anti-pattern | Principle violated | Recommended approach |
 |---|---|---|
-| `if (a) A() else B()` instant swap | Continuity | `MochiBlurCrossfade` / `MochiBlurVisibility` |
-| `Text(count.toString())` changing in place | Continuity | `MochiCounterText` |
+| `if (a) A() else B()` branch swap | Continuity | `MochiBlurCrossfade` / `MochiBlurVisibility` |
+| `Text(count.toString())` in-place mutation | Continuity | `MochiCounterText` |
 | `RoundedCornerShape(n.dp)` | Geometry | `MochiTheme.shapes.*` / `MochiRoundedRectangle` |
-| Hard-coded `Color(0xFF…)` | Solid and restrained | `MochiTheme.colorScheme` / `MochiDefaults` |
-| Decorative gradients | Solid and restrained | Solid theme container colors |
-| `clickable` with the default ripple | Solid and restrained | `mochiPressDeform` + `mochiPressGlow`, `indication = null` |
-| Plain button + hand-drawn overlay | Reuse | `MochiDropdown` / `MochiPopoverButton` |
-| Bare `Row`s inside a generic card as settings | Reuse | `MochiListSection` / `MochiListRow` |
-| Outer `animateContentSize` around self-resizing content | One owner | Keep a single size animation |
-| Padding tweaks on one page to fix a visual bug | Fix at the root | Change the library token or component, write the rule |
-| Animating before content has laid out | Lay out first | Let library transitions handle it, or wait for steady frames |
-| Custom floating bar not registered | Continuous occlusion | `mochiNavOccluder()` on its outermost modifier |
-| Demo made of tuning sliders | Real scenarios | A real scenario + one or two key parameters |
+| Hardcoded `Color(0xFF…)` | Material restraint | `MochiTheme.colorScheme` / `MochiDefaults` |
+| Decorative gradients or body-card glass | Material restraint | Solid theme surfaces (`groupedBackground` / `groupedContainer`) |
+| `clickable` with default Material ripple | Material restraint | `mochiPressDeform` + `mochiPressGlow` with `indication = null` |
+| Plain button + custom popup surface | Reuse | `MochiDropdown` / `MochiPopoverButton` |
+| Bare `Row`s inside a generic card for settings | Reuse | `MochiListSection` / `MochiListRow` |
+| Wrapping self-resizing content in `animateContentSize` | Single animation owner | Keep a single size animation |
+| Per-screen padding tweaks to mask alignment bugs | Root-cause ownership | Update the library token or component and document the rule |
+| Starting entrance animations before layout settles | Lay out before animating | Use library transitions or wait for frame stabilization |
+| Unregistered custom floating bar | Continuous occlusion | Add `mochiNavOccluder()` on the bar's outermost modifier |
+| Demo screen composed solely of tuning sliders | Real scenarios | Ground in a real workflow with one or two key controls |
 
-## A small comparison
+## Code comparison
 
 ```kotlin
-// ✗ hard-coded color and corners, system ripple, instant text swap
+// ✗ Don't: hardcoded color and circular corners, default ripple, instant text swap
 Box(
     Modifier
         .background(Color(0xFFEFEFEF), RoundedCornerShape(16.dp))
         .clickable { on = !on },
 ) { Text(if (on) "On" else "Off") }
 
-// ✓ theme color and continuous corners, press deformation + fingertip glow, blurred text replacement
+// ✓ Do: theme tokens and G2 corners, press deformation + fingertip glow, blurred text transition
 val shape = MochiTheme.shapes.extraLarge
 Box(
     Modifier
         .mochiPressDeform()
         .background(MochiDefaults.groupedContainer(), shape)
         .mochiPressGlow(rememberMochiGlowState(), shape)
-        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { on = !on },
+        .clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+        ) { on = !on },
 ) { MochiBlurText(if (on) "On" else "Off") }
 ```
 
 ## Read next
 
-- [Design principles](design-principles.md): every rule, number and the checklist.
-- [Application integration requirements](application-integration.md): item-by-item requirements for apps.
-- [Adding components](adding-components.md): the workflow for modifying the library.
+- [Design principles](design-principles.md): complete rules, metrics, and pre-submission checklist.
+- [Application integration guide](application-integration.md): itemized requirements for consuming apps.
+- [Adding components](adding-components.md): library contribution and review workflow.
 - [Content transitions](content-transitions.md), [Effects](effects.md), [Navigation](navigation.md).

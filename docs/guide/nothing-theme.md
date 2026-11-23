@@ -1,10 +1,18 @@
 # Nothing appearance
 
-`mochi-nothing` is an optional local asset module. It supplies Nothing’s colors and control palette, with Mochi’s typography, geometry, icons and interactions. The demo's Theme → Appearance selector switches between Mochi, Nothing and iOS and persists the selection. Mochi's wallpaper-color mode and palette algorithm remain independent of Nothing's System / Light / Dark modes.
+In `ui.feice.mochi.nothing`, published on Maven Central (`io.github.feice11:mochi-nothing`). This optional appearance module supplies a neutral monochrome surface palette accented with Nothing red (`NothingColors.Accent`), matching control overrides, and opt-in typography helpers. Default type metrics, list geometry, G2 continuous corners, and spring motion follow Mochi's standard specifications.
 
 ## Integration
 
-Inside this repository, add `implementation(project(":mochi-nothing"))`:
+Add the Maven Central dependency (or `implementation(project(":mochi-nothing"))` when developing inside this repository):
+
+```kotlin
+dependencies {
+    implementation("io.github.feice11:mochi-nothing:<version>")
+}
+```
+
+Wrap the root of your UI with `MochiNothingTheme`:
 
 ```kotlin
 import androidx.compose.runtime.Composable
@@ -16,31 +24,61 @@ fun ApplicationTheme(content: @Composable () -> Unit) {
 }
 ```
 
-`isDark` follows the system by default. Override `textStyles`, `shapes`, `motionScheme` or `materials` when needed. Apps depending only on `mochi-compose` include none of these fonts. This module has no Maven publishing configuration. Read the [asset provenance and license status](../../mochi-nothing/ASSET_NOTICES.md); extracted firmware assets are not automatically covered by this repository's Apache license.
+Applications depending only on `mochi-compose` do not bundle any font assets from this module. Review [Firmware asset provenance (`ASSET_NOTICES.md`)](../../mochi-nothing/ASSET_NOTICES.md) for provenance and licensing details: the repository's Apache-2.0 license covers the Kotlin integration code and does not automatically extend to firmware-extracted font files.
 
-## Colors and typography
+### `MochiNothingTheme` parameters
 
-- `nothingColorScheme(isDark)` supplies the complete semantic palette: light gray pages / white cards, black pages / charcoal cards, limited red primary actions and small selection markers on neutral surfaces and icon tiles. Error colors remain distinct. This is an evidence-informed preset, not a claim of pixel-exact system replication.
-- The demo shares one serif-title setting across Mochi, iOS and Nothing. Apps can opt into the alternative families with `textStyles = nothingTextStyles()`. That helper preserves the input type weights, sizes and spacing, uses system serif for display and title roles, and uses Inter with platform fallback for body text.
-- Explicitly use `nothingDotTextStyle(base)` for standalone numbers or short Latin display labels. It does not replace list values, button labels or paragraphs. Synthetic bold is disabled for dot glyphs to prevent adjacent dots joining.
-- List metrics follow iOS 26 like the other themes (52dp minimum, 28dp tiles). Real font metrics still govern measurement; wrapping and larger fonts may increase height. Never shrink or clip text to force a fixed height.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `isDark` | `Boolean` | `isSystemInDarkTheme()` | Whether to use the dark appearance |
+| `textStyles` | `MochiTextStyles` | `defaultTextStyles()` | Typography tokens (defaults to Mochi's styles; pass `nothingTextStyles()` to enable serif titles and Inter body text) |
+| `shapes` | `MochiShapes` | `defaultShapes()` | G2 continuous-curvature shape scale |
+| `motionScheme` | `MochiMotionScheme` | `defaultMotionScheme()` | Spatial and effects spring tokens |
+| `materials` | `MochiMaterials` | `MochiMaterials()` | Material configuration (solid bars with top-bar scroll-edge blur enabled by default) |
+| `content` | `@Composable () -> Unit` | Required | Composable hierarchy scoped to the theme |
 
-`nothingControlPalette(isDark)` supplies switch/slider thumb, inactive-track and list-chevron colors through `LocalMochiControlPalette`, using white knobs on red active tracks and neutral inactive tracks. Only primary actions, active switch tracks, slider progress and small selection markers use red. All tonal containers and icon tiles stay neutral, including ordinary stepper buttons. Tab bars keep a neutral selected background; the selected icon and label turn red automatically (`tabSelected` in the control palette, read by the tab bar's default colors, so callers pass nothing). Slider knobs stay light against dark cards. Nothing list chevrons use an opaque secondary foreground; disabled rows still apply their normal disabled alpha. Mochi retains its white knobs and original chevron tint; explicitly supplied component colors still take precedence.
+## Colors and control palette
 
-## Liquid glass and blur
+| API | Return Type | Description |
+|---|---|---|
+| `NothingColors.Accent` | `Color` | Nothing red (`0xFFD71921`), shared by primary actions and active selection accents |
+| `nothingColorScheme(isDark)` | `MochiColorScheme` | Full semantic color scheme derived from Nothing OS 4.1 values, independent of wallpaper seed colors |
+| `nothingControlPalette(isDark)` | `MochiControlPalette` | Control overrides for switch/slider knobs, inactive tracks, list chevrons, and selected tabs |
 
-Materials are independent of colors, so the Nothing appearance can also turn on the liquid glass tab bar and the scroll-edge blur (an even blur under the top bar, on by default), each with its own switch:
+- **Surfaces and accent boundaries**: `nothingColorScheme(isDark)` pairs light gray pages (`#F2F2F2`) with white cards in light mode, and black pages with charcoal cards (`#1C1C1C`) in dark mode. `NothingColors.Accent` is reserved for primary action buttons (`primary`), active switch tracks, filled slider progress, and compact selection indicators; `primaryContainer`, `secondaryContainer`, `tertiaryContainer`, and icon tiles remain neutral grays, while `error` retains its distinct semantic red.
+- **Control overrides (`nothingControlPalette`)**: Supplies white switch and slider knobs (`Color.White`), dark-mode inactive tracks (`#666666`), opaque secondary list chevrons (`#666666` light / `#A8A8A8` dark; disabled rows still apply `MochiDefaults.DisabledAlpha`), and `tabSelected = NothingColors.Accent` via `LocalMochiControlPalette`. Solid tab bars keep a neutral selection capsule while selected tab icons and labels turn red automatically without caller overrides; explicit component `colors` arguments still take precedence.
+
+## Opt-in typography helpers
+
+`MochiNothingTheme` uses Mochi's default font families unless you opt into the module's typography helpers:
+
+- `nothingTextStyles(base = defaultTextStyles(), serifDisplay = true)`: Preserves all font sizes, weights, line heights, and letter spacing from `base` while swapping font families. With `serifDisplay = true`, `display*`, `headline*`, `largeTitle`, and `navTitle` use `FontFamily.Serif` (falling back to platform Song/Ming faces for CJK); passing `serifDisplay = false` keeps both titles and body roles in variable `Inter` (`100..900`) with platform CJK fallback.
+- `nothingDotTextStyle(base)`: Applies the dot-matrix display font (`Ndot57`) with `FontSynthesis.None` so synthetic bold never merges adjacent dots. Reserve it for standalone numeric readouts or short Latin display labels; do not apply it to list values, button labels, or body paragraphs.
+
+List dimensions match the other appearances (iOS 26.0 (24A435) UIKit `52dp` minimum row height and `28dp` leading tiles), measuring against active font metrics and expanding naturally when text wraps or font scale increases.
+
+## Liquid glass and scroll edge
+
+Because materials are independent of color schemes, `MochiNothingTheme` supports liquid glass bars and scroll-edge blur via `materials`:
 
 ```kotlin
+// With mochi-compose alone
 MochiNothingTheme(
-    isDark = dark,
+    isDark = isDark,
+    materials = mochiGlassMaterials(),
+    content = content,
+)
+
+// With mochi-ios two-switch helper
+MochiNothingTheme(
+    isDark = isDark,
     materials = iosMaterials(glass = glassOn, blur = blurOn),
     content = content,
 )
 ```
 
-`iosMaterials` lives in mochi-ios (without mochi-ios, use `mochiGlassMaterials()`). The glass is neutral and the selected tab uses Nothing red (`tabSelected` from `nothingControlPalette`). Components read materials from the theme; pages need no theme or switch branches.
+The liquid glass surface remains neutral while the selected tab icon and label render in Nothing red (`tabSelected` from `nothingControlPalette`).
 
-## Runtime switching
+## Runtime appearance switching
 
-Switch appearances at one stable `MochiTheme` call site by updating colors, textStyles and materials, plus `LocalMochiControlPalette`; do not rebuild the navigation subtree through separate theme branches. See the demo's `DemoAppearance.kt`. Differences such as the selected tab color, switch knobs and list chevrons live in the control palette, so pages never need `if (nothing)`. Material components need matching MaterialTheme colors and typography; the demo's `M3Bridge` maps both.
+When switching between multiple appearances (such as Mochi, iOS, and Nothing) at runtime, keep a single root `MochiTheme` call site and update its `colors`, `textStyles`, `materials`, and `LocalMochiControlPalette` provider in place; branching into separate top-level subtrees recreates `MochiNavHost` and resets navigation state. Because tab selection tint, switch thumbs, and list chevrons resolve through `LocalMochiControlPalette`, individual screens never need appearance-specific conditionals. If your app mixes in Material 3 components, synchronize `MaterialTheme`'s `colorScheme` and `typography` alongside `MochiTheme`.

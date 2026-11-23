@@ -1,20 +1,23 @@
 # 通用效果
 
-库里的组件都由三种通用效果拼起来：按压高光、形变（橡皮筋 / 果冻 / 跟手弹簧）、融球连接。它们是公开 API，可以直接用在你自己的组件上。示例 app 的「效果」标签里有每种效果的可交互演示。
+Mochi 组件底层的物理交互、光影与合成能力通过 `ui.feice.mochi.effect.*` 与 `ui.feice.mochi.theme.MochiGraphics` 对外公开，可直接用于自定义容器和控件。
 
 | 效果 | 包 | 主要 API |
 |---|---|---|
-| 卡片高度 | `ui.feice.mochi.effect.content` | `Modifier.mochiAnimateHeight`，卡片默认开启 |
-| 按压高光 | `ui.feice.mochi.effect.glow` | `rememberMochiGlowState`、`Modifier.mochiPressGlow`、`Modifier.mochiGlow` |
-| 形变 | `ui.feice.mochi.effect.elastic` | `rubberBand`、`rememberMochiRubberBandState`、`Modifier.mochiRubberBand`、`Modifier.mochiJelly`、`MochiFollowSpring` |
-| 融球连接 | `ui.feice.mochi.effect.metaball` | `rememberMochiMetaballRenderer`、`DrawScope.drawMochiMetaball`、`proximityFuse` |
-| 内容变换 | `ui.feice.mochi.effect.content` | `MochiMorphIcon`、`MochiBlurText`、`MochiBlurVisibility`、`MochiCounterText`、`MochiBlurCrossfade`，见[内容变换](content-transitions.md) |
-| HDR 高光（实验性） | `ui.feice.mochi.effect.hdr` | `MochiHdr`、`MochiHdrPalette`、`MochiEdgeGlow`，见[HDR 高光](hdr.md) |
-| 越界回弹 | `ui.feice.mochi.effect.overscroll` | `ProvideMochiOverscroll`、`rememberMochiOverscrollEffect`、`MochiScrollDefaults.flingBehavior`，见[越界回弹](overscroll.md) |
+| 卡片高度 | `ui.feice.mochi.effect.content` | `Modifier.mochiAnimateHeight` |
+| 按压高光 | `ui.feice.mochi.effect.glow` | `rememberMochiGlowState`、`Modifier.mochiPressGlow`、`Modifier.mochiGlow`、`MochiGlowDefaults` |
+| 弹性形变 | `ui.feice.mochi.effect.elastic` | `Modifier.mochiPressDeform`、`rubberBand`、`rememberMochiRubberBandState`、`Modifier.mochiRubberBand`、`Modifier.mochiJelly`、`MochiFollowSpring` |
+| 融球连接 | `ui.feice.mochi.effect.metaball` | `rememberMochiMetaballRenderer`、`DrawScope.drawMochiMetaball`、`proximityFuse`、`MochiMetaballShadow` |
+| 渐变遮罩与边缘模糊 | `ui.feice.mochi.effect.mask` | `Modifier.mochiFadeMask`、`Modifier.mochiScrollFadeMask`、`Modifier.mochiProgressiveBlur`、`Modifier.mochiScrollEdgeBlur`、`MochiSmoothGradient` |
+| 柔和投影 | `ui.feice.mochi.effect.shadow` | `DrawScope.drawMochiShadow` |
+| 液态玻璃 | `ui.feice.mochi.effect.glass` | `rememberMochiBackdrop`、`Modifier.mochiBackdropSource`、`MochiGlassSurface`、`MochiGlassCapsule`、`MochiGlassGroup`、`MochiGlassBlobs`、`MochiVibrant` |
+| 内容变换与主题揭开 | `ui.feice.mochi.effect.content` | `MochiMorphIcon`、`MochiBlurCrossfade`、`MochiBlurText`、`MochiBlurVisibility`、`MochiCounterText`、`MochiThemeRevealHost`，详见[内容变换](content-transitions.md) |
+| HDR 高光（实验性） | `ui.feice.mochi.effect.hdr`、`ui.feice.mochi.theme` | `MochiHdr`、`MochiHdrPalette`、`MochiEdgeGlow`、`mochiHdrBrush`，详见 [HDR 高光](hdr.md) |
+| 越界回弹 | `ui.feice.mochi.effect.overscroll` | `ProvideMochiOverscroll`、`rememberMochiOverscrollEffect`、`Modifier.mochiContainedScroll`、`MochiScrollDefaults.flingBehavior`，详见[越界回弹](overscroll.md) |
 
 ## 卡片高度
 
-所有卡片容器默认平滑改变高度。`MochiListCard`、`MochiListSection` 和示例卡片已经默认开启；自定义卡片统一使用 `ui.feice.mochi.effect.content.mochiAnimateHeight`：
+`MochiListCard` 与 `MochiListSection` 默认平滑过渡内容高度变化。自定义卡片容器通过 `ui.feice.mochi.effect.content.mochiAnimateHeight` 接入同一套高度动画：
 
 ```kotlin
 val shape = MochiTheme.shapes.extraLarge
@@ -29,15 +32,21 @@ Column(
 }
 ```
 
-背景放在修饰符之前，使其看到动画中的高度；内边距和目标 `height(targetHeight)` 放在之后。首次测量直接显示，之后用临界阻尼弹簧过渡（刚度 380，结束阈值 0.5px），中途改变目标时从当前高度继续。宽度即时更新，文字不被拉伸。仅在过渡中按可见高度的圆角轮廓裁切内容，静止后释放额外裁切，让按压形变自然伸出。遵循系统动画倍率。
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `shape` | `Shape` | `RectangleShape` | 高度过渡期间的裁切轮廓 |
+| `enabled` | `Boolean` | `true` | 是否启用高度弹簧过渡 |
+| `animationSpec` | `AnimationSpec<Float>` | `spring(1f, stiffnessFor(0.28f), 0.5f)` | 高度过渡曲线，默认与 `MochiMotionTokens.Settle` 同档 |
 
-已有手势或逐帧动画控制高度时设 `enabled = false`，不要再叠加 `animateContentSize` 或另一层高度动画。面板手势、页面形变和提示尺寸过渡继续使用已有动画拥有者。
+将 `background` 放在 `mochiAnimateHeight` 之前，使底板跟随动画中的可见高度绘制；将 `padding` 或目标 `height` 放在其后。首次测量、挂载后前 `500ms` 稳定期、容器宽度改变（重新排版）、玻璃形变转场期间或开启减弱动态效果时直接跳到目标高度；常规内容增减使用临界阻尼弹簧（周期 `0.28s`，结束阈值 `0.5px`），中途打断时从当前高度继续过渡。宽度始终即时更新，不会拉伸内部文字。仅在高度过渡期间按可见高度与 `shape` 裁切内容，静止后释放裁切，使子项的按压形变与高光可以自然伸出边界。遵循系统动画时长缩放。
+
+当外部手势或逐帧动画已经独占容器高度（例如面板拖拽、来源卡片整页变形或提示条尺寸动画）时，传入 `enabled = false`，避免叠加 `animateContentSize` 或第二套高度弹簧产生滞后。
 
 ## 按压高光
 
-按哪亮哪：以手指为中心的一大片柔光（中间几乎一样亮，到半径附近才平滑暗下去），相加叠在表面上。不画贴边的亮边：光只从手指处亮起、扩散。光心不贴手指，而是用一根弹簧带阻尼地追过去。
+按压高光从触点中心向四周辐射柔光，光心通过二维阻尼弹簧追随手指移动。光效使用相加混合（`BlendMode.Plus`，权重 `0.28f`）点亮表面，不描绘形状边缘亮线（避免按下的元素出现生硬外框），也不使用颜色减淡（避免浅色底板过曝发白而降低文字对比度）。当 `MochiHdr` 开启且已知底色时，触点附近还会在线性光空间叠加一层保持原色相的提亮光泽（峰值达可用余量的 `60%`）。
 
-最简单的用法，一个 Modifier 搞定手势和绘制：
+使用 `Modifier.mochiPressGlow` 同时接入触摸手势与绘制：
 
 ```kotlin
 val shape = MochiTheme.shapes.full
@@ -45,88 +54,106 @@ Box(
     Modifier
         .background(MochiTheme.colorScheme.secondaryContainer, shape)
         .mochiPressGlow(rememberMochiGlowState(), shape)
-        .clickable { … },
+        .clickable { /* ... */ },
 )
 ```
 
-`mochiPressGlow` 不消费触摸事件，可以和 `clickable` 等叠用。光半径默认按元素大小算：`MochiGlowDefaults.radius(size, density)` = 短边 × 1.2 + 长边 × 0.15，限制在 40dp 到 160dp。主要看短边，又宽又矮的元素光不会铺满一大片，大面板也不会整块发白。自己驱动时也用它算 `press` 的半径。
+`mochiPressGlow` 不消费指针事件，可与 `clickable` 及 `mochiPressDeform` 组合使用。未指定固定 `radius` 时，光斑半径由 `MochiGlowDefaults.radius(size, density)` 按元素尺寸计算：`短边 × 1.2 + 长边 × 0.15`，并限制在 `40dp`（`MinRadius`）至 `160dp`（`MaxRadius`）之间。以短边为主导可避免宽扁控件铺满整片白光，同时限制大面积面板的最大光斑范围（大面板可使用 `MochiGlowDefaults.SurfaceIntensity = 0.85f` 收敛峰值）。`MochiGlowDefaults.ElementRadiusFactor` 与 `MochiGlowDefaults.SurfaceRadius` 已废弃，请改用 `MochiGlowDefaults.radius(size, density)`。
 
-`mochiPressGlow` 和 `mochiPressDeform` 共用一套触摸节奏：放在滚动容器里（列表、网格的卡片和行）时，按下先等 90ms、手指没动才开始反馈，只是想滚动时不会闪；滚动一接手就收回；快速轻点也补一次完整的按下和回弹。不在滚动容器里时按下立刻反馈。
+亮度沿径向按 `0.85 × exp(−r³ × 1.6)`（`r = 距离 / 半径`）衰减至接近 `0`，边缘无拐折；着色器路径叠加 `±0.5/255` 像素抖动以消除深色表面色阶。
 
-光的亮度沿 `0.85·exp(−r³·1.6)` 平滑衰减（r = 距离 / 半径），一直淡到几乎为 0，没有硬边。shader 里加了 ±0.5/255 的抖动，暗色背景上不会出现一圈圈色阶。
+`mochiPressGlow` 与 `mochiPressDeform` 共用同一套滚动容器触摸节奏：位于可滚动容器（`LazyColumn`、`verticalScroll` 等）内时，按下先等待 `90ms`，确认手指未发生滚动位移后再点亮反馈；一旦外层滚动接管立即收回；未满 `90ms` 即抬起的快速轻点仍会补足至少 `90ms` 的完整亮起与回弹脉冲。位于非滚动区域时按下立即响应。
 
-自己驱动状态（比如手势在别的地方，或者要跨窗口共享触点）时，用 `MochiGlowState` 的方法，再用 `Modifier.mochiGlow` 只负责画：
+需要自行驱动手势或跨窗口共享触点时，使用 `rememberMochiGlowState` 配合 `Modifier.mochiGlow` 仅负责绘制：
 
-| 方法 | 说明 |
+| `MochiGlowState` 方法 | 说明 |
 |---|---|
-| `press(at, radius, intensity = 1f)` | 按下：光从 35% 长到 radius |
-| `moveTo(p)` | 手指移动，光心带阻尼地追过去 |
-| `grow(radius, intensity)` | 按着的时候换到更大的元素上（比如从按钮滑进面板），光平滑长大；没按着时不生效 |
-| `release()` | 松手：光淡出 |
+| `press(at = null, radius, intensity = 1f)` | 按下：光斑从 `35%` 半径展开至 `radius`，亮度升至 `intensity` |
+| `moveTo(p)` | 更新目标触点，光心按阻尼弹簧追随 |
+| `grow(radius, intensity)` | 按住期间滑入更大表面（如从按钮滑入菜单面板）时平滑扩大光斑；松手后调用无效 |
+| `markReleased()` | 立即标记为已松手（不启动淡出动画），便于与其他收起动画同步 |
+| `release()` | 松手并平滑淡出光斑 |
 
-`MochiGlowSpec`：
+`MochiGlowSpec` 参数（通过 `MochiGlowDefaults.spec()` 创建）：
 
-| 参数 | 说明 | 默认值 |
-|---|---|---|
-| color | 光的颜色，alpha 就是最大亮度 | 白色，浅色主题 0.45、深色 0.14 |
-| followResponse | 光心跟手弹簧的响应时间（秒） | 0.32 |
-| followDamping | 光心跟手弹簧的阻尼比 | 0.78 |
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `color` | `Color` | 白色（浅色 `alpha = 0.3f`，深色 `alpha = 0.22f`） | 高光颜色，其 `alpha` 决定最大强度 |
+| `followResponse` | `Float` | `0.32f` | 光心跟手弹簧响应时间（秒） |
+| `followDamping` | `Float` | `0.78f` | 光心跟手弹簧阻尼比 |
 
-同一份 `MochiGlowState` 也可以交给融球渲染器（`drawMochiMetaball(glow = …)`），这时光画在 shader 里，用的是同一条曲线，颈和本体之间看不出接缝。
+同一份 `MochiGlowState` 可直接传入融球渲染器 `drawMochiMetaball(glow = state)`，由着色器按同一衰减曲线在融合轮廓内绘制高光，颈部与主体之间无接缝。
 
 ### 按压形变
 
-`Modifier.mochiPressDeform(scale = 0.96f, follow = 3.dp)`：按下时轻微缩小，并朝手指方向偏一点、朝那一侧略微拉长（跟手形变），松手带一点回弹。它不消费触摸事件，可以和 `clickable`、`mochiPressGlow` 叠用；只改图层，不重组、不重新布局。
+`Modifier.mochiPressDeform(scale = MochiPressDefaults.Scale, follow = MochiPressDefaults.Follow)` 在按下时将元素缩至 `0.96f`，朝手指方向最多偏移 `3dp` 并沿偏移侧轻微拉长，松手后带回弹恢复。该修饰符不消费触摸事件，仅更新绘制图层，不触发重组或重新测量。
 
-## 形变
+## 弹性形变
 
 ### 橡皮筋
 
-`rubberBand(overshoot, dimension, max)` 是 iOS UIScrollView 的回弹公式：刚拉出去时几乎 1:1 跟手，越远越拉不动，`max` 是软上限。
+`rubberBand(overshoot, dimension, max)` 实现 iOS `UIScrollView` 橡皮筋阻尼公式：初始阶段接近 `1:1` 跟手，越拉阻力越大，并以 `max` 作为渐近软上限。`rubberBandPull(pointer, bounds, max)` 计算指针越出矩形边界时的二维拉动量。
 
-拖出边界时让元素被拉过去：
+将元素绑定到越界拖拽状态：
 
 ```kotlin
-var pointer by remember { mutableStateOf<Offset?>(null) }   // 手指位置，抬起时设为 null
-var bounds by remember { mutableStateOf(Rect.Zero) }        // 元素的边界，和 pointer 同一个坐标系
-val rubber = rememberMochiRubberBandState(pointer = { pointer }, bounds = { bounds }, maxPull = 72.dp)
+var pointer by remember { mutableStateOf<Offset?>(null) }
+var bounds by remember { mutableStateOf(Rect.Zero) }
+val rubber = rememberMochiRubberBandState(
+    pointer = { pointer },
+    bounds = { bounds },
+    maxPull = 72.dp,
+)
 
 Box(Modifier.mochiRubberBand(rubber))
 ```
 
-拉的时候快而稳（响应 0.24s、阻尼 0.86），松手或回到边界内时带一点回弹（0.36s、0.7）。`adjust` 参数可以再加工目标，比如选择列表往按钮方向只拉 40%。只需要几何结果时，用 `Rect.rubberStretched(pull)`：整体被拉过去 60%、朝拉的那侧再拉长 40%，另一轴轻微收窄。
+拖拽越界时采用快响应高阻尼弹簧（响应 `0.24s`、阻尼比 `0.86`），松手或回到边界内时切换为带轻微过冲的回弹弹簧（响应 `0.36s`、阻尼比 `0.7`）。可通过 `adjust` 回调按方向缩放目标拉动量。仅需几何计算时直接调用 `Rect.rubberStretched(pull)`：矩形整体平移 `60%`、朝拉动侧额外拉伸 `40%`，垂直轴向轻微收窄 `8%` 以保持体积感。
 
-### 果冻
+### 果冻形变
 
-按速度沿运动方向拉长、横向收窄，回弹时速度反向就自然变成压扁：
+`Modifier.mochiJelly` 根据瞬时运动速度沿运动轴拉伸、垂直轴按体积近似守恒收窄；回弹速度反向时自然转为压扁：
 
 ```kotlin
 val pos = remember { Animatable(0f) }
-Box(Modifier.mochiJelly(velocity = { pos.velocity * travelPx / sizePx }, gel = 0.6f, vertical = false))
+Box(
+    Modifier.mochiJelly(
+        velocity = { pos.velocity * travelPx / sizePx },
+        gel = 0.6f,
+        vertical = false,
+    ),
+)
 ```
 
-`velocity` 的单位是「每秒移动几个自身尺寸」。底层是 `jellyStretch(velocity)` 和 `jellyCrossScale(stretch)` 两个函数。
+`velocity` 单位为「每秒移动自身尺寸的倍数」，底层计算函数为 `jellyStretch(velocity)`（限幅 `-0.10f..0.16f`）与 `jellyCrossScale(stretch)`。
 
 ### 跟手弹簧
 
-`MochiFollowSpring(response, dampingRatio)`：二维的、每帧积分的弹簧，目标每帧都在变也连续跟手，不会像「目标一变就重启动画」那样卡住。
+`MochiFollowSpring(response, dampingRatio)` 是按真实帧间隔逐步积分（内部采用 `240Hz` 子步长保证大帧间隔稳定性）的二维弹簧。即使目标位置每帧变化，位置与速度也保持连续：
 
 ```kotlin
-val spring = remember { MochiFollowSpring(0.32f, 0.78f) }
+val spring = remember { MochiFollowSpring(response = 0.32f, dampingRatio = 0.78f) }
 LaunchedEffect(Unit) {
-    while (true) position = spring.stepFrame(target)
+    while (true) {
+        position = spring.stepFrame(target)
+    }
 }
 ```
 
 ## 融球连接
 
-两块连续曲率圆角矩形 a、b，靠得够近时像两滴水一样用「颈」连起来；自带两层柔和投影，可以叠加按压高光。需要 API 33+（AGSL），以下自动降级成两块纯色形状。
+`ui.feice.mochi.effect.metaball` 将两个连续曲率圆角矩形 `a` 与 `b` 在靠近时以液态颈部相连，内置双层柔和投影与可选按压高光。Android 13+（API 33+）且 `MochiGraphics.shaders` 开启时由 AGSL 着色器绘制；更低系统版本或「中」图形档位下回退为两块独立纯色形状。
 
-合并用平滑并集（smooth-min），并且不超出「外包形状」：包住两块的圆角矩形，圆角和较小那块一样。平滑并集在两块重叠或挨得很近时会把轮廓往外胀，限制以后颈只往两块之间的空隙里长，不会鼓包；两个胶囊并排时外包形状就是包住它们的大胶囊，合在一起的样子是一整个胶囊，不会切出直边和方角。需要动感的地方（比如顶栏变形）由使用方自己让形状鼓起、回弹，不靠合并算法。
+融合轮廓采用限制在外包圆角矩形（圆角取较小一侧）内的平滑并集（smooth-min），使液态颈仅向两形状之间的空隙生长而不会向外鼓包；两个并排胶囊合并后恰好形成完整大胶囊，不产生平直切边。
 
 ```kotlin
 val renderer = rememberMochiMetaballRenderer()
-val colors = MochiMetaballColors(a = cs.secondaryContainer, b = cs.surfaceContainerHigh, shadow = cs.shadow)
+val cs = MochiTheme.colorScheme
+val colors = MochiMetaballColors(
+    a = cs.secondaryContainer,
+    b = cs.surfaceContainerHigh,
+    shadow = cs.shadow,
+)
 
 Spacer(
     Modifier.fillMaxSize().drawBehind {
@@ -135,137 +162,177 @@ Spacer(
             b = MochiBlob(panelRect, 20.dp.toPx()),
             fuse = 28.dp.toPx() * proximityFuse(buttonRect, panelRect, restGap = 48.dp.toPx()),
         )
-        drawMochiMetaball(renderer, frame, colors, MochiMetaballShadow.elevated(this, 1f, cs.isDark), glow = glowState)
+        drawMochiMetaball(
+            renderer = renderer,
+            frame = frame,
+            colors = colors,
+            shadow = MochiTheme.shadows.floating.resolve(this, cs.isDark),
+            glow = glowState,
+        )
     },
 )
 ```
 
-`MochiMetaballFrame`：
+`MochiMetaballFrame` 参数：
 
-| 参数 | 说明 |
-|---|---|
-| a / b | 两块形状（`MochiBlob(rect, cornerRadius)`，px）。b 画在上面 |
-| fuse | 融合半径（px），越大颈越粗越黏，0 = 不连 |
-| blend | 0..1，颜色过渡开关：0 全是 a 色，1 按离谁近从 a 色过渡到 b 色 |
-| merge | 0..1，a 整块被 b 色吞掉（a、b 重合的包裹式展开用） |
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `a` | `MochiBlob` | 必填 | 主形状（`MochiBlob(rect, cornerRadius)`，像素坐标） |
+| `b` | `MochiBlob` | 必填 | 次形状（绘制在顶层） |
+| `fuse` | `Float` | 必填 | 融合半径（px），越大颈部越宽，`0f` 表示断开 |
+| `blend` | `Float` | `1f` | 颜色混合比例：`0f` 全取 `a` 色，`1f` 按距离平滑过渡至 `b` 色 |
+| `merge` | `Float` | `0f` | `0f..1f`，将 `a` 整体过渡为 `b` 色（用于重叠包裹式展开） |
 
-`proximityFuse(a, b, restGap)` 给出「靠近就连上」的系数：间距 ≥ restGap 时是 0，贴上时是 1。乘上最大融合半径就是 `fuse`。
+- **距离系数**：`proximityFuse(a, b, restGap)` 在间距大于等于 `restGap` 时返回 `0f`，接触时返回 `1f`，乘以最大融合半径即可得到 `fuse`。
+- **阴影解析**：主题内优先使用 `MochiTheme.shadows.<level>.resolve(density, dark, visibility)`（见[阴影档位](theme.md#阴影档位mochishadows)）；连续高度插值可使用 `MochiMetaballShadow.elevated(density, elevation, dark, visibility)`，无阴影传 `MochiMetaballShadow.None`。
+- **不透明与半透明绘制**：不透明填充时，`b` 内部安全区运行免 SDF 轻量着色器，仅边缘带与投影环运行完整 SDF 着色器；半透明填充（如 iOS 半透明语义色）在独立离屏层内合并精确 G2 轮廓后单次合成上屏，重叠区不会累加不透明度，外部投影也不会透进表面内部，调用方无需在底层重复绘制形状本体。G2 路径按尺寸自动缓存。
 
-`MochiMetaballShadow.elevated(density, elevation, dark, visibility)` 按浮起程度给出两层阴影；不要阴影用 `MochiMetaballShadow.None`。在主题里优先用阴影档位 `MochiTheme.shadows.floating.resolve(density, dark)`（见 [阴影档位](theme.md#阴影档位mochishadows)），应用换了档位表，你的组件也跟着换。
+## 渐变遮罩与边缘模糊
 
-半透明填充在融合表面保持原来的透明度，包括两块重叠、拖尾藏在选中块内部的情况。渲染器只把一份本体合成到页面上，自身阴影留在表面外；调用方不要在下面再画一遍本体。所有主题都遵守这条规则，包括 iOS 的半透明语义填充。
+`ui.feice.mochi.effect.mask` 提供容器内容渐隐遮罩、平滑渐变画刷与边缘模糊修饰符。
 
-不透明填充仍由 b 的内部便宜 shader 和边缘、阴影一圈的完整 shader 绘制。半透明填充在独立图层中使用合并的精确 G2 本体轮廓，避免透明度累加。Path 按尺寸缓存。
+### 容器渐变遮罩
 
-## 渐变遮罩
-
-`effect/mask` 是通用的容器内渐变遮罩：把一个区域自己画出来的内容在指定的边上渐隐成透明。它擦掉的是内容本身，不是盖一层底色，所以放在卡片、彩色、渐变、图片上都一样干净，形状、圆角和阴影都不受影响。
+`mochiFadeMask` 与 `mochiScrollFadeMask` 使用 `BlendMode.DstOut` 直接擦除容器自身绘制的内容边缘，不额外覆盖纯色遮挡层，因此置于卡片、彩色背景、渐变或玻璃表面上都不会破坏底色、圆角与外部阴影。
 
 ```kotlin
-// 可滚动区域：还能往哪边滚，那一边渐隐；滚到头那一边是实的
-Column(Modifier.mochiScrollFadeMask(scrollState).verticalScroll(scrollState)) { … }
-LazyColumn(state = list, modifier = Modifier.mochiScrollFadeMask(list)) { … }
-LazyRow(state = row, modifier = Modifier.mochiScrollFadeMask(row, vertical = false)) { … }
+// 可滚动容器（修饰符置于滚动修饰符外侧）：未到顶/底的一侧渐隐，滚到尽头时完全清晰
+Column(Modifier.mochiScrollFadeMask(scrollState).verticalScroll(scrollState)) { /* ... */ }
+LazyColumn(state = listState, modifier = Modifier.mochiScrollFadeMask(listState)) { /* ... */ }
+LazyRow(state = rowState, modifier = Modifier.mochiScrollFadeMask(rowState, vertical = false)) { /* ... */ }
+LazyVerticalGrid(columns = GridCells.Fixed(2), state = gridState, modifier = Modifier.mochiScrollFadeMask(gridState)) { /* ... */ }
 
-// 任意容器：固定遮某几条边
-Box(Modifier.mochiFadeMask(MochiFadeEdges(bottom = 48.dp))) { … }
+// 固定边缘遮罩
+Box(Modifier.mochiFadeMask(MochiFadeEdges(bottom = 48.dp))) { /* ... */ }
 
-// 每条边的深浅每帧自己算（在绘制阶段读，不触发重组）
-Modifier.mochiFadeMask(MochiFadeEdges.vertical()) { edge -> … }
+// 绘制阶段按帧动态计算各边强度（0f..1f），不触发重组
+Box(Modifier.mochiFadeMask(MochiFadeEdges.vertical()) { edge -> /* ... */ }) { /* ... */ }
 ```
 
-- 渐隐曲线是 smoothstep 的 S 形，拆成 16 段色标（`MochiSmoothGradient`），两端接纯色和透明时没有折线。库里所有「纯色 → 透明」的渐隐（滚动边缘、底部工具栏、渐变遮罩）都用它，自己画渐隐也用它，不要再写两三个色标的线性渐变。
-- 滚动版：只要那一边还有被裁掉的内容就遮满，滚到离头只剩渐隐长度的 1/4 时才平滑变浅。不能按整段渐隐长度成比例：内容只多出半行时会只遮一半，裁切线清楚地露在外面。
-- 遮罩要离屏合成，离屏缓冲按这一层的矩形裁切，所以只在真的有边要遮时才开，不遮时内容可以照常画出矩形外。要跟着形变平移、放大的内容，把变换放在遮罩外层，不要放在里面。
-- `start` / `end` 按阅读方向，从右往左排版时自动对调。
-- 默认渐隐长度 24dp（`MochiFadeMaskDefaults.Extent`）。
-- 已经接入：能滚动的菜单（`MochiDropdown` 等）上下边、演示页介绍文字的滚动区。旧的 `navigation.mochiScrollFadeMask` 已废弃，转到这里。
-- `mochiFadeMask` / `mochiScrollFadeMask` 只渐隐透明度，任何外观都不自动模糊。要越靠边越糊的效果，另加 `Modifier.mochiProgressiveBlur(edges, blur = MochiProgressiveBlurDefaults.Blur /* 4dp */, amount = { 1f })`（Android 13+，更早的版本原样画），边的写法和 `mochiFadeMask` 一样，一般和同样边长的渐变遮罩叠着用。实现上是近似：系统高斯模糊和清晰内容按遮罩交叉淡化，不逐像素变半径。库里的栏和遮罩都不用它，演示只在「渐变遮罩」页。
-- 这和顶栏 / 底栏后面的 `mochiScrollEdgeFade` 不同：那个是在栏后面铺一层底色（顶栏是半透明页面底色加下沿细线，底栏是底色渐变），用于盖住滚到栏下面的内容。顶栏下面那段内容的模糊由滚动容器加 `Modifier.mochiScrollEdgeBlur(top, alpha)` 自己做：顶栏下沿以上整段按同一个 sigma（`scrollEdge.blur` × `alpha`）均匀模糊，到下沿硬截断；模糊的是内容自己，不需要背景来源，栏也不会画到自己身上。主题的 `scrollEdge` 为 null 或 Android 12 及以下时它什么都不做。标题脚手架已经接好，自己的页面在滚动容器上加，`top` 是顶栏下沿离容器顶边的距离，`alpha` 和顶栏的 backgroundProgress 用同一个。
-- 性能：模糊只在真正发糊的那一块上跑（滚动边缘是顶栏下面那一条，渐进模糊是几条边的外接矩形），其余内容原样画；每个像素 13 个取样、覆盖 ±3σ。全屏滚动容器上模糊本身的耗时比整层模糊少约 90%，结果逐像素相差不到 1/255。
+- **平滑曲线**：遮罩采用 `MochiSmoothGradient` 将 `smoothstep` S 曲线拆为 `16` 段色标（API 29+ 在 `LinearExtendedSrgb` 色彩空间插值），起止两端斜率都为 `0`，消除双色标线性渐变的生硬折线。自定义纯色到透明渐隐同样可直接调用 `MochiSmoothGradient.vertical` 或 `MochiSmoothGradient.horizontal`。
+- **滚动收尾阈值**：`mochiScrollFadeMask` 在某侧仍有裁切内容时保持满强度遮罩，仅在距离滚动尽头最后 `1/4` 渐隐长度内平滑收敛至 `0`，避免内容仅溢出半行时因遮罩过浅而暴露硬裁切边。默认渐隐长度为 `24dp`（`MochiFadeMaskDefaults.Extent`）。`ui.feice.mochi.navigation.mochiScrollFadeMask` 已废弃并转发至此实现。
+- **按需离屏与变换顺序**：仅当存在有效遮罩边（长度与强度都大于 `0`）时才启用 `CompositingStrategy.Offscreen`；无遮罩时保持 `Auto`，不裁切越界绘制内容。若元素带有形变平移或缩放，应将几何变换放在 `mochiFadeMask` 外层。`MochiFadeEdges` 的 `start` 与 `end` 在 RTL 布局下自动镜像。
 
-演示在「效果 → 渐变遮罩」。
+### 渐进模糊与滚动边缘模糊
+
+`mochiFadeMask` 仅改变不透明度。需要边缘模糊时可按场景选用以下修饰符（需要 Android 13+，Android 12 及以下原样绘制）：
+
+- **`Modifier.mochiProgressiveBlur(edges, blur = 4.dp, amount = { 1f })`**：逐像素变半径高斯模糊（对应 iOS `variableBlur`），可与同边长的 `mochiFadeMask` 叠用。每个像素的模糊 `sigma = blur × 遮罩值`（`< 0.3px` 时跳过），执行横竖两遍可分离高斯（每侧 `16` 点，共 `33` 点覆盖 `±3σ`）。
+- **`Modifier.mochiScrollEdgeBlur(top, alpha = { 1f })`**：顶栏下方的滚动内容模糊，挂在滚动容器上。模糊参数读取 `MochiTheme.materials.scrollEdge`（为 `null` 时不生效）：`Frosted` 样式对 `top` 以上的条带调用系统硬件降采样模糊并在 `top` 处硬截断；`GradientBlur` 样式在栏下沿附近执行逐像素变半径模糊。`MochiLargeTitleScaffold`、`MochiCompactTitleScaffold` 与 `MochiSheetScaffold` 已内置接入；自定义页面将 `top` 设为顶栏下沿距容器顶边的距离，`alpha` 与顶栏的 `backgroundProgress` 共用即可。它与导航包中为栏自身铺设半透明底色和细线的 `mochiScrollEdgeFade` 配合使用，直接模糊容器内容，无需额外录制背景源。
+
+两类边缘模糊只在需要模糊的条带区域内执行，其余区域直接回放原图层；且在视口边界处采用镜像反射取样（`TileMode.MIRROR` / 反射核坐标），防止滚动经过视口边缘的单行高对比像素被拉宽成闪烁亮带。
 
 ## 柔和投影
 
-`DrawScope.drawMochiShadow(path, shadow, color)`（`effect/shadow`）给任意形状投一层和融球同一套参数的阴影（`MochiMetaballShadow` 有环境、接触两层，环境层可以用 `ambientInset` 先往里收再模糊；`elevated` 预设是往里收的大半径淡环境层加很软很淡的接触层，边上只有很淡的一点，不出硬线），边缘是高斯模糊，没有断层和色带。阴影垫在形状下面，先画阴影，再画形状本体：本体的抗锯齿边缘直接盖在阴影上，不会留一圈硬灰线。半透明的本体会透出下面的阴影。
+`ui.feice.mochi.effect.shadow` 提供与融球共享 `MochiMetaballShadow` 参数的双层高斯投影（内收大半径环境影 + 贴近底部的柔和接触影），用于替代 Material 的光源高度阴影 `shadowElevation`。绘制时先画阴影再画形状本体，使本体的抗锯齿边缘自然落在柔和阴影上，避免挖洞裁切留下灰暗硬线。
 
 ```kotlin
-val shadowLevel = MochiTheme.shadows.raised // 在 @Composable 里读
-drawBehind {
-    val p = pathCache.get(size.toRect(), size.minDimension / 2f, 1f)
-    // 胶囊、圆角矩形用矩形版本：给出矩形和圆角
-    drawMochiShadow(size.toRect(), size.minDimension / 2f, shadowLevel.resolve(this, dark), MochiTheme.colorScheme.shadow)
-    drawPath(p, container)
-}
+val shadowLevel = MochiTheme.shadows.raised
+val shadowColor = MochiTheme.colorScheme.shadow
+val isDark = MochiTheme.colorScheme.isDark
+
+Box(
+    Modifier
+        .drawBehind {
+            drawMochiShadow(
+                rect = size.toRect(),
+                cornerRadius = size.minDimension / 2f,
+                shadow = shadowLevel.resolve(this, isDark),
+                color = shadowColor,
+            )
+        }
+        .background(containerColor, MochiCapsule),
+)
 ```
 
-浮起的表面用它，不用 Material 的 `shadowElevation`。标签栏、搜索圆钮、附件条、分档滑条、开关 / 滑块的拇指、警告框和提示条已经接入。
+| 重载 | 适用场景与渲染机制 |
+|---|---|
+| `DrawScope.drawMochiShadow(rect, cornerRadius, shadow, color)` | **胶囊与圆角矩形（含连续曲率形状及动画表面）**：Android 13+ 通过单次解析近似 AGSL 着色器（横向 `erf` 积分 + 竖向 `4` 点高斯积分 + `±0.5/255` 抖动）直接绘制，零纹理分配，尺寸每帧变化也不会增长显存 |
+| `DrawScope.drawMochiShadow(path, shadow, color)` | **静止任意路径**：Android 9+ 通过 `Paint.setShadowLayer` 绘制。系统会为每条不同 `Path` 缓存模糊遮罩纹理且不主动回收，不要用于每帧变形的动态路径。Android 8.1 及以下回退为外接胶囊的 `4` 圈递减透明环 |
 
-胶囊和圆角矩形用矩形版本 `drawMochiShadow(rect, cornerRadius, shadow, color)`。Android 13 起它用着色器直接算圆角矩形的高斯模糊阴影，一次绘制、不生成任何纹理；模糊过的阴影上看不出连续曲率和圆弧圆角的差别。路径版本走系统的 `setShadowLayer`，系统会按路径内容给每个形状生成一张模糊纹理，而且一直留着，形状每帧在变（动画、拖动、收起）时显存会一直涨。在 Android 16 真机上，非 iOS 外观的底栏滚动收起时，每帧漏一张，滑几十次就漏到数百 MB。所以路径版本只用在形状不变的地方。
+## 玻璃渲染与性能
 
-API 28 以下画不了任意形状的模糊阴影，退化成按外接矩形的胶囊，叠几圈越来越淡的环。
+`ui.feice.mochi.effect.glass` 提供液态玻璃背景采样、独立玻璃表面与多块融合容器：
 
-## 图形档位
+| API | 说明 |
+|---|---|
+| `rememberMochiBackdrop` / `Modifier.mochiBackdropSource` | 声明并录制玻璃背后的内容源；通过 `LocalMochiBackdrop` 向浮在上方的栏与玻璃组件提供采样图层 |
+| `rememberMochiBarBackdrop` | 仅在当前主题 `controlGlass` 开启时创建背景源，纯色模式下返回 `null` 免去录制 |
+| `MochiGlassSurface` / `MochiGlassCapsule` | 单块圆角矩形或胶囊玻璃表面，无材质或无背景源时自动回退为材质 `fallbackColor` 纯色 |
+| `MochiGlassGroup` / `rememberMochiGlassGroupState` | 多块玻璃共享一套渲染节点做光滑并集融合，支持 `bloom` 生长收回、`appear`、`pop` 与弹簧定位（子项挂 `Modifier.mochiGlassItem`） |
+| `MochiGlassBlobs` | 形变转场用的多圆角矩形光滑并集表面（液态玻璃下为单块融合玻璃，纯色模式下回退为融球连接） |
+| `MochiVibrant` | 类 iOS `UIVibrancyEffect` 内容活力层，以子内容为遮罩填充经模糊与 `4×5` 色彩矩阵提拉对比度后的背景 |
+| `LocalMochiGlassShadow` / `MochiNoGlassShadow` | 绘制阶段按帧控制玻璃外阴影强度（`0f..1f`），顶栏在内容未滚入下方时借此隐藏阴影 |
+| `LocalMochiGlassDark` / `MochiGlassContent` | 提供自适应明暗翻转后的当前深浅状态，以及玻璃上的 `label`、`secondary`、`separator`、`accent` 语义前景色 |
+| `mochiGlassOverflow()` | 返回当前主题玻璃外阴影与轮廓环超出自身边界的宽度，供外层 `mochiBlur` 或 `MochiBlurTransition.overflow` 预留离屏边距 |
 
-玻璃的背景来源用 `mochiBackdropSource`，玻璃和来源作为兄弟节点摆放。来源与玻璃各自保留绘制边界：兄弟控件的动画不应连带重录静止背景，背景真正变化时仍实时更新。裁切应限制在需要它的内容区域，避免把整个玻璃效果图套进重复的复杂路径裁切；面板和转场所需的轮廓仍须保留。
+### 采样与渲染管线
 
-库内部嵌套录制图层时先保存独立的 `Density`，不把可变的外层 `DrawScope` 当成密度传入内层；后者可能循环委托并触发栈溢出。滚动边缘不读取 GPU 像素（底色固定，不再取背后亮度）。性能验收应分别记录原页面耗时、画面一致性与稳定性，不能把移除效果、降低刷新率或单项微基准的收益写成整页提升。
+- **兄弟节点与单次录制**：玻璃表面必须与 `mochiBackdropSource` 作为兄弟节点置于其后，避免玻璃采样到自身。两者拥有独立的绘制边界，兄弟控件动画不会触发静止背景重录；内部通过单次图层回放保证即使多层脚手架嵌套，可见内容每帧也只绘制一遍。`MochiNavHost` 仅在浮层读取背景或共享顶栏转场期间捕获窗口背景，常规页面滚动直接复用显示层。
+- **分级金字塔管线（Android 13+）**：每处玻璃表面或融合组由四级节点构成：第 `0` 级采样（按 `0.5 × 密度` texel/pt 录制玻璃及配方采样半径内的背景，窗口边界处重复边缘像素；全模糊大面板自动降低初始采样级数以减少约 `3/4` 像素填充）、`13` 点下采样金字塔（按最粗模糊半径决定级数，通透样式约 `1` 级、标准样式 `4–6` 级、大面板 `8–9` 级）、`2 px/pt` 面色层（计算折射、多路模糊、面色矩阵与渗色）以及全分辨率收尾层（外投影、内环阴影、镜面高光、染色与按压反馈）。Android 12 回退为系统模糊加色彩矩阵；更低版本绘制材质纯色回退。
+- **节点共享与范围锁定**：`MochiGlassGroup`、按钮组与菜单水滴整组共用一套渲染节点以减少 RenderNode 遍历开销；几何、尺寸与配方未变时直接复用上次渲染结果。从按钮展开为面板的变形菜单在开合起点按整段扫掠并集区域一次性锁定第 `0` 级与金字塔，展开和回弹期间仅重跑面色与收尾层，不触发重新排版或重录（超出锁定区时按 `32px` 步进扩容一次）。
+- **异步亮度自适应**：开启 `MochiGlass.adaptive` 时，每 `250ms` 通过 `PixelCopy` 异步采样玻璃外围一圈像素并在后台线程计算平均亮度，不在主线程回读 GPU；检测到滚动或页面转场时自动暂停采样。
 
-每块（每组）玻璃（Android 13+）的渲染节点：取样（背后内容按每 pt 0.5×屏幕密度个 texel 录进第 0 级，范围是玻璃外扩配方要的取样半径，不设上限，只录到窗口边为止，再往外重复边上的像素，相当于网页纹理的 CLAMP_TO_EDGE）、金字塔（往下每级录上一级缩小一半，挂 13 点下采样；级数按配方里最粗那路模糊取，通透样式一般只要 1 级，标准样式 4～6 级，面板这类大块玻璃到 8、9 级）、面色（读「面色区 + 各级」，每 pt 2 像素算折射、模糊、背景滤镜、面色矩阵和渗色）、收尾（全分辨率，比玻璃大一圈：投影、环形阴影、高光、染色、按压）。金字塔各级都很小，节点数比旧引擎多几个，但每级的像素只有上一级的四分之一。系统每帧准备绘制时要逐个遍历渲染节点，节点越多越慢，所以一组会融合的玻璃（`MochiGlassGroup`、按钮组、菜单水滴）共用一套节点，不是每块一套。形状、尺寸、配方没变时效果对象原样复用，系统直接用上次算好的结果；背后内容变化时实时更新，不用重录。自适应明暗每 250ms 用 PixelCopy 异步复制玻璃外面一圈求平均亮度，不在主线程读 GPU。
+## 图形档位（MochiGraphics）
 
-会变形的玻璃（iOS 玻璃菜单从按钮长成面板）按整段会扫过的范围取样：开合开始时按按钮、展开后的面板、橡皮筋和过冲的并集录一次取样和金字塔，面板在里面变大变小、回弹时这几层一个都不重录，系统留着它们的离屏结果，每帧只重跑面色和收尾；面板越出范围时按 32px 取整放大一次。玻璃节点铺满浮层只排版一次，面板作为形状传进去，开合途中不重新排版。做法参考 FlClash（prism_ui）的 hold。
+`ui.feice.mochi.theme.MochiGraphics.level` 控制全局图形质量档位，库内高开销渲染路径统一按该档位决定开关与强度。修改 `level`（可观察状态）立即生效，持久化由宿主应用自行管理。
 
-`MochiGraphics.level`（`theme`）是全局的图形档位，库里所有「贵」的画法都按它决定画不画、画多重。改它立即生效，App 自己负责保存。
-
-| | 中 `Mid` | 高 `High`（默认） | 超高 `Extra` |
+| 能力 | `Mid`（中） | `High`（高，默认） | `Extra`（超高） |
 |---|---|---|---|
-| 模糊（内容变换、导航栏、出现动画） | 开 | 开 | 开，半径 ×1.5 |
-| AGSL 着色器（融球、边缘流光、导航栏融合） | 关 | 开 | 开 |
-| 柔和阴影 | 开 | 开 | 开 |
-| 换明暗揭开 | 硬边 | 羽化 + 光晕 | 羽化 + 光晕 |
-| 刷新率 | 跟随系统 | 跟随系统 | 选屏幕最高刷新率 |
+| 模糊（`MochiGraphics.blur`，Android 12+） | 开启（`1.0×`） | 开启（`1.0×`） | 开启（半径 `1.5×`，`blurScale = 1.5f`） |
+| AGSL 着色器（`MochiGraphics.shaders`：融球、液态玻璃、边缘流光、导航栏融合，Android 13+） | 关闭（走纯色回退） | 开启 | 开启 |
+| 柔和阴影（`MochiGraphics.softShadows`，Android 9+） | 开启 | 开启 | 开启 |
+| 主题揭开边缘（`MochiGraphics.softReveal`） | 清晰硬边 | 羽化边缘 + 光晕 | 羽化边缘 + 光晕 |
+| 屏幕刷新率 | 跟随系统 | 跟随系统 | 请求当前分辨率下最高刷新率 |
 
-- 系统本身不支持的效果（Android 12 以下没有模糊、13 以下没有 AGSL）不管档位多高都不会出现。
-- 超高档不会打开 HDR，HDR 是单独的开关（`MochiHdr.enabled`）。
-- 刷新率由最外层的 `MochiTheme` 设置到窗口上（`preferredDisplayModeId`，只在当前分辨率的模式里挑），离开时恢复。
-- 自己写的效果用 `MochiGraphics.blur` / `shaders` / `softShadows` / `blurScale` 判断，不要再自己比 `SDK_INT`，同一个档位下整套界面的质感才一致。
-
-演示 App 的「主题 → 图形」用分档滑条（`MochiStepSlider`）切档位，下面列出每项效果在这一档的状态。
+- **系统能力边界**：硬件或系统版本不支持的能力（Android 12 以下无 `RenderEffect` 模糊，Android 13 以下无 AGSL 着色器，Android 9 以下无任意路径柔和阴影）在任何档位下都保持关闭。
+- **HDR 独立控制**：`Extra` 档位不会自动开启 HDR；HDR 高光由 [`MochiHdr.enabled`](hdr.md) 独立控制。
+- **窗口刷新率托管**：最外层 `MochiTheme` 根据档位设置窗口的 `preferredDisplayModeId`（仅在当前物理分辨率匹配的显示模式中选择最高刷新率），离开组合时恢复原窗口设置。
+- **自定义效果接入**：编写自定义特效时应读取 `MochiGraphics.blur`、`shaders`、`softShadows`、`blurScale`、`reveal`、`softReveal`，无需重复判断 `Build.VERSION.SDK_INT`，保证同一档位下整套界面表现一致。
 
 ## 主题揭开
 
-`MochiThemeRevealHost(state) { App() }` + `state.reveal { 改主题 }`（`effect/content`）：像 iOS / Telegram 切深浅色那样，新主题从手指处以一个圆揭开。
-
-- 先拍下当前整帧，再执行改动：旧画面盖在上面，中间挖一个越来越大的洞，约 0.64 秒铺满，起步快、收尾长。
-- 洞一开始是圆，碰到屏幕边就贴边铺开，四个角收成屏幕自己的圆角：最后一刻洞的形状就是屏幕，不会剩弧形的旧画面卡在屏幕圆角上。
-- 洞口羽化随进度收掉，带一圈很淡的光；底下的新画面从 0.97 放大回 1，像从下面浮上来。
-- 盖上截图、执行改动（整页重排的重活）、开始计时分在不同的帧：重活那一帧不会让画面抽一下，动画也不会因为长帧跳过开头。
-- 圆心默认是最近一次按下的位置（Host 只看不消费触摸），也可以传 `origin`。
-- 揭开途中再触发：上一次的揭开先接着走，等新截图（屏幕上一半旧一半新的样子）回来再无缝接上，接力的这次更快（0.5 秒）、新画面只从 0.99 放大；连点几下时中间的改动会合并进最后一次。
-- 揭开期间 `state.isRevealing` 为 true，配色这时一步到位（`animateMochiColorScheme(…, animate = !state.isRevealing)`）。
-- 图形档位「中」是清楚的硬边、没有光晕。
-- 拍照用 PixelCopy 拷屏幕上真正显示的像素（Android 8.0 以上）；系统关闭动画、更低的系统或拷贝失败时直接改，不做转场。
-
-同一个状态还有 `state.crossfade { 改主题 }`：原位的内容模糊转场，旧画面变糊、淡出，新画面同时从模糊里清晰起来，约 0.5 秒，不从手指扩散（两层的模糊半径都逐帧连续，不用分级缓存，免得一级一级跳；换主题的重排在动画开始前就做完）；期间 `isRevealing` 同样为 true，配色一步到位：颜色的过渡由交叉淡化完成，再逐帧插值会让整棵树每帧重组、转场卡顿。系统不支持模糊时只是淡入淡出。
-
-设置页拿到的状态一般可能是 null（预览、测试里没接 Host），而且只在深浅真的变了时才想要揭开。三个辅助函数：
+`MochiThemeRevealHost` 与 `rememberMochiThemeRevealState()`（位于 `ui.feice.mochi.effect.content`）为整套主题或深浅色切换提供屏幕级过渡动画：
 
 ```kotlin
-reveal.revealOrChange { controller.keyColor = it }              // 揭开；状态是 null 就直接改
-reveal.revealIfShadeChanges(nowDark, mode.isDark(systemDark)) {  // 深浅变了才揭开，
-    controller.colorSchemeMode = mode                           // 没变就原地插值过去
+val revealState = rememberMochiThemeRevealState()
+
+MochiThemeRevealHost(state = revealState) {
+    val colorScheme = animateMochiColorScheme(
+        target = controller.currentColorScheme(),
+        animate = !revealState.isRevealing,
+    )
+    MochiTheme(colors = colorScheme) {
+        AppContent()
+    }
 }
-reveal.crossfadeOrChange { settings.style = it }                 // 换整套风格：原位模糊交叉
 ```
 
-`ColorSchemeMode.isDark(systemDark)` 判断一个模式此刻是不是深色。
+### 两种屏幕级过渡
 
-怎么选：换整套风格（Mochi ↔ Nothing）用 `crossfade`；换明暗用 `reveal`，但只有深浅真的变了才揭开（比如系统是浅色时在「浅色」和「自动」之间切，画面不变，就直接改）。
+- **圆孔揭开（`state.reveal(origin = null) { ... }`）**：先通过 `PixelCopy` 截取当前窗口像素（Android 8.0+）盖在顶层，再执行主题变更，随后以 `origin`（默认取最近一次手指按下的位置，`Host` 在 `Initial` 阶段观察按压而不消费事件）为圆心挖出不断扩大的圆孔，历时 `640ms`（快起步长收尾缓动）。圆孔触及屏幕四边后贴边铺开，四角平滑收敛为设备物理屏幕圆角（`MochiScreenCorners`），结束瞬间与屏幕轮廓完全吻合（Android 13+ 由单遍 AGSL 着色器直接计算解析距离场与洞口柔光，Android 8.0–12 回退为 G2 连续圆角路径挖洞）。高档位下洞口带随进度收紧的 `20dp` 羽化边与淡白光晕（`Mid` 档为清晰硬边），底层新画面同步从 `0.97` 缩放浮升至 `1.0`。若揭开途中再次触发，当前动画继续运行直至新截图就绪后平滑衔接，接力动画缩短至 `500ms`、起始缩放收窄为 `0.99`；快速连点会将中间变更合并至最新一次执行。窗口旋转、折叠屏展开或分屏尺寸变化时自动终止残影，防止截图错位。
+- **原位模糊交叉（`state.crossfade { ... }`）**：截取旧画面后在原位用 `500ms` 完成新旧画面交叉过渡：顶层旧截图从清晰连续模糊至 `18dp` 并淡出，底层新画面从 `12dp` 连续模糊清晰化（不采用分档模糊缓存，避免整屏跳档；Android 12 以下退化为纯透明度交叉淡化）。
 
-只用于整套换装（主题、明暗）：字体、控件配色、材质一起换，插值不了。种子色这类连续参数交给配色插值，不揭开。演示 App 的「主题」页切主题、切明暗时使用揭开转场。引导里的配色连续插值，字体原位替换。
+两种过渡都将「覆盖截图」「执行主题重排」与「启动动画时钟」拆分到连续帧执行，避免重排长帧导致画面闪烁或跳过动画开头。过渡期间 `state.isRevealing` 为 `true`，应将其取反后传给 `animateMochiColorScheme(animate = !state.isRevealing)` 使新配色一步到位，避免整棵组合树在转场期间逐帧插值重组。当开启减弱动态效果、系统关闭动画、运行于 Android 8.0 以下或截图失败时，变更会直接同步执行。
 
-## 为什么没有亮边
+### 空安全切换辅助函数
 
-以前按下时形状边缘会描一圈亮边，周围的卡片也会被「环境光」照亮一圈描边，现在都去掉了：iOS 26 是从手指处把表面照亮，不给它描边，描一圈边会让每个按下的元素都像被框住。柔光本体相应地多加了一点光（相加 0.28），按下去照样看得出来。不用颜色减淡：浅色底上会冲成一片白，按钮上的字就看不清了。
+设置页持有的 `MochiThemeRevealState?` 在预览或测试环境下可能为 `null`。库提供三个扩展函数简化调用：
 
+```kotlin
+// 有 Host 时从触点揭开，为 null 时直接修改
+revealState.revealOrChange { controller.colorSchemeMode = mode }
+
+// 仅在实际深浅色翻转时执行揭开；未翻转（如浅色系统下从「浅色」切到「跟随系统」）时直接修改并走颜色插值
+revealState.revealIfShadeChanges(
+    fromDark = nowDark,
+    toDark = mode.isDark(systemDark),
+) {
+    controller.colorSchemeMode = mode
+}
+
+// 切换整套视觉风格（字体、图标、控件配色同步变更）：执行原位模糊交叉
+revealState.crossfadeOrChange { settings.style = nextStyle }
+```
+
+仅在字体、图标、材质与控件色板整体切换（无法逐属性插值）时使用屏幕级转场：明暗翻转用 `revealIfShadeChanges`，跨风格切换用 `crossfadeOrChange`。修改莫奈种子色或对比度等连续参数时直接更新状态，交由 `animateMochiColorScheme` 平滑插值。

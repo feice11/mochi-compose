@@ -1,173 +1,249 @@
 # Content transitions
 
-Content never swaps instantly — this is a library-wide rule (see the end). The package `ui.feice.mochi.effect.content` provides:
+Mochi components follow a library-wide rule that discrete content changes never swap abruptly: icons, labels, badges, and numbers transition via in-place path morphing, blur replacement, or rolling digit wheels, while values updated every frame during direct manipulation (such as a live slider readout) update immediately so they never lag behind the finger. Content transition APIs live in `ui.feice.mochi.effect.content` (with spring and accessibility helpers in `ui.feice.mochi.anim`).
 
-| Case | API | Looks like |
+| Scenario | API | Behavior |
 |---|---|---|
-| One icon becomes another | `MochiMorphIcon(icon)` | In-place morph: every stroke moves point by point into the new one (SF Symbols magic replace) |
-| Text changes | `MochiBlurText(text)` | Blur replace: the old text blurs, shrinks and fades; the new one sharpens out of the blur |
-| Appear / disappear | `MochiBlurVisibility(visible) { … }` | Grows out of a smaller, blurred, transparent state and goes back the same way |
-| A number changes | `MochiCounterText(value)` | Counter: changed digits turn like a wheel (forward when increasing, back when decreasing), blurrier the faster they go, with a small bounce as they land |
-| Streaming text | `MochiFlyInText(text)` | Text that grows piece by piece: new characters fly in from up close like a soft paper strip and flatten as they land; replaced characters back away and fade |
-| Anything else | `MochiBlurCrossfade(state) { … }` | The general blur replace the others are built on |
-| Icon draw | `MochiDrawIcon(icon, drawn)` | SF Symbols 7 Draw On / Off: strokes drawn on / erased one by one |
-| Icon bounce | `Modifier.mochiBounce(trigger)` | SF Symbols bounce: squash, then spring back |
-| Scroll-linked reveal | `Modifier.mochiBlurReveal({ v })` | Blur-fade by a continuous progress (used by collapsing titles) |
+| Icon swap | `MochiMorphIcon` | In-place contour-paired path morphing (SF Symbols Magic Replace style) with a subtle midpoint blur |
+| Icon draw | `MochiDrawIcon` | Draws or erases stroked contours sequentially along their path (SF Symbols Draw On / Off style) while fading fills |
+| Icon bounce | `Modifier.mochiBounce` | Quick squash followed by an underdamped spring rebound whenever `trigger` changes (SF Symbols Bounce style) |
+| Text change | `MochiBlurText` | Blurs, shrinks, and fades old text out while sharpening new text in place |
+| Appear / disappear | `MochiBlurVisibility` | Grows from a smaller, blurred, transparent state and reverses on exit, smoothly pushing neighbors |
+| Arbitrary content | `MochiBlurCrossfade` | General-purpose in-place blur crossfade underlying `MochiBlurText` and `MochiBlurVisibility` |
+| Numeric change | `MochiCounterText` | Changed digits turn on `0–9` arc wheels with speed-linked blur and a slight landing bounce |
+| Streaming text | `MochiFlyInText` | Appended characters fly in from up close like a curling paper strip and flatten on landing; replaced text backs away and fades |
+| Scroll-linked reveal | `Modifier.mochiBlurReveal` | Drives alpha, blur, and vertical offset directly from a continuous `0f..1f` progress with zero timer lag |
 
-Try each one under Effects → Content transitions in the example app.
+## Icon morph, draw & bounce
 
-## In-place icon morph
-
-```kotlin
-MochiMorphIcon(if (dark) moonIcon else sunIcon, tint = …, size = 24.dp)
-```
-
-- The `ImageVector` is split into contours (group translation / scale / rotation applied), each sampled at 96 evenly spaced points.
-- Contours of the old and new icon are paired by centre distance plus length difference; fills pair only with fills, strokes with strokes. Closed contours rotate their start point so the points travel the least (direction is kept, so cut-out holes stay holes).
-- Unpaired strokes grow out of their own centre or shrink into it; stroke width interpolates too.
-- Halfway through it blurs slightly (1.5dp by default) to hide the irregular in-between shape.
-- Changing the icon mid-morph continues from the current shape, without a jump.
-
-| Parameter | Description | Default |
-|---|---|---|
-| tint | The whole icon is drawn in one color | `LocalContentColor` |
-| size | Side length; the icon's own viewport is scaled into it | 24.dp |
-| spec | Morph spring | `MochiMorphIconDefaults.Spring` (`MochiSprings.snappy(300)`) |
-| blur | Maximum blur halfway through | 1.5.dp |
-
-When two icons are too different to morph nicely, use a blur replace instead: `MochiBlurCrossfade(icon) { Icon(it) }`.
-
-## Blur replace
+### In-place morph (`MochiMorphIcon`)
 
 ```kotlin
-MochiBlurText(status)                                   // text
-MochiBlurVisibility(hasBadge) { Badge() }               // appear / disappear
-MochiBlurCrossfade(state, contentAlignment = Alignment.CenterStart) { Content(it) }
+MochiMorphIcon(
+    icon = if (isDark) moonVector else sunVector,
+    tint = MochiTheme.colorScheme.onSurface,
+    size = 24.dp,
+)
 ```
 
-- Old and new content overlap in place. Alpha follows a smoothstep, so by the time it is half faded it is already blurred and you never see two sharp copies on top of each other.
-- The occupied size is a weighted blend of both contents by how visible each is: when text gets longer or shorter, or content appears or disappears, neighbours are pushed smoothly.
-- Switching back mid-way sharpens that content again from where it is.
+`MochiMorphIcon` decomposes an `ImageVector` into contours (applying group translations, scales, and rotations) and samples `96` evenly spaced points along each contour:
 
-`MochiBlurTransition` parameters:
+- **Same-kind contour pairing**: Filled contours pair only with fills and stroked contours pair only with strokes, matched greedily by center distance plus arc-length difference. Closed contours rotate their start index to minimize point travel while preserving winding direction so cut-out holes stay intact.
+- **Unpaired strokes & midpoint blur**: Unpaired contours grow from or collapse into their own centroid while stroke widths interpolate continuously. A sine-shaped blur peaking halfway through (`1.5dp` by default) softens irregular intermediate geometry. Changing `icon` mid-animation retargets smoothly from the current interpolated shape.
+- **Dissimilar icons**: When two icons share too little geometry for a clean path morph, use blur replacement instead: `MochiBlurCrossfade(iconName) { MochiIonicon(it, size = 24.dp) }`.
 
-| Parameter | Description | Default |
-|---|---|---|
-| blur | Blur radius when fully hidden | 8.dp |
-| scale | Scale when fully hidden (new content grows from this size) | 0.9 |
-| exitScale | Scale the old content shrinks to; set it apart from scale for a depth switch | same as scale |
-| slide | Offset along the direction when fully hidden (fraction of content height) | 0 |
-| enter / exit | Appear / disappear animations | `MochiSprings.snappy(300)`: 300 ms, bounce 0.15. Scale and offset show the small bounce; alpha and blur are clamped |
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `icon` | `ImageVector` | Required | Target vector icon |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the icon canvas |
+| `tint` | `Color` | `LocalContentColor.current` | Uniform tint color applied across the icon |
+| `size` | `Dp` | `24.dp` | Icon side length; the vector's own viewport scales to fit |
+| `spec` | `AnimationSpec<Float>` | `MochiMorphIconDefaults.Spring` | Morph spring, defaulting to `MochiSprings.snappy(300)` |
+| `blur` | `Dp` | `MochiMorphIconDefaults.Blur` (`1.5.dp`) | Peak blur radius at the midpoint of the morph (Android 12+) |
 
-Built in: `MochiBlurTransitions.Replace`, `Appear` (scale 0.8, blur 10dp), `Counter` (slide 0.55 × height, blur 5dp, no scale) `Subtle` (blur 3dp, scale 0.97; the old text leaves in 160ms, the new one sharpens in 220ms) and `Depth` (a depth switch with no blur: the old content shrinks to 0.96 and fades in 140ms, the new one starts 60ms later and settles from 1.03, like the keyboard's emoji panel switch).
-
-Use `Depth` where content changes often but the change should still be visible (IME candidates): it only animates scale and alpha, with no blur layer. For a touch of blur, use `MochiBlurTransitions.Depth.copy(blur = 4.dp)` on the most prominent piece only.
-
-Use `Subtle` where many pieces of text change together as the user types (IME candidates, search suggestions, filter results): `Replace` is too loud there, and every piece needs its own blur layer, so a dozen changing at once drops frames.
-
-## Reduce motion
-
-When the system turns animations off (animator scale 0), or the app provides `LocalMochiReduceMotion provides true` at the root, `MochiBlurCrossfade` / `MochiBlurText`, `MochiFlyInText` and the elastic menus and popovers settle at once. Check `mochiReduceMotion()` in your own animations.
-
-## Font changes
+### Sequential stroke draw (`MochiDrawIcon`)
 
 ```kotlin
-CompositionLocalProvider(LocalMochiFontCrossfade provides true) { … }
+MochiDrawIcon(
+    icon = checkVector,
+    drawn = isCompleted,
+    size = 32.dp,
+    initiallyDrawn = false,
+)
 ```
 
-With this on, a `Text` in the subtree blur-replaces in place when its font changes (family, weight, size and other typesetting attributes). Only the text itself blurs; no full-screen snapshot transition is needed. Color changes do not count as a font change and keep following the color scheme interpolation. It is off by default, because blur-replacing every text on a page at once adds many blur layers; for a full-screen restyle such as the theme page, use `MochiThemeRevealState.crossfade`. The example's onboarding (theme choice, serif titles) turns it on.
+When `drawn` becomes `true`, stroked contours trace from start to end along their path direction, staggered by `stagger` (`0.12f` of total progress by default); when `false`, strokes erase in reverse while filled contours fade in and out. Pass `initiallyDrawn = false` to animate the draw-on immediately on first composition. Defaults to the critically damped `MochiDrawIconDefaults.Spring` (`0.7s` response, `1f` damping).
 
-## Counter
+### Triggered bounce (`Modifier.mochiBounce`)
 
 ```kotlin
-MochiCounterText(count)
-MochiCounterText(cents, format = { "$" + NumberFormat.getInstance().format(it / 100) })
-MochiCounterText("%02d:%02d".format(m, s), direction = 1)   // text you formatted yourself
+MochiIonicon(
+    name = "heart",
+    modifier = Modifier.mochiBounce(trigger = tapCount.takeIf { it > 0 }, depth = 0.2f),
+)
 ```
 
-- Characters are compared right-aligned and only the changed ones roll. Each digit is a 0–9 wheel that turns as many steps as needed (6 to 1 passes 5, 4, 3, 2). A growing absolute value rolls forward (the new digit comes up from below), a shrinking one rolls back; with `direction` 0 it takes the shorter way.
-- The wheel is drawn on an arc, larger near the center and fading out by screen position, so only one row shows at rest. Motion effects follow speed: faster means smaller, fainter and blurrier, and it is sharp only once it stops. The blur goes through `mochiBlur` (continuous radius) and is capped at the amount of a one-step roll.
-- The spring is solved from "steps left + current speed": a one-step and a nine-step roll overshoot by the same amount (about 0.09 steps), and long rolls do not drag. Repeated changes keep the current momentum; when a change reverses direction the motion amount is held, so the blur never flashes sharp halfway. Digits beyond the target are not drawn once it has passed, so the bounce never reveals them.
-- A new leading digit rises from below while its width grows from 0; a removed one sinks while its width shrinks to 0, and the neighbors slide smoothly. If it comes back halfway, the same cell rises back from where it is.
-- Non-digit characters ($, commas, units) blur-replace (`transition`).
-- Tabular figures (`tnum`) are used automatically so the string does not wobble sideways. Font, size and color come from `style` / `color`, and at rest it matches a `Text` on the same line exactly. Screen readers read the whole string.
+Whenever `trigger` changes to a new non-`null`, non-`false` value, the element compresses to `1 - depth` (`0.8f` by default) over `70ms` and rebounds to `1f` with `MochiMotionTokens.Bounce` (`0.34s` response, `0.55f` damping ratio). Initial composition does not trigger a bounce. Commonly applied to tapped action icons and newly selected tab bar icons.
 
-## Streaming text
+## Blur replacement
+
+`MochiBlurText`, `MochiBlurVisibility`, and `MochiBlurCrossfade` overlap outgoing and incoming content in place:
 
 ```kotlin
-MochiFlyInText(partialTranscript)
-MochiFlyInText(answer, style = MochiTheme.textStyles.body, leadingGap = 8.dp)
+// Text replacement (identical text does not replay)
+MochiBlurText(
+    text = statusText,
+    style = MochiTheme.textStyles.body,
+)
+
+// Appear / disappear (occupied size interpolates smoothly between 0 and content size)
+MochiBlurVisibility(visible = hasUnread) {
+    MochiBadge(text = "New")
+}
+
+// Arbitrary state replacement
+MochiBlurCrossfade(
+    targetState = currentStage,
+    transition = MochiBlurTransitions.Replace,
+    contentAlignment = Alignment.CenterStart,
+) { stage ->
+    StageSummary(stage)
+}
 ```
 
-For text that grows piece by piece: a partial speech transcript, an answer streamed word by word, pinyin being composed. Replacing the whole text with something else is still `MochiBlurText`.
+Alpha follows a `smoothstep` curve so both copies are blurred where they cross, avoiding double sharp text. When outgoing and incoming items share identical dimensions, parent relayout is skipped during the transition; when sizes differ, occupied width and height blend by visibility weight so surrounding elements shift smoothly. Reverting to a previous state mid-flight resumes sharpening that slot from its current progress.
 
-- The new text is compared with the previous one from the start; unchanged characters stay put. Appended characters take off left to right, 45ms apart so several fly at once, travelling from close up, lower down and blurred into place while curling flat from the bottom edge like a soft paper strip. Each character's progress is a spring with damping 0.45: it overshoots by about a fifth, squashing slightly against the baseline, then springs back.
-- When earlier characters change, everything from the change on flies in as new: settled old characters back away upwards and into the distance, blurring and fading; a character replaced mid-flight hands its progress to the new one while the old one finishes its path and fades quickly, so the flight is never interrupted.
-- Single line. When it doesn't fit, the newest characters stay visible on the right with a fade on the left, and the shift is animated with a spring; clearing it backs the characters away and the width goes to 0.
-- Flying characters draw outside the line (close ones are larger and lower), so the parent must not clip its top, bottom or left edge.
-- `motionBlur = false` keeps the flight, curl and bounce but drops the blur: cleaner for short text that changes constantly, such as pinyin being composed.
-- Blur comes from two small pre-rendered images per character (sharp and blurred) cross-faded by speed, and the deformation is a `drawBitmapMesh` grid, so it needs no Android 12; settled characters are drawn as ordinary text. Screen readers read the whole text; with system animations off the characters just appear.
+### `MochiBlurTransition` parameters
 
-## Icon draw
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `blur` | `Dp` | `8.dp` | Blur radius when fully hidden (Android 12+; older versions keep alpha, scale, and slide) |
+| `scale` | `Float` | `0.9f` | Initial scale for incoming content (also used for outgoing content unless `exitScale` differs) |
+| `slide` | `Float` | `0f` | Vertical offset when hidden as a fraction of content height along `direction` (`+1` up, `-1` down, `0` in place) |
+| `enter` | `AnimationSpec<Float>` | `MochiSprings.snappy(300)` | Incoming animation spec (alpha and blur clamp to `0..1`; scale and slide show the slight spring overshoot) |
+| `exit` | `AnimationSpec<Float>` | `MochiSprings.snappy(300)` | Outgoing animation spec (slots are removed once progress drops below `0.01f` to free offscreen layers early) |
+| `overflow` | `Dp` | `0.dp` | Extra margin drawn outside layout bounds; pass `mochiGlassOverflow()` when wrapping liquid glass so outer shadows are not clipped |
+| `exitScale` | `Float` | `scale` | Target scale for outgoing content; set distinct from `scale` for depth transitions |
+
+### `MochiBlurTransitions` presets
+
+| Preset | `blur` | `scale` / `exitScale` | `slide` | Enter / exit timing | Primary use case |
+|---|---|---|---|---|---|
+| `Replace` | `8.dp` | `0.9f` / `0.9f` | `0f` | `snappy(300)` / `snappy(300)` | Standard button labels, trailing row values, and icon swaps (default for `MochiBlurText` and `MochiBlurCrossfade`) |
+| `Appear` | `10.dp` | `0.8f` / `0.8f` | `0f` | `snappy(300)` / `snappy(300)` | Badges, inline hints, and status chips appearing or disappearing (default for `MochiBlurVisibility`) |
+| `Subtle` | `3.dp` | `0.97f` / `0.97f` | `0f` | `snappy(220)` / `snappy(160)` | High-frequency multi-item text updates while typing (IME candidates, search suggestions, live filters) |
+| `Depth` | `0.dp` | `1.03f` / `0.96f` | `0f` | `60ms` delayed spring / `140ms` fade | Receding-depth panel swaps (such as keyboard to emoji panel) or zero-blur rapid switches; use `Depth.copy(blur = 4.dp)` on a focal element if blur is desired |
+| `Counter` | `5.dp` | `1.0f` / `1.0f` | `0.55f` | `spring(0.58f, 380f)` / `snappy(300)` | Directional vertical slide with landing bounce for digits and symbols (default for `MochiCounterText`) |
+
+## Counter text
+
+`MochiCounterText` animates numeric strings digit by digit for counts, prices, timers, and percentages:
 
 ```kotlin
-MochiDrawIcon(checkIcon, drawn = done, tint = …, size = 40.dp)
+// Automatic direction from absolute value comparison (up when growing, down when shrinking)
+MochiCounterText(value = count.toLong())
+
+// Custom currency or thousands formatting
+MochiCounterText(
+    value = cents,
+    format = { "$" + NumberFormat.getInstance().format(it / 100) },
+)
+
+// Pre-formatted string with explicit direction (+1 forward, -1 backward, 0 shortest path)
+MochiCounterText(
+    text = "%02d:%02d".format(minutes, seconds),
+    direction = 1,
+)
 ```
 
-Stroked contours are drawn along their own direction from start to end, each one starting a little after the previous (`stagger`, 12% of the run by default); `drawn = false` erases them the same way back. Filled parts fade. With `initiallyDrawn = false` it draws on from blank the first time it appears.
+- **Right-aligned digit wheels**: Characters align from the right so only changed places roll. Each digit is a `0–9` cyclic wheel rendered along an arc (changing `6` to `1` rolls through `5, 4, 3, 2`); higher rotational speed shrinks, fades, and blurs the wheel via continuous `mochiBlur`, sharpening completely at rest.
+- **Consistent overshoot & momentum**: The wheel spring solves from remaining steps and current velocity so a 1-step roll and a 9-step roll overshoot by the same ~`0.09` steps without dragging on long jumps. Rapid updates preserve momentum, and direction reversals hold the motion-blur level so digits never flash sharp mid-turn.
+- **Digit count & tabular alignment**: Added leading digits rise from below while expanding width from `0`, and removed digits sink back to `0` width, sliding neighbors smoothly. Non-digit characters (`$`, commas, units) blur-replace using `transition`. Tabular numerals (`tnum`) are enabled automatically to prevent horizontal jitter, and accessibility semantics expose the full string as one node.
 
-## Bounce
+## Streaming fly-in text (`MochiFlyInText`)
 
-`Modifier.mochiBounce(trigger)` bounces whenever `trigger` becomes a new non-null, non-false value (70 ms down to `1 − depth`, then a 0.38 s / 0.45 spring back); the first composition does not bounce. For a tapped icon use `taps.takeIf { it > 0 }`, for a tab use "is selected".
+`MochiFlyInText` animates single-line text that grows incrementally, such as live speech transcripts, token-streamed replies, or composing pinyin. Use `MochiBlurText` when replacing an entire phrase at once.
 
-## Scroll-linked reveal
+```kotlin
+MochiFlyInText(text = partialTranscript)
 
-`Modifier.mochiBlurReveal(visible = { v }, blur = 4.dp, rise = 0.dp)` sets alpha, blur and offset from a 0..1 progress, without a timer: use it for anything tied to the scroll position (collapsing large titles, bar titles), so stopping halfway stays halfway. `visible` is read during placement / drawing, so it does not recompose.
+MochiFlyInText(
+    text = composingPinyin,
+    style = MochiTheme.textStyles.body,
+    leadingGap = 8.dp,
+    motionBlur = false,
+)
+```
 
-`GraphicsLayerScope.mochiBlurReveal(v)` is still there for writing it in the same graphicsLayer block as other layer properties, but it sets the blur directly on that layer, which is then re-blurred every frame it moves or scales. Prefer the Modifier version where possible. To combine it with properties such as scale, put those in an outer layer: `Modifier.graphicsLayer { scaleX = s }.mochiBlurReveal({ v })`.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `text` | `String` | Required | Current streaming text (split by Unicode code points so surrogate pairs stay intact) |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the line |
+| `color` | `Color` | `Color.Unspecified` | Text color; falls back to `style.color` then `LocalContentColor.current` |
+| `style` | `TextStyle` | `LocalTextStyle.current` | Single-line text style |
+| `leadingGap` | `Dp` | `0.dp` | Leading spacing reserved when `text` is non-empty; collapses to `0` when empty |
+| `motionBlur` | `Boolean` | `true` | Blends pre-blurred glyph bitmaps at high velocity; set `false` for short, rapidly mutating text such as composing pinyin |
 
-## Blur cost
+- **Soft paper-strip flight & mid-stream edits**: Unchanged leading characters stay fixed while appended characters launch left-to-right `45ms` apart, curling flat from the baseline through a perspective `drawBitmapMesh` grid and landing on a `0.45`-damped spring with ~`20%` overshoot squash. When earlier characters are revised, settled old segments recede upward and fade out while characters replaced mid-flight hand their spring progress directly to the incoming glyph and fade over `140ms` without interrupting the wave.
+- **Single-line overflow & clip bounds**: When text exceeds available width, the latest characters stay right-aligned with a `28dp` left fade mask and spring-driven horizontal scroll; clearing `text` fades old glyphs away and shrinks width to `0`. Because flying glyphs project larger and lower than the resting line, avoid clipping the top, bottom, or left edges on parent containers.
+- **All-API compatibility**: Motion blur crossfades sharp and half-resolution blurred glyph bitmaps by velocity (LRU-cached across `96` glyphs) and switches to ordinary `drawText` once settled, requiring no Android 12 `RenderEffect`.
 
-`Modifier.mochiBlur { radius }` blurs its content. Every content transition in the library goes through it (blur replace, appear / disappear, scroll-linked reveal, tab bar labels).
+## Scroll-linked reveal (`mochiBlurReveal`)
 
-- Large radii are downsampled: the content is drawn at 1/2, 1/4 or 1/8 resolution, blurred with the equivalent smaller radius, and scaled back up. The extra softness from upscaling is subtracted from the low-resolution radius, so the overall blur matches full resolution within 5%. Small radii (almost sharp) stay at full resolution, so the end of a transition is not soft.
-- By default radii are bucketed in 1.5x steps, so a transition re-blurs each layer about 8 times. The blurred result is drawn into a cache layer with a margin for the spill. In frames where the step does not change, moving, scaling or fading the layer only composites that image. With `renderEffect` set directly, the render thread only reuses last frame's blur when the content, the effect and the clip bounds in the layer's own coordinates are unchanged, so a moving layer is re-blurred every frame.
-- `continuous = true`: the radius changes every frame without steps, for large-area blurs such as whole pages sliding in and out (steps would be visible there). The radius changes every frame anyway, so no cache layer is used: on phone GPUs every extra offscreen layer costs a render target switch, which is more expensive than the pixels it saves.
-- At radius 0 no layer is created, so there is no extra cost at rest.
-- Put offset and scale in a graphicsLayer outside it, and set alpha with `mochiBlurAlpha(alpha, radius)`: `Modifier.graphicsLayer { mochiBlurAlpha(a, r); scaleX = s }.mochiBlur { r }`. While blurring, the alpha is applied directly to the blurred image instead of opening a separate full offscreen layer for it. On a phone that layer costs more than the blur itself.
-- Put a clip inside it to keep the soft spill, or outside it to clip the spill too.
-- When the content draws outside its bounds (the outer shadow of glass), pass `overflow`: `mochiBlur(overflow = mochiGlassOverflow()) { r }`, and for blur replace or appear/disappear use `MochiBlurTransitions.Replace.copy(overflow = mochiGlassOverflow())`. The blur layer records that extra margin, and fading no longer opens an offscreen layer clipped to the content, so the shadow is not cut into a sharp rectangle mid-transition. Text and icons don't need it; the extra margin is blurred too.
-- At startup each blur step is drawn once on an invisible offscreen canvas in the background, so the render thread compiles its shaders ahead of time and the first blur transition does not drop frames compiling them.
-- The theme reveal transition still changes its radius continuously every frame and does not go through this.
+Use `mochiBlurReveal` for elements whose visibility tracks scroll position continuously (such as collapsing large titles and navigation bar titles), mapping a `0f..1f` progress directly to alpha, blur, and vertical offset with no timer:
 
-## Compatibility
+```kotlin
+// Preferred: Modifier version caches blurred textures across scroll translations
+Text(
+    text = title,
+    modifier = Modifier.mochiBlurReveal(
+        visible = { collapseProgress() },
+        blur = 4.dp,
+        rise = 6.dp,
+    ),
+)
 
-Blur uses `RenderEffect` and needs Android 12 (API 31). Older versions get the fade, scale and offset only; the morph itself is unaffected.
+// Combine with scale or other transforms in an outer graphicsLayer
+Box(
+    Modifier
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .mochiBlurReveal(visible = { progress }),
+)
+```
 
-## Rule: content never swaps instantly
+`visible` is evaluated during placement and draw without recomposing. A `GraphicsLayerScope.mochiBlurReveal(visible, blur = 4.dp, rise = 0.dp)` overload is also available when sharing a single `graphicsLayer` block, though setting `RenderEffect` directly on a moving or scaling layer re-blurs every frame; prefer `Modifier.mochiBlurReveal` whenever possible.
 
-All components and the example follow this:
+## Font crossfade & reduced motion
 
-1. Icon to icon: morph in place with `MochiMorphIcon`; if the shapes are too different, blur-replace with `MochiBlurCrossfade`. Never swap directly.
-2. Text to text: `MochiBlurText` (button labels, status, trailing values…); pass `MochiBlurTransitions.Subtle` where many pieces change together as the user types; use `MochiFlyInText` for text that grows piece by piece.
-3. Appear / disappear: small pieces (badges, hints, inline icons) use `MochiBlurVisibility`, pushing neighbours smoothly.
-4. Numbers: `MochiCounterText` (counts, prices, timers, percentages).
-5. Exception: values that change every frame while the user drags (a slider's readout) are shown directly, otherwise they lag behind the finger.
-6. With system animations off, all of these finish instantly.
+### Local font crossfade (`LocalMochiFontCrossfade`)
 
-Already wired up:
-- Library: list row trailing values, bar button labels, toast title and subtitle blur-replace; toast icons blur-replace including addition/removal, independently of the toast's entry/exit; lower-right status chips appear/disappear with blur; the large-title subtitle blur-replaces and the collapsing title hands over with blur; numeric tab badges roll like a counter and the selected tab icon bounces; the stepper value rolls like a counter
-- Example: demo page collapsing titles hand over with blur; dropdown button labels, the segmented control's title and step count, and the nav bar page subtitle follow the rule
+```kotlin
+CompositionLocalProvider(LocalMochiFontCrossfade provides true) {
+    OnboardingPreviewCard()
+}
+```
 
-## Springs
+Providing `LocalMochiFontCrossfade provides true` (from `ui.feice.mochi.basic`) causes Mochi `Text` composables in the subtree to blur-replace in place whenever typesetting attributes (font family, weight, size) change, while pure color changes continue to follow color-scheme interpolation. It defaults to `false` so full pages do not allocate blur layers for every label simultaneously; enable it on compact preview cards (such as theme/font onboarding), and use [`MochiThemeRevealState.crossfade`](effects.md#theme-reveal) for full-screen style switches.
 
-`MochiSprings` has the four SwiftUI presets written as duration + bounce (`mochiSpring(durationMillis, bounce)`: stiffness = (2π / duration)², damping ratio = 1 − bounce, or 1 / (1 + bounce) for negative bounce):
+### Reduced motion (`LocalMochiReduceMotion`)
 
-| Preset | Bounce | Default duration |
-|---|---|---|
-| `smooth` | 0 | 500 ms |
-| `crisp` | 0.1 | 300 ms |
-| `snappy` | 0.15 | 500 ms |
-| `bouncy` | 0.3 | 500 ms |
+`LocalMochiReduceMotion` (`Boolean?`, `null` by default) follows the system animator scale (`ANIMATOR_DURATION_SCALE == 0f`) unless overridden at the root via `CompositionLocalProvider(LocalMochiReduceMotion provides true)`. When active, all content transition components as well as elastic dropdown menus and popovers snap directly to their target state. Custom animations can query `ui.feice.mochi.anim.mochiReduceMotion()`.
 
-Content transitions (blur replace, counter, icon morph) all use `MochiSprings.snappy(300)`.
+## Blur performance & `MochiSprings`
+
+### Cached & downsampled blur (`mochiBlur`)
+
+All Mochi content transitions render blur through `Modifier.mochiBlur` (active on Android 12+; older versions skip blur and retain alpha, scale, and slide; radius `0` allocates zero layers):
+
+```kotlin
+val overflow = mochiGlassOverflow()
+
+Box(
+    Modifier
+        .graphicsLayer {
+            mochiBlurAlpha(alpha = currentAlpha, blur = currentRadius)
+            scaleX = currentScale
+            scaleY = currentScale
+        }
+        .mochiBlur(overflow = overflow) { currentRadius },
+)
+```
+
+- **Adaptive downsampling**: Large blur radii draw content at `1/2`, `1/4`, or `1/8` resolution, subtract bilinear upscaling softness from the low-resolution Gaussian radius, and scale back up within `5%` of full-resolution sigma while cutting pixel fill by `4–64x`. Small radii near completion stay at full resolution for a crisp finish.
+- **Stepped texture cache vs. continuous mode**: By default (`continuous = false`), radii are quantized into `1.5x` steps (~`8` re-blurs per transition) and cached in an offscreen layer padded by `3σ`, so frames that only translate, scale, or fade composite the cached texture without re-blurring. Pass `continuous = true` for large-area page blurs where steps would be visible; this omits the extra cache layer to avoid per-frame render-target switches. `MochiTheme` pre-warms stepped blur shaders on a background thread at startup so the first transition never drops frames compiling shaders.
+- **Zero-layer alpha modulation (`mochiBlurAlpha`)**: Call `mochiBlurAlpha(alpha, blur, continuous)` in the outer `graphicsLayer`. While blur is active, it switches to `CompositingStrategy.ModulateAlpha` so alpha multiplies directly onto the single blurred texture without allocating a second offscreen layer.
+- **Glass shadow overflow & clipping**: Pass `overflow = mochiGlassOverflow()` (or `MochiBlurTransition.copy(overflow = mochiGlassOverflow())`) when blurring liquid-glass controls so outer shadows are recorded inside the blur margin without clipping to a rectangle. Place `clip` modifiers outside `mochiBlur` to trim blur spill, or inside `mochiBlur` to preserve soft spill edges.
+
+### `MochiSprings` presets
+
+`ui.feice.mochi.anim.MochiSprings` and `mochiSpring(durationMillis, bounce, visibilityThreshold)` parameterize springs by perceptual duration and bounce (stiffness $k = (2\pi / \text{duration})^2$; damping ratio $\zeta = 1 - \text{bounce}$ for $\text{bounce} \ge 0$, or $\zeta = 1 / (1 + \text{bounce})$ for $\text{bounce} < 0$):
+
+| Preset | Base `bounce` | Default `durationMillis` | Notes |
+|---|---|---|---|
+| `MochiSprings.smooth` | `0.0` | `500` | Critically damped with zero overshoot |
+| `MochiSprings.crisp` | `0.1` | `300` | Quick settle with minimal rebound |
+| `MochiSprings.snappy` | `0.15` | `500` | Crisp, responsive default; content transitions (`Replace`, `Appear`, `Counter` exit, `MochiMorphIcon`) use `MochiSprings.snappy(300)` |
+| `MochiSprings.bouncy` | `0.3` | `500` | Pronounced spring rebound (adjustable via `extraBounce`) |

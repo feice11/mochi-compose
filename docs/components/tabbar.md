@@ -1,195 +1,248 @@
 # MochiTabBar
 
-Bottom tab bar: the iOS 26 floating capsule with an MD3E selection indicator.
+`MochiTabBar` is in `ui.feice.mochi.basic`, and the root tab scaffold `MochiTabScaffold` is in `ui.feice.mochi.navigation`. Together they implement the iOS 26 floating capsule tab bar: `MochiTabBar` switches automatically between a solid metaball capsule and a liquid glass lens bar based on `MochiTheme.materials.bar`, supporting velocity-driven indicator deformation, press-and-slide scrubbing with haptic ticks, scroll-driven collapse into a single-icon pill, a detached search button, and a top accessory bar.
 
-- Switching: the indicator stretches with its speed (jelly) as it slides to the new tab. A small droplet follows closely through a short metaball neck and merges back as it catches up, including fast switches across several tabs.
-- Press and slide: press anywhere and the indicator grows, glows and follows your finger, and the bar glows too. It ticks as it crosses tabs and snaps to the nearest tab on release.
-- Drag deformation: the bar shifts slightly with your finger and swells with the indicator; past either end the indicator and the bar stretch together on a rubber band, with a small jelly bounce on release. The bar always wraps the indicator, and its corner radius is the indicator's radius plus the padding, so the two stay concentric however they deform.
-- Color transition: tabs change color continuously as the indicator passes over them.
-- Collapse on scroll: scrolling content down shrinks the bar to a small capsule showing only the current icon; scrolling up, or tapping it, expands it again.
-- Layouts: standard, icons only, separate search button, and an accessory above the bar (see Layouts).
-- Shadow: a soft two-layer shadow shared with menus, not the Material one.
-
-## Import
+## Imports
 
 ```kotlin
+import androidx.compose.ui.unit.dp
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.MochiTabBar
-import ui.feice.mochi.basic.MochiTabItem
 import ui.feice.mochi.basic.MochiTabBarDefaults
 import ui.feice.mochi.basic.MochiTabBarSearch
+import ui.feice.mochi.basic.MochiTabItem
 import ui.feice.mochi.basic.rememberMochiTabBarScrollBehavior
+import ui.feice.mochi.icons.MochiIconStyle
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.navigation.MochiNavHost
+import ui.feice.mochi.navigation.MochiTabReselectHandler
+import ui.feice.mochi.navigation.MochiTabScaffold
+import ui.feice.mochi.navigation.MochiTabScaffoldDefaults
+import ui.feice.mochi.navigation.mochiHideWhenCovered
+import ui.feice.mochi.navigation.rememberMochiTabScaffoldState
 ```
 
-## Root tabs: MochiTabScaffold
+## Root Tab Scaffold: MochiTabScaffold
 
-Use `MochiTabScaffold` for an app's root tabs. It wires up the following, so do not assemble it with `when (tab)`:
+Use `MochiTabScaffold` for an application's root tabs; do not switch pages manually with `when (tab)` or append hardcoded bottom spacers. It integrates the full root-tab lifecycle:
 
-- Each tab keeps its page state and scroll position; switching uses a depth crossfade between the tab pages and can also follow a horizontal swipe
-- Tapping the current tab scrolls to top: automatic for pages using Mochi's title scaffolds; pages with their own `LazyColumn` + `MochiTitleBar` call `MochiTabReselectHandler { listState.animateScrollToItem(0) }`
-- Content clears the tab bar automatically (`LocalMochiBottomBarInset`), no trailing `Spacer(112.dp)`; custom lists get their bottom padding from `MochiTabScaffoldDefaults.contentBottomPadding()`
-- Scrolling down collapses the bar to a small circle with the current icon and scrolling up expands it, for solid and glass bars alike
-- The glass tab bar records tab content as its backdrop; the solid bar gets a fading underlay
-- Inside a `MochiNavHost` root page, the bar hides when a page is pushed
+- **State retention and peer transitions**: Visited tab pages stay in composition, preserving their UI state and scroll positions. Switching tabs runs a peer depth crossfade (`0.94`–`1.0` scale), pre-warms newly visited pages at `1/255` alpha so first-frame rasterization settles before motion starts, and shares a single clock with the tab indicator so both start and settle together. When `swipeBetweenTabs` is `true`, horizontal drags scrub between adjacent tabs and hand off release velocity to both the page and indicator springs.
+- **Reselect to scroll to top**: Tapping the active tab expands the bar and invokes the page's reselect handler. Mochi title scaffolds register this automatically; custom pages built with `LazyColumn` + `MochiTitleBar` call `MochiTabReselectHandler { listState.animateScrollToItem(0) }` (only the first handler registered in a page takes effect, so nested scroll areas in sheets do not override the main list).
+- **Automatic bottom clearance**: Publishes the bar container's full measured height via `LocalMochiBottomBarInset` (held constant during scroll collapse and push transitions so list padding never jumps). Mochi title scaffolds consume this automatically without a trailing `Spacer(112.dp)`; custom scrollable lists read `MochiTabScaffoldDefaults.contentBottomPadding()`.
+- **Scroll collapse and backdrop capture**: Collapses the bar into a circle showing the active icon on downward scroll and expands it on upward scroll across both solid and glass bars. Records tab content into a `MochiBackdrop` and provides it through `LocalGlassSources` for liquid glass rendering.
+- **Push occlusion**: Applies `Modifier.mochiHideWhenCovered()` so pushing a destination in `MochiNavHost` hides the tab bar automatically.
 
 ```kotlin
+val tabs = remember {
+    persistentListOf(
+        MochiTabItem(
+            label = "Catalog",
+            selectedIcon = { tint -> MochiIonicon("grid", tint = tint, style = MochiIconStyle.Filled) },
+        ) { tint -> MochiIonicon("grid-outline", tint = tint) },
+        MochiTabItem(
+            label = "Inspect",
+            selectedIcon = { tint -> MochiIonicon("scan", tint = tint, style = MochiIconStyle.Filled) },
+        ) { tint -> MochiIonicon("scan-outline", tint = tint) },
+        MochiTabItem(
+            label = "Settings",
+            selectedIcon = { tint -> MochiIonicon("settings", tint = tint, style = MochiIconStyle.Filled) },
+        ) { tint -> MochiIonicon("settings-outline", tint = tint) },
+    )
+}
 val tabState = rememberMochiTabScaffoldState()
-MochiNavHost(nav) { route ->
+
+MochiNavHost(navigator) { route ->
     when (route) {
-        "home" -> MochiTabScaffold(tabs, state = tabState, onSelect = { vm.tabChanged(it) }) { index ->
+        "home" -> MochiTabScaffold(
+            items = tabs,
+            state = tabState,
+            onSelect = { viewModel.onTabSelected(it) },
+        ) { index ->
             when (index) {
                 0 -> CatalogPage()
                 1 -> DetectorPage()
                 else -> SettingsPage()
             }
         }
-        "detail" -> DetailPage(onDetect = { tabState.select(1); nav.popTo(0) })
+        "detail" -> DetailPage(
+            onOpenDetector = {
+                tabState.select(1)
+                navigator.popTo(0)
+            },
+        )
     }
 }
 ```
 
-Use `MochiTabBar` directly (below) only for special layouts: a bar outside the root page, a search button or a bottom accessory.
+### MochiTabScaffold Parameters
 
-## Usage
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `items` | `ImmutableList<MochiTabItem>` | Required | Tab definitions |
+| `modifier` | `Modifier` | `Modifier` | Modifier applied to the full-size root container |
+| `state` | `MochiTabScaffoldState` | `rememberMochiTabScaffoldState()` | Selection state holder; call `state.select(index)` to switch tabs programmatically |
+| `onSelect` | `(Int) -> Unit` | `{}` | Invoked after tab selection changes via tap or horizontal swipe |
+| `colors` | `MochiTabBarColors` | `MochiTabBarDefaults.colors()` | Tab bar color tokens |
+| `behavior` | `MochiTabBarBehavior` | `MochiTabBarDefaults.behavior()` | Tab bar dimensions, physics, and label visibility rules |
+| `background` | `Color` | `MochiDefaults.groupedBackground()` | Root container background and base color for glass backdrop sampling |
+| `swipeBetweenTabs` | `Boolean` | `true` | Enables horizontal swipe gestures between adjacent tabs |
+| `collapseOnScroll` | `Boolean` | `true` | Collapses and expands the tab bar on vertical scroll; when `false`, the bar stays expanded while reselect-to-top and push hiding remain active |
+| `content` | `@Composable (index: Int) -> Unit` | Required | Composable page content for tab `index` |
+
+### State and Bottom Inset Helpers
+
+- `rememberMochiTabScaffoldState(initialIndex: Int = 0): MochiTabScaffoldState`: Saves `selectedIndex` across configuration changes and exposes `select(index: Int)` to switch tabs with the depth transition.
+- `MochiTabReselectHandler(onReselect: suspend () -> Unit)`: Registers the suspend callback triggered when the active tab is tapped again; no-op outside `MochiTabScaffold`.
+- `LocalMochiBottomBarInset`: `ProvidableCompositionLocal<Dp>` (defaults to `0.dp`) reporting the total height occupied from the bottom screen edge by the bottom bar, navigation bar insets, and outer padding.
+
+`MochiTabScaffoldDefaults` constants and helpers:
+
+| Name | Value | Description |
+|---|---|---|
+| `BarClearance` | `16.dp` | Extra spacing between the last scrollable item and the top of the bottom bar |
+| `EndPadding` | `40.dp` | Bottom content padding above the system navigation bar when no bottom bar is present |
+| `contentBottomPadding()` | `@Composable () -> Dp` | Returns `maxOf(nav + EndPadding, bar + BarClearance)` when a bottom bar is present, or `nav + EndPadding` otherwise |
+
+## Standalone Tab Bar: MochiTabBar
+
+Use `MochiTabBar` directly when placing a tab bar outside the root screen, or when combining a detached `search` button or top `accessory` bar.
 
 ```kotlin
-var tab by rememberSaveable { mutableIntStateOf(0) }
+var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 val scrollBehavior = rememberMochiTabBarScrollBehavior()
 val items = remember {
     persistentListOf(
-        MochiTabItem("Home") { tint -> Icon(Icons.Home, tint) },
-        MochiTabItem("Search") { tint -> Icon(Icons.Search, tint) },
-        MochiTabItem("Me") { tint -> Icon(Icons.Person, tint) },
+        MochiTabItem(
+            label = "Home",
+            selectedIcon = { tint -> MochiIonicon("home", tint = tint, style = MochiIconStyle.Filled) },
+        ) { tint -> MochiIonicon("home-outline", tint = tint) },
+        MochiTabItem(
+            label = "Search",
+            selectedIcon = { tint -> MochiIonicon("search", tint = tint, style = MochiIconStyle.Filled) },
+        ) { tint -> MochiIonicon("search-outline", tint = tint) },
+        MochiTabItem(
+            label = "Profile",
+            selectedIcon = { tint -> MochiIonicon("person", tint = tint, style = MochiIconStyle.Filled) },
+        ) { tint -> MochiIonicon("person-outline", tint = tint) },
     )
 }
 
 Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)) { … }
+    LazyColumn(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentPadding = PaddingValues(bottom = 104.dp),
+    ) { /* List items */ }
+
     MochiTabBar(
-        selectedIndex = tab,
-        onSelect = { tab = it },
+        selectedIndex = selectedTab,
+        onSelect = { selectedTab = it },
         items = items,
-        modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp, vertical = 12.dp),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         scrollBehavior = scrollBehavior,
     )
 }
 ```
 
-The `icon` lambda receives the color to use. It moves continuously between `content` and `selectedContent` as the indicator passes, so just tint the icon with it.
+Both `icon` and `selectedIcon` receive the live interpolated `tint` color, which transitions continuously between `colors.content` and `colors.selectedContent` as the indicator crosses each tab. Pass `tint` directly to `MochiIonicon`.
 
-## Parameters
+### MochiTabBar Parameters
 
-| Parameter | Description |
-|---|---|
-| selectedIndex / onSelect | Selected item / selection callback (on tap, or on release after press and slide) |
-| items | `ImmutableList<MochiTabItem>` |
-| enabled | Ignores touches when false |
-| scrollBehavior | Collapse on scroll; no collapsing when null |
-| colors | `MochiTabBarDefaults.colors()` |
-| behavior | `MochiTabBarDefaults.behavior()` |
-| windowInsets | Avoids the bottom navigation bar by default; pass `WindowInsets(0)` inside a container that isn't full screen |
-| search | `MochiTabBarSearch`: a separate search button on the right; null = none |
-| accessory | `@Composable (inline: Boolean) -> Unit`: an accessory above the bar; null = none |
-| material | `MochiGlass?`: glass material, defaults to `MochiTheme.materials.bar`; when not null the glass tab bar is used (every layout supported) |
-| backdrop | Backdrop source for the glass, defaults to `LocalMochiBackdrop.current`; see [iOS appearance and glass materials](../guide/ios-theme.md) |
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `selectedIndex` | `Int` | Required | Active tab index (clamped internally to `0..items.lastIndex`) |
+| `onSelect` | `(Int) -> Unit` | Required | Invoked when a different tab is tapped or settled on after press-and-slide |
+| `items` | `ImmutableList<MochiTabItem>` | Required | Tab definitions; renders nothing if empty |
+| `modifier` | `Modifier` | `Modifier` | Outer container modifier (`mochiNavOccluder()` is applied internally) |
+| `enabled` | `Boolean` | `true` | Enables touch input |
+| `scrollBehavior` | `MochiTabBarScrollBehavior?` | `null` | Scroll-collapse controller; stays expanded when `null` |
+| `colors` | `MochiTabBarColors` | `MochiTabBarDefaults.colors()` | Container, indicator, content, shadow, and badge colors |
+| `behavior` | `MochiTabBarBehavior` | `MochiTabBarDefaults.behavior()` | Dimensions, jelly and metaball parameters, haptics, and label mode |
+| `windowInsets` | `WindowInsets` | `MochiTabBarDefaults.windowInsets` | Clears the bottom navigation bar by default; pass `WindowInsets(0)` inside non-fullscreen containers |
+| `onReselect` | `((Int) -> Unit)?` | `null` | Invoked when tapping or releasing on the already-selected tab (typically to scroll to top) |
+| `search` | `MochiTabBarSearch?` | `null` | Detached circular search button on the right; omitted when `null` |
+| `accessory` | `(@Composable (inline: Boolean) -> Unit)?` | `null` | Capsule accessory above the bar; `inline` becomes `true` when collapsed into the bar row |
+| `material` | `MochiGlass?` | `MochiTheme.materials.bar` | Liquid glass material; switches to the glass tab bar when non-null |
+| `backdrop` | `MochiBackdrop?` | `LocalMochiBackdrop.current` | Backdrop source sampled by the glass material; see [iOS Appearance and Glass Materials](../guide/ios-theme.md) |
 
-`MochiTabBarColors`:
+### MochiTabItem Parameters
 
-| Field | Default |
-|---|---|
-| container | surfaceContainerLowest in light, surfaceContainerHigh in dark |
-| indicator | secondaryContainer |
-| selectedContent | `tabSelected` from the control palette (red for Nothing); otherwise onSecondaryContainer on solid bars and primary on glass bars |
-| content | onSurfaceVariant on solid bars, onSurface on glass bars |
-| shadow | shadow (color of the soft two-layer shadow) |
-| badge / onBadge | error / onError |
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `label` | `String` | Required | Tab title (`10.sp` Semibold stacked, `13.sp` Semibold inline) and accessibility `Role.Tab` label |
+| `selectedIcon` | `(@Composable (tint: Color) -> Unit)?` | `null` | Selected-state icon (typically filled); falls back to `icon` when `null` |
+| `badge` | `String?` | `null` | Top-right badge: `null` hides it, `""` draws a `10.dp` dot, non-empty text draws an `18.dp` capsule |
+| `icon` | `@Composable (tint: Color) -> Unit` | Required | Default unselected-state icon (typically outline) |
 
-`MochiTabBarBehavior`:
+### Colors and Behavior Defaults
 
-| Field | Description | Default |
-|---|---|---|
-| height | Capsule height | 64.dp |
-| itemWidth | Ideal width per item; with few items the bar narrows and centers | 92.dp |
-| gel | Jelly stretch strength, 0 = off | 0.6 |
-| fuseRadius | Radius of the metaball neck between droplet and indicator, 0 = no droplet | 22.dp |
-| pressScale | Indicator scale while pressed | 1.12 |
-| hapticProfile | Haptics when sliding across tabs | IosLike |
-| showLabels | Show tab labels; false = icons only | true |
-| selectedLabelOnly | Show the label on the selected tab only; with icons only it sits to the right of the icon | false |
+`MochiTabBarDefaults.colors()` returns `MochiTabBarColors`:
 
-`MochiTabBarScrollBehavior`: `collapsed` is the current state; `collapse()` / `expand()` change it manually.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `container` | `Color` | `surfaceContainerLowest` in light, `surfaceContainerHigh` in dark | Solid capsule fill color |
+| `indicator` | `Color` | `secondaryContainer` | Selection indicator fill color |
+| `selectedContent` | `Color` | `LocalMochiControlPalette.current?.tabSelected`, else `primary` on glass bars or `onSecondaryContainer` on solid bars | Selected icon and label color (red in the Nothing appearance) |
+| `content` | `Color` | `onSurface` on glass bars, `onSurfaceVariant` on solid bars | Unselected icon and label color |
+| `shadow` | `Color` | `shadow` | Soft dual-layer shadow color on solid bars |
+| `badge` | `Color` | `error` | Badge capsule background color |
+| `onBadge` | `Color` | `onError` | Badge label color |
 
-The metaball neck needs API 33+ (AGSL). Lower versions show the droplet and the indicator without the neck.
+`MochiTabBarDefaults.behavior()` and `MochiTabBarDefaults.iconOnlyBehavior()` return `MochiTabBarBehavior`:
 
-## Filled icon when selected
+| Parameter | Type | Default (`behavior` / `iconOnlyBehavior`) | Description |
+|---|---|---|---|
+| `height` | `Dp` | `64.dp` / `52.dp` | Capsule height |
+| `itemWidth` | `Dp` | `92.dp` / `60.dp` | Target item width; narrows and centers the bar when items require less than available width |
+| `gel` | `Float` | `0.6f` | Velocity-driven jelly stretch strength on solid bars (`0f` disables stretch) |
+| `fuseRadius` | `Dp` | `22.dp` / `18.dp` | Metaball neck radius between trailing droplet and indicator on solid bars (`0.dp` disables the droplet) |
+| `pressScale` | `Float` | `1.12f` | Indicator scale factor while pressed on solid bars |
+| `hapticProfile` | `MochiHapticProfile` | `MochiHapticProfile.IosLike` | Haptic tick profile when sliding across tab boundaries |
+| `showLabels` | `Boolean` | `true` / `false` | Shows labels permanently (`false` in `iconOnlyBehavior`) |
+| `selectedLabelOnly` | `Boolean` | `false` | Shows the label on the selected tab only (stacked below the icon, or inline to the right in icon-only mode) |
 
-`MochiTabItem(label, selectedIcon = { tint -> filled icon }) { tint -> outline icon }`: as the indicator passes, the outline icon fades out and the filled one fades in, like the iOS tab bar. Without `selectedIcon`, `icon` is always used. The glass tab bar is the exception: iOS 26 glass tab bar icons are all filled, so both selected and unselected items use `selectedIcon` (or `icon` without it), told apart only by color.
+## Layout Variants
 
-## Tap again to scroll to top
+Icon-only mode, selected-label-only mode, the detached search button, and the top accessory bar all build on the same `MochiTabBar` and compose freely with one another.
 
-`onReselect = { index -> … }` is called when the selected tab is tapped again (on iOS that scrolls to top), e.g. `listState.animateScrollToItem(0)`. `MochiTabScaffold` already wires this.
-
-## Badges
-
-`MochiTabItem(label, badge = "3") { … }` puts a badge at the icon's top-right corner: `null` = none, `""` = a small red dot, anything else = text in a red capsule. It pops in from zero, and when the text changes (a count going up) it bumps with a small jelly bounce. The badge itself is the public [MochiBadge](badge.md), usable outside the tab bar too.
-
-## Droplet neck
-
-The follower uses a 0.24-second response with damping ratio 0.9, tightened to 0.16 seconds while held. The shared rubber-band function smoothly limits visible center separation to half a tab width. Droplet placement, sizing and neck calculations use that same position without hard clamping or resetting spring velocity. The indicator's own following, jelly and selection logic remain independent.
-
-The droplet's height follows the indicator's current height, and the neck radius is capped at half the height difference between the two. The smooth-min that forms the neck bulges by `(k − |a−b|)² / 4k` wherever the two distances differ by less than `k`, so only `k ≤` that difference keeps the neck from swelling past the indicator's edge. Tapping quickly no longer makes the junction bulge.
-
-Tab labels are 10sp Semibold (iOS 26).
-
-## Hide when a page is pushed
-
-Add `Modifier.mochiHideWhenCovered()` to the tab bar (it must live in a page inside `MochiNavHost`). When a page is side-pushed on top, the bar behaves like iOS `hidesBottomBarWhenPushed`: it stays in the page below, moves left with it and is covered by the new page, and comes back with it on return, with no vertical movement. When a page opens from a card (`mochiNavSource`), the bar slides down off the screen and slides up again on return; the offset follows the transition progress through an extra ease (fully hidden at 60% of the open), so a half-way back gesture or a reversal mid-way stays continuous.
-
-## Badge counter and icon bounce
-
-Numeric badges roll like a counter when they change (up when increasing, down when decreasing); non-numeric ones blur-replace. The icon of the newly selected tab bounces once (`mochiBounce`).
-
-## Manual collapse and expansion
-
-The example page uses a compact bar with a manual switch instead of a long mock list. Scroll coordination remains available in the component.
+### Icons Only
 
 ```kotlin
-val behavior = rememberMochiTabBarScrollBehavior()
-MochiSwitch(behavior.collapsed, { if (it) behavior.collapse() else behavior.expand() })
-MochiTabBar(selectedIndex, onSelect, items, scrollBehavior = behavior)
+MochiTabBar(
+    selectedIndex = selectedTab,
+    onSelect = { selectedTab = it },
+    items = items,
+    behavior = MochiTabBarDefaults.iconOnlyBehavior(),
+)
 ```
 
-Read `collapsed` for the switch state so tapping the collapsed bar also updates it.
+`iconOnlyBehavior()` sets a `52.dp` height and `60.dp` item width, omits labels, centers icons in their cells, and produces a nearly circular indicator while keeping the bar's corner radius equal to the indicator radius plus the `4.dp` inset. Pass `showLabels = false` to `MochiTabBarDefaults.behavior(...)` for custom dimensions.
 
-## Layouts
-
-All three layouts live on `MochiTabBar` and can be combined, for example an accessory plus search.
-
-### Icons only
+### Selected Label Only
 
 ```kotlin
-MochiTabBar(tab, { tab = it }, items, behavior = MochiTabBarDefaults.iconOnlyBehavior())
+// Stacked: selected label appears below the icon
+val stackedBehavior = MochiTabBarDefaults.behavior(selectedLabelOnly = true)
+
+// Inline: in icon-only mode, selected label expands to the right of the icon
+val inlineBehavior = MochiTabBarDefaults.iconOnlyBehavior(selectedLabelOnly = true)
 ```
 
-The bar is 52dp tall with 60dp per item. It shows no labels: icons are centered in their cells and the indicator is nearly round. The bar's corner radius still equals the indicator's radius plus the 4dp padding. You can also pass `showLabels = false` to `behavior()` and pick your own height and width.
+- **Stacked with labels (`showLabels = true`)**: Unselected icons shift down `7.dp` to sit centered in their cells. Selecting a tab lifts the icon and blurs in the `10.sp` Semibold label using the content-transition appear curve (`MochiBlurTransitions.Appear`); deselecting blurs it out along the reverse path.
+- **Inline with icons only (`showLabels = false`)**: The selected tab expands a `13.sp` Semibold label `6.dp` to the right of its icon. Each cell's extra width equals its measured label width multiplied by its continuous selection fraction, so cell widths and overall bar width interpolate smoothly without layout jumps during indicator slides or press-and-drag gestures. Touch hit-testing maps finger positions through the live cell widths.
 
-### Label on the selected tab only
-
-```kotlin
-behavior = MochiTabBarDefaults.behavior(selectedLabelOnly = true)          // label below the icon
-behavior = MochiTabBarDefaults.iconOnlyBehavior(selectedLabelOnly = true)  // label to the right of the icon
-```
-
-- With labels: unselected icons are centered in their cells. When a tab is selected, its icon moves up to make room and the label blurs in (the same blur as the content-transition Appear); on deselection it blurs out, keeping the same movement.
-- Icons only: the selected tab's label sits to the right of its icon, and that cell widens by the label's width; the label blurs in and out the same way. Each cell's extra width is its label width times how selected it is, so cell widths and the whole bar change continuously while the indicator slides or is dragged, with no jumps. Press-and-slide maps the finger through the actual cell widths.
-- The demo app's home tab bar uses the second form.
-
-### Separate search button (iOS 26 search tab)
+### Detached Search Button
 
 ```kotlin
 var searching by rememberSaveable { mutableStateOf(false) }
 var query by rememberSaveable { mutableStateOf("") }
+
 MochiTabBar(
-    tab, { tab = it }, items,
+    selectedIndex = selectedTab,
+    onSelect = { selectedTab = it },
+    items = items,
     search = MochiTabBarSearch(
         active = searching,
         onActiveChange = { searching = it },
@@ -200,66 +253,111 @@ MochiTabBar(
 )
 ```
 
-- At rest, a round button sits 8dp to the right of the bar. Its diameter equals the bar height and it shows a magnifier (replace it with `icon`). It glows and deforms when pressed.
-- Tapping the button collapses the bar into a small circle showing the current tab's icon, and expands the button into a search field. The text field fades in and takes focus. Both shapes run on one spring and stretch a metaball neck between them mid-way; there is no neck at rest.
-- Tapping the small circle, or pressing back, calls `onActiveChange(false)`. Both shapes return the way they came and the keyboard is hidden.
-- With a search button, the tab bar gives up the width of one button plus the gap.
+`MochiTabBarSearch` parameters:
 
-### Bottom accessory (iOS 26 bottomAccessory)
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `active` | `Boolean` | Required | Whether the search field is currently expanded |
+| `onActiveChange` | `(Boolean) -> Unit` | Required | Invoked with `true` when tapping the search button, or `false` when tapping the collapsed tab circle or pressing system back |
+| `query` | `String` | Required | Current search query |
+| `onQueryChange` | `(String) -> Unit` | Required | Invoked when the query text changes |
+| `placeholder` | `String` | `"搜索"` | Placeholder text and accessibility label for the search button |
+| `onSearch` | `(String) -> Unit` | `{}` | Invoked on software keyboard `ImeAction.Search` |
+| `icon` | `(@Composable (tint: Color) -> Unit)?` | `null` | Button icon; defaults to the built-in `22.dp` magnifier glyph when `null` |
+
+- At rest, a circular button with diameter equal to `behavior.height` sits `8.dp` to the right of the tab bar, supporting press glow and elastic deformation; the tab bar yields the width of one button plus the `8.dp` gap.
+- Tapping the button collapses the tab bar into a circle showing the active tab's icon while expanding the button into a focused text field on a shared spring. On solid bars, a metaball neck (up to `14.dp` radius) stretches between the two shapes mid-transition and disappears at rest.
+- Tapping the collapsed left circle or pressing system back invokes `onActiveChange(false)`, reversing both shapes along the shared spring and clearing focus to dismiss the keyboard.
+
+### Top Accessory Bar
 
 ```kotlin
 MochiTabBar(
-    tab, { tab = it }, items,
+    selectedIndex = selectedTab,
+    onSelect = { selectedTab = it },
+    items = items,
     scrollBehavior = scrollBehavior,
-) { inline ->
-    if (inline) CompactPlayer() else FullPlayer()
-}
+    accessory = { inline ->
+        if (inline) CompactMiniPlayer() else ExpandedMiniPlayer()
+    },
+)
 ```
 
-- The accessory is a 48dp capsule floating 8dp above the bar, as wide as the whole row.
-- When the bar collapses on scroll, the accessory follows the same collapse progress down into the row, to the right of the small circle, and fills the remaining width. A search button, if present, sits at the far right.
-- `inline` becomes `true` once collapsed; show a compact version then. The two versions blur-replace each other instead of swapping instantly.
-- The accessory has its own shadow, press glow and deformation. It fades out while searching and ignores taps during that time.
-- With an accessory, the component's height includes the accessory and the gap.
+- When expanded, the accessory is a `48.dp` capsule floating `8.dp` above the tab bar across the full row width (including any search button); the component's measured height includes both the accessory and the gap.
+- During scroll collapse, the accessory interpolates down into the main row to the right of the collapsed tab circle and fills the remaining width (stopping to the left of the search button if present).
+- Once collapsed, `inline` switches to `true` and swaps between expanded and compact content via `MochiBlurCrossfade`.
+- The accessory renders its own soft shadow, press glow, and press deformation; while search is active, it fades out and consumes pointer events without firing clicks.
 
-## Glass tab bar
+## Interaction and Solid Bar Mechanics
 
-When `material` is not null (the theme has glass on, in any of the three appearances), the whole bar becomes the iOS 26 glass tab bar. The solid bar's jelly, droplet, metaball neck, shadow and press glow are replaced by the glass press effects below; layouts are exactly the same as the solid bar, so callers change nothing for glass:
+### Icons and Badges
 
-- Icon only, and the selected label only (stacked, or beside the icon in the icon-only layout; cell widths follow the indicator continuously and the lens takes the width of the cell it is in)
-- Collapse on scroll: the glass narrows continuously into a circle with the current icon while the expanded content fades out; tap the circle to expand
-- The search button / field and the accessory above are the same glass (same recipe, same backdrop source); their text and icons use the on-glass content color
-- Selected icons and labels use the exact `colors.selectedContent` value in both light and dark appearances
+- **Outline-to-filled icon crossfade**: When `selectedIcon` is provided, solid tab bars fade `icon` out and `selectedIcon` in continuously as the indicator crosses the cell; omitting `selectedIcon` keeps `icon` throughout. Selecting a tab triggers a single bounce on its icon (`mochiBounce`, depth `0.16f`). Following iOS 26, liquid glass tab bars render filled icons (`selectedIcon ?: icon`) for both selected and unselected items, distinguishing states by color and the indicator capsule.
+- **Badge motion and counter rolling**: `MochiTabItem.badge` uses the public [MochiBadge](badge.md) component. Badges pop in and shrink out from their bottom-left corner (`TransformOrigin(0f, 1f)`). Updating a visible badge's text triggers a `1.25×` jelly bounce; numeric strings roll digits upward when increasing and downward when decreasing while growing only to the right from a pinned left edge so tab layout never shifts.
 
-- The bar is a liquid glass capsule (64dp tall): supercircle shape, inner and outer refraction, the blur pyramid, face matrix and stroke / diffuse highlights, with parameters following its short side (under 64dp, so no shadow or edge bleed)
-- At rest, the indicator is a translucent gray capsule (`colors.indicator`). The icon inside is in the selected color (`colors.selectedContent`). Selected and unselected icons are both filled
-- Unselected items use `colors.content`; with adaptive glass they turn white over dark content and black over bright content, changing with the glass
-- Press anywhere: the indicator becomes a glass bubble, 8dp larger on every side, and moves to the item under the finger. The indicator inside fades out and the bubble itself fades in with the press progress. The bubble follows Kyant's catalog LiquidBottomTabs: a 10 / 14dp lens with chromatic aberration, the default highlight, an outer shadow and an 8dp inner shadow. All icons on the bar grow 1.16×, and the whole bar scales to 1.0355×
-- Press and drag: the bubble follows the finger, stretching horizontally and flattening vertically with its speed. The whole bar shifts by 1.17% of the drag distance. Crossing a tab gives a light tick
-- Release: the bubble returns to the nearest tab while shrinking back into the indicator, and `onSelect` is called (`onReselect` if it is the current item)
-- When `selectedIndex` changes from outside (for example by swiping pages), the indicator slides over without swelling
-- The selected-color icons are drawn on top of the indicator, clipped to its outline
-- While pressed, the bar glass shows the matrix layer and a Gaussian glow under the finger (see Theme › Materials)
+### Drag Deformation, Droplet Neck, and Soft Shadow
 
-The springs are fitted from per-frame layer recordings of an iOS 26.5 press (response in seconds / dampingRatio): press progress 0.25 / 1 for both press and release; bubble growth 0.6 / 0.85 on press, 0.25 / 1 on release; position 0.4 / 0.85 on press, 0.2 / 0.85 while following the finger, 0.4 / 0.85 on release; bar scale 0.33 / 0.62 on press, 0.44 / 0.63 on release. The stretch is a speed-driven spring (0.6 / 0.21) and is an approximation. The glow fades in with 0.2 / 0.82, grows with 0.5 / 1 when dragging, and on release grows with 0.63 / 0.9 and fades with 0.65 / 0.87.
+- **Concentric deformation and press glow**: Pressing anywhere on a solid bar scales the indicator to `pressScale`, lights up fingertip glows on both the indicator and bar, and translates the bar with the finger on a rubber band (up to `6.dp` horizontally and `3.dp` vertically, `0.30s` response / `0.62` damping ratio). Dragging past either end stretches both the indicator and bar on a rubber band. The bar bounds always wrap the indicator with a `4.dp` inset (`bar corner radius = indicator corner radius + 4.dp`), keeping corners concentric under every deformation.
+- **Trailing droplet and smooth-min neck**: The follower spring uses a `0.24s` response and `0.90` damping ratio, tightening to `0.16s` while held. A shared rubber-band curve bounds visible center separation to `0.5` tab widths without clamping or resetting spring velocity, driving droplet position, scale, and neck geometry from one coordinate. Droplet height tracks the indicator's live height, and the smooth-min neck radius `k` is capped at `95%` of half their height difference: because smooth-min bulges outward by `(k - |a - b|)² / 4k` wherever distances differ by less than `k`, keeping `k` within half the height difference prevents the junction from swelling past the indicator's top and bottom edges during rapid taps. Neck rendering uses AGSL on Android 13+ (API 33+); lower API levels draw the droplet and indicator without the connecting neck.
+- **Soft dual-layer shadow**: Solid bars, the detached search button, and the accessory draw dual-layer shadows via `drawMochiShadow` (`MochiMetaballShadow`)—combining a wide, inset ambient blur with a soft contact blur, without Material elevation shadows. The bar uses `MochiTheme.shadows.raised` at rest and interpolates to the wider, softer `MochiTheme.shadows.lifted` while pressed, increasing opacity in dark mode and tinting with `colors.shadow`.
 
-When pressed, the bar grows past its original bounds. The recording the lens samples and the glow's off-screen layer both extend 24dp around the bar, so dragging the lens to either end never shows a cut-off straight edge.
+### Scroll Collapse and Programmatic Control
 
-Rendering keeps off-screen passes to a minimum:
-- The lens reads "page + bar glass + glow and selected icons" directly, instead of a copy of the bar glass;
-- Shadows, highlights and the glass finish are drawn by one shader;
+`rememberMochiTabBarScrollBehavior(threshold: Dp = 24.dp)` creates a scroll state whose `nestedScrollConnection` collapses the bar after `24.dp` of downward post-scroll and expands it after `24.dp` of upward post-scroll (resetting accumulated delta whenever scroll direction reverses). Callers can also read `collapsed` or call `collapse()` and `expand()` directly; tapping the collapsed pill to expand updates `collapsed` automatically:
 
-None of this changes the image: on the emulator it differs from before by at most 2/255 per pixel.
+```kotlin
+val scrollBehavior = rememberMochiTabBarScrollBehavior()
 
-The glass body (shared by the tab bar, `MochiGlassCapsule`, glass buttons and sheets) is the liquid glass ported from the web version; render nodes and cost are described in [Effects › Performance](../guide/effects.md). The tab bar decides light or dark from the backdrop luma itself (hysteresis 0.1 / 0.3 and 0.9 / 0.7) and the glass does not sample again.
+MochiSwitch(
+    checked = scrollBehavior.collapsed,
+    onCheckedChange = { shouldCollapse ->
+        if (shouldCollapse) scrollBehavior.collapse() else scrollBehavior.expand()
+    },
+)
+MochiTabBar(
+    selectedIndex = selectedTab,
+    onSelect = { selectedTab = it },
+    items = items,
+    scrollBehavior = scrollBehavior,
+)
+```
 
-While a page opened from a source is covering the screen, the tab bar would have to recompute its glass every frame through the morphing container. Before the expansion reaches 35%, the glass fades smoothly to the translucent fallback color; after that the glass layer is fully transparent, so the system skips it and nothing is computed. Going back restores it along the same path. The fade is applied on the glass's outline layer, which is larger than the glass and contains the outer shadow, not on the bar itself: a layer with alpha below 1 is rendered offscreen into its own rectangle, so fading the bar would cut the shadow off at the bar's bounds and leave square gray corners outside the capsule. Side-push transitions don't need this: the page underneath is cached as a texture, so its glass isn't recomputed anyway.
+### Hiding on Navigation Push
 
-During the transition the navigation host draws a copy of the lower page's bars over the morphing container and fades it (`mochiNavOccluder`). The copy's fade layer extends 40dp beyond the bar's rectangle so the glass outer shadow, rim and the solid bar's shadow stay intact; a layer only as large as the bar cut the shadow off, and it popped back when the real bar returned at the end.
+Attach `Modifier.mochiHideWhenCovered()` when placing a standalone `MochiTabBar` inside a `MochiNavHost` page (`MochiTabScaffold` applies this automatically):
 
-Only `height`, `itemWidth`, `showLabels`, `selectedLabelOnly` and `hapticProfile` of `behavior` are used. Labels sit under the icons (10sp semibold). See [iOS appearance and glass materials](../guide/ios-theme.md) for the backdrop source and material parameters.
+- **Push transitions**: Matches iOS `hidesBottomBarWhenPushed` by keeping the bar inside the underlying page so it translates left underneath the incoming screen and returns horizontally on pop with zero vertical motion.
+- **Source-card transitions (`mochiNavSource`)**: Slides the bar downward off screen along an eased curve tied to transition progress (completing by `60%` expansion) and slides it back up on return, staying continuous across partial back gestures and mid-flight reversals.
 
-## Shadow
+## Liquid Glass Tab Bar
 
-The bar, the search button and the accessory all cast their shadow with `drawMochiShadow`, using the same parameters as menus, `MochiMetaballShadow.elevated`: a faint, inset, widely blurred ambient layer plus a very soft, faint contact layer, so only a trace of shadow sits at the edge and there is no banding. Material elevation shadows are not used. While the bar is pressed it lifts, and its shadow gets wider and softer. In dark mode the shadow is heavier so it stays visible. The shadow color is `colors.shadow`.
+When `material` is non-null (bar glass enabled in any theme appearance), `MochiTabBar` renders the iOS 26 liquid glass tab bar. Every layout variant (icons only, stacked or inline selected-label-only, scroll collapse, detached search, and top accessory) uses the same caller API, reading `height`, `itemWidth`, `showLabels`, `selectedLabelOnly`, and `hapticProfile` from `behavior`.
 
+### Appearance and Adaptive Contrast
+
+- **Liquid glass capsule**: At its default `64.dp` height (`52.dp` in icon-only mode), the bar renders via the shared `GlassBody` pipeline (superellipse SDF, inner and outer refraction, blur pyramid, face color matrix, stroke, and diffuse highlights; with a short side of `64.dp` or less, the recipe omits drop shadow and edge bleed). The search button/field and top accessory share the identical glass recipe and backdrop source. See [Effects › Performance](../guide/effects.md) for render-node details.
+- **Layered indicator and icons**: At rest, the indicator is a translucent neutral capsule (`colors.indicator`, or black interpolated between `10%` and `30%` alpha when `glass.adaptive` is active). Both selected and unselected icons render filled; selected icons and labels always use `colors.selectedContent` in light and dark appearances, drawn crisp above the indicator and clipped to its capsule outline.
+- **Single-sampler adaptive luma**: When `glass.adaptive` is enabled, the bar samples average color from a `16.dp`-tall strip `8.dp` above its top edge every `100ms` (with exponential smoothing and a dead band), flipping tone with dual luma hysteresis (below `0.1` to dark and above `0.3` back in light mode; above `0.9` to light and below `0.7` back in dark mode). Once 2 consecutive samples agree, a `450ms` transition drives both the glass tone and unselected content color (interpolating between black and white) without a second sampler inside the glass body.
+
+### Lens Bubble and Springs
+
+- **Press lens inflation**: Pressing anywhere expands the indicator by `8.dp` on all four sides into a liquid lens bubble that travels to the pressed item. The resting gray indicator fades out as the lens fades in (`10.dp` refraction height and `14.dp` refraction amount with chromatic aberration, omitted for `MochiGlassStyle.Frosted`, plus default highlight, outer shadow, and `8.dp` inner shadow). All bar icons scale to `1.16×`, and the bar body scales to `1.0355×` while lighting up its internal matrix layer and fingertip Gaussian glow.
+- **Drag stretch and release**: Dragging moves the bubble with the finger, stretching horizontally and compressing vertically with speed, shifts the bar by `1.17%` of drag distance (plus `+0.0000206` X and `-0.0000404` Y scale per `dp`), and ticks across tab boundaries. Releasing snaps the bubble to the nearest tab while shrinking back into the resting indicator and invoking `onSelect` or `onReselect`. External `selectedIndex` updates (such as page swipes) slide the indicator directly without inflating the lens.
+- **Minimal offscreen passes**: At rest, the indicator samples only `barGlass`; while pressed or settling, the lens reads the combined backdrop (`page + barGlass + glow and selected-color icons`) directly while shadows, highlights, and surface finish composite in a single shader pass.
+
+Spring parameters are fitted from per-frame layer recordings of iOS 26.5 `_UILiquidLensView` presses (listed as `response` in seconds / `dampingRatio`; velocity stretch is an approximation):
+
+| Animation Channel | Press | Drag Follow | Release / External Slide |
+|---|---|---|---|
+| Press progress `pressProgress` | `0.25s` / `1.0` | — | `0.25s` / `1.0` |
+| Lens expansion (`8.dp` per side) | `0.60s` / `0.85` | — | `0.25s` / `1.0` |
+| Lens / indicator position | `0.40s` / `0.85` | `0.20s` / `0.85` | `0.40s` / `0.85` |
+| Bar scale and drag pan | `0.33s` / `0.62` | `0.30s` / `0.85` | `0.44s` / `0.63` |
+| Velocity stretch (fitted approximation) | `0.60s` / `0.21` | `0.60s` / `0.21` | `0.60s` / `0.21` |
+| Fingertip glow (in / scale / out) | In `0.20s` / `0.82` | 2× scale `0.50s` / `1.0` | 4× scale `0.63s` / `0.90`, out `0.65s` / `0.87` |
+
+### Navigation Occlusion and Offscreen Bounds
+
+- **Extended sampling bounds**: Because pressing scales the bar and expands the lens `8.dp` beyond every edge, both the `barGlass` recording and the pressed-icon offscreen layer extend `24.dp` around all four sides of the bar so dragging the lens to either end never refracts a clipped straight edge.
+- **Source-card transition fallback**: When a page opens over the screen via `mochiNavSource`, the glass fades smoothly to its translucent fallback color before expansion reaches `35%`; past `35%`, the glass layer reaches zero alpha so the system skips glass evaluation altogether, reversing on pop. Alpha is applied on `GlassBody`'s outer outline layer (which encloses the outer shadow), not on the bar's layout bounds, preventing rectangular offscreen clipping at the capsule corners. Push transitions cache the underlying page as a texture and require no fallback fade.
+- **Occluder copy outset**: During a source-card transition, `MochiNavHost` composites a fading copy of underlying bars (`mochiNavOccluder`) above the morphing container. That copy's isolated fade layer extends `40.dp` beyond the bar's rectangle on all sides, keeping glass outer shadows, rims, and solid-bar shadows intact until the real bar resumes.

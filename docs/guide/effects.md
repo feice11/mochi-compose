@@ -1,20 +1,23 @@
 # Effects
 
-Every component in the library is built from three shared effects: press glow, elastic (rubber band / jelly / follow spring) and metaball connection. They are public API, so you can use them on your own components. The "效果" (Effects) tab of the example app has an interactive demo for each.
+Mochi exposes the physical interaction, lighting, masking, shadow, and compositing effects that power its components under `ui.feice.mochi.effect.*` and `ui.feice.mochi.theme.MochiGraphics`, so you can apply the same primitives to custom surfaces and controls.
 
 | Effect | Package | Main API |
 |---|---|---|
-| Card height | `ui.feice.mochi.effect.content` | `Modifier.mochiAnimateHeight`; enabled by default in cards |
-| Press glow | `ui.feice.mochi.effect.glow` | `rememberMochiGlowState`, `Modifier.mochiPressGlow`, `Modifier.mochiGlow` |
-| Elastic | `ui.feice.mochi.effect.elastic` | `rubberBand`, `rememberMochiRubberBandState`, `Modifier.mochiRubberBand`, `Modifier.mochiJelly`, `MochiFollowSpring` |
-| Metaball | `ui.feice.mochi.effect.metaball` | `rememberMochiMetaballRenderer`, `DrawScope.drawMochiMetaball`, `proximityFuse` |
-| Content transitions | `ui.feice.mochi.effect.content` | `MochiMorphIcon`, `MochiBlurText`, `MochiBlurVisibility`, `MochiCounterText`, `MochiBlurCrossfade`, see [Content transitions](content-transitions.md) |
-| HDR highlights (experimental) | `ui.feice.mochi.effect.hdr` | `MochiHdr`, `MochiHdrPalette`, `MochiEdgeGlow`; see [HDR highlights](hdr.md) |
-| Overscroll | `ui.feice.mochi.effect.overscroll` | `ProvideMochiOverscroll`, `rememberMochiOverscrollEffect`, `MochiScrollDefaults.flingBehavior`; see [Overscroll](overscroll.md) |
+| Card height | `ui.feice.mochi.effect.content` | `Modifier.mochiAnimateHeight` |
+| Press glow | `ui.feice.mochi.effect.glow` | `rememberMochiGlowState`, `Modifier.mochiPressGlow`, `Modifier.mochiGlow`, `MochiGlowDefaults` |
+| Elastic deformation | `ui.feice.mochi.effect.elastic` | `Modifier.mochiPressDeform`, `rubberBand`, `rememberMochiRubberBandState`, `Modifier.mochiRubberBand`, `Modifier.mochiJelly`, `MochiFollowSpring` |
+| Metaball | `ui.feice.mochi.effect.metaball` | `rememberMochiMetaballRenderer`, `DrawScope.drawMochiMetaball`, `proximityFuse`, `MochiMetaballShadow` |
+| Fade mask & edge blur | `ui.feice.mochi.effect.mask` | `Modifier.mochiFadeMask`, `Modifier.mochiScrollFadeMask`, `Modifier.mochiProgressiveBlur`, `Modifier.mochiScrollEdgeBlur`, `MochiSmoothGradient` |
+| Soft shadow | `ui.feice.mochi.effect.shadow` | `DrawScope.drawMochiShadow` |
+| Liquid glass | `ui.feice.mochi.effect.glass` | `rememberMochiBackdrop`, `Modifier.mochiBackdropSource`, `MochiGlassSurface`, `MochiGlassCapsule`, `MochiGlassGroup`, `MochiGlassBlobs`, `MochiVibrant` |
+| Content transitions & theme reveal | `ui.feice.mochi.effect.content` | `MochiMorphIcon`, `MochiBlurCrossfade`, `MochiBlurText`, `MochiBlurVisibility`, `MochiCounterText`, `MochiThemeRevealHost`; see [Content transitions](content-transitions.md) |
+| HDR highlights (experimental) | `ui.feice.mochi.effect.hdr`, `ui.feice.mochi.theme` | `MochiHdr`, `MochiHdrPalette`, `MochiEdgeGlow`, `mochiHdrBrush`; see [HDR highlights](hdr.md) |
+| Overscroll | `ui.feice.mochi.effect.overscroll` | `ProvideMochiOverscroll`, `rememberMochiOverscrollEffect`, `Modifier.mochiContainedScroll`, `MochiScrollDefaults.flingBehavior`; see [Overscroll](overscroll.md) |
 
 ## Card height
 
-All card containers smoothly transition height changes by default. `MochiListCard`, `MochiListSection` and demo cards already enable this. For custom cards, use `ui.feice.mochi.effect.content.mochiAnimateHeight`:
+`MochiListCard` and `MochiListSection` animate content height changes by default. Custom card containers use `ui.feice.mochi.effect.content.mochiAnimateHeight` to share the same height behavior:
 
 ```kotlin
 val shape = MochiTheme.shapes.extraLarge
@@ -29,15 +32,21 @@ Column(
 }
 ```
 
-Place the background before the effect so it sees the animated height. Place padding and target `height(targetHeight)` after it. The first measurement displays immediately; later changes use a critically damped spring (stiffness 380, 0.5px threshold), continuing from the current height when interrupted. Width is updated immediately, without stretching text. The rounded content clip follows the visible height only during the transition; at rest it releases the extra clip so press deformation can extend naturally. System animation scale is respected.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `shape` | `Shape` | `RectangleShape` | Clipping outline applied while the height is resizing |
+| `enabled` | `Boolean` | `true` | Enables or disables height spring animation |
+| `animationSpec` | `AnimationSpec<Float>` | `spring(1f, stiffnessFor(0.28f), 0.5f)` | Height transition spec, aligned with `MochiMotionTokens.Settle` |
 
-Use `enabled = false` when an existing gesture or animation already changes height every frame. Do not stack this with `animateContentSize` or a second height animation. Sheet gestures, page morphs and toast size transitions keep their existing animation owner.
+Place `background` before `mochiAnimateHeight` so the surface fill tracks the animated visible height, and place `padding` or target `height` modifiers after it. Height snaps immediately on initial measurement, during the first `500ms` settle window after attach, when the container width changes (relayout), while an active glass morph transition is running, or when reduced motion is enabled. Subsequent content height changes animate with a critically damped spring (`0.28s` response, `0.5px` visibility threshold) and continue smoothly from the current height if interrupted. Width updates immediately so text never stretches. Content is clipped to `shape` at the visible height only while resizing; once settled, clipping is released so child press deformation and highlights can extend naturally. System animator duration scale is respected.
+
+Pass `enabled = false` when a gesture or frame-driven animation already owns the container height (such as sheet drags, source-card page morphs, or toast size transitions), and do not stack `animateContentSize` or a second height spring on the same container.
 
 ## Press glow
 
-Light up where you press: a broad soft glow centered on the finger (almost flat in the middle, fading smoothly near the radius), added on top of the surface. There is no rim along the edge: the light only rises and spreads from the finger. The glow center follows the finger through a damped spring.
+Press glow illuminates a surface radially from the touch point, with the glow center trailing the finger through a 2D damped spring. It uses additive blending (`BlendMode.Plus` with `0.28f` weight) to brighten the surface from the touch center without outlining the perimeter (which makes pressed controls look framed) or applying color dodge (which blows light surfaces out to white and reduces label contrast). When `MochiHdr` is active and a surface base color is known, an additional linear-light hue-preserving sheen lifts the touch area up to `60%` of the available HDR headroom peak.
 
-The simplest form handles both gesture and drawing:
+Use `Modifier.mochiPressGlow` to attach both gesture handling and rendering:
 
 ```kotlin
 val shape = MochiTheme.shapes.full
@@ -45,88 +54,106 @@ Box(
     Modifier
         .background(MochiTheme.colorScheme.secondaryContainer, shape)
         .mochiPressGlow(rememberMochiGlowState(), shape)
-        .clickable { … },
+        .clickable { /* ... */ },
 )
 ```
 
-`mochiPressGlow` doesn't consume touch events, so it stacks with `clickable` and friends. The radius follows the element's size: `MochiGlowDefaults.radius(size, density)` = shorter side × 1.2 + longer side × 0.15, clamped to 40dp–160dp. It is driven mostly by the shorter side, so wide, short elements don't get a huge light and large panels don't wash out. Use it for `press` radii when driving the state yourself.
+`mochiPressGlow` does not consume pointer events, so it composes cleanly with `clickable` and `mochiPressDeform`. When `radius` is `null`, the glow radius is computed from element bounds via `MochiGlowDefaults.radius(size, density)`: `shorterSide * 1.2f + longerSide * 0.15f`, clamped between `40dp` (`MinRadius`) and `160dp` (`MaxRadius`). Weighting toward the shorter side keeps wide, short rows from lighting up across their entire width while capping large panels so they do not wash out (large panels can scale intensity by `MochiGlowDefaults.SurfaceIntensity = 0.85f`). `MochiGlowDefaults.ElementRadiusFactor` and `MochiGlowDefaults.SurfaceRadius` are deprecated; use `MochiGlowDefaults.radius(size, density)` instead.
 
-`mochiPressGlow` and `mochiPressDeform` share one touch rhythm: inside a scroll container (cards and rows in lists and grids) a press waits 90ms and starts only if the finger has not moved, so nothing flashes when you just scroll; once the scroll takes over the feedback is withdrawn; a quick tap still gets a full press and bounce. Outside scroll containers the press responds immediately.
+Brightness falls off radially along `0.85 * exp(-r^3 * 1.6)` (`r = distance / radius`) down to near zero with no hard edge; shader paths add `±0.5/255` dithering to prevent banding on dark surfaces.
 
-Brightness falls off smoothly as `0.85·exp(−r³·1.6)` (r = distance / radius) down to almost zero, with no hard edge. The shader adds ±0.5/255 dithering so dark backgrounds don't show banding.
+`mochiPressGlow` and `mochiPressDeform` share the same scroll-aware touch rhythm: inside a scrollable container (`LazyColumn`, `verticalScroll`, etc.), a press waits `90ms` and activates only if the finger has not started scrolling; if the scroll container claims the gesture, feedback withdraws immediately; a quick tap released before `90ms` still plays a full press-and-release pulse held for at least `90ms`. Outside scroll containers, press feedback begins immediately on down.
 
-To drive the state yourself (gestures handled elsewhere, or a touch point shared across windows), call `MochiGlowState` methods and use `Modifier.mochiGlow` for drawing only:
+When gestures are driven externally or a touch point is shared across windows, drive `MochiGlowState` directly and attach `Modifier.mochiGlow` for rendering only:
 
-| Method | Description |
+| `MochiGlowState` method | Description |
 |---|---|
-| `press(at, radius, intensity = 1f)` | Press: the glow grows from 35% to radius |
-| `moveTo(p)` | Finger moved; the center follows with damping |
-| `grow(radius, intensity)` | While held, move onto a larger element (e.g. from button into panel); no-op when not held |
-| `release()` | Release: fade out |
+| `press(at = null, radius, intensity = 1f)` | Starts a press: expands radius from `35%` to `radius` and animates brightness to `intensity` |
+| `moveTo(p)` | Updates the target touch position; `center` follows with spring damping |
+| `grow(radius, intensity)` | Smoothly expands the glow when sliding onto a larger surface while held (no-op once released) |
+| `markReleased()` | Marks the state as released immediately without starting fade-out, useful when coordinating custom exit animations |
+| `release()` | Releases the press and fades the glow out |
 
-`MochiGlowSpec`:
+`MochiGlowSpec` parameters (created via `MochiGlowDefaults.spec()`):
 
-| Parameter | Description | Default |
-|---|---|---|
-| color | Glow color; alpha is the peak brightness | White, 0.45 light / 0.14 dark |
-| followResponse | Follow spring response (seconds) | 0.32 |
-| followDamping | Follow spring damping ratio | 0.78 |
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `color` | `Color` | White (`alpha = 0.3f` light, `alpha = 0.22f` dark) | Glow color; its `alpha` sets peak brightness |
+| `followResponse` | `Float` | `0.32f` | Follow spring response time in seconds |
+| `followDamping` | `Float` | `0.78f` | Follow spring damping ratio |
 
-The same `MochiGlowState` can be passed to the metaball renderer (`drawMochiMetaball(glow = …)`); the glow is then drawn in the shader with the same curve, so the neck and the bodies show no seam.
+The same `MochiGlowState` can be passed to `drawMochiMetaball(glow = state)`, which evaluates the identical falloff curve inside the metaball shader without a seam across the neck and bodies.
 
 ### Press deformation
 
-`Modifier.mochiPressDeform(scale = 0.96f, follow = 3.dp)` shrinks slightly on press, shifts a little toward the finger and stretches slightly to that side, then springs back on release. It doesn't consume touch events, so it stacks with `clickable` and `mochiPressGlow`. It only changes the layer: no recomposition and no relayout.
+`Modifier.mochiPressDeform(scale = MochiPressDefaults.Scale, follow = MochiPressDefaults.Follow)` shrinks the element to `0.96f` on press, shifts it up to `3dp` toward the finger while stretching slightly toward that side, and springs back on release. It does not consume pointer events and mutates only the graphics layer, avoiding recomposition and relayout.
 
-## Elastic
+## Elastic deformation
 
 ### Rubber band
 
-`rubberBand(overshoot, dimension, max)` is iOS UIScrollView's rubber-band formula: nearly 1:1 at first, harder the further you pull, with `max` as a soft cap.
+`rubberBand(overshoot, dimension, max)` implements the iOS `UIScrollView` rubber-band resistance curve: nearly `1:1` near the boundary, progressively stiffer further out, with `max` as an asymptotic soft cap. `rubberBandPull(pointer, bounds, max)` computes the 2D pull vector when a pointer leaves a `Rect`.
 
-Pull an element when the finger leaves its bounds:
+Bind an element to out-of-bounds pointer drag:
 
 ```kotlin
-var pointer by remember { mutableStateOf<Offset?>(null) }   // finger position, null when lifted
-var bounds by remember { mutableStateOf(Rect.Zero) }        // element bounds, same coordinate space
-val rubber = rememberMochiRubberBandState(pointer = { pointer }, bounds = { bounds }, maxPull = 72.dp)
+var pointer by remember { mutableStateOf<Offset?>(null) }
+var bounds by remember { mutableStateOf(Rect.Zero) }
+val rubber = rememberMochiRubberBandState(
+    pointer = { pointer },
+    bounds = { bounds },
+    maxPull = 72.dp,
+)
 
 Box(Modifier.mochiRubberBand(rubber))
 ```
 
-Pulling is quick and stable (response 0.24 s, damping 0.86); release or moving back inside springs back with a little overshoot (0.36 s, 0.7). `adjust` can reshape the target, e.g. the dropdown only pulls 40% toward its button. For geometry only, use `Rect.rubberStretched(pull)`: moved 60% toward the pull, stretched 40% on that side, slightly narrowed on the other axis.
+Pulling uses a fast, well-damped spring (`0.24s` response, `0.86` damping ratio), while releasing or returning inside bounds switches to a livelier return spring (`0.36s` response, `0.7` damping ratio). Pass `adjust` to scale directional pull. For pure geometry calculations, call `Rect.rubberStretched(pull)`, which translates the rect `60%` toward the pull, stretches the leading side by `40%`, and narrows the cross axis by `8%` to preserve perceived volume.
 
 ### Jelly
 
-Stretch along the motion and narrow across it according to velocity; when the velocity reverses on bounce it naturally squashes:
+`Modifier.mochiJelly` stretches an element along its axis of motion and narrows the cross axis to preserve volume according to instantaneous velocity, naturally squashing when velocity reverses on rebound:
 
 ```kotlin
 val pos = remember { Animatable(0f) }
-Box(Modifier.mochiJelly(velocity = { pos.velocity * travelPx / sizePx }, gel = 0.6f, vertical = false))
+Box(
+    Modifier.mochiJelly(
+        velocity = { pos.velocity * travelPx / sizePx },
+        gel = 0.6f,
+        vertical = false,
+    ),
+)
 ```
 
-`velocity` is in "own sizes per second". The building blocks are `jellyStretch(velocity)` and `jellyCrossScale(stretch)`.
+`velocity` is expressed in element sizes per second. The underlying math helpers are `jellyStretch(velocity)` (clamped to `-0.10f..0.16f`) and `jellyCrossScale(stretch)`.
 
 ### Follow spring
 
-`MochiFollowSpring(response, dampingRatio)`: a 2D spring integrated every frame. The target can change every frame and motion stays continuous, unlike restarting an animation on each change.
+`MochiFollowSpring(response, dampingRatio)` integrates a 2D spring step-by-step using real frame deltas (`240Hz` internal sub-stepping keeps large frame intervals stable). Position and velocity stay continuous even when the target moves every frame:
 
 ```kotlin
-val spring = remember { MochiFollowSpring(0.32f, 0.78f) }
+val spring = remember { MochiFollowSpring(response = 0.32f, dampingRatio = 0.78f) }
 LaunchedEffect(Unit) {
-    while (true) position = spring.stepFrame(target)
+    while (true) {
+        position = spring.stepFrame(target)
+    }
 }
 ```
 
 ## Metaball
 
-Two continuous-corner rounded rectangles a and b, joined by a "neck" like two droplets when close enough; with a soft two-layer shadow and optional press glow. Requires API 33+ (AGSL); below that it falls back to two solid shapes.
+`ui.feice.mochi.effect.metaball` joins two continuous-curvature rounded rectangles `a` and `b` with a liquid neck when they approach each other, complete with a two-layer soft shadow and optional press glow. It renders via AGSL shaders on Android 13+ (API 33+) when `MochiGraphics.shaders` is enabled, and falls back to two solid shapes on older Android versions or at graphics level `Mid`.
 
-The merge is a smooth union (smooth-min) clamped to a "hull": the rounded rect enclosing both shapes, with the smaller shape's corner. A smooth union pushes the outline outward where the shapes overlap or nearly touch; with the clamp, the neck only grows into the gap between them and never bulges. Two capsules side by side get the capsule enclosing both as their hull, so when they merge the result is one capsule with no flat cuts or square corners. Where motion should feel elastic (the toolbar morph), the caller swells and overshoots the shapes itself instead of relying on the merge.
+The merged outline uses a smooth union (smooth-min) clamped to the enclosing rounded-rectangle hull (using the smaller shape's corner radius), so the neck grows strictly into the gap between the two shapes without bulging outward; two side-by-side capsules merge into a single clean capsule with no flat cuts.
 
 ```kotlin
 val renderer = rememberMochiMetaballRenderer()
-val colors = MochiMetaballColors(a = cs.secondaryContainer, b = cs.surfaceContainerHigh, shadow = cs.shadow)
+val cs = MochiTheme.colorScheme
+val colors = MochiMetaballColors(
+    a = cs.secondaryContainer,
+    b = cs.surfaceContainerHigh,
+    shadow = cs.shadow,
+)
 
 Spacer(
     Modifier.fillMaxSize().drawBehind {
@@ -135,139 +162,177 @@ Spacer(
             b = MochiBlob(panelRect, 20.dp.toPx()),
             fuse = 28.dp.toPx() * proximityFuse(buttonRect, panelRect, restGap = 48.dp.toPx()),
         )
-        drawMochiMetaball(renderer, frame, colors, MochiMetaballShadow.elevated(this, 1f, cs.isDark), glow = glowState)
+        drawMochiMetaball(
+            renderer = renderer,
+            frame = frame,
+            colors = colors,
+            shadow = MochiTheme.shadows.floating.resolve(this, cs.isDark),
+            glow = glowState,
+        )
     },
 )
 ```
 
-`MochiMetaballFrame`:
+`MochiMetaballFrame` parameters:
 
-| Parameter | Description |
-|---|---|
-| a / b | The two shapes (`MochiBlob(rect, cornerRadius)`, px). b is drawn on top |
-| fuse | Fuse radius (px); larger means a thicker, stickier neck; 0 = not joined |
-| blend | 0..1 color transition: 0 = all a color, 1 = blend from a to b by proximity |
-| merge | 0..1, a is fully taken over by b's color (for cover-style expansion where a and b coincide) |
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `a` | `MochiBlob` | Required | Primary shape (`MochiBlob(rect, cornerRadius)` in pixels) |
+| `b` | `MochiBlob` | Required | Secondary shape (drawn on top) |
+| `fuse` | `Float` | Required | Smooth-min fuse radius in pixels (`0f` = disconnected) |
+| `blend` | `Float` | `1f` | Color transition factor: `0f` uses `a`'s color everywhere, `1f` blends toward `b` by proximity |
+| `merge` | `Float` | `0f` | `0f..1f`, transitions `a` entirely into `b`'s color (used for overlapping cover-style expansion) |
 
-`proximityFuse(a, b, restGap)` gives the "join when close" factor: 0 at distance ≥ restGap, 1 when touching. Multiply by the max fuse radius to get `fuse`.
+- **Proximity factor**: `proximityFuse(a, b, restGap)` returns `0f` at distances `>= restGap` and `1f` upon contact; multiply by the maximum fuse radius to compute `fuse`.
+- **Shadow resolution**: Prefer `MochiTheme.shadows.<level>.resolve(density, dark, visibility)` inside themed components (see [Shadow levels](theme.md#shadow-levels-mochishadows)); use `MochiMetaballShadow.elevated(density, elevation, dark, visibility)` for continuous elevation progress or `MochiMetaballShadow.None` for no shadow.
+- **Opaque and translucent fills**: For opaque colors, `b`'s interior safe rect runs an SDF-free fill shader while the full SDF shader runs only along the perimeter band and shadow ring. Translucent fills (such as iOS translucent semantic fills) combine exact G2 contours inside an isolated layer and composite onto the page once, preserving uniform alpha across overlaps and keeping the shadow outside the surface; callers do not need to paint the bodies separately underneath. G2 paths are cached by size.
 
-`MochiMetaballShadow.elevated(density, elevation, dark, visibility)` gives the two-layer shadow for an elevation; use `MochiMetaballShadow.None` for no shadow. Inside a theme prefer the shadow levels, `MochiTheme.shadows.floating.resolve(density, dark)` (see [Shadow levels](theme.md#shadow-levels-mochishadows)), so an app that changes its shadow table changes yours too.
+## Fade mask & edge blur
 
-Translucent fills retain their alpha across the merged surface, including overlaps and a tail contained inside the selection. The renderer composites one body over the page and keeps its own shadow outside the surface; callers should not paint the bodies again underneath. This applies to every theme, including iOS semantic fills.
+`ui.feice.mochi.effect.mask` provides container edge fade masks, smooth gradient brushes, and edge blur modifiers.
 
-For opaque fills, b's interior runs a cheap shader without SDFs; the expensive shader only runs on the edge band and the shadow ring. Translucent fills use an isolated layer with the combined exact G2 body contours to avoid accumulating alpha. Paths are cached by size.
+### Container fade mask
 
-## Fade mask
-
-`effect/mask` is a general fade mask for containers: it fades out the content the area draws itself on the chosen edges. It erases the content rather than painting a background over it, so it stays clean on cards, colors, gradients and images, and doesn't affect shapes, corners or shadows.
+`mochiFadeMask` and `mochiScrollFadeMask` erase the container's own drawn pixels along selected edges using `BlendMode.DstOut`, without painting a solid color overlay. They work cleanly over cards, colored fills, gradients, images, and glass without affecting corners or outer shadows.
 
 ```kotlin
-// Scrolling areas: an edge fades while you can still scroll toward it, and is solid at the end
-Column(Modifier.mochiScrollFadeMask(scrollState).verticalScroll(scrollState)) { … }
-LazyColumn(state = list, modifier = Modifier.mochiScrollFadeMask(list)) { … }
-LazyRow(state = row, modifier = Modifier.mochiScrollFadeMask(row, vertical = false)) { … }
+// Scrollable containers (place outside the scroll modifier): fades clipped edges, solid at scroll bounds
+Column(Modifier.mochiScrollFadeMask(scrollState).verticalScroll(scrollState)) { /* ... */ }
+LazyColumn(state = listState, modifier = Modifier.mochiScrollFadeMask(listState)) { /* ... */ }
+LazyRow(state = rowState, modifier = Modifier.mochiScrollFadeMask(rowState, vertical = false)) { /* ... */ }
+LazyVerticalGrid(columns = GridCells.Fixed(2), state = gridState, modifier = Modifier.mochiScrollFadeMask(gridState)) { /* ... */ }
 
-// Any container: fixed edges
-Box(Modifier.mochiFadeMask(MochiFadeEdges(bottom = 48.dp))) { … }
+// Fixed edge mask on any container
+Box(Modifier.mochiFadeMask(MochiFadeEdges(bottom = 48.dp))) { /* ... */ }
 
-// Compute each edge's strength per frame (read at draw time, no recomposition)
-Modifier.mochiFadeMask(MochiFadeEdges.vertical()) { edge -> … }
+// Dynamic per-frame edge strength (0f..1f) read during draw without recomposition
+Box(Modifier.mochiFadeMask(MochiFadeEdges.vertical()) { edge -> /* ... */ }) { /* ... */ }
 ```
 
-- The fade follows a smoothstep S curve split into 16 stops (`MochiSmoothGradient`), so there is no kink where it meets the solid color or full transparency. Every solid-to-clear fade in the library (scroll edges, the bottom toolbar, fade masks) uses it; use it for your own fades too instead of a two- or three-stop linear gradient.
-- Scrolling variants: as long as content is clipped on that side, the edge is fully masked; it only eases off over the last quarter of the fade length before the end. Scaling over the whole fade length is wrong: content that overflows by half a line would be only half masked, leaving the clip line plainly visible.
-- The mask composites offscreen, and an offscreen buffer clips to the layer's rectangle, so it only goes offscreen while some edge is actually masked; otherwise content may draw outside the rectangle as usual. For content that moves or scales with a morph, put the transform outside the mask, not inside it.
-- `start` / `end` follow reading direction and swap automatically in RTL.
-- The default fade length is 24dp (`MochiFadeMaskDefaults.Extent`).
-- Already applied to the top and bottom of scrollable menus (`MochiDropdown` and friends) and the demo pages' scrolling descriptions. The old `navigation.mochiScrollFadeMask` is deprecated and forwards here.
-- `mochiFadeMask` / `mochiScrollFadeMask` only fade alpha and never blur on their own, in any appearance. For a blur that grows toward the edge, add `Modifier.mochiProgressiveBlur(edges, blur = MochiProgressiveBlurDefaults.Blur /* 4dp */, amount = { 1f })` (Android 13+; older versions draw as is). Its edges are written like `mochiFadeMask`'s, and it usually sits together with a fade mask of the same lengths. It is an approximation: a system Gaussian blur is cross-faded with the sharp content along the mask instead of varying the radius per pixel. No library bar or mask uses it; the demo shows it only on the 渐变遮罩 page.
-- This differs from `mochiScrollEdgeFade` behind top and bottom bars, which paints a background behind the bar (a translucent page background with a bottom hairline for the top bar, a background gradient for the bottom bar) to cover content scrolled underneath.
-  - The blur of the content under the top bar is done by the scrolling container itself, with `Modifier.mochiScrollEdgeBlur(top, alpha)`: everything above the bar's bottom edge is blurred evenly with one sigma (`scrollEdge.blur` × `alpha`) and cut off hard at that edge. It blurs its own content, so it needs no backdrop source and the bar never draws itself. It does nothing when the theme's `scrollEdge` is null or on Android 12 and below.
-  - The title scaffolds already do this. On your own pages, add it to the scrolling container: `top` is the distance from the container top to the bar's bottom edge, and `alpha` is the same value as the bar's backgroundProgress.
-- Performance: the blur only runs on the part that actually blurs (the strip under the top bar for scroll edges, the bounding box of the edges for progressive blur); the rest of the content is drawn as is. Each pixel takes 13 samples covering ±3σ. On a full-screen scroll container the blur itself costs about 90% less than blurring the whole layer, and results differ by less than 1/255 per pixel.
+- **Smoothstep curve**: Masks use `MochiSmoothGradient`, which approximates a `smoothstep` S-curve with `16` stops (interpolated in `LinearExtendedSrgb` on API 29+) so slope reaches `0` at both ends without a visible linear-gradient crease. Use `MochiSmoothGradient.vertical` and `MochiSmoothGradient.horizontal` for custom solid-to-clear fades as well.
+- **Scroll ramp threshold**: `mochiScrollFadeMask` keeps an edge at full strength whenever content remains clipped on that side, easing off only across the final `1/4` of `extent` before the scroll bound so a half-line overflow never exposes a hard clip line. Default `extent` is `24dp` (`MochiFadeMaskDefaults.Extent`). `ui.feice.mochi.navigation.mochiScrollFadeMask` is deprecated and forwards to this implementation.
+- **On-demand offscreen compositing**: `CompositingStrategy.Offscreen` is enabled only while at least one edge has positive extent and amount; when inactive, the layer stays `Auto` so content can draw beyond bounds freely. Place morph translations or scales outside `mochiFadeMask`. `MochiFadeEdges` `start` and `end` mirror automatically in RTL layouts.
 
-Demo: Effects → 渐变遮罩.
+### Progressive blur & scroll-edge blur
+
+`mochiFadeMask` modulates alpha only. For edge blur on Android 13+ (drawn unchanged on Android 12 and below):
+
+- **`Modifier.mochiProgressiveBlur(edges, blur = 4.dp, amount = { 1f })`**: True per-pixel variable-radius Gaussian blur (matching iOS `variableBlur`), typically paired with a `mochiFadeMask` of the same `edges`. Each pixel evaluates `sigma = blur * mask` (skipped below `0.3px`) in two separable 33-tap Gaussian passes (`16` taps per side spanning `±3σ`).
+- **`Modifier.mochiScrollEdgeBlur(top, alpha = { 1f })`**: Blurs scrolling content underneath a top bar when attached to the scrolling container. Parameters come from `MochiTheme.materials.scrollEdge` (no-op when `null`): `Frosted` applies hardware-downsampled `RenderEffect` blur uniformly above `top` with a crisp cutoff at the bar's bottom edge, while `GradientBlur` runs a variable-radius pocket blur across the bar boundary. `MochiLargeTitleScaffold`, `MochiCompactTitleScaffold`, and `MochiSheetScaffold` wire this automatically; on custom layouts, set `top` to the bar's bottom offset from the container top and share `alpha` with the bar's `backgroundProgress`. It complements `mochiScrollEdgeFade` (which paints the bar's translucent tint and bottom hairline) and blurs the container's own content directly without a backdrop source.
+
+Both blur modifiers execute strictly within the active edge band while drawing the rest of the container untouched, and both reflect samples at the viewport boundary (`TileMode.MIRROR` / reflected kernel coordinates) so a single scrolling high-contrast pixel row at the edge is never stretched into a flickering band.
 
 ## Soft shadow
 
-`DrawScope.drawMochiShadow(path, shadow, color)` (`effect/shadow`) casts a shadow under any shape, using the same parameters as the metaball (`MochiMetaballShadow` has an ambient and a contact layer, and `ambientInset` shrinks the ambient shape before blurring; the `elevated` preset is an inset, widely blurred, faint ambient layer plus a very soft, faint contact layer, so only a trace of shadow sits at the edge and there is no hard line), with Gaussian edges and no banding. The shadow sits under the shape: draw the shadow first, then the shape, so the shape's anti-aliased edge lands directly on the soft shadow without a hard grey line. A translucent shape lets the shadow show through.
+`ui.feice.mochi.effect.shadow` draws a two-layer Gaussian shadow sharing `MochiMetaballShadow` parameters (an inset, wide ambient layer plus a soft contact layer), replacing Material's `shadowElevation` on floating surfaces. Draw the shadow first and the surface path over it so the anti-aliased edge lands directly on the soft shadow without a cutout seam.
 
 ```kotlin
-val shadowLevel = MochiTheme.shadows.raised // read in the composable
-drawBehind {
-    val p = pathCache.get(size.toRect(), size.minDimension / 2f, 1f)
-    // Capsules and rounded rectangles use the rect overload: pass the rect and corner radius
-    drawMochiShadow(size.toRect(), size.minDimension / 2f, shadowLevel.resolve(this, dark), MochiTheme.colorScheme.shadow)
-    drawPath(p, container)
-}
+val shadowLevel = MochiTheme.shadows.raised
+val shadowColor = MochiTheme.colorScheme.shadow
+val isDark = MochiTheme.colorScheme.isDark
+
+Box(
+    Modifier
+        .drawBehind {
+            drawMochiShadow(
+                rect = size.toRect(),
+                cornerRadius = size.minDimension / 2f,
+                shadow = shadowLevel.resolve(this, isDark),
+                color = shadowColor,
+            )
+        }
+        .background(containerColor, MochiCapsule),
+)
 ```
 
-Use it for floating surfaces instead of Material's `shadowElevation`. The tab bar, its search button and accessory, the step slider, switch and slider thumbs, alerts and toasts already do.
+| Overload | Target shapes & rendering mechanism |
+|---|---|
+| `DrawScope.drawMochiShadow(rect, cornerRadius, shadow, color)` | **Capsules and rounded rectangles (including continuous-curvature and animated surfaces)**: On Android 13+, evaluates an analytical AGSL Gaussian convolution (`erf` horizontal integral + 4-tap vertical integral + `±0.5/255` dithering) in a single draw call with zero texture allocations, safe for shapes that resize every frame |
+| `DrawScope.drawMochiShadow(path, shadow, color)` | **Static arbitrary paths**: Uses `Paint.setShadowLayer` on Android 9+. Because the platform caches per-path shadow mask textures without eviction, do not call this overload on paths that mutate every frame. Falls back to `4` concentric capsule rings below API 28 |
 
-For capsules and rounded rectangles, use the rect overload `drawMochiShadow(rect, cornerRadius, shadow, color)`. On Android 13+ it computes the rounded rectangle's Gaussian shadow directly in a shader: one draw, no textures. Once blurred, a continuous-curvature corner and a circular corner look the same. The path overload goes through the system's `setShadowLayer`, which creates a blur texture for every distinct path and keeps it, so a shape that changes every frame (animation, dragging, collapsing) makes GPU memory grow without bound. On an Android 16 phone, the non-iOS tab bar collapsing while scrolling leaked one texture per frame, reaching hundreds of MB after a few dozen swipes. Use the path overload only for shapes that don't change.
+## Glass rendering & performance
 
-Below API 28, arbitrary-shape blur shadows aren't available, so it falls back to a few fading capsule rings around the bounding box.
+`ui.feice.mochi.effect.glass` provides backdrop capture, standalone liquid-glass surfaces, and multi-item merging containers:
 
-## Graphics level
+| API | Description |
+|---|---|
+| `rememberMochiBackdrop` / `Modifier.mochiBackdropSource` | Captures background content for glass sampling; expose via `LocalMochiBackdrop` to floating bars and glass controls |
+| `rememberMochiBarBackdrop` | Allocates a backdrop only when `MochiTheme.materials.controlGlass` is active, returning `null` in solid mode |
+| `MochiGlassSurface` / `MochiGlassCapsule` | Standalone rounded-rectangle or capsule glass surface; falls back to `MochiGlass.fallbackColor` when material or backdrop is `null` |
+| `MochiGlassGroup` / `rememberMochiGlassGroupState` | Renders multiple glass items as one smooth-union glass surface sharing a single render-node graph, with `bloom`, `appear`, `pop`, and spring placement (`Modifier.mochiGlassItem`) |
+| `MochiGlassBlobs` | Smooth-union surface for morphing transitions across multiple `MochiBlob` rects (single merged glass on Android 13+, metaball solid fallback when glass is off) |
+| `MochiVibrant` | iOS `UIVibrancyEffect`-style vibrancy layer using child content as an alpha mask over blurred, `4×5` color-matrix-filtered backdrop content |
+| `LocalMochiGlassShadow` / `MochiNoGlassShadow` | Draw-phase lambda (`0f..1f`) scaling outer glass shadow opacity; used by top bars to hide shadow while scroll is at rest |
+| `LocalMochiGlassDark` / `MochiGlassContent` | Exposes current adaptive glass luminance polarity and semantic foreground colors (`label`, `secondary`, `separator`, `accent`) |
+| `mochiGlassOverflow()` | Returns the outer shadow and ring reach beyond glass bounds, passed to `mochiBlur` or `MochiBlurTransition.overflow` so offscreen blur layers do not clip glass shadows |
 
-Use `mochiBackdropSource` for liquid-glass content and place glass beside its source. Both retain independent drawing boundaries: sibling animations should not re-record an unchanged background, while actual background changes remain live. Apply clipping to the content that needs it rather than replaying a complex parent path through the entire glass filter graph. Keep the contours required by sheets and navigation transitions.
+### Sampling & render pipeline
 
-Nested layer recording snapshots an independent `Density` instead of passing the mutable enclosing `DrawScope` as density; circular delegation can otherwise overflow the stack. Scroll edges never read GPU pixels (the fill is fixed and no longer samples the brightness behind). Validate page timing, visual consistency and stability separately. Removing effects, lowering refresh rate or improving an isolated microbenchmark does not establish a whole-page performance improvement.
+- **Sibling placement & single-pass recording**: Place glass surfaces as siblings after `mochiBackdropSource`, never inside it, so glass does not sample itself. Both keep independent drawing boundaries so sibling animations do not re-record a static backdrop, and internal single-pass layer replay ensures visible content executes once per frame even across nested scaffolds. `MochiNavHost` records its window backdrop only while an overlay reads it or shared bars are transitioning, keeping ordinary scrolling on the display layer.
+- **Pyramid render graph (Android 13+)**: Each glass surface or merging group uses four render stages: level-0 sampling (recorded at `0.5 × density` texels/pt across the glass plus recipe sample reach, clamping edge pixels at the window boundary; coarse-only frosted surfaces step down initial resolution to cut pixel fill by ~75%), a 13-tap downsample pyramid (1 level for clear recipes, `4–6` for regular, `8–9` for large sheets), a `2 px/pt` face pass (refraction, multi-level blur, backdrop filter, face matrix, and bleed), and a full-resolution finish pass (outer shadow, inner ring, specular highlights, tint, and press). Android 12 falls back to platform blur plus face color matrix; older versions draw the solid fallback color.
+- **Shared render nodes & hold bounds**: `MochiGlassGroup`, button groups, and menu droplets share one render-node set across all merged pieces, reusing cached `RenderEffect` instances whenever geometry and recipe stay unchanged. Morphing menus lock level 0 and the pyramid once over the union of the button, open panel, rubber-band pull, and overshoot when opening begins, running only the face and finish passes per frame without relayout (expanding in `32px` steps if pulled past the initial union).
+- **Asynchronous adaptive luminance**: When `MochiGlass.adaptive` is enabled, a ring around the glass is sampled every `250ms` via `PixelCopy` and averaged off the main thread without stalling GPU readback; sampling pauses automatically during tracked scrolling and navigation transitions.
 
-Each glass surface or group (Android 13+) uses these render nodes: sampling (the backdrop recorded into level 0 at 0.5 × screen density texels per pt, covering the glass plus the full sample reach the recipe asks for, recorded up to the window edge and extended beyond it by repeating the edge pixels, like the web texture's CLAMP_TO_EDGE), the pyramid (each level records the one above at half size with the 13-tap downsample; as many levels as the coarsest blur in the recipe needs, usually 1 for clear, 4–6 for regular and up to 8–9 for large surfaces such as sheets), face (reads the face area plus the levels and computes refraction, blur, backdrop filter, face matrix and bleed at 2 px per pt) and finish (full resolution, slightly larger than the glass: shadows, highlights, tint, press). The pyramid levels are tiny, each a quarter of the pixels of the one above, though they add a few nodes compared with the previous engine. The system walks every render node before drawing each frame, so a merging group (`MochiGlassGroup`, button groups, the menu droplet) shares one set of nodes rather than one set per piece. When shape, size and recipe are unchanged the effect objects are reused and the system reuses its last result; backdrop changes update live without re-recording. Adaptive light/dark copies a ring around the glass with PixelCopy every 250 ms and averages it off the main thread; it never reads GPU memory on the main thread.
+## Graphics level (MochiGraphics)
 
-Glass that changes shape (the iOS glass menu growing from its button into a panel) samples the whole area it will sweep: when the menu starts opening, level 0 and the pyramid are recorded once over the union of the button, the open panel, the rubber band and the overshoot. While the panel grows, shrinks and springs back inside that area none of those layers are recorded again, so the system keeps their offscreen results and only the face and finish passes run each frame; if the panel leaves the area it grows once, rounded out to 32 px. The glass node fills the overlay and is laid out once, with the panel passed in as a shape, so opening and closing never relayout. This follows the hold technique in FlClash (prism_ui).
+`ui.feice.mochi.theme.MochiGraphics.level` sets the global graphics quality tier consulted by expensive rendering paths across the library. Updating `level` (observable state) takes effect immediately; persistence belongs to the host app.
 
-`MochiGraphics.level` (`theme`) is the global graphics level; every expensive drawing path in the library decides whether and how heavily to draw based on it. Changes apply immediately; the app is responsible for saving it.
-
-| | Mid | High (default) | Extra |
+| Capability | `Mid` | `High` (default) | `Extra` |
 |---|---|---|---|
-| Blur (content transitions, nav bar, appear animations) | on | on | on, radius ×1.5 |
-| AGSL shaders (metaball, edge glow, nav bar fusion) | off | on | on |
-| Soft shadows | on | on | on |
-| Light/dark reveal | hard edge | feathered + glow | feathered + glow |
-| Refresh rate | system | system | highest refresh rate |
+| Blur (`MochiGraphics.blur`, Android 12+) | On (`1.0×`) | On (`1.0×`) | On (`1.5×` radius, `blurScale = 1.5f`) |
+| AGSL shaders (`MochiGraphics.shaders`: metaball, liquid glass, edge glow, nav bar fusion, Android 13+) | Off (solid fallbacks) | On | On |
+| Soft shadows (`MochiGraphics.softShadows`, Android 9+) | On | On | On |
+| Theme reveal edge (`MochiGraphics.softReveal`) | Crisp hard edge | Feathered edge + glow | Feathered edge + glow |
+| Display refresh rate | System default | System default | Highest refresh rate at current resolution |
 
-- Effects the system cannot do (no blur below Android 12, no AGSL below 13) never appear, whatever the level.
-- Extra does not turn on HDR; HDR is a separate switch (`MochiHdr.enabled`).
-- The refresh rate is set on the window by the outermost `MochiTheme` (`preferredDisplayModeId`, choosing only among modes at the current resolution) and restored when it leaves.
-- Your own effects should check `MochiGraphics.blur` / `shaders` / `softShadows` / `blurScale` instead of comparing `SDK_INT` yourself, so the whole UI looks consistent at a given level.
-
-In the demo app, Theme → Graphics switches levels with the step slider (`MochiStepSlider`) and shows the state of each effect.
+- **Platform capability bounds**: Effects unsupported by the OS (no `RenderEffect` blur below Android 12, no AGSL shaders below Android 13, no arbitrary-path soft shadow below Android 9) remain disabled regardless of `level`.
+- **Independent HDR switch**: `Extra` does not enable HDR; HDR highlights are controlled separately via [`MochiHdr.enabled`](hdr.md).
+- **Window refresh rate management**: The outermost `MochiTheme` sets `preferredDisplayModeId` on the `Window` (selecting only among modes matching the current physical resolution) and restores the previous mode on disposal.
+- **Custom effects**: Query `MochiGraphics.blur`, `shaders`, `softShadows`, `blurScale`, `reveal`, and `softReveal` instead of checking `Build.VERSION.SDK_INT` manually so custom surfaces stay consistent with the active tier.
 
 ## Theme reveal
 
-`MochiThemeRevealHost(state) { App() }` + `state.reveal { change the theme }` (`effect/content`): like switching light/dark on iOS or Telegram, the new theme is revealed by a circle growing from the finger.
-
-- The current frame is captured first, then the change runs: the old frame stays on top with a growing hole that covers the screen in about 0.64 s, fast at the start with a long tail.
-- The hole starts as a circle, flattens against the screen edges as it reaches them, and its corners settle into the screen's own corner radii: at the end the hole is exactly the screen shape, so no curved slivers of the old frame linger in the rounded corners.
-- The feathered edge sharpens as it progresses, with a faint glow; the new frame underneath scales from 0.97 back to 1, as if rising from below.
-- Covering with the capture, applying the change (the heavy relayout) and starting the clock happen on separate frames, so the heavy frame causes no visible hitch and the animation does not skip its start.
-- The center defaults to the most recent press (the host observes touches without consuming them); you can also pass `origin`.
-- Triggering again mid-reveal lets the current reveal keep running until the new capture (the on-screen half-old, half-new frame) arrives, then hands over without a visible cut; the follow-up is faster (0.5 s) and only scales from 0.99. Rapid taps merge their intermediate changes into the last one.
-- `state.isRevealing` is true while revealing; colors should snap then (`animateMochiColorScheme(…, animate = !state.isRevealing)`).
-- At graphics level Mid the edge is hard with no glow.
-- The capture uses PixelCopy to copy the pixels actually on screen (Android 8.0+); with animations disabled, on older systems or if the copy fails, the change is applied directly.
-
-The same state also offers `state.crossfade { change the theme }`: an in-place content blur transition of about 0.5 s where the old frame blurs and fades while the new one sharpens out of a blur, with no spreading from the finger (both blur radii change continuously frame by frame instead of using cached steps, which would jump, and the relayout for the new theme finishes before the animation starts); `isRevealing` is true here too, so colors snap: the crossfade itself carries the color change, and interpolating on top would recompose the whole tree every frame and make the transition stutter. Where the system cannot blur, it is just a fade.
-
-Settings pages usually hold a nullable state (no host in previews or tests) and only want the reveal when light/dark actually flips. Three helpers cover that:
+`MochiThemeRevealHost` and `rememberMochiThemeRevealState()` (in `ui.feice.mochi.effect.content`) coordinate full-screen transitions for whole-theme or light/dark switches:
 
 ```kotlin
-reveal.revealOrChange { controller.keyColor = it }              // reveal, or just change when the state is null
-reveal.revealIfShadeChanges(nowDark, mode.isDark(systemDark)) {  // reveal only if light/dark flips;
-    controller.colorSchemeMode = mode                           // otherwise colors interpolate in place
+val revealState = rememberMochiThemeRevealState()
+
+MochiThemeRevealHost(state = revealState) {
+    val colorScheme = animateMochiColorScheme(
+        target = controller.currentColorScheme(),
+        animate = !revealState.isRevealing,
+    )
+    MochiTheme(colors = colorScheme) {
+        AppContent()
+    }
 }
-reveal.crossfadeOrChange { settings.style = it }                 // whole-style switch: in-place blur crossfade
 ```
 
-`ColorSchemeMode.isDark(systemDark)` tells whether a mode is dark right now.
+### Transition modes
 
-Which to use: switching the whole style (Mochi ↔ Nothing) uses `crossfade`; switching light/dark uses `reveal`, but only when the brightness actually changes (e.g. switching between Light and Auto while the system is light changes nothing on screen, so apply it directly).
+- **Circular reveal (`state.reveal(origin = null) { ... }`)**: Captures the current window via `PixelCopy` (Android 8.0+), places the snapshot on top, applies the theme mutation, and expands a cutout from `origin` (defaulting to the latest press observed by the host in `PointerEventPass.Initial` without consuming input) over `640ms` with a fast-out, long-tail curve. As the circle reaches the window edges it flattens against them while its corners settle into the device's physical `MochiScreenCorners`, matching the screen silhouette at completion (evaluated in a single-pass AGSL SDF shader on Android 13+, or a G2 rounded-rect `Path` cutout on Android 8.0–12). At `High` and `Extra` levels the cutout carries a `20dp` feather and subtle white halo that sharpen to zero at the end (`Mid` uses a crisp hard edge), while the new UI underneath scales from `0.97` to `1.0`. Triggering again mid-reveal keeps the current reveal running until the new snapshot arrives, then hands off smoothly into a `500ms` follow-up scaling from `0.99`; rapid taps coalesce intermediate state changes into the latest pass. Window resizes (rotation, foldable posture changes, or split-screen resizing) abort any active snapshot cleanly so coordinates never tear.
+- **In-place blur crossfade (`state.crossfade { ... }`)**: Captures the old frame and crossfades in place over `500ms`: the top snapshot blurs continuously up to `18dp` while fading out, and the new UI underneath sharpens continuously from `12dp` blur (continuous per-frame radii avoid stepped jumps across a full-screen image; degrades to a plain alpha crossfade below Android 12).
 
-Use it only for whole re-dresses (theme, light/dark), where fonts, icons and control colors all change and cannot be interpolated. Continuous parameters such as the seed color use scheme interpolation instead. The theme and light/dark switches on the Theme tab use it. Onboarding interpolates colors and updates text in place.
+Both modes separate displaying the snapshot, running the heavy theme relayout, and starting the animation clock onto consecutive frames so the relayout frame never causes a visible hitch or skips the start of the curve. While active, `state.isRevealing` is `true`; pass `animate = !revealState.isRevealing` to `animateMochiColorScheme` so colors snap immediately under the snapshot without recomposing the tree every frame. When reduced motion is enabled, system animations are disabled, running below Android 8.0, or capture fails, the change runs synchronously.
 
-## Why there is no rim
+### Null-safe helpers
 
-Earlier versions drew a bright rim along the edge of the pressed shape, plus an "ambient" rim on nearby cards. Both were removed: iOS 26 lights the surface from the finger and doesn't outline it, and a rim made every pressed element look framed. The soft body adds a little more light now (plus 0.28) so the press still reads clearly. Color dodge isn't used: it washes light surfaces to white and makes button text hard to read.
+Settings screens often hold a nullable `MochiThemeRevealState?` (for previews or tests without a host). Three extension helpers handle null states and conditional dark-mode flips:
 
+```kotlin
+// Reveals from touch point when a host is present, or mutates directly when null
+revealState.revealOrChange { controller.colorSchemeMode = mode }
+
+// Reveals only when effective light/dark polarity changes; otherwise mutates directly for color interpolation
+revealState.revealIfShadeChanges(
+    fromDark = nowDark,
+    toDark = mode.isDark(systemDark),
+) {
+    controller.colorSchemeMode = mode
+}
+
+// Whole-style switch (fonts, icons, and control palette changing together): runs in-place blur crossfade
+revealState.crossfadeOrChange { settings.style = nextStyle }
+```
+
+Reserve screen-level reveals for whole-theme switches where typography, icons, materials, and control palettes change together (`revealIfShadeChanges` for light/dark polarity, `crossfadeOrChange` for visual style). For continuous parameters such as Monet seed color or contrast level, mutate state directly and let `animateMochiColorScheme` interpolate in place.

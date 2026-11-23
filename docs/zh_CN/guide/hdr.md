@@ -1,85 +1,112 @@
 # HDR 高光（实验性）
 
-打开后，按住时的高光、开关滑块的圆钮和屏幕边缘流光用超过 SDR 白的亮度画，像 iOS 的 Apple Intelligence 光效那样真的在发亮。需要 Android 14（API 34）以上和支持 HDR 的屏幕；其他情况一切按 SDR 画。
+全局控制位于 `ui.feice.mochi.theme` 包（`MochiHdr`、`Color.hdr`），光效与画刷位于 `ui.feice.mochi.effect.hdr` 包（`MochiEdgeGlow`、`MochiHdrPalette`、`mochiHdrBrush`）。
 
-示例 app「效果 → HDR 高光」里每种都能试；「主题」页有全局开关。
+开启 `MochiHdr.enabled` 后，按压高光、开关与滑块的圆钮以及屏幕边缘流光将以高于 SDR 纯白的线性亮度绘制。该能力需要 Android 14（API 34）及以上系统与支持 HDR 的显示屏；不满足条件或开关关闭时，所有组件按常规 SDR 绘制，静止态界面外观保持不变。
 
-## 原理
+## 基本用法与 API
 
-1. 窗口 HDR 模式：打开时把 Activity 窗口的 `colorMode` 设为 `COLOR_MODE_HDR`，系统给这个窗口一块扩展范围的画布；API 35+ 还会用 `setDesiredHdrHeadroom` 申请最多 3 倍的余量。关掉时恢复默认模式。
-2. 亮度余量（headroom）：屏幕现在能比 SDR 白亮多少倍，系统按环境光和当前亮度实时调整（屏幕调到最亮时余量会变小）。通过 `Display.registerHdrSdrRatioChangedListener` 跟踪。
-3. 峰值亮度：HDR 光最亮能到 SDR 白的多少倍（线性光）= 1 + (min(余量, 3) − 1) × `strength`。
-
-## 不过曝：所有 HDR 光都遵守的规则
-
-HDR 光看起来「发白、过曝」，根因是某个通道超过了屏幕能显示的上限被截断：彩色光的三个通道都顶到上限，就只剩白色。库里所有 HDR 画法都保证每个通道都不超过峰值：
-
-- 在线性光里提亮：颜色先转到线性光再提亮。shader 最后用 `fromLinearSrgb` 转回画布的色彩空间；不在 sRGB 编码值上直接乘（编码值乘 2，实际亮度约是 4.6 倍）。
-- 只放大彩色的部分：浅色是「一大块白 + 一点颜色」。浅粉 F5B9EA 三个通道都不低，整体乘倍数时连最小的通道也被抬到超过 SDR 白，看上去就是一道白光。所以提亮时最亮的通道照样到目标倍数，较暗的通道按比例拉开，白色成分（最小的通道）保持 SDR 亮度，越亮越艳、不会发白。接近白、灰的颜色退回整体乘倍数，白光照样变亮、不会染上色。Kotlin 和 AGSL 用同一个规则（`hdrLift`）。
-- 不叠加、不用乘法混合：不用相加混合把几层光叠在一起。光泽是覆盖上去的（在底色和提亮后的底色之间插值）。不用 `Modulate` 这类混合模式：HDR 模式下画布不是线性编码，乘法会把底色压暗，按下去反而变灰。
-- 不混白：彩色光就按自己的颜色提亮，不往白色混。
-- 大片的光保持 SDR：边缘流光的柔光不提亮或只轻微提亮，只有细线是 HDR，不刺眼。
-
-## API
+窗口色彩模式由最外层 `MochiTheme` 自动托管，应用只需读写 `MochiHdr` 状态或放置 `MochiEdgeGlow`：
 
 ```kotlin
-MochiHdr.enabled = true          // 全局开关（默认关）
-MochiHdr.strength = 0.6f         // 0..1，用掉亮度余量的多少
-MochiHdr.headroom                // 屏幕当前的 HDR / SDR 亮度比（状态）
-MochiHdr.supported               // 系统和屏幕是否支持
-Color.hdr(boost)               // 同一种颜色在线性光下亮 boost 倍（扩展范围）
-mochiHdrBrush(Color.White)       // 纯色画刷，HDR 时自动提亮到峰值；自己画 HDR 内容时用
-```
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import ui.feice.mochi.effect.hdr.MochiEdgeGlow
+import ui.feice.mochi.effect.hdr.MochiHdrPalette
+import ui.feice.mochi.effect.hdr.mochiHdrBrush
+import ui.feice.mochi.theme.MochiHdr
 
-窗口模式由最外层的 `MochiTheme` 管理，不需要自己设置。
+// 全局开关与强度配置（Compose 可观察状态）
+MochiHdr.enabled = true
+MochiHdr.strength = 0.6f
 
-## 自动变亮的部分
+// 全屏顶层叠加屏幕边缘流光（不拦截触摸事件）
+Box(Modifier.fillMaxSize()) {
+    PageContent()
+    MochiEdgeGlow(
+        active = isProcessing,
+        modifier = Modifier.fillMaxSize(),
+        palette = MochiHdrPalette.Intelligence,
+    )
+}
 
-打开 `MochiHdr` 就生效，不用改代码。都只在按住期间出现，松手就淡出；平时界面和 SDR 一样：
-
-- 按压高光（`mochiPressGlow` / `mochiGlow`）和融球里的按压光（按钮、按钮组、选择列表、标签栏）。原来的柔光保持 SDR，另外加一层：
-  - 光泽：手指附近覆盖一层按原色提亮的本色（到峰值的 60%）。需要知道底色，按钮和融球组件会自动传，单独用 `mochiGlow` 时没有这层；
-
-  强度只跟按压程度走、不乘高光颜色的透明度，所以深色模式下也一样亮。
-- 开关和滑块的圆钮：按住时整颗圆钮覆盖一层提亮到峰值一半的本色，比白更亮，松手淡出。
-
-## HDR 效果
-
-| 效果 | API | 说明 |
-|---|---|---|
-| 屏幕边缘流光 | `MochiEdgeGlow(active, modifier, palette, width, line, speed, intensity)` | Apple Intelligence / Siri 式的彩色光沿屏幕圆角流动；放在全屏最上层，不拦截触摸 |
-
-### 颜色预设 `MochiHdrPalette`
-
-| 预设 | 颜色 |
-|---|---|
-| `Intelligence`（默认） | Apple Intelligence：紫、粉、蓝、红、橙 |
-| `Siri` | 青、蓝、紫、品红 |
-| `Aurora` | 绿、青、蓝、紫 |
-| `Sunset` | 金、橙、红、玫红 |
-| `Ocean` | 青绿、天蓝、深蓝 |
-| `White` | 纯白 |
-
-自定义：`MochiHdrPalette(listOf(…))`，最多用前 8 种，沿一圈依次过渡、首尾相接；单色用 `MochiHdrPalette(color)`。
-
-### 边缘流光
-
-- 光盖在内容上（不是相加），浅色界面上也保持原本的颜色。
-- HDR 下只放大彩色部分：贴边亮线到峰值，柔光只提亮 35%。即使是 Apple Intelligence 那组浅色，最亮的地方也是彩色，不会发白。
-- 可调：`width` 柔光往里伸多深、`line` 贴边亮线粗细、`speed` 流动速度、`intensity` 整体强度。
-- 换 `palette` 时颜色平滑过渡：两套颜色都沿一圈均匀取 8 个点，逐个插值。
-- API 33+ 用一个 AGSL shader 单次画完（到圆角矩形边的距离 → 一条锐利的亮线 + 往里的柔光），没有离屏模糊；更低版本是一圈不流动的扫掠渐变描边。只在显示时让帧时钟跑，完全收回后不再刷新。屏幕圆角取自 `WindowInsets.getRoundedCorner`（API 31+）。
-
-```kotlin
-// 页面外面套一层
-Box {
-    Page()
-    MochiEdgeGlow(thinking, Modifier.fillMaxSize(), palette = MochiHdrPalette.Siri, width = 24.dp)
+// 自定义 Canvas 绘制超白高光（避免 Compose 纯色画笔截断至 8 位 sRGB）
+Canvas(Modifier.size(48.dp)) {
+    drawCircle(brush = mochiHdrBrush(Color.White))
 }
 ```
 
+### `MochiHdr` 属性与工具函数
+
+| 成员 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `MochiHdr.enabled` | `Boolean` | `false` | 全局 HDR 高光开关 |
+| `MochiHdr.strength` | `Float` | `0.6f` | `0f..1f`，使用当前可用亮度余量的比例 |
+| `MochiHdr.headroom` | `Float` | `1f` | 屏幕当前实测的 HDR / SDR 峰值亮度比（只读可观察状态） |
+| `MochiHdr.supported` | `Boolean` | `false` | 当前系统版本（API 34+）与屏幕硬件是否支持 HDR 界面（只读可观察状态） |
+| `Color.hdr(boost)` | `(Float) -> Color` | 必填 | 将颜色转换至 `LinearExtendedSrgb` 并在线性光下放大 `boost` 倍（`boost <= 1f` 原样返回） |
+| `mochiHdrBrush(color, boost)` | `(Color, Float) -> Brush` | `boost = MochiHdr.boost` | 绘制阶段使用的扩展范围纯色画刷；SDR 下返回 `SolidColor`，HDR 下使用 `Long` 线性扩展色标避免 8 位截断 |
+
+## 窗口管线与防过曝色彩规则
+
+### 窗口模式与峰值计算
+
+1. **窗口色彩模式托管**：最外层 `MochiTheme` 默认在广色域屏幕上请求 `COLOR_MODE_WIDE_COLOR_GAMUT`；当 `MochiHdr.enabled && MochiHdr.supported` 为真时切换为 `COLOR_MODE_HDR`（Android 15 / API 35+ 同时通过 `Window.setDesiredHdrHeadroom` 申请最高 `3.0×` 余量），并在关闭或离开组合时恢复原窗口模式。
+2. **实时余量跟踪**：通过 `Display.registerHdrSdrRatioChangedListener` 监听系统按环境光与屏幕背光动态调整的 `hdrSdrRatio`（屏幕调至最高手动亮度时可用余量随之收窄）。
+3. **峰值倍率**：实际渲染峰值（以线性光 SDR 白 = `1.0` 为基准，上限锁定为 `3.0×`）按以下公式计算：
+   $$\text{boost} = 1 + \bigl(\min(\text{usableHeadroom}, 3) - 1\bigr) \times \text{strength}$$
+   在 API 35+ 设备上，若窗口已请求 HDR 但系统尚未激活高动态合成（报告余量仍为 `1.0×`），活动光效会先以最高 `1.125×` 的信号绘制以唤醒系统 HDR 合成通道，随后按实测余量渲染。
+
+### 色相保持与防过曝规则（`hdrLift`）
+
+当彩色光效的任一通道超出显示屏上限被截断时，三个通道趋同会导致画面发白过曝。库内所有 HDR 渲染路径统一遵守以下约束：
+
+- **线性光空间运算**：提亮与混合全部在线性光空间（`LinearExtendedSrgb`）完成，AGSL 着色器末尾再通过 `fromLinearSrgb` 转回画布空间，不直接对非线性 sRGB 编码值做乘法。
+- **仅放大彩色分量（`hdrLift`）**：浅色光（如 `#F5B9EA`）本身包含大量白色基底（最小通道值较高），若三通道等比相乘会将白色基底一并抬高至超白。`hdrLift` 将最大通道提至目标增益，按比例拉开中间通道，同时令最小通道（白色基底）保持在 SDR 范围，使颜色越亮越鲜艳而不泛白；低饱和度近白或灰色则平滑过渡回等比放大，确保纯白光正常提亮且不偏色。
+- **插值覆盖替代叠加或正片叠底**：高光光泽以 `SrcOver` 插值覆盖在底色之上，不把多层高光做相加堆叠，也不使用 `BlendMode.Modulate`（非线性画布上的乘法混合会使按下区域发灰变暗）。大面积柔光保持 SDR 或仅微幅提亮，仅细亮线或触点中心达到峰值。
+
+## 内置组件的自动 HDR 增强
+
+开启 `MochiHdr.enabled` 后，以下内置交互反馈在按住期间自动启用超白光泽，松手后淡出，无需修改业务代码：
+
+- **按压高光与融球控件**：按钮、按钮组、下拉菜单与标签栏在保留基础 SDR 柔光的同时，于触点附近叠加一层按底色原色相提亮的光泽（峰值达可用增益的 `60%`）。该层强度仅随按压进度变化，不受高光 `alpha` 衰减影响，深色与浅色模式下亮度一致（需组件已知底色；单独调用无底色信息的 `Modifier.mochiGlow` 时不绘制该层）。
+- **开关与滑块圆钮**：`MochiSwitch` 与 `MochiSlider` 按住拖拽期间，圆钮表面覆盖一层提亮至峰值增益一半的本色光泽，松手后平滑消退。
+
+## 屏幕边缘流光（`MochiEdgeGlow`）
+
+`MochiEdgeGlow` 沿屏幕物理圆角轮廓绘制流动的彩色亮线与向内晕开的柔光（类 Apple Intelligence / Siri 边缘光效），通常置于全屏 `Box` 最顶层，不消费任何触摸事件。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `active` | `Boolean` | 必填 | 为 `true` 时流光从屏幕边缘生长展开（`700ms` `smooth` 弹簧），为 `false` 时收回（`450ms` `smooth` 弹簧） |
+| `modifier` | `Modifier` | `Modifier` | 画布修饰符（全屏叠加传 `Modifier.fillMaxSize()`） |
+| `palette` | `MochiHdrPalette` | `MochiHdrPalette.Intelligence` | 沿屏幕周长循环过渡的色板 |
+| `width` | `Dp` | `24.dp` | 内部柔光从屏幕边缘向内延伸的宽度 |
+| `line` | `Dp` | `3.dp` | 贴近屏幕边缘的核心亮线粗细 |
+| `speed` | `Float` | `1f` | 色相旋转与波浪起伏的速度倍率 |
+| `intensity` | `Float` | `1f` | `0f..1f`，整体不透明度与亮度系数 |
+
+Android 13+（API 33+）且 `MochiGraphics.shaders` 开启时，`MochiEdgeGlow` 由单个 AGSL 着色器一次性计算圆角矩形有向距离场、双波段宽度起伏与静态 `4×4` Bayer 像素抖动，无离屏模糊开销；贴边核心亮线提至 `100%` HDR 峰值，向内柔光仅提亮 `35%` 增益，并以预乘 `SrcOver` 绘制，在浅色界面上同样保持清晰色相。更低版本或 `Mid` 图形档位回退为静态扫掠渐变圆角描边。帧时钟仅在流光可见期间运行，完全收回后立即停止刷新。屏幕圆角半径在 API 31+ 上自动读取 `WindowInsets.getRoundedCorner`。
+
+### 色板预设（`MochiHdrPalette`）
+
+| 预设 | 色彩组成 |
+|---|---|
+| `MochiHdrPalette.Intelligence` | **默认**。紫、浅粉、蓝、紫罗兰、珊瑚红、琥珀橙、淡紫（7 色循环） |
+| `MochiHdrPalette.Siri` | 青、蓝、紫、品红（4 色循环） |
+| `MochiHdrPalette.Aurora` | 翠绿、青蓝、宝蓝、紫罗兰（4 色循环） |
+| `MochiHdrPalette.Sunset` | 金黄、暖橙、绯红、玫红（4 色循环） |
+| `MochiHdrPalette.Ocean` | 青绿、天蓝、深蓝（4 色循环） |
+| `MochiHdrPalette.White` | 单色纯白 |
+
+可通过 `MochiHdrPalette(colors: List<Color>)`（至少 1 色，沿周长均匀重采样为 `8` 个线性扩展色标）或单色构造函数 `MochiHdrPalette(color: Color)` 自定义色板；运行期切换 `palette` 时会在 `500ms` 内逐点平滑插值过渡。
+
 ## 兼容性与功耗
 
-- API 34 以下、或屏幕不支持（`MochiHdr.supported == false`）：开关不起作用，全部按 SDR 画。模拟器一般不支持。
-- 渐变用 long 颜色要 API 29+，HDR 只在 API 34+ 打开，所以不影响低版本。
-- HDR 模式下屏幕会提高背光，比 SDR 更耗电。默认关闭；示例的 HDR 页进入时临时打开、离开时恢复。
+- **硬件与模拟器回退**：Android 14 以下设备、未配备 HDR 屏幕的机型以及常规模拟器上 `MochiHdr.supported` 为 `false`，开启开关不会改变渲染路径。
+- **背光功耗**：激活窗口 `COLOR_MODE_HDR` 后系统会提升显示面板背光或像素驱动电压，功耗高于常规 SDR 模式。因此 `MochiHdr.enabled` 默认关闭，建议作为应用内可选开关或在特定光效场景按需临时开启。

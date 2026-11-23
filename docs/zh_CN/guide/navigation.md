@@ -1,32 +1,76 @@
 # 导航与页面转场
 
-`ui.feice.mochi.navigation` 提供页面栈、来源容器变形、侧推、共享顶栏与返回手势。开发应用先读 [应用接入规范](application-integration.md)，完整三页代码见 [MochiAppStarter.kt](../../../example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt)。
+位于 `ui.feice.mochi.navigation` 包。提供 `String` 路由返回栈、来源容器变形、侧推转场、跨页共享顶栏与全屏返回手势。应用级接入顺序见 [应用接入规范](application-integration.md)，完整三页骨架见 [MochiAppStarter.kt](../../../example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt)。
 
-## 先选择转场
+## 转场模式与核心 API
 
-| 场景 | 接法 | 顶栏行为 |
+| 场景 | 接入方式 | 顶栏行为 |
 |---|---|---|
-| 卡片或图标一镜到底打开整页 | `mochiNavSource` + `push(route, from = key)` | 整页连同顶栏从来源长出来，关闭时缩回来源 |
-| 列表继续进入详情、设置子页 | `push(route)`，不传来源 | 页面侧推；已登记的共享顶栏留在原位变形 |
-| 多页面板 | 同一个独立导航器传给 `MochiSheet` 与内部 `MochiNavHost` | 内页侧推共享顶栏，返回先退页再关面板 |
-
-**不要使用 `mochiSharedElement` 实现共享顶栏或图标飞行。它已废弃且是 no-op。** 当前来源转场是容器变形与卡片/页面内容交叉淡化，没有独立元素飞行动画；共享顶栏是另一套有效能力。
+| 卡片或图标展开为整页 | `mochiNavSource` + `push(route, from = key)` | 整页连同顶栏从来源容器展开，关闭时缩回来源 |
+| 列表进入详情或设置子页 | `push(route)`（不传 `from`） | 页面横向侧推；已登记 `navId` 的顶栏控件留在原位变形 |
+| 多页面板内部导航 | 独立 `MochiNavigator` 同时传给 `MochiSheet` 与内部 `MochiNavHost` | 面板内侧推共享顶栏，返回时先退子页再关面板 |
 
 | API | 说明 |
 |---|---|
-| `rememberMochiNavigator(root)` | String 路由页面栈，保存在 rememberSaveable，支持旋转与进程重建 |
-| `MochiNavHost(navigator)` | 页面显示、转场、系统返回与全屏右滑返回 |
-| `push(route, from = key)` / `push(route)` | 来源容器变形 / 侧推 |
-| `pop()` / `popTo(index)` | 返回一级 / 返回更早页面（根页 index 为 0），被打断的侧推页从当前位置继续退出 |
-| `MochiNavigator.current` | 当前主机的导航器 |
-| `mochiNavSource(key, cornerRadius, color)` | 来源登记；key、圆角、底色与真实来源卡片一致 |
-| `mochiNavOccluder()` | 浮在内容上的栏登记为遮挡物：从来源打开时栏先盖在变形容器上再随进度淡掉（玻璃栏这段时间透出的是正在展开的容器，不是被盖住的旧内容）；`MochiTitleBar`、`mochiScrollEdgeFade`、`MochiTabBar`、`MochiBottomToolbar` 已自带 |
-| `rememberMochiScreenCorners()` | 四个物理圆角，单位 px，不是 dp |
-| `MochiNavHost(corners = …)` | 覆盖圆角；默认在面板内继承面板轮廓，其他位置使用屏幕圆角；`MochiScreenCorners.None` 显式关闭内页转场圆角 |
+| `rememberMochiNavigator(root)` | 创建并通过 `rememberSaveable` 保存 `String` 路由栈，跨屏幕旋转与进程重建保留 |
+| `MochiNavigator.current` | 读取当前所在 `MochiNavHost` 的导航器；不在主机内时为 `null` |
+| `push(route, from = key)` / `push(route)` | 传 `from` 执行来源容器变形，省略 `from` 执行侧推转场 |
+| `pop()` / `popTo(index)` | 返回上一页，或返回 `backStack[index]`（根页 `index` 为 `0`） |
+| `MochiNavHost(...)` | 承载栈顶页面，统一驱动转场图层、系统预测性返回、全屏右滑返回与共享顶栏 |
+| `MochiBackButton(...)` | 44dp 顶栏圆形返回按钮，自动接入共享顶栏，可选长按弹出返回历史菜单 |
+| `Modifier.mochiNavSource(key, cornerRadius, color)` | 将卡片或图标登记为可展开成整页的来源容器 |
+| `Modifier.mochiNavSharedElement(key, shape, contentScale)` | 在来源容器变形期间，让来源页与目标页同 `key` 元素沿容器轮廓连续飞行 |
+| `LocalMochiNavTitleSharedKey` | 为标题骨架登记顶栏标题的共享 `key`，使来源卡片标题飞入 `MochiTitleBar` |
+| `Modifier.mochiNavOccluder()` | 标记浮在内容上方的栏；来源变形时先留在容器上方再随进度淡出（`MochiTitleBar`、`mochiScrollEdgeFade`、`MochiTabBar`、`MochiBottomToolbar` 已内置） |
+| `Modifier.mochiHideWhenCovered()` | 标记被新页覆盖时收起的底部栏（`MochiTabScaffold` 已内置） |
+| `rememberMochiNavSettled()` | 返回 `State<Boolean>`，指示当前页面是否已完成打开且未处于关闭中 |
+| `rememberMochiScreenCorners()` / `MochiScreenCorners` | 读取设备四个物理屏幕圆角（单位为 `px`），供转场生成 G2 连续曲率轮廓 |
 
-## 一镜到底动画
+`mochiSharedElement` 已废弃且无实际效果，请使用 `mochiNavSource`（容器内局部元素飞行请使用 `mochiNavSharedElement`，侧推共享顶栏请使用栏控件的 `navId`）。
 
-以下完整函数放在应用已有的 `MochiTheme` 与 `ProvideMochiOverscroll` 内。Activity、系统栏与三页侧推接法见完整骨架。
+## MochiNavHost 与转场参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `navigator` | `MochiNavigator` | 必填 | 由 `rememberMochiNavigator(root)` 创建的返回栈实例 |
+| `modifier` | `Modifier` | `Modifier` | 作用于主机外层容器的修饰符 |
+| `spec` | `MochiNavSpec` | `MochiNavDefaults.spec()` | 转场弹簧曲线、缩放比例、压暗遮罩与底色配置 |
+| `corners` | `MochiScreenCorners?` | `null` | 转场页面圆角覆盖值；`null` 在面板内继承面板轮廓，其余位置使用物理屏幕圆角；传 `MochiScreenCorners.None` 显式关闭转场圆角 |
+| `predictiveBack` | `Boolean` | `LocalMochiPredictiveBack.current` | 是否启用系统手势的预测性返回预览；设为 `false` 时普通返回与应用内全屏右滑返回照常工作，内层主机和面板自动继承 |
+| `windowGlass` | `Boolean` | `true` | 是否在最外层主机录制整页作为浮层（菜单、警告框、面板）与共享顶栏玻璃的取样来源；页面包含 `WebView` 等原生视图时传 `false` |
+| `content` | `@Composable (route: String) -> Unit` | 必填 | 根据路由渲染页面内容 |
+
+### MochiNavSpec 与 MochiNavDefaults.spec()
+
+通过 `MochiNavDefaults.spec(...)` 按需覆盖单项参数：
+
+| 参数 | 类型 | 默认值（`MochiNavDefaults.spec()`） | 说明 |
+|---|---|---|---|
+| `open` | `AnimationSpec<Float>` | `MochiSprings.smooth(300, visibilityThreshold = 0.0005f)` | 来源变形打开时的尺寸、圆角与展开淡化进度弹簧（平滑停稳、无回弹） |
+| `close` | `AnimationSpec<Float>` | `MochiSprings.smooth(300, visibilityThreshold = 0.0005f)` | 来源变形关闭时的尺寸与圆角弹簧 |
+| `openMove` | `AnimationSpec<Float>` | `MochiSprings.snappy(300, visibilityThreshold = 0.0005f)` | 来源变形打开时容器中心位移弹簧（带 `0.15` 轻微回弹） |
+| `closeMove` | `AnimationSpec<Float>` | `MochiSprings.snappy(300, visibilityThreshold = 0.0005f)` | 来源变形关闭时容器中心位移弹簧 |
+| `cancel` | `AnimationSpec<Float>` | `MochiMotions.responseSpring(0.35f, 1f)` | 预测性返回或右滑返回取消后弹回整屏的弹簧 |
+| `push` | `AnimationSpec<Float>` | `MochiMotionTokens.Page` | 侧推打开与关闭共用的临界阻尼弹簧，中途转向时保持速度连续 |
+| `underScale` | `Float` | `1f` | 来源变形期间下层页面的缩放比例；`1f` 保持原位，小于 `1f` 时绕屏幕中心缩小 |
+| `backScale` | `Float` | `0.86f` | 来源页面在返回手势拖到底时的最小缩放比例 |
+| `scrim` | `Color` | 浅色 `Black 18%` / 深色 `Black 40%` | 侧推期间下层页面的压暗遮罩色（面板内侧推跳过压暗） |
+| `sourceScrim` | `Color` | 浅色 `Black 36%` / 深色 `Black 60%` | 来源变形期间下层页面的压暗遮罩色 |
+| `backdrop` | `Color` | `Color.Black` | 来源变形期间最底层的画布底色 |
+| `pushBackdrop` | `Color` | `MochiDefaults.groupedBackground()` | 侧推期间最底层的画布底色，避免页面边缘露出时闪黑 |
+
+### 屏幕圆角与窗口玻璃取样
+
+`rememberMochiScreenCorners()` 在 Android 12（API 31）及以上读取 `WindowInsets.getRoundedCorner` 的四个物理圆角半径（单位为 `px`），并在屏幕旋转后更新；直角屏或低版本系统返回 `MochiScreenCorners.None`（模拟器或直角屏在顶层侧推时回退使用 `28.dp` 圆角）。侧推与来源变形期间，主机沿用这些半径或外层面板轮廓生成 Kyant G2 连续曲率路径裁切，页面静止时自动撤除裁切。
+
+当主题开启液态玻璃且 `windowGlass = true` 时，最外层 `MochiNavHost` 会按需录制整页画面，供菜单、警告框、面板及转场中的共享顶栏玻璃控件取样。若页面内嵌 `WebView` 等无法绘制到离屏图层的原生视图（在部分 Vulkan 设备上被玻璃离屏取样会导致渲染线程崩溃），请设置 `windowGlass = false`：
+
+- 浮层依次回退取样打开位置的 `LocalMochiBackdrop`、标题骨架或标签页骨架为栏录制的正文背景；无可用来源时绘制材质后备纯色。浮层拥有独立作用域，面板内按钮不会取样被面板遮挡的下层页面。
+- 共享顶栏转场中的玻璃按钮切换为取样各自所属页面的背景，转场全程保持玻璃质感。
+
+## 来源容器变形
+
+将以下组件放在已配置 `MochiTheme` 与 `ProvideMochiOverscroll` 的根部容器内：
 
 ```kotlin
 import androidx.compose.runtime.Composable
@@ -46,48 +90,74 @@ fun NavigationBasics() {
     val nav = rememberMochiNavigator("home")
     MochiNavHost(nav) { route ->
         when (route) {
-            "home" -> MochiLargeTitleScaffold(title = "Home") {
+            "home" -> MochiLargeTitleScaffold(title = "首页") {
                 MochiListCard(
-                    modifier = Modifier.mochiNavSource("entry", MochiListDefaults.SectionCorner, MochiDefaults.groupedContainer()),
+                    modifier = Modifier.mochiNavSource(
+                        key = "entry",
+                        cornerRadius = MochiListDefaults.SectionCorner,
+                        color = MochiDefaults.groupedContainer(),
+                    ),
                 ) {
-                    MochiListRow("Open detail", chevron = true, onClick = { nav.push("detail", from = "entry") })
+                    MochiListRow("打开详情", chevron = true, onClick = { nav.push("detail", from = "entry") })
                 }
             }
-            "detail" -> MochiLargeTitleScaffold(title = "Detail", navigationIcon = { MochiBackButton() }) {
-                MochiListCard { MochiListRow("Opened from the source card") }
+            "detail" -> MochiLargeTitleScaffold(title = "详情", navigationIcon = { MochiBackButton() }) {
+                MochiListCard { MochiListRow("从来源卡片展开的页面") }
             }
         }
     }
 }
-
 ```
 
-来源修饰放在整张卡片外层，记录整张卡片。来源与目标页按完整尺寸排版，转场通过图层移动、缩放和圆角变化完成，不为动画每帧重排页面。当前默认打开和关闭的大小、圆角都用 iOS 的 smooth 300ms（`MochiSprings.smooth(300)`，不回弹、平滑停住）；位置单独用一根带一点回弹的 snappy 300ms（`openMove` / `closeMove`），到位时轻轻冲过一点再落回。途中掉头保留速度。打开途中就能直接往回划，不用等转场停稳；正在缩回去时点它会从当前位置重新打开。自定义时通过 `MochiNavDefaults.spec()` 配置，不复制另一套引擎。
+### 容器变形与中途打断
 
-卡片画面随来源容器早期淡出，页面画面交叠着淡入；返回时反向恢复来源。下层页保持组合与滚动状态，转场时退后并压暗，完全被盖住时不绘制。来源转场退后露出的区域使用 `backdrop`，默认黑色；侧推露出区域使用 `pushBackdrop`，默认分组页面底色。
+- **整卡录制与图层缩放**：将 `Modifier.mochiNavSource(key, cornerRadius, color)` 挂在整张卡片或图标容器外层。目标页面在栈中或转场期间，原位置的卡片隐藏，由 `MochiNavHost` 在变形容器内同时绘制卡片录制图层与按整屏排版的页面图层，仅通过 `graphicsLayer` 位移、缩放与 G2 路径裁切驱动动画，不触发每帧重新测量。
+- **双弹簧与分层淡化**：容器尺寸与圆角由 `open` / `close`（`smooth 300ms`）控制，中心位置由 `openMove` / `closeMove`（`snappy 300ms`）控制。打开时卡片画面沿进度早期淡出、页面内容交叠淡入；关闭时透明度由独立的短时长淡化时钟（`MochiMotionTokens.Fade`，约 `150ms`）驱动，先用来源 `color` 盖住页面再显出卡片画面，避免弹簧尾段出现多层半透明叠影。宽度超过主机宽度 `60%` 的宽卡片则按容器高度比例直接控制卡片画面显隐。若来源卡片已滚出视口或卸载，转场自动回退为中心 `0.84f..1f` 缩放与淡入淡出。
+- **任意时刻打断与重开**：页面打开途中无需等待停稳即可直接右滑返回；页面正在缩回来源时，点击可见区域会从当前位置、速度与各层透明度立即反向重新展开。
+- **下层背景与遮挡栏（`mochiNavOccluder`）**：下层页面默认保持原始尺寸（`underScale = 1f`），保留组合状态、滚动位置与来源坐标，叠加 `sourceScrim` 压暗，并在完全被覆盖时跳过绘制。`MochiTitleBar`、`mochiScrollEdgeFade`、`MochiTabBar`、`MochiBottomToolbar` 已内置 `mochiNavOccluder()`（自定义浮动栏可挂在最外层）：当卡片局部压在顶栏或底栏下方时，主机在变形容器轮廓内单独绘制一份栏副本并随打开进度（`0..0.5`）淡出，避免容器起飞首帧突然盖住栏或叠出双倍阴影；期间下层玻璃栏通过覆盖层背景实时取样变形容器本身。
 
-## 侧推与返回
+### 容器内共享元素飞行
 
-`nav.push("detail")` 不传 `from`，页面从右侧进入；下层页向左退。顶栏必须按下一节登记，不能把“用了 Mochi 按钮”当成已经共享。`MochiNavSpec.push` 默认是临界阻尼弹簧，可在当前进度与速度上打断、返回或再次推入，不重置到起点。
+当来源卡片与详情页包含同一张封面图或需要把卡片标题飞入详情页顶栏时，可在容器变形之上叠加 `mochiNavSharedElement`：
 
-`MochiBackButton` 默认调用当前导航器 `pop()`；不在 `MochiNavHost` 里、或已经在第一页时，交给 Activity 的 `OnBackPressedDispatcher`（由外面的返回处理关面板或退出 Activity），按钮不会点了没反应；系统返回与返回手势由主机处理，不另加一个竞争的页面返回处理器。独立浮层按其自身返回生命周期先关闭。`popTo(index)` 跳回更早页面；`MochiBackButton(history = { route -> 标题 })` 启用长按返回历史，标题映射由业务提供。
+- 在来源页与目标页对应元素上添加相同 `key` 的 `Modifier.mochiNavSharedElement(key, shape, contentScale)`。`shape` 传入元素当前可见的圆角形状（如 `MochiTheme.shapes.medium`），图片使用默认的 `ContentScale.Crop`，字号不同的文字或图标使用 `ContentScale.Fit`。转场期间原地元素隐藏，由主机在容器轮廓裁切内连续插值位置、尺寸与四个角的 G2 半径，并在中段交叉淡化两侧录制画面。
+- 在详情页外层通过 `CompositionLocalProvider(LocalMochiNavTitleSharedKey provides "item-title")` 提供标题共享 `key`，并在来源卡片的标题文本上挂同 `key` 的 `mochiNavSharedElement("item-title", contentScale = ContentScale.Fit)`，展开时卡片标题即可直接飞入 `MochiTitleBar` 的居中标题。
 
-预测性返回需要 application 配置 `android:enableOnBackInvokedCallback="true"`。Android 14 的开发者选项可能还需开启预测性返回动画；三键导航或没有手势进度时仍可返回，只播放提交后的退出动画。
+## 侧推与返回手势
 
-全屏右滑返回只接管子元素未消费的触摸，横向列表、开关、滑块和左滑行优先处理自己的手势。只有完全打开的栈顶页接全屏右滑；侧推页跟手平移，来源页跟手缩回，取消则回到当前页。松手时只要还在起点右边就按速度判断：往左甩得够快（150dp/s 以上）是取消，往右或停住就返回，不用先划过一半。接手的那一下就消费掉触摸，外层同样等「没被消费的拖动」的手势（[侧边栏](../components/sidebar.md)、外层导航）不会一起接手：子页右划是返回，退到根页右划才打开侧边栏。
+调用 `nav.push("detail")` 不传 `from` 时执行侧推转场：新页从右侧滑入（`W * (1 - p)`），下层页向左平移 `30%`（`-0.3 * W * p`）并叠加 `scrim` 压暗。打开与关闭共用同一条临界阻尼弹簧 `spec.push`，在转场任意位置触发 `pop()` 或再次 `push` 同一路由都会沿当前位置与速度连续转向。快速连续调用 `pop()` 时，侧推页面同时平滑退出、不会吞掉输入；涉及来源变形的连续返回则自动排队依次执行。
+
+### MochiBackButton
+
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `modifier` | `Modifier` | `Modifier` | 按钮修饰符 |
+| `colors` | `MochiButtonColors` | `MochiButtonDefaults.barColors()` | 顶栏按钮配色（自动适配液态玻璃或纯色） |
+| `history` | `((route: String) -> String)?` | `null` | 路由到菜单标题的映射函数；非 `null` 且栈深大于 1 时开启长按历史菜单 |
+| `onClick` | `(() -> Unit)?` | `null` | 自定义点击回调；为 `null` 时先调 `MochiNavigator.current?.pop()`，在根页或主机外转发给 `OnBackPressedDispatcher` |
+
+`MochiBackButton` 采用 `44.dp` 圆形栏按钮尺寸，内部 `‹` 图标按三角形视觉重心向尖端修正偏移。传入 `history` 后，长按按钮会以包裹式 `MochiIconDropdown` 展开更早的路由列表（最近一页在最上方），点击任一项调用 `navigator.popTo(index)` 退回目标页。`MochiNavHost` 已统一接管系统返回，页面内部无需再额外添加竞争的 `BackHandler`；菜单、对话框等独立浮层会按各自的返回生命周期优先关闭。
+
+### 预测性返回与全屏右滑返回
+
+- **系统预测性返回**：在 `AndroidManifest.xml` 的 `<application>` 上配置 `android:enableOnBackInvokedCallback="true"` 即可启用手势预览（三键导航或关闭 `predictiveBack` 时仍执行常规退出动画）。手势拖动期间，侧推页最多跟手右移 `90%` 屏宽并在松手后继承手势末速度滑出；来源页跟手缩小至 `backScale` 并随手指边缘与纵向位移轻微偏移，提交后缩回来源，取消则按 `spec.cancel` 弹回。
+- **全屏右滑返回**：在栈顶活动页面任意位置向右拖动（无需从屏幕边缘起手）即可跟手返回，打开动画尚未停稳时也可直接右滑打断。手势仅接管子组件未消费的横向拖动（`dx > touchSlop && dx > abs(dy) * 1.2f`），横向滚动列表、滑块、开关与左滑操作行优先响应自身手势。松手时只要触点仍在起点右侧，便按水平速度判定：向左快速甩回（超过 `150.dp/s`）取消返回，向右或停顿即提交 `pop()`，无需拖过半屏。手势一旦认领便立即消费触摸事件，外层 [侧边栏](../components/sidebar.md) 或父级 `MochiNavHost` 不会同时触发：在子页右滑始终先返回上一页，退回根页后右滑才打开侧边栏。
 
 ## 共享顶栏
 
-**应用的适用侧推页默认必须使用共享顶栏。** `navId` 的 API 默认值为 null 只是兼容非导航场景，不是漏配的理由。两页需要处于同一个 `MochiNavHost`；`MochiLargeTitleScaffold` 或 `MochiSheetHeader` 是布局容器，不能代替按钮登记。
+在 `MochiNavHost` 的侧推转场（含 `push`、`pop`、预测性返回、全屏右滑返回及连续多页侧推链）中，登记了共享身份的顶栏控件会脱离各自滑动的页面图层，由主机统一在最上层原地变形。
 
-- `MochiBackButton` 自动登记返回形状与内容，不重复使用保留 ID `mochi.back`。
-- `MochiBarIconButton` 登记 `navId` 与值稳定的图标 `contentKey`。
-- `MochiBarButton` 登记 `navId`，文字自动作为 contentKey，不存在同名公开参数。
-- `MochiBarGroup` 登记整组形状，`MochiBarGroupItem` 分别登记内容；不能只给组 ID。
-- 跨页同语义内容复用 ID，同页不同内容不重名；不要使用路由前缀、随机 ID 或临时 lambda 作为身份。
-- 形状按左右侧及顺序配对，内容按 navId 配对。组的形状与主操作内容可以使用相同字符串，因为是不同种类的句柄。
+### 登记规则
 
-以下函数接到相邻两页的 `actions` 中；图标插槽和点击回调由调用方作为参数提供，没有隐式的图标库依赖：
+应用的适用侧推页面默认都应接入共享顶栏（`navId` 默认为 `null` 仅用于非导航场景）。相邻页面须位于同一个 `MochiNavHost` 内；`MochiLargeTitleScaffold`、`MochiTitleBar` 与 `MochiSheetHeader` 仅负责排版，不会自动替内部按钮登记共享状态。
+
+- `MochiBackButton`：自动使用保留 ID `"mochi.back"` 登记形状与内容，业务代码不要复用 `"mochi.back"`。
+- `MochiBarIconButton` / `MochiBarIconDropdown`：传入稳定的 `navId` 与值相等的图标 `contentKey`（例如图标名字符串）。
+- `MochiBarButton`：传入稳定的 `navId`，按钮文本自动作为内部 `contentKey`，文字变化时原地模糊替换。
+- `MochiBarGroup`：在组上设置 `navId` 登记整块胶囊形状，并在每个 `MochiBarGroupItem` / `MochiBarGroupDropdownItem` 上分别设置各自的 `navId` 与 `contentKey`。组形状与主操作内容属于不同种类的句柄，可以共用同一个字符串（如 `"app.primary"`）。
+- `Modifier.mochiNavBarItem(id, contentKey)`：将自定义顶栏元素登记为纯内容项（仅参与位置跟随与模糊替换，不生成按钮胶囊形状或点击反馈）。
+
+跨页同语义操作复用同一个稳定 `navId`，同一页内的不同内容项保持 `navId` 唯一；不要把路由前缀、随机数或临时 lambda 拼进身份标识。
 
 ```kotlin
 import androidx.compose.runtime.Composable
@@ -110,49 +180,24 @@ fun ListActions(
 
 @Composable
 fun DetailActions(onDone: () -> Unit) {
-    MochiBarButton("Done", onClick = onDone, navId = "app.primary")
+    MochiBarButton("完成", onClick = onDone, navId = "app.primary")
 }
-
 ```
 
-列表的组可以变成详情页的单个图标或文字按钮。形状随侧推/返回进度连续变形，内容 key 相同时保持内容跟随，不同时模糊替换；新增或移除的形状融入/分离。预测性返回及取消使用同一进度。完整可编译骨架还包含列表开关：先选择详情使用图标或文字完成按钮，再侧推进入，展示对应变形。
+### 按压交接、融球分裂与玻璃槽位
 
-来源打开时不单独接管顶栏，整页一起变形。菜单、提示、对话框等独立布局树不登记为页面的共享顶栏；面板自己的内部导航按自己的主机登记。任意自定义顶栏内容可用 `mochiNavBarItem(id, contentKey)`，但它只登记内容，不自动生成按钮形状、点击反馈或可访问语义。
+- **按压形变直接交接**：按下放大或被手指拉偏的栏按钮（含液态玻璃按钮与玻璃按钮组）触发推页时，共享顶栏首帧直接从按钮此刻的形变矩形与缩放比例接手，并随按钮自身的松手弹簧回弹过渡到目标形状，不会先跳回静止布局尺寸。
+- **形状配对与融球过渡**：左右两侧各自从屏幕外侧向内按顺序配对形状，线性插值位置、圆角、颜色与外阴影强度（`LocalMochiGlassShadow`），并在中段叠加有界呼吸膨胀（宽 `2.5%`、高 `6%`，连续多页侧推不累加）。多出的形状从最内侧配对形状分裂长出或被吸回；一侧完全无形状时原地按 `0.62f..1f` 缩放淡入淡出。同侧靠近的纯色形状以 `20.dp` 融球颈相连；同侧相容的液态玻璃形状分配在持久化的 `GlassBlobs` 玻璃槽位中融合变形，换页全程不销毁重建着色器节点。
+- **内容配对**：按 `navId` 配对内容；两侧 `contentKey` 非空且相等时内容随形状平滑移动，不同或为 `null` 时旧内容模糊（最高 `12.dp`）淡出、新内容去模糊淡入。
+- **作用边界**：来源容器变形（`push(route, from = key)`）携带整页连同顶栏一起缩放，不单独固定顶栏；下拉菜单、弹出层、警告框等独立浮层树不会混入下层页面的共享顶栏；面板内的导航栈只与面板自己的 `MochiNavHost` 配对。
 
 ## 多页面板与标签栏
 
-面板内页的转场轮廓、压暗与阴影跟随可见面板底边，包含全屏导航区；正文单独保留固定高度和安全区。半屏底部两角按可见底边裁切，全屏底部两角为直角，不在内部导航主机外追加底部 padding。
+- **多页面板**：创建独立的 `rememberMochiNavigator(...)`，同时传给 `MochiSheet(navigator = sheetNav)` 与面板内部的 `MochiNavHost(sheetNav)`（省略 `corners` 参数以自动继承面板轮廓：半屏悬停时底部两角跟随可见圆角底边，展开至全屏时底部两角保持直角）。内部 `spec` 的 `pushBackdrop` 设为与面板一致的表面色，顶栏使用 `MochiSheetHeader` 并配置稳定 `navId`。面板内侧推子页时不重复压暗下层页，正文保持稳定安全区高度，不要在内部 `MochiNavHost` 外再追加底部安全区留白；系统返回与右滑手势会先逐级退出子页，回到根页后才关闭面板。详见 [底部面板](../components/sheet.md)。
+- **根页标签栏**：根部多标签页使用 `MochiTabScaffold`，自动保存各标签独立状态与滚动位置、提供 `LocalMochiBottomBarInset`（自定义滚动页可通过 `MochiTabScaffoldDefaults.contentBottomPadding()` 读取底部留白）、支持再次点击当前标签回顶（自定义列表可通过 `MochiTabReselectHandler` 登记），并可通过 `collapseOnScroll = false` 让标签栏在正文滚动时保持展开（默认为 `true`）。`MochiTabScaffold` 已对标签栏应用 `Modifier.mochiHideWhenCovered()`（自定义底部栏也可直接挂载）：侧推时底部栏留在下层页面内随页面左移，来源变形时由主机独立图层代画并在前 `60%` 覆盖进度内向下滑出屏幕，返回时随进度平滑滑回。详见 [标签栏](../components/tabbar.md)。
 
-多页面板的独立导航器同时传给 `MochiSheet(navigator = nav)` 与内部 `MochiNavHost(nav)`（省略 corners，自动继承面板转场轮廓；全屏侧推底部保持直角），内部配置匹配面板底色的 `pushBackdrop`，使用 `MochiSheetHeader` 与稳定顶栏 ID。返回先退出子页，根页才关闭，不能在子页退出中途把返回交给后面的页面。详见 [底部面板](../components/sheet.md)。
+## 转场就绪与渲染性能
 
-底栏放在所属页面内，被新页覆盖时使用 `mochiHideWhenCovered()`；返回时随主机进度恢复。手动收起/展开与滚动联动按业务选择，读取真实 `collapsed` 状态。详见 [标签栏](../components/tabbar.md)。
-
-## 重内容、滚动与验收
-
-页面业务数据异步加载；主机先等新页组合、测量、绘制完、帧率回稳（至少 2 帧，最多多等 160ms）再开始转场。耗时 IO/解码不放在组合或测量中，骨架与真实内容保持合理占位，加载后使用内容变换。`rememberMochiNavSettled()` 可观察当前页转场完成，再启动非关键重工作，不能让关键导航与返回等待网络。
-
-转场期间的绘制开销由主机控制，页面不需要配合：
-
-- 侧推在页面自己的坐标中保留固定 G2 轮廓，移动时更新图层位移。来源动画在主机坐标裁切变形容器，只有下层玻璃栏仍可见且需要取样时才录制变形后的页面。下层页默认保持原位，来源卡片沿用已录制的画面。
-- 下层页里用 `mochiHideWhenCovered` 收起的栏（标签栏、底部工具栏）这段时间由主机代画，位置、下滑、叠放顺序和原来一样，所以下层页内容不会因为栏在动而每帧重画。
-- 页面里不要把会随转场变化的屏幕坐标（`positionInRoot` / `positionInWindow`）每帧写进会触发重组或重画的状态：转场里整页在缩放，这些值每帧都变，离屏缓存就会每帧作废。需要页面内的位置时用页面自己的坐标（`localPositionOf`），库里的菜单锚点只在菜单打开期间才跟踪位置。
-
-自定义滚动容器继承根部 `ProvideMochiOverscroll`，传 `MochiScrollDefaults.flingBehavior()`；默认每毫秒保留 0.998 速度，接近静止才结束。`MochiLargeTitleScaffold` 已接入自己的滚动、标题交接与刷新，不重复包竖向滚动。`mochiScrollEdgeFade` 用于系统栏边缘底色，`mochiScrollFadeMask` 用于局部滚动内容渐隐；两者不替代安全区。
-
-静态核对共享登记与来源 key、编译骨架后，分别记录实际验证范围。交互验收场景包括：来源打开返回、组变单按钮、文字/图标转换、侧推途中返回/取消、内部面板先退页及大字号。用户保留实机验收时不主动操作设备，编译通过不能写成动画已通过。
-
-## 返回预览和固定底栏
-
-`MochiNavHost(predictiveBack = false)` 关闭系统手势的预测性返回预览，普通返回仍然退页。嵌套主机及底部面板通过 `LocalMochiPredictiveBack` 继承；应用内全屏右滑手势独立保留。演示在主题 → 外观提供持久化开关。
-
-`MochiNavHost(windowGlass = false)` 不把整页录下来给浮层（菜单、警告框、面板）的玻璃取样。页面里有 WebView 时要关：WebView 被画进玻璃的离屏图层，在 Vulkan 渲染的机器上会让渲染线程崩溃。关掉后浮层改为取样打开它那一处的背景来源：`LocalMochiBackdrop`（页面自己用截图做的来源），再没有就用标题脚手架、标签页脚手架给顶栏录的正文；都没有才画材质的纯色。浮层里不再继承页面的 `LocalMochiBackdrop`，面板里的按钮不会取样到被面板盖住的页面。共享顶栏的转场里，玻璃按钮改为取样按钮自己所在页的背景，转场途中仍是玻璃，不变成纯色。
-
-`MochiTabScaffold(collapseOnScroll = false)` 让底栏在正文滚动时保持展开；默认 true 保留库原行为。再点当前标签回顶、保存各标签位置、进入新页时隐藏均不受影响。演示首页使用 false。
-
-来源转场中的遮挡栏由导航主机单独绘制，原页面和收起栏的代绘层不再同时画同一份栏及阴影；侧推时仍只由原页面绘制。往返及中途取消都沿用这份归属规则。
-
-## 来源背景与 G2 转场轮廓
-
-来源卡片展开、缩回及预测性返回期间，下层页面默认不缩放，滚动位置、来源坐标和底栏位置保持一致。`underScale` 默认 1；为兼容已有调用，显式传入小于 1 的值仍可启用旧景深。压暗按转场与返回进度独立计算，不依赖缩放比例。一镜到底的压暗用 `sourceScrim`（浅色 36%、深色 60% 黑），比侧推的 `scrim`（18% / 40%）深，前景从卡片长出来时和背景分得更开。
-
-侧推与来源容器共用 Kyant G2 连续曲率轮廓，沿用屏幕半径和面板的各角设置（全屏面板底角仍为 0）。页面使用路径裁切，淡出的遮挡栏副本在独立图层使用相同轮廓的外部透明度蒙版。页面静止时撤掉转场裁切。
+- **首帧稳定等待与重内容加载**：新路由首次推入时，`MochiNavHost` 会先等待新页面完成组合、测量、首次绘制且帧间隔恢复平稳（至少 2 帧，设有上限）后再启动弹簧，避免首屏类加载或子组合吞掉动画前几帧。不要在组合或测量阶段执行阻塞 I/O 与大图解码；非关键耗时任务可观察 `rememberMochiNavSettled()` 变为 `true` 后再启动，加载期间使用同尺寸的 `MochiSkeleton` 占位并通过内容变换平滑替换，不要让导航与返回等待网络请求。
+- **离屏缓存与坐标系规范**：转场期间主机自动将运动页与被覆盖页缓存为离屏纹理、暂停移动或被遮挡页面的背景亮度回读，并将玻璃切入运动档位。转场期间不要在页面内部将 `positionInRoot()` 或 `positionInWindow()` 每帧写入触发重组或重绘的状态（整页缩放平移会使根坐标每帧变化，导致离屏缓存每帧失效）；需要页内相对位置时请使用 `localPositionOf`。
+- **滚动容器配合**：`MochiLargeTitleScaffold` 与 `MochiCompactTitleScaffold` 已内置越界回弹、默认惯性与滚动边缘效果，外层不要重复包裹竖向滚动容器。自定义滚动容器会自动继承根部 `ProvideMochiOverscroll`，建议传入 `MochiScrollDefaults.flingBehavior()`（默认每毫秒保留 `0.998` 速度，接近静止时平滑停住）。

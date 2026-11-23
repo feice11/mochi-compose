@@ -1,50 +1,30 @@
 # MochiIntensitySlider
 
-强度调整条，照 Codex 桌面版的思考强度滑条（`ModelPickerPowerSliderImpl`，从 Codex 26.1013 的前端包读出来的尺寸、动效和着色器）做。适合推理强度、效果强度、玻璃通透度这类「越往右越猛」的量，可以无级，也可以分档。
+位于 `ui.feice.mochi.basic` 包。面向推理强度、效果强度、通透度等单向递增量设计的胶囊强度滑条，支持无级连续调节与离散分档两种模式。组件尺寸、缓动曲线与高值着色器提取自 Codex 26.1013 桌面端 `ModelPickerPowerSliderImpl`，属于正文内控件，不使用液态玻璃材质。
 
-## 外形
-
-- 轨道：24dp 高的胶囊（和库里其他控件同一种 G2 连续曲率圆角），底色是文字色 10%，内描边 0.5dp；填充段按轨道形状抗锯齿裁切，圆头边缘是平滑的
-- 拇指：28dp 白色圆，比轨道上下各凸出 2dp；0.5dp 描边，2dp 的淡阴影；拇指中心在 0 和 1 时离轨道两端各 13dp
-- 填充段：右边对齐拇指中心、被拇指盖住；最两端那一档里收拢到「没有填充」和「填满」
-- 刻度：4dp 圆点。分档时每档一个；无级时只在 `detent` 画一个。已越过的是白色 30%，没越过的是说明文字色 50%
-
-## 越往右越炫
-
-- 值超过 `HighFrom`（0.5）后，Codex 最高档的效果按值逐渐浮现，到 1 时最浓：
-  - 蓝紫流动渐变：12 个高斯色团按各自的频率游走（Codex 着色器逐行移植），再按 luminosity 混合叠在一条蓝 → 紫的横向渐变上
-  - 星点：14 颗白点在填充段里缓慢漂移，越往右亮起的越多
-  - 刻度同时淡出、缩小到 0.75
-- 越过 0.5 往上时，渐变从右往左揭开（2s）
-- 拖到最右端时，从拇指爆出 16 颗紫色粒子（0.62s）
-- Codex 只在最高一档出现这些效果；这里按值渐进，是 Mochi 自己的扩展
-
-## 动画什么时候在跑
-
-- 处在高值时，渐变和星点一直缓慢流动（照 Codex）。这是「静止不刷新」规则的一个有意例外，只在值超过 0.5 时出现
-- 值回到 0.5 以下、`enabled = false`、组件离开界面、或者系统关掉了动画（开发者选项里动画时长为 0）时完全不刷新；系统关掉动画时渐变停在第 0 帧，不爆散、不揭开
-- Android 12 及以下没有 RuntimeShader：高值时画静止的蓝紫横向渐变，星点照常
-
-## 交互
-
-- 点哪里拇指就滑到哪里（0.3s，曲线 cubic-bezier(.23, 1, .32, 1)）；分档时拖动每换一档滑 0.15s，无级时跟手
-- 按下时拇指放大到 32/28（弹簧 stiffness 420），松手回弹（220）
-- 无级时拖过 `detent`（默认 0.5，传 `null` 关掉）轻震，并在它两边 2.5% 以内轻轻吸住，方便回到默认值；拖到两头各震一下。分档时每换一档震一下
-- 无障碍：读作进度条（0..1），支持 `setProgress`；分档时按档报告
-
-## 用法
+## 基本用法
 
 ```kotlin
-// 无级
+import kotlin.math.roundToInt
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
+import ui.feice.mochi.basic.MochiIntensitySlider
+import ui.feice.mochi.icons.MochiIonicon
+
+// 无级连续调节（带两端图标与 0.5 默认吸附点）
 var power by remember { mutableFloatStateOf(0.5f) }
 MochiIntensitySlider(
     value = power,
     onValueChange = { power = it },
-    startIcon = { tint -> Icon(…, tint = tint) },
-    endIcon = { tint -> Icon(…, tint = tint) },
+    startIcon = { tint -> MochiIonicon("sparkles", size = 18.dp, tint = tint) },
+    endIcon = { tint -> MochiIonicon("flash", size = 18.dp, tint = tint) },
 )
 
-// 分档：5 档，value = 档序号 / 4
+// 离散分档：共 5 档，value 取值为 档位索引 / 4f
 var level by remember { mutableIntStateOf(1) }
 MochiIntensitySlider(
     value = level / 4f,
@@ -55,29 +35,55 @@ MochiIntensitySlider(
 
 ## 参数
 
-| 参数 | 说明 |
-|---|---|
-| value / onValueChange | 当前值（0..1）和回调；拖动中每次变化都回调。分档时值落在 i / (stops − 1) |
-| enabled | 关掉时半透明、不接触摸，高值动画也停 |
-| stops | 0 = 无级；≥ 2 = 分成这么多档（含两端），每档一个圆点 |
-| detent | 无级时的吸附点和刻度，默认 0.5；`null` 不吸附 |
-| colors | `MochiIntensitySliderDefaults.colors(...)`：轨道、描边、低值填充、高值的蓝 / 紫、拇指、刻度、图标 |
-| startIcon / endIcon | 两端的小图标，参数是建议的图标颜色 |
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `value` | `Float` | 必填 | 当前强度值（范围 `0f..1f`）；分档模式下落在 `i / (stops - 1f)` |
+| `onValueChange` | `(Float) -> Unit` | 必填 | 数值变更回调，点击与拖拽过程中实时触发 |
+| `modifier` | `Modifier` | `Modifier` | 修饰符 |
+| `enabled` | `Boolean` | `true` | 是否启用；为 `false` 时透明度降为 `0.4f`、停止响应手势并暂停高强度帧动画 |
+| `stops` | `Int` | `0` | 离散档位数；`0` 表示无级调节，`>= 2` 表示含两端在内的总档位数 |
+| `detent` | `Float?` | `0.5f` | 无级模式下的刻度与磁性吸附点；传 `null` 关闭吸附 |
+| `colors` | `MochiIntensitySliderColors` | `MochiIntensitySliderDefaults.colors()` | 轨道、内描边、低值填充、高值蓝/紫渐变、旋钮、刻度与两端图标配色 |
+| `startIcon` | `(@Composable (Color) -> Unit)?` | `null` | 轨道左侧图标槽位，回调参数为建议图标颜色 `colors.icon` |
+| `endIcon` | `(@Composable (Color) -> Unit)?` | `null` | 轨道右侧图标槽位，回调参数为建议图标颜色 `colors.icon` |
 
-## Defaults
+## 默认值
 
-| 名称 | 值 |
-|---|---|
-| `Height` | 32dp |
-| `TrackHeight` | 24dp |
-| `ThumbSize` | 28dp |
-| `ThumbInset` | 13dp（拇指中心离轨道两端） |
-| `TickSize` | 4dp |
-| `IconSpacing` | 12dp |
-| `HighFrom` | 0.5（高值效果从这里开始浮现） |
+`MochiIntensitySliderDefaults` 常量与尺寸定义如下：
 
-低值填充默认是主题主色；高值的蓝 `#339CFF`、紫（浅色 `#924FF7`，深色 `#AD7BF9`）是 Codex 的 chart-blue / chart-purple，表达的是强度，不跟主题色走，需要时通过 `colors` 换掉。
+| 名称 | 值 | 说明 |
+|---|---|---|
+| `Height` | `32.dp` | 组件整体高度（为旋钮按压放大与阴影预留上下空间） |
+| `TrackHeight` | `24.dp` | 胶囊轨道高度 |
+| `ThumbSize` | `28.dp` | 圆形旋钮直径（上下各超出轨道 `2dp`） |
+| `ThumbInset` | `13.dp` | 取值为 `0f` 与 `1f` 时旋钮中心距轨道两端的内缩距离 |
+| `TickSize` | `4.dp` | 刻度圆点直径 |
+| `IconSpacing` | `12.dp` | 两端图标与轨道之间的水平间距 |
+| `HighFrom` | `0.5f` | 高强度视觉效果开始渐显的阈值 |
 
-## 示例
+低值填充色 `fill` 默认取主题 `primary`；高强度渐变的蓝色 `#339CFF` 与紫色（浅色 `#924FF7`、深色 `#AD7BF9`）固定采用表达强度的语义色，不随主题色变化，可通过 `MochiIntensitySliderDefaults.colors(highBlue = ..., highPurple = ...)` 覆盖。
 
-- 「组件 → 滑块」里的「强度调整条」（无级）和「强度调整条 · 分档」（5 档，最高 Ultra）。
+## 外观与几何结构
+
+- **轨道与填充裁切**：`24dp` 高的 G2 连续曲率胶囊轨道采用 `10%` 前景色底色与 `0.5dp` 内描边。填充段在独立离屏图层中用奇偶路径（`BlendMode.DstOut`）抗锯齿擦除轨道外侧区域，保持两端圆头边缘平滑；填充右缘在中间行程对齐旋钮中心，进入最左/最右端区间时线性收拢至空轨或铺满整条轨道。
+- **旋钮与刻度**：旋钮为 `28dp` 白色实心圆，带 `0.5dp` 描边与 `2dp` 柔和阴影。刻度为 `4dp` 圆点：分档模式下每档绘制一枚，无级模式下仅在 `detent` 位置绘制一枚；已越过刻度使用 `30%` 白色，未越过刻度使用 `50%` 次要文字色。
+
+## 高强度视觉效果
+
+当 `value` 超过 `MochiIntensitySliderDefaults.HighFrom`（`0.5f`）时，高强度视觉层按 `smoothstep(0.5f, 1f, value)` 连续增强（Codex 原版仅在最高档显示，Mochi 扩展为按数值渐进过渡）：
+
+- **蓝紫流光场**：12 个高斯色团按独立频率游走，叠加动态细微噪点后，以 W3C `luminosity` 混合模式合成在横向蓝紫基底渐变之上。数值由 `0.5f` 以下向上越过阈值时，流光场在 `2s` 内从右向左羽化揭开。
+- **漂移星点与刻度淡出**：14 颗发光白点在填充段内缓慢漂移，数值越接近 `1f` 点亮的星点越多；同时轨道刻度点渐隐并缩小至 `0.75×`。
+- **满格粒子爆散**：数值首次到达最右端满格时，从旋钮中心向外爆散 16 颗蓝紫渐变粒子（持续 `0.62s`）。
+
+## 动画生命周期与降级
+
+- **按需帧循环**：仅当 `value > 0.5f`（或满格粒子爆散尚未结束）且组件处于启用可见状态时才驱动逐帧刷新；当数值回落至 `0.5f` 以下、`enabled = false` 或组件移出组合树时立即停止帧循环，静止状态下零重绘开销。
+- **系统减弱动态效果**：当系统关闭动画（`ANIMATOR_DURATION_SCALE == 0f`）时，高值渐变固定停留在第 `0` 帧，不运行逐帧循环，也不触发揭开过渡与满格爆散粒子。
+- **系统版本回退**：Android 13（API 33）及以上使用 AGSL `RuntimeShader` 渲染动态流光场；Android 12 及以下自动回退为静态横向蓝紫渐变，漂移星点与粒子效果照常绘制。
+
+## 交互与无障碍
+
+- **点击与拖拽**：点击轨道时，无级模式以 `300ms`（`cubic-bezier(0.23, 1, 0.32, 1)`）滑向目标值，分档模式每次点选或拖动换档以 `150ms` 平滑过渡（外部修改 `value` 时按 `300ms` 过渡）；无级拖拽紧跟手指。按住期间旋钮弹簧放大至 `32/28` 倍（刚度 `420`），松手回弹（刚度 `220`）。
+- **磁性吸附与触觉反馈**：无级模式下经过 `detent` 或抵达两端端点时触发轻刻度触感，并在 `detent` 两侧 `2.5%` 行程内提供磁性吸附；分档模式下每次切换档位都会触发轻刻度触感。
+- **无障碍语义**：对外暴露 `0f..1f` 范围的进度条语义并支持 `setProgress` 调节；分档模式下同步报告中间步数 `stops - 2`。

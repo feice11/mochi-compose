@@ -13,7 +13,7 @@
 - 写界面前先查应用接入规范里的「场景 → 组件对照」：展开行、选项、筛选芯片（MochiChip）、密码框、空状态、页尾说明、多条滑块（MochiListSliderRow 的 title/valueText）都有现成组件，不要用按钮、Text + padding、Column 自己拼。图标用 mochi-icons 的 MochiIonicon（全套 Ionicons），不要引 Material Icons、手画 Path 或用 emoji。
 - 文案和视觉按接入规范第 5 节去掉「AI 味」：不用「·」把标题和数量、状态和解释拼成一行（数量放行尾 value、次要信息放副标题，或写成完整的句子；同一对象的并列元数据如「歌手 · 时长」可以用），副标题不写口号，不用沉浸式、极致、丝滑、赋能这类说不出事实的词，不写「不是 X 而是 Y」和凑满三条的排比，不用 emoji 当图标，不加渐变底色和到处的进场动画。
 - 标题按卡片外分组小标题判断：正文有「配色」「主题色板」这类分组标题时默认用 MochiCompactTitleScaffold（已有滚动容器用 MochiTitleBar），删除独立大标题及空占位，分组标题本身保留；没有此类分组小标题可以保留大标题。判断条件不是说明文字或卡片有无，卡片内部介绍标题不受影响。目录首页初始展开，向上滚动折叠到顶栏、回顶部展开，各标签独立保存位置；不强制初始折叠或添加补白。详见大标题文档。
-- 挨着的两个及以上按钮做成按钮组：顶栏用 MochiBarGroup（弹菜单的一项用 MochiBarGroupDropdownItem），正文用 MochiButtonGroup；只有一个按钮才单独放。
+- 挨着的两个及以上按钮做成按钮组：顶栏用 MochiBarGroup（弹菜单的一项用 MochiBarGroupDropdownItem），正文用 MochiButtonGroup；只有一个按钮才单独放。同一排成对操作同步使用玻璃或纯色，按语义设置 fuseGroup，只让相关操作融球。
 - 适用侧推页默认接共享顶栏：库顶栏控件 + 稳定 navId；图标给稳定 contentKey，按钮组子项也登记；MochiBackButton 自动参与。
 - 来源卡片打开用 mochiNavSource + push(from)，整页变形，不机械钉住顶栏；mochiSharedElement 已废弃且无效果。
 - 长页面（一屏放不下）用懒加载列表：MochiLazyLargeTitleScaffold / MochiLazyCompactTitleScaffold 或 LazyColumn + MochiTitleBar，每个分组一项，行很多的分组用 mochiListSection（每行一项、仍是一张卡片；不要一行一张卡片、不要把小标题单独成项），项内可改状态用 rememberSaveable；页面里嵌的滚动区域挂 mochiContainedScroll。普通 Column 长页面滚动时整棵树都要重算，主线程会卡。
@@ -26,7 +26,7 @@
 - 标准列表保留主题字号，标题单行省略、副标题最多两行，动态值继续内容替换；日期仍共基线，图标与控件仍按整行居中。
 - 左右滑操作胶囊的 8dp 三侧留白相对完整可见行计算；按钮尺寸、放置、按压边界和删除裁切必须使用同一完整区域，不按正文高度另算一套。
 - 面板内导航使用独立导航器，先退子页再关面板；内部 MochiNavHost 省略 corners，自动继承侧推圆角，全屏仅顶部圆角、底部直角。面板期间系统导航栏背景透明，关闭后恢复窗口原设置；标签栏被新页覆盖时按业务隐藏。
-- 面板侧推轮廓、压暗与阴影使用包含导航区的当前可见表面高度；半屏底部圆角落在可见底边。正文保持固定测量和安全区，不在内部导航主机外追加底部 padding 截短转场图层。
+- 面板内侧推不压暗下层页（只有圆角轮廓）；轮廓使用包含导航区的当前可见表面高度；半屏底部圆角落在可见底边。正文保持固定测量和安全区，不在内部导航主机外追加底部 padding 截短转场图层。
 - 交付时逐项列“已接入 + 位置”或“不适用 + 原因”，不要为用全组件添加无关业务。
 - 可复制骨架：[MochiAppStarter.kt](example/src/main/java/ui/feice/mochi/starter/MochiAppStarter.kt)。不能依赖示例私有辅助组件。
 
